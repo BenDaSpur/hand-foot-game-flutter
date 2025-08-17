@@ -37,13 +37,32 @@ The bot players feature advanced strategy including:
 - **Books**: Need both clean (no wilds) and dirty (with wilds) books of 7+ cards to go out
 - **Scoring**: Positive points from melds, negative from cards left in hand
 
-## 🚀 Getting Started
+## 📱 Download & Play
+
+### 🎮 Ready-to-Play Downloads
+**[📥 Download Latest Release](https://github.com/[your-username]/hand_foot_game_flutter/releases/latest)**
+
+Choose your platform:
+- **🤖 Android**: Download `hand-foot-android.apk` 
+- **🪟 Windows**: Download `hand-foot-windows.zip`
+- **🍎 macOS**: Download `hand-foot-macos.tar.gz`
+- **🐧 Linux**: Download `hand-foot-linux.tar.gz`
+- **🌐 Web**: Download `hand-foot-web.tar.gz` (host on web server)
+
+### Installation Instructions
+- **Android**: Enable "Install from unknown sources" in settings, then install the APK
+- **Windows**: Extract ZIP file and run `hand_foot_game_flutter.exe`
+- **macOS**: Extract archive and run the `.app` file
+- **Linux**: Extract archive and run the executable
+- **Web**: Extract files and serve from any web server
+
+## 🚀 Development Setup
 
 ### Prerequisites
 - Flutter SDK 3.8.1 or higher
 - Dart SDK
 
-### Installation
+### Build from Source
 ```bash
 # Clone the repository
 git clone [your-repo-url]
@@ -111,6 +130,35 @@ This game draws visual inspiration from the indie hit **Balatro**, featuring:
 - Holographic effects on special cards
 - Bright, contrasting colors on dark themes
 - Modern card game aesthetics with retro-futuristic flair
+
+## 🚀 Releases & Updates
+
+This project uses automated builds via GitHub Actions. Every tagged release automatically builds for:
+- Android (APK + AAB)
+- Windows (ZIP)
+- macOS (tar.gz) 
+- Linux (tar.gz)
+- Web (tar.gz)
+
+### Creating a Release (for maintainers)
+```bash
+# Use the release script
+./scripts/release.sh 1.0.0
+
+# Or manually create a git tag
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The GitHub Action will automatically build all platforms and create a release with downloadable assets.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`) 
+5. Open a Pull Request
 
 ## 📜 License
 

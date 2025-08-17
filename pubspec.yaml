@@ -1,7 +1,7 @@
 name: hand_foot_game_flutter
-description: "A new Flutter project."
+description: "A beautiful Hand & Foot card game with Balatro-inspired visuals and intelligent AI opponents."
 publish_to: 'none'
-version: 0.1.0
+version: 1.0.0+1
 
 environment:
   sdk: ^3.8.1

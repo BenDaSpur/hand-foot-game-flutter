@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -265,8 +266,15 @@ class _GameScreenState extends State<GameScreen> {
     );
     final currentPlayer = _gameController.gameState.currentPlayer;
     
+    // Only consider it stuck if:
+    // 1. It's the human player's turn
+    // 2. They have an empty foot (not just empty hand - that's normal transition)
+    // 3. They've already picked up their foot
+    // 4. They don't meet the requirements to go out
     return currentPlayer.type == PlayerType.human && 
-           humanPlayer.currentHand.isEmpty && 
+           humanPlayer.hasPickedUpFoot &&
+           humanPlayer.foot.isEmpty && 
+           !humanPlayer.canGoOutWithBooks &&
            _gameController.gameState.turnPhase == TurnPhase.meld;
   }
 
@@ -600,6 +608,30 @@ class _GameScreenState extends State<GameScreen> {
         _selectedCardIndices.clear();
         _processBotTurns();
       }
+    } else {
+      // Handle case where player has no cards to discard
+      final humanPlayer = _gameController.gameState.players.firstWhere(
+        (p) => p.type == PlayerType.human,
+      );
+      
+      if (humanPlayer.currentHand.isEmpty) {
+        // If hand is empty but foot hasn't been picked up, do it automatically
+        if (!humanPlayer.hasPickedUpFoot && humanPlayer.hand.isEmpty) {
+          humanPlayer.pickUpFoot();
+          // The logAction is private, so the GameState will handle logging internally
+        }
+        
+        // If both hand and foot are empty, but requirements aren't met
+        if (humanPlayer.hasPickedUpFoot && humanPlayer.foot.isEmpty && !humanPlayer.canGoOutWithBooks) {
+          _showErrorDialog('Cannot go out! You need both clean and dirty books to win.');
+          return;
+        }
+        
+        // Force advance turn if we're truly stuck
+        _gameController.gameState.nextPlayer();
+        setState(() {});
+        _processBotTurns();
+      }
     }
   }
 
@@ -722,6 +754,15 @@ class _GameScreenState extends State<GameScreen> {
                 case 'new_game':
                   _showNewGameConfirmation();
                   break;
+                case 'copy_seed':
+                  _copySeedToClipboard();
+                  break;
+                case 'export_game':
+                  _exportGameState();
+                  break;
+                case 'load_game':
+                  _showLoadGameDialog();
+                  break;
               }
             },
             itemBuilder: (BuildContext context) => [
@@ -732,6 +773,37 @@ class _GameScreenState extends State<GameScreen> {
                     Icon(Icons.refresh, color: Colors.red),
                     SizedBox(width: 8),
                     Text('New Game'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<String>(
+                value: 'copy_seed',
+                child: Row(
+                  children: [
+                    Icon(Icons.copy, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Copy Seed'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'export_game',
+                child: Row(
+                  children: [
+                    Icon(Icons.download, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Export Game'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'load_game',
+                child: Row(
+                  children: [
+                    Icon(Icons.upload, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Load Game'),
                   ],
                 ),
               ),
@@ -1113,5 +1185,244 @@ class _GameScreenState extends State<GameScreen> {
         ),
       ),
     );
+  }
+
+  void _copySeedToClipboard() {
+    final seed = _gameController.gameSeed?.toString() ?? 'No seed (legacy game)';
+    Clipboard.setData(ClipboardData(text: seed));
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Game seed copied to clipboard: $seed'),
+        backgroundColor: BalatroTheme.neonGreen,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _exportGameState() {
+    final gameStateJson = _gameController.exportGameState();
+    Clipboard.setData(ClipboardData(text: gameStateJson));
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Game state exported to clipboard'),
+        backgroundColor: BalatroTheme.neonBlue,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {
+            _showExportedGameDialog(gameStateJson);
+          },
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _showExportedGameDialog(String gameStateJson) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        title: const Text(
+          'Exported Game State',
+          style: TextStyle(color: BalatroTheme.neonPink),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              gameStateJson,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: Colors.white70,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: BalatroTheme.neonGreen),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: gameStateJson));
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Game state copied to clipboard'),
+                  backgroundColor: BalatroTheme.neonGreen,
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text(
+              'Copy',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLoadGameDialog() {
+    final TextEditingController textController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        title: const Text(
+          'Load Game State',
+          style: TextStyle(color: BalatroTheme.neonPink),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Paste the exported game state JSON below:',
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: TextField(
+                  controller: textController,
+                  maxLines: null,
+                  expands: true,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: Colors.white,
+                  ),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderSide: const BorderSide(color: BalatroTheme.neonBlue),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: BalatroTheme.neonBlue),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: BalatroTheme.glowColor, width: 2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    hintText: 'Paste game state JSON here...',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: BalatroTheme.deepPurple,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      final clipboardData = await Clipboard.getData('text/plain');
+                      if (clipboardData?.text != null) {
+                        textController.text = clipboardData!.text!;
+                      }
+                    },
+                    child: const Text(
+                      'Paste from Clipboard',
+                      style: TextStyle(color: BalatroTheme.neonYellow),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      textController.clear();
+                    },
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(color: BalatroTheme.neonOrange),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: BalatroTheme.neonGreen),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              _loadGameFromJson(textController.text);
+              Navigator.of(context).pop();
+            },
+            child: const Text(
+              'Load Game',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _loadGameFromJson(String jsonText) {
+    if (jsonText.trim().isEmpty) {
+      _showErrorDialog('Please paste a valid game state JSON.');
+      return;
+    }
+
+    try {
+      final newController = GameController.fromExportJson(jsonText);
+      if (newController == null) {
+        _showErrorDialog('Failed to load game state. The JSON format may be invalid or corrupted.');
+        return;
+      }
+
+      setState(() {
+        _gameController = newController;
+        _botAI = BotAI();
+        _selectedCardIndices.clear();
+        _viewingPlayerMelds = null;
+        _isInitialized = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Game loaded successfully! Seed: ${newController.gameSeed ?? "No seed"}'),
+          backgroundColor: BalatroTheme.neonGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // Process bot turns if needed
+      _processBotTurns();
+    } catch (e) {
+      _showErrorDialog('Error loading game: ${e.toString()}');
+    }
   }
 }

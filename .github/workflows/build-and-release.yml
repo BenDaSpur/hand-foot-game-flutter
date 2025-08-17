@@ -1,0 +1,294 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Web
+        run: flutter build web --release
+
+      - name: Create web archive
+        run: |
+          cd build/web
+          tar -czf ../../hand-foot-web.tar.gz *
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: web-build
+          path: hand-foot-web.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Create Windows archive
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath hand-foot-windows.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-build
+          path: hand-foot-windows.zip
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Create macOS archive
+        run: |
+          cd build/macos/Build/Products/Release
+          tar -czf ../../../../../hand-foot-macos.tar.gz hand_foot_game_flutter.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-build
+          path: hand-foot-macos.tar.gz
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux
+        run: flutter build linux --release
+
+      - name: Create Linux archive
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czf ../../../../../hand-foot-linux.tar.gz *
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-build
+          path: hand-foot-linux.tar.gz
+
+  create-release:
+    needs: [build-android, build-web, build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          release_name: Hand & Foot Game ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## 🎮 Hand & Foot Card Game Release ${{ steps.version.outputs.VERSION }}
+            
+            A beautiful Flutter implementation of the classic Hand & Foot card game with Balatro-inspired visuals!
+            
+            ### 📱 Downloads
+            
+            - **Android**: Download the APK file below for Android devices
+            - **Windows**: Download and extract the Windows ZIP file
+            - **macOS**: Download and extract the macOS archive
+            - **Linux**: Download and extract the Linux archive  
+            - **Web**: Host the web archive on any web server
+            
+            ### 🎯 Game Features
+            - Smart AI opponents with strategic gameplay
+            - Stunning neon Balatro-inspired theme
+            - Complete Hand & Foot rules implementation
+            - Multi-round progression with increasing difficulty
+            
+            ### 🚀 Installation
+            - **Android**: Enable "Install from unknown sources" and install the APK
+            - **Desktop**: Extract the archive and run the executable
+            - **Web**: Extract and serve the files from a web server
+            
+            Enjoy the game! 🃏✨
+          draft: false
+          prerelease: false
+
+      - name: Upload Android APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: android-apk/app-release.apk
+          asset_name: hand-foot-android.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      - name: Upload Android AAB
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: android-aab/app-release.aab
+          asset_name: hand-foot-android.aab
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows Build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: windows-build/hand-foot-windows.zip
+          asset_name: hand-foot-windows.zip
+          asset_content_type: application/zip
+
+      - name: Upload macOS Build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: macos-build/hand-foot-macos.tar.gz
+          asset_name: hand-foot-macos.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Linux Build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: linux-build/hand-foot-linux.tar.gz
+          asset_name: hand-foot-linux.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Web Build
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: web-build/hand-foot-web.tar.gz
+          asset_name: hand-foot-web.tar.gz
+          asset_content_type: application/gzip

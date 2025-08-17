@@ -3,12 +3,13 @@ import 'card.dart';
 
 class Deck {
   List<PlayingCard> _cards = [];
+  final int? _seed;
 
-  Deck() {
+  Deck({int? seed}) : _seed = seed {
     _initializeStandardDeck();
   }
 
-  Deck.fromCards(List<PlayingCard> cards) {
+  Deck.fromCards(List<PlayingCard> cards, {int? seed}) : _seed = seed {
     _cards = List.from(cards);
   }
 
@@ -27,8 +28,8 @@ class Deck {
     _cards.add(const PlayingCard(rank: CardRank.joker));
   }
 
-  static Deck createHandAndFootDeck(int playerCount) {
-    final deck = Deck();
+  static Deck createHandAndFootDeck(int playerCount, {int? seed}) {
+    final deck = Deck(seed: seed);
     final allCards = <PlayingCard>[];
     
     final deckCount = playerCount + 1;
@@ -36,11 +37,11 @@ class Deck {
       allCards.addAll(deck._cards);
     }
     
-    return Deck.fromCards(allCards);
+    return Deck.fromCards(allCards, seed: seed);
   }
 
   void shuffle() {
-    final random = Random();
+    final random = _seed != null ? Random(_seed) : Random();
     for (int i = _cards.length - 1; i > 0; i--) {
       final j = random.nextInt(i + 1);
       final temp = _cards[i];
@@ -80,4 +81,12 @@ class Deck {
   bool get isEmpty => _cards.isEmpty;
   
   List<PlayingCard> get cards => List.unmodifiable(_cards);
+  
+  int? get seed => _seed;
+  
+  // For game state restoration - replaces the entire deck with new cards
+  void replaceCards(List<PlayingCard> newCards) {
+    _cards.clear();
+    _cards.addAll(newCards);
+  }
 }
