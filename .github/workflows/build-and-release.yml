@@ -76,7 +76,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Web
-        run: flutter build web --release
+        run: flutter build web --release --base-href /handfoot/
 
       - name: Create web archive
         run: |
