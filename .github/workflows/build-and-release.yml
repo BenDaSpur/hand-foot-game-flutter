@@ -246,6 +246,40 @@ jobs:
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
+          CURRENT_TAG=${{ steps.version.outputs.VERSION }}
+          
+          # If this is the first tag, compare against first commit
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          echo "Generating changelog from $PREV_TAG to $CURRENT_TAG"
+          
+          # Generate changelog
+          CHANGELOG=$(cat <<EOF
+          ## 🔄 Changes Since Last Release
+          
+          EOF
+          )
+          
+          # Get commit messages since last tag
+          COMMITS=$(git log --pretty=format:"- %s" $PREV_TAG..$CURRENT_TAG 2>/dev/null || git log --pretty=format:"- %s" $PREV_TAG..HEAD)
+          
+          if [ -n "$COMMITS" ]; then
+            CHANGELOG="$CHANGELOG"$'\n'"$COMMITS"
+          else
+            CHANGELOG="$CHANGELOG"$'\n'"- No changes since last release"
+          fi
+          
+          # Save to file for multiline output
+          echo "$CHANGELOG" > changelog.md
+          echo "CHANGELOG_FILE=changelog.md" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -256,6 +290,8 @@ jobs:
 
             A beautiful Flutter implementation of the classic Hand & Foot card game with Balatro-inspired visuals!
 
+            $(cat changelog.md)
+
             ### 📱 Downloads
 
             - **Android**: Download the APK file below for Android devices
@@ -263,6 +299,7 @@ jobs:
             - **macOS**: Download and extract the macOS archive
             - **Linux**: Download and extract the Linux archive  
             - **Web**: Host the web archive on any web server
+            - **🌐 Play Online**: [GitHub Pages](https://bendaspur.github.io/hand-foot-game-flutter/)
 
             ### 🎯 Game Features
             - Smart AI opponents with strategic gameplay

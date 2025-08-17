@@ -781,6 +781,9 @@ class _GameScreenState extends State<GameScreen> {
                   case 'load_game':
                     _showLoadGameDialog();
                     break;
+                  case 'how_to_play':
+                    _showHowToPlayDialog();
+                    break;
                 }
               },
               itemBuilder: (BuildContext context) => [
@@ -822,6 +825,17 @@ class _GameScreenState extends State<GameScreen> {
                       Icon(Icons.upload, color: Colors.blue),
                       SizedBox(width: 8),
                       Text('Load Game'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'how_to_play',
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline, color: Colors.purple),
+                      SizedBox(width: 8),
+                      Text('How to Play'),
                     ],
                   ),
                 ),
@@ -1491,6 +1505,127 @@ class _GameScreenState extends State<GameScreen> {
             },
             child: const Text(
               'Load Game',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHowToPlayDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        title: const Text(
+          'How to Play Hand & Foot',
+          style: TextStyle(color: BalatroTheme.neonPink),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  '🎯 OBJECTIVE',
+                  style: TextStyle(
+                    color: BalatroTheme.neonGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Be the first player to "go out" by melding all cards in your hand and foot.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                SizedBox(height: 16),
+                
+                Text(
+                  '🃏 SETUP',
+                  style: TextStyle(
+                    color: BalatroTheme.neonGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '• Each player gets 11 cards for their "hand" and 11 for their "foot"\n'
+                  '• You play your hand first, then pick up your foot when hand is empty\n'
+                  '• Play-down requirements increase each round (60, 90, 120+ points)',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                SizedBox(height: 16),
+                
+                Text(
+                  '📝 MELDS',
+                  style: TextStyle(
+                    color: BalatroTheme.neonGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '• Melds are sets of 3+ cards of the same rank\n'
+                  '• 2s and Jokers are wild cards\n'
+                  '• 3s cannot be melded and block the discard pile\n'
+                  '• Only one meld per rank allowed\n'
+                  '• Books (7+ cards) give bonus points:\n'
+                  '  - Clean Book (no wilds): +500 points\n'
+                  '  - Dirty Book (with wilds): +300 points\n'
+                  '  - Wild Book (all wilds): +1000 points',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                SizedBox(height: 16),
+                
+                Text(
+                  '🎮 GAMEPLAY',
+                  style: TextStyle(
+                    color: BalatroTheme.neonGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '1. DRAW: Take 2 cards from deck OR unlock discard pile\n'
+                  '2. MELD: Play cards (first meld must meet point requirement)\n'
+                  '3. DISCARD: End your turn by discarding one card\n\n'
+                  '• To unlock discard pile: Need 2+ natural cards matching top card\n'
+                  '• Must have already played down to unlock discard pile\n'
+                  '• Going out requires one clean book AND one dirty book',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                SizedBox(height: 16),
+                
+                Text(
+                  '🏆 WINNING',
+                  style: TextStyle(
+                    color: BalatroTheme.neonGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'First player to reach 8,500 points wins!\n'
+                  'Going out gives +100 bonus points.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Got it!',
               style: TextStyle(color: BalatroTheme.neonBlue),
             ),
           ),
