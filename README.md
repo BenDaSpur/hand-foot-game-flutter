@@ -86,8 +86,13 @@ flutter run
 ### Development Commands
 
 ```bash
-# Static analysis
-flutter analyze
+# Format code and run tests (recommended)
+./format_and_test.sh
+
+# Individual commands
+dart format .            # Format all Dart files
+flutter test             # Run tests
+flutter analyze          # Static analysis
 
 # Build for release
 flutter build apk        # Android
@@ -96,6 +101,30 @@ flutter build windows    # Windows
 flutter build macos      # macOS
 flutter build linux      # Linux
 ```
+
+### Code Formatting & CI/CD
+
+This project includes comprehensive code quality and CI/CD pipelines:
+
+#### Local Development
+- **Pre-commit Hook**: Automatically formats code, runs tests, and checks analysis before each commit
+- **VS Code Settings**: Auto-format on save when using VS Code
+- **Manual Script**: Run `./format_and_test.sh` to format and test manually
+
+#### Continuous Integration
+- **Fast Quality Checks**: Optimized CI pipeline (~2-3 minutes)
+- **Automated Testing**: All PRs and pushes run 74 comprehensive tests
+- **Code Analysis**: Static analysis with `flutter analyze` 
+- **Format Checking**: Ensures consistent code formatting
+- **Dependency Verification**: Validates package dependencies
+- **Branch Protection**: Main branch requires PR reviews and passing CI checks
+
+#### Quality Gates
+- ✅ All tests must pass (74/74)
+- ✅ Code analysis must be clean
+- ✅ Formatting must be consistent
+- ✅ Dependencies must be valid
+- ✅ PR reviews required for main branch
 
 ## 🎪 How to Play
 

@@ -1,15 +1,14 @@
-name: Continuous Integration
+name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, master, develop, "**" ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, master, develop ]
 
 jobs:
-  test:
+  quality-checks:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,14 +25,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify formatting
+      - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
 
-      - name: Analyze project source
-        run: flutter analyze
+      - name: Run tests
+        run: flutter test
 
-    # - name: Check build (Android)
-    #   run: flutter build apk --debug
+      - name: Analyze code
+        run: flutter analyze --no-fatal-warnings
 
-    # - name: Check build (Web)
-    #   run: flutter build web --debug
+      - name: Verify dependencies
+        run: flutter pub deps

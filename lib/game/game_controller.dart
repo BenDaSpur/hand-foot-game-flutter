@@ -33,8 +33,8 @@ class GameController {
 
   void initializeGame() {
     _gameState.deck.shuffle();
-    _gameState.dealCards();
     _gameState.startRound();
+    _gameState.dealCards();
   }
 
   bool drawFromDeck() {
