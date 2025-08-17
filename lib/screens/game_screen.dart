@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
-import '../models/meld.dart';
 import '../game/game_controller.dart';
 import '../ai/bot_ai.dart';
 import '../widgets/playing_card_widget.dart';
@@ -65,6 +64,17 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _processBotTurn() async {
+    // Check if round has ended and automatically start next round
+    if (_gameController.gameState.phase == GamePhase.roundEnd) {
+      await Future.delayed(
+        const Duration(seconds: 2),
+      ); // Brief pause to show scores
+      _gameController.nextRound();
+      setState(() {});
+      _processBotTurns(); // Resume game flow
+      return;
+    }
+
     final currentPlayer = _gameController.gameState.currentPlayer;
 
     if (currentPlayer.type == PlayerType.bot) {
@@ -178,10 +188,7 @@ class _GameScreenState extends State<GameScreen> {
 
     final selectedIndices = <int>[];
 
-    if (meld.type == MeldType.wild) {
-      // For wild melds, select all wild cards
-      selectedIndices.addAll(wildIndices);
-    } else if (naturalIndices.isNotEmpty) {
+    if (naturalIndices.isNotEmpty) {
       // For natural/mixed melds, select natural cards of the same rank
       selectedIndices.addAll(naturalIndices);
 
@@ -439,18 +446,10 @@ class _GameScreenState extends State<GameScreen> {
       if (card.rank == meld.rank && !card.isWild) {
         // Natural cards of the same rank
         naturalCount++;
-      } else if (card.isWild && meld.type != MeldType.wild) {
-        // Wild cards that could be used as wilds (not for wild melds)
-        wildAsWildCount++;
-      } else if (card.isWild && meld.type == MeldType.wild) {
-        // Wild cards for wild melds
+      } else if (card.isWild) {
+        // Wild cards that could be used as wilds
         wildAsWildCount++;
       }
-    }
-
-    // For wild melds, count all wild cards
-    if (meld.type == MeldType.wild) {
-      return wildAsWildCount;
     }
 
     // For natural/mixed melds with the same rank

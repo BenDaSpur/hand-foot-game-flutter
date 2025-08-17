@@ -1,6 +1,6 @@
 import 'card.dart';
 
-enum MeldType { natural, mixed, wild }
+enum MeldType { natural, mixed }
 
 class Meld {
   final CardRank rank;
@@ -18,14 +18,8 @@ class Meld {
     final naturalCards = cards.where((card) => !card.isWild).toList();
     final wildCards = cards.where((card) => card.isWild).toList();
 
-    if (naturalCards.isEmpty && wildCards.length >= 3) {
-      return Meld(
-        rank: CardRank.joker,
-        cards: List.from(cards),
-        type: MeldType.wild,
-      );
-    }
-
+    // Wild cards (2s and Jokers) cannot form their own melds
+    // They can only be used to supplement natural card melds (4-A)
     if (naturalCards.isEmpty) return null;
 
     final rank = naturalCards.first.rank;
@@ -47,10 +41,6 @@ class Meld {
   bool canAddCard(PlayingCard card) {
     // 3s cannot be added to any meld
     if (card.isThree) return false;
-
-    if (type == MeldType.wild) {
-      return card.isWild;
-    }
 
     if (card.isWild) {
       final wildCards = cards.where((c) => c.isWild).length;
@@ -76,12 +66,13 @@ class Meld {
       total += card.pointValue;
     }
 
-    if (type == MeldType.natural && cards.length >= 7) {
-      total += 500;
-    } else if (type == MeldType.mixed && cards.length >= 7) {
-      total += 300;
-    } else if (type == MeldType.wild && cards.length >= 7) {
-      total += 1000;
+    // Book bonuses (7+ cards)
+    if (cards.length >= 7) {
+      if (type == MeldType.natural) {
+        total += 500; // Clean book bonus
+      } else if (type == MeldType.mixed) {
+        total += 300; // Dirty book bonus
+      }
     }
 
     return total;
@@ -95,9 +86,7 @@ class Meld {
 
   @override
   String toString() {
-    final rankStr = rank == CardRank.joker
-        ? 'Wilds'
-        : '${rank.name[0].toUpperCase()}${rank.name.substring(1)}';
+    final rankStr = '${rank.name[0].toUpperCase()}${rank.name.substring(1)}';
     return '$rankStr (${cards.length} cards)';
   }
 }
