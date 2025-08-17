@@ -1543,7 +1543,7 @@ class _GameScreenState extends State<GameScreen> {
                   style: TextStyle(color: Colors.white70),
                 ),
                 SizedBox(height: 16),
-                
+
                 Text(
                   '🃏 SETUP',
                   style: TextStyle(
@@ -1560,7 +1560,7 @@ class _GameScreenState extends State<GameScreen> {
                   style: TextStyle(color: Colors.white70),
                 ),
                 SizedBox(height: 16),
-                
+
                 Text(
                   '📝 MELDS',
                   style: TextStyle(
@@ -1582,7 +1582,7 @@ class _GameScreenState extends State<GameScreen> {
                   style: TextStyle(color: Colors.white70),
                 ),
                 SizedBox(height: 16),
-                
+
                 Text(
                   '🎮 GAMEPLAY',
                   style: TextStyle(
@@ -1602,7 +1602,7 @@ class _GameScreenState extends State<GameScreen> {
                   style: TextStyle(color: Colors.white70),
                 ),
                 SizedBox(height: 16),
-                
+
                 Text(
                   '🏆 WINNING',
                   style: TextStyle(
