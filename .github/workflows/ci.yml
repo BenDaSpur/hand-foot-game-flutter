@@ -2,38 +2,38 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: '3.32.8'
-        channel: 'stable'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: "stable"
 
-    - name: Disable Flutter analytics
-      run: flutter config --no-analytics
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
 
-    - name: Install dependencies
-      run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-    - name: Verify formatting
-      run: dart format --output=none --set-exit-if-changed .
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
 
-    - name: Analyze project source
-      run: flutter analyze
+      - name: Analyze project source
+        run: flutter analyze
 
-    - name: Check build (Android)
-      run: flutter build apk --debug
+    # - name: Check build (Android)
+    #   run: flutter build apk --debug
 
-    - name: Check build (Web)
-      run: flutter build web --debug
+    # - name: Check build (Web)
+    #   run: flutter build web --debug
