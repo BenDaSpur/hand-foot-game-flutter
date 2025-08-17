@@ -83,20 +83,20 @@ class Player {
   bool createMeld(List<PlayingCard> cards, {int playDownRequirement = 0}) {
     final meld = Meld.createMeld(cards);
     if (meld == null) return false;
-    
+
     // Check if a meld of this rank already exists
     final existingMeldIndex = findMeldByRank(meld.rank);
     if (existingMeldIndex != -1) {
       // Add cards to existing meld instead of creating a new one
       final existingMeld = melds[existingMeldIndex];
-      
+
       // Validate that all cards can be added to the existing meld
       for (final card in cards) {
         if (!existingMeld.canAddCard(card)) {
           return false; // Cannot add this card to existing meld
         }
       }
-      
+
       // Check play down requirement if player hasn't played down yet
       if (!hasPlayedDown && playDownRequirement > 0) {
         final cardPointValue = cards.fold<int>(
@@ -107,7 +107,7 @@ class Player {
           return false; // Not enough points to play down
         }
       }
-      
+
       // Add all cards to the existing meld
       for (final card in cards) {
         if (!existingMeld.addCard(card)) {
@@ -122,7 +122,7 @@ class Player {
           return false;
         }
       }
-      
+
       hasPlayedDown = true;
       return true;
     } else {

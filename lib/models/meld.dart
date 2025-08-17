@@ -47,7 +47,7 @@ class Meld {
   bool canAddCard(PlayingCard card) {
     // 3s cannot be added to any meld
     if (card.isThree) return false;
-    
+
     if (type == MeldType.wild) {
       return card.isWild;
     }
