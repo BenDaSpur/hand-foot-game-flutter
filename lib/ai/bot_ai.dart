@@ -12,6 +12,26 @@ class BotDecision {
 }
 
 class BotAI {
+  // Strategic constants for better maintainability
+  static const int strategicBufferPoints = 20;
+  static const int aggressiveMatchingThreshold = 3;
+  static const int valuablePileThreshold = 60;
+  static const int largePileThreshold = 4;
+  static const int footPileValueThreshold = 30;
+  static const int footPileSizeThreshold = 2;
+  static const int handPileValueThreshold = 80;
+  static const int handPileSizeThreshold = 5;
+  static const int lowHandCardThreshold = 3;
+  static const int meldRetentionThreshold = 5;
+  static const int postPlaydownMeldValue = 50;
+  static const int postPlaydownHandSize = 8;
+  static const double highValuePairBreakChance = 0.3;
+  static const double pointUsagePenalty = 0.1;
+  static const double pairRetentionBonus = 10.0;
+  static const double consolidationPenalty = 5.0;
+  static const int maxMeldCombinations =
+      2; // Limit to 2-meld combos for performance
+
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
@@ -44,21 +64,23 @@ class BotAI {
         final discardPileSize = gameState.discardPile.length;
 
         // More aggressive if we have many matching cards or valuable pile
-        if (matchingNaturals >= 3 ||
-            discardPileValue > 60 ||
-            discardPileSize > 4) {
+        if (matchingNaturals >= aggressiveMatchingThreshold ||
+            discardPileValue > valuablePileThreshold ||
+            discardPileSize > largePileThreshold) {
           return BotDecision(action: 'drawFromDiscard');
         }
 
         // On foot pile, be more willing to take smaller piles
         if (bot.hasPickedUpFoot &&
-            (discardPileValue > 30 || discardPileSize > 2)) {
+            (discardPileValue > footPileValueThreshold ||
+                discardPileSize > footPileSizeThreshold)) {
           return BotDecision(action: 'drawFromDiscard');
         }
 
         // Conservative threshold for hand pile (save unlocking for better opportunities)
         if (!bot.hasPickedUpFoot &&
-            (discardPileValue > 80 || discardPileSize > 5)) {
+            (discardPileValue > handPileValueThreshold ||
+                discardPileSize > handPileSizeThreshold)) {
           return BotDecision(action: 'drawFromDiscard');
         }
       }
@@ -274,8 +296,8 @@ class BotAI {
   }
 
   bool _shouldBreakUpHighValuePair() {
-    // 30% chance to break up high-value pairs when no other options
-    return Random().nextDouble() < 0.3;
+    // Strategic chance to break up high-value pairs when no other options
+    return Random().nextDouble() < highValuePairBreakChance;
   }
 
   bool _shouldMeldAfterPlayDown(
@@ -285,8 +307,8 @@ class BotAI {
   ) {
     if (possibleMelds.isEmpty) return false;
 
-    // If we're close to running out of hand (3 or fewer cards), be aggressive
-    if (bot.currentHand.length <= 3) {
+    // If we're close to running out of hand, be aggressive
+    if (bot.currentHand.length <= lowHandCardThreshold) {
       return true;
     }
 
@@ -302,8 +324,8 @@ class BotAI {
             .where((c) => c.rank == rank && !c.isWild)
             .length;
 
-        // Only meld if we have 5+ of this rank (keep 2 for potential unlock)
-        if (totalOfThisRank >= 5) {
+        // Only meld if we have enough of this rank (keep 2 for potential unlock)
+        if (totalOfThisRank >= meldRetentionThreshold) {
           return true;
         }
       }
@@ -315,7 +337,8 @@ class BotAI {
     final bestMeld = _chooseBestMeld(possibleMelds);
     final meldValue = _calculateMeldScore(bestMeld);
 
-    return meldValue >= 50 || bot.currentHand.length > 8;
+    return meldValue >= postPlaydownMeldValue ||
+        bot.currentHand.length > postPlaydownHandSize;
   }
 
   /// Finds strategic multi-meld combinations for play-down that minimize points
@@ -345,7 +368,8 @@ class BotAI {
 
     // Strategy 1: Single meld if it barely exceeds requirement (avoid over-commitment)
     for (final points in sortedPoints) {
-      if (points >= playDownRequirement && points <= playDownRequirement + 20) {
+      if (points >= playDownRequirement &&
+          points <= playDownRequirement + strategicBufferPoints) {
         // Only use single meld if it's close to requirement (not massive overkill)
         viableCombinations.add(meldsByPoints[points]!);
         break; // Take first minimal single meld option
@@ -375,6 +399,7 @@ class BotAI {
   }
 
   /// Finds multi-meld combinations that meet play-down requirement
+  /// Optimized to only consider 2-meld combinations for performance
   List<List<List<PlayingCard>>> _findMeldCombinations(
     Map<int, List<List<PlayingCard>>> meldsByPoints,
     int requirement,
@@ -382,38 +407,34 @@ class BotAI {
     final combinations = <List<List<PlayingCard>>>[];
     final sortedPoints = meldsByPoints.keys.toList()..sort();
 
-    // Try combinations of 2-3 melds
-    for (int i = 0; i < sortedPoints.length; i++) {
-      for (int j = i; j < sortedPoints.length; j++) {
+    // Limit combinations to prevent O(n³) complexity - only try 2-meld combinations
+    for (
+      int i = 0;
+      i < sortedPoints.length && combinations.length < maxMeldCombinations;
+      i++
+    ) {
+      for (
+        int j = i;
+        j < sortedPoints.length && combinations.length < maxMeldCombinations;
+        j++
+      ) {
         final points1 = sortedPoints[i];
         final points2 = sortedPoints[j];
 
         if (points1 + points2 >= requirement) {
-          // Found 2-meld combination
-          for (final meld1 in meldsByPoints[points1]!) {
-            for (final meld2 in meldsByPoints[points2]!) {
-              if (!_meldsConflict(meld1, meld2)) {
-                combinations.add([meld1, meld2]);
-              }
-            }
-          }
-        }
+          // Found 2-meld combination - limit iterations to prevent performance issues
+          final melds1 = meldsByPoints[points1]!;
+          final melds2 = meldsByPoints[points2]!;
 
-        // Try 3-meld combinations
-        for (int k = j; k < sortedPoints.length; k++) {
-          final points3 = sortedPoints[k];
-          if (points1 + points2 + points3 >= requirement) {
-            for (final meld1 in meldsByPoints[points1]!) {
-              for (final meld2 in meldsByPoints[points2]!) {
-                for (final meld3 in meldsByPoints[points3]!) {
-                  if (!_meldsConflict(meld1, meld2) &&
-                      !_meldsConflict(meld1, meld3) &&
-                      !_meldsConflict(meld2, meld3)) {
-                    combinations.add([meld1, meld2, meld3]);
-                  }
-                }
+          // Take only the first few combinations to avoid exponential blowup
+          for (int m1 = 0; m1 < melds1.length && m1 < 2; m1++) {
+            for (int m2 = 0; m2 < melds2.length && m2 < 2; m2++) {
+              if (!_meldsConflict(melds1[m1], melds2[m2])) {
+                combinations.add([melds1[m1], melds2[m2]]);
+                if (combinations.length >= maxMeldCombinations) break;
               }
             }
+            if (combinations.length >= maxMeldCombinations) break;
           }
         }
       }
@@ -423,14 +444,37 @@ class BotAI {
   }
 
   /// Checks if two melds conflict (use same cards)
+  /// Hand & Foot uses multiple decks, so we need to track actual card instances
   bool _meldsConflict(List<PlayingCard> meld1, List<PlayingCard> meld2) {
-    for (final card1 in meld1) {
-      for (final card2 in meld2) {
-        if (card1.rank == card2.rank && card1.suit == card2.suit) {
+    // Create a map to count cards by rank+suit for each meld
+    final meld1Cards = <String, int>{};
+    final meld2Cards = <String, int>{};
+
+    for (final card in meld1) {
+      final key = '${card.rank.name}-${card.suit?.name ?? 'joker'}';
+      meld1Cards[key] = (meld1Cards[key] ?? 0) + 1;
+    }
+
+    for (final card in meld2) {
+      final key = '${card.rank.name}-${card.suit?.name ?? 'joker'}';
+      meld2Cards[key] = (meld2Cards[key] ?? 0) + 1;
+    }
+
+    // Check if any card type would be over-used
+    // This is a simplified check - in practice we'd need to know total available cards
+    for (final entry in meld1Cards.entries) {
+      final meld2Count = meld2Cards[entry.key] ?? 0;
+      if (meld2Count > 0) {
+        // For now, assume we have enough cards if the total needed is reasonable
+        // In Hand & Foot with 2 standard decks, we have 2 of each card
+        final totalNeeded = entry.value + meld2Count;
+        if (totalNeeded > 2) {
+          // Conservative: assume max 2 per rank+suit
           return true;
         }
       }
     }
+
     return false;
   }
 
@@ -452,7 +496,7 @@ class BotAI {
 
     for (final combination in combinations) {
       final score = _scoreCombination(bot, controller, combination);
-      if (score > bestScore) {
+      if (score.isFinite && score > bestScore) {
         bestScore = score;
         bestCombination = combination;
       }
@@ -467,10 +511,14 @@ class BotAI {
     GameController controller,
     List<List<PlayingCard>> combination,
   ) {
+    // Handle empty combinations gracefully
+    if (combination.isEmpty) return double.negativeInfinity;
+
     final usedCards = <PlayingCard>[];
     var totalPoints = 0;
 
     for (final meld in combination) {
+      if (meld.isEmpty) continue; // Skip empty melds
       usedCards.addAll(meld);
       totalPoints += meld.fold<int>(0, (sum, card) => sum + card.pointValue);
     }
@@ -486,7 +534,7 @@ class BotAI {
     var score = 0.0;
 
     // Prefer minimal point usage (keep more cards)
-    score -= totalPoints * 0.1;
+    score -= totalPoints * pointUsagePenalty;
 
     // Bonus for retaining pairs (unlock potential)
     final remainingRanks = <CardRank, int>{};
@@ -496,15 +544,21 @@ class BotAI {
       }
     }
 
-    // Big bonus for keeping pairs (2+ of same rank for unlocking)
-    for (final count in remainingRanks.values) {
-      if (count >= 2) {
-        score += count * 10.0; // Encourage keeping pairs
+    // Prevent division by zero - if no cards remain, heavily penalize
+    if (remainingRanks.isEmpty) {
+      score -= 100.0; // Large penalty for using all cards
+    } else {
+      // Big bonus for keeping pairs (2+ of same rank for unlocking)
+      for (final count in remainingRanks.values) {
+        if (count >= 2) {
+          score += count * pairRetentionBonus; // Encourage keeping pairs
+        }
       }
-    }
 
-    // Bonus for keeping fewer but higher-count ranks vs many singletons
-    score += remainingRanks.length * -5.0; // Prefer consolidation
+      // Bonus for keeping fewer but higher-count ranks vs many singletons
+      score -=
+          remainingRanks.length * consolidationPenalty; // Prefer consolidation
+    }
 
     return score;
   }

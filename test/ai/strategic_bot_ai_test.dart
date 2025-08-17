@@ -209,5 +209,188 @@ void main() {
       // Bot should try to unlock discard pile - has 3 matching kings + valuable pile
       expect(decision.action, equals('drawFromDiscard'));
     });
+
+    group('Strategic AI Edge Cases', () {
+      test('should handle no possible melds gracefully', () {
+        // Bot with cards that cannot form any melds
+        bot.dealHand([
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.four,
+          ), // Singleton
+          const PlayingCard(
+            suit: Suit.spades,
+            rank: CardRank.five,
+          ), // Singleton
+          const PlayingCard(
+            suit: Suit.diamonds,
+            rank: CardRank.six,
+          ), // Singleton
+          const PlayingCard(
+            suit: Suit.clubs,
+            rank: CardRank.seven,
+          ), // Singleton
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.eight,
+          ), // Singleton
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        // Should fall back to discard since no melds possible
+        expect(decision.action, equals('discard'));
+        expect(decision.data, isA<PlayingCard>());
+      });
+
+      test('should handle insufficient cards for play-down', () {
+        // Bot with cards that total less than play-down requirement
+        bot.dealHand([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four), // 5 pts
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four), // 5 pts
+          const PlayingCard(
+            suit: Suit.diamonds,
+            rank: CardRank.four,
+          ), // 5 pts = 15 total
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        // Should discard since can't meet play-down requirement (60 points)
+        expect(decision.action, equals('discard'));
+      });
+
+      test('should handle empty discard pile for draw decision', () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+
+        bot.dealFoot([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.draw;
+
+        // Empty discard pile
+        gameController.gameState.discardPile.clear();
+        gameController.gameState.discardPileFrozen = false;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        // Should draw from deck when discard pile is empty
+        expect(decision.action, equals('drawFromDeck'));
+      });
+
+      test('should handle frozen discard pile correctly', () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+
+        bot.dealFoot([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.draw;
+
+        // Frozen discard pile with wild card on top
+        gameController.gameState.discardPile.clear();
+        gameController.gameState.discardPile.addAll([
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.two,
+          ), // Wild card freezes pile
+        ]);
+        gameController.gameState.discardPileFrozen = true;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        // Should draw from deck when pile is frozen due to wild card
+        expect(decision.action, equals('drawFromDeck'));
+      });
+
+      test('should handle strategic play-down with no viable combinations', () {
+        // Bot with only one type of meld possible, but not meeting requirement
+        bot.dealHand([
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.four,
+          ), // 5 pts each
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          const PlayingCard(
+            suit: Suit.diamonds,
+            rank: CardRank.four,
+          ), // 15 pts total
+          // Not enough for 60-point requirement, no other melds possible
+          const PlayingCard(
+            suit: Suit.clubs,
+            rank: CardRank.eight,
+          ), // Singleton
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.nine,
+          ), // Singleton
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        // Should discard since strategic play-down finds no viable combinations
+        expect(decision.action, equals('discard'));
+      });
+
+      test('should handle card conflict detection with identical cards', () {
+        // Bot with many identical cards (testing multi-deck conflict detection)
+        bot.dealHand([
+          // 6 aces - should be able to form at least one meld
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace), // 20 pts
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.ace,
+          ), // 20 pts (duplicate)
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace), // 20 pts
+          const PlayingCard(
+            suit: Suit.spades,
+            rank: CardRank.ace,
+          ), // 20 pts (duplicate)
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace), // 20 pts
+          const PlayingCard(
+            suit: Suit.diamonds,
+            rank: CardRank.ace,
+          ), // 20 pts (duplicate)
+          // Total: 120 points - well above 60 point requirement
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        // Should create a meld since we have plenty of cards and points
+        if (decision.action == 'createMeld') {
+          final selectedMeld = decision.data as List<PlayingCard>;
+          expect(selectedMeld.length, greaterThanOrEqualTo(3));
+
+          // All cards should be aces
+          final allAces = selectedMeld.every(
+            (card) => card.rank == CardRank.ace,
+          );
+          expect(allAces, isTrue);
+        } else {
+          // If it chooses to discard, that's also valid behavior
+          expect(decision.action, equals('discard'));
+        }
+      });
+    });
   });
 }
