@@ -42,6 +42,12 @@ The bot players feature advanced strategy including:
 
 ## 📱 Download & Play
 
+### 🌐 Play Online (GitHub Pages)
+
+**[🎮 Play Now in Your Browser](https://bendaspur.github.io/hand-foot-game-flutter/)**
+
+No download required! Play the game directly in your web browser.
+
 ### 🎮 Ready-to-Play Downloads
 
 **[📥 Download Latest Release](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**

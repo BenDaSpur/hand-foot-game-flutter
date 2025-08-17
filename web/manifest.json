@@ -1,11 +1,11 @@
 {
-    "name": "hand_foot_game_flutter",
-    "short_name": "hand_foot_game_flutter",
+    "name": "Hand & Foot Card Game",
+    "short_name": "Hand & Foot",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1a0d29",
+    "theme_color": "#6d28d9",
+    "description": "A beautiful Hand & Foot card game with Balatro-inspired visuals and intelligent AI opponents.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
