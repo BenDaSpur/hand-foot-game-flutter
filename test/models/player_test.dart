@@ -408,5 +408,99 @@ void main() {
       expect(player.findMeldByRank(CardRank.king), equals(1));
       expect(player.findMeldByRank(CardRank.queen), equals(-1));
     });
+
+    test('should handle duplicate cards correctly when creating melds', () {
+      // Simulate multiple decks with identical cards
+      player.dealHand([
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ace,
+        ), // First ace of hearts
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ace,
+        ), // Duplicate ace of hearts
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+      ]);
+
+      // Create meld with both identical ace of hearts cards plus one more ace
+      final meldCards = [
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ace,
+        ), // Should match first instance
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ace,
+        ), // Should match second instance
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+      ];
+
+      final success = player.createMeld(meldCards, playDownRequirement: 60);
+
+      expect(success, isTrue);
+      expect(player.hasPlayedDown, isTrue);
+      expect(player.melds.length, equals(1));
+      expect(player.melds.first.cards.length, equals(3));
+      expect(
+        player.currentHand.length,
+        equals(2),
+      ); // King + remaining ace should remain
+      expect(
+        player.currentHand.where((card) => card.rank == CardRank.ace).length,
+        equals(1),
+      ); // Only one ace should remain
+    });
+
+    test('should handle duplicate cards when adding to existing meld', () {
+      // Create initial meld with first ace
+      final initialCards = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ];
+
+      player.dealHand([
+        ...initialCards,
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.ace,
+        ), // Fourth ace
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ace,
+        ), // Duplicate ace of hearts
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.two), // Wild card
+      ]);
+
+      // Create initial meld
+      final success1 = player.createMeld(initialCards, playDownRequirement: 60);
+      expect(success1, isTrue);
+      expect(player.currentHand.length, equals(3));
+
+      // Add duplicate ace of hearts and wild card to existing meld
+      final additionalCards = [
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ace,
+        ), // This duplicate should be found correctly
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.two), // Wild card
+      ];
+      final success2 = player.createMeld(additionalCards);
+
+      expect(success2, isTrue);
+      expect(player.melds.length, equals(1)); // Still only one meld
+      expect(
+        player.melds.first.cards.length,
+        equals(5),
+      ); // Original 3 + 2 added
+      expect(
+        player.currentHand.length,
+        equals(1),
+      ); // Only diamonds ace should remain
+      expect(player.currentHand.first.suit, equals(Suit.diamonds));
+    });
   });
 }
