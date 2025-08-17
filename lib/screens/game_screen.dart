@@ -189,21 +189,18 @@ class _GameScreenState extends State<GameScreen> {
     final selectedIndices = <int>[];
 
     if (naturalIndices.isNotEmpty) {
-      // For natural/mixed melds, select natural cards of the same rank
+      // For existing melds, prefer natural cards of the same rank over wilds
+      // This provides cleaner gameplay - add natural cards first, wilds only if needed
       selectedIndices.addAll(naturalIndices);
+    } else if (wildIndices.isNotEmpty) {
+      // Only select wilds if no natural cards of this rank are available
+      final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
+      final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
+      final maxAdditionalWilds = currentNaturalsInMeld - currentWildsInMeld;
 
-      // Only add wilds if we have natural cards and won't exceed the limit
-      if (wildIndices.isNotEmpty) {
-        final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
-        final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
-        final maxAdditionalWilds =
-            (currentNaturalsInMeld + naturalIndices.length) -
-            currentWildsInMeld;
-
-        if (maxAdditionalWilds > 0) {
-          final wildsToAdd = wildIndices.take(maxAdditionalWilds).toList();
-          selectedIndices.addAll(wildsToAdd);
-        }
+      if (maxAdditionalWilds > 0) {
+        final wildsToAdd = wildIndices.take(maxAdditionalWilds).toList();
+        selectedIndices.addAll(wildsToAdd);
       }
     }
 
@@ -342,7 +339,17 @@ class _GameScreenState extends State<GameScreen> {
         // Error handling is now done inside _createMultipleMelds()
       } else {
         // Player has already played down, create a single meld
-        if (_gameController.createMeld(_selectedCards)) {
+
+        // Check for wild-only selection
+        final hasOnlyWildCards =
+            _selectedCards.isNotEmpty &&
+            _selectedCards.every((card) => card.isWild);
+
+        if (hasOnlyWildCards) {
+          _showErrorDialog(
+            'Cannot create melds with only wild cards! Wild cards (2s and Jokers) can only supplement natural card melds (4-A). Please select at least 2 natural cards of the same rank.',
+          );
+        } else if (_gameController.createMeld(_selectedCards)) {
           _sortHand(_sortMode);
           _selectedCardIndices.clear();
         } else {
@@ -452,24 +459,48 @@ class _GameScreenState extends State<GameScreen> {
       }
     }
 
-    // For natural/mixed melds with the same rank
+    // For existing melds, prioritize natural cards over wilds
     if (naturalCount > 0) {
+      // Only count natural cards when they're available for existing melds
+      return naturalCount;
+    }
+
+    // If no natural cards available, count wilds that could be added
+    if (wildAsWildCount > 0) {
       final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
       final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
-      final maxAdditionalWilds =
-          (currentNaturalsInMeld + naturalCount) - currentWildsInMeld;
+      final maxAdditionalWilds = currentNaturalsInMeld - currentWildsInMeld;
       final usableWilds = wildAsWildCount > maxAdditionalWilds
           ? maxAdditionalWilds
           : wildAsWildCount;
-      return naturalCount + (usableWilds > 0 ? usableWilds : 0);
+      return usableWilds > 0 ? usableWilds : 0;
     }
 
-    // If no natural cards of this rank, don't count wild cards
     return 0;
   }
 
   bool _createMultipleMelds() {
     final gameState = _gameController.gameState;
+
+    // Check if user selected only wild cards before processing meld groups
+    final humanPlayer = _gameController.gameState.players.firstWhere(
+      (p) => p.type == PlayerType.human,
+    );
+    final selectedCards = _selectedCardIndices
+        .where((index) => index < humanPlayer.currentHand.length)
+        .map((index) => humanPlayer.currentHand[index])
+        .toList();
+
+    final hasOnlyWildCards =
+        selectedCards.isNotEmpty && selectedCards.every((card) => card.isWild);
+
+    if (hasOnlyWildCards) {
+      _showErrorDialog(
+        'Cannot create melds with only wild cards! Wild cards (2s and Jokers) can only supplement natural card melds (4-A). Please select at least 2 natural cards of the same rank.',
+      );
+      return false;
+    }
+
     final meldGroups = _findMeldGroupsFromSelectedIndices();
 
     if (meldGroups.isEmpty) {
