@@ -14,18 +14,22 @@ class BalatroTheme {
   static const Color cardBackground = Color(0xFF2c1810);
   static const Color cardBorder = Color(0xFF8b4513);
   static const Color glowColor = Color(0xFF64ffda);
-  
+
   // Text colors
   static const Color primaryText = Color(0xFFffffff);
   static const Color secondaryText = Color(0xFFb0bec5);
   static const Color accentText = Color(0xFF64ffda);
-  
+
   // Card suit colors - bright and visible on dark backgrounds
-  static const Color heartsColor = Color(0xFFe91e63);    // Bright pink/red
-  static const Color diamondsColor = Color(0xFFff5722);  // Bright orange
-  static const Color clubsColor = Color(0xFF81c784);     // Light green (for visibility)
-  static const Color spadesColor = Color(0xFF90caf9);    // Light blue (for visibility)
-  
+  static const Color heartsColor = Color(0xFFe91e63); // Bright pink/red
+  static const Color diamondsColor = Color(0xFFff5722); // Bright orange
+  static const Color clubsColor = Color(
+    0xFF81c784,
+  ); // Light green (for visibility)
+  static const Color spadesColor = Color(
+    0xFF90caf9,
+  ); // Light blue (for visibility)
+
   static ThemeData get darkTheme {
     return ThemeData(
       brightness: Brightness.dark,
@@ -50,10 +54,7 @@ class BalatroTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
       ),
       cardTheme: CardThemeData(
@@ -62,41 +63,53 @@ class BalatroTheme {
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: cardBorder.withValues(alpha: 0.6),
-            width: 1,
-          ),
+          side: BorderSide(color: cardBorder.withValues(alpha: 0.6), width: 1),
         ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: darkPurple,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: glowColor.withValues(alpha: 0.3),
-            width: 2,
-          ),
+          side: BorderSide(color: glowColor.withValues(alpha: 0.3), width: 2),
         ),
         titleTextStyle: const TextStyle(
           color: primaryText,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
-        contentTextStyle: const TextStyle(
-          color: secondaryText,
-          fontSize: 14,
-        ),
+        contentTextStyle: const TextStyle(color: secondaryText, fontSize: 14),
       ),
       textTheme: const TextTheme(
-        displayLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        displayMedium: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        displaySmall: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        headlineLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        headlineMedium: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        headlineSmall: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
+        displayLarge: TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.bold,
+        ),
+        displayMedium: TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.bold,
+        ),
+        displaySmall: TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.bold,
+        ),
+        headlineLarge: TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.bold,
+        ),
+        headlineMedium: TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.bold,
+        ),
+        headlineSmall: TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.bold,
+        ),
         titleLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
         titleMedium: TextStyle(color: primaryText, fontWeight: FontWeight.w600),
-        titleSmall: TextStyle(color: secondaryText, fontWeight: FontWeight.w600),
+        titleSmall: TextStyle(
+          color: secondaryText,
+          fontWeight: FontWeight.w600,
+        ),
         bodyLarge: TextStyle(color: primaryText),
         bodyMedium: TextStyle(color: secondaryText),
         bodySmall: TextStyle(color: secondaryText),
@@ -129,10 +142,7 @@ class BalatroTheme {
           spreadRadius: 4,
         ),
       ],
-      border: Border.all(
-        color: glowColor.withValues(alpha: 0.4),
-        width: 1,
-      ),
+      border: Border.all(color: glowColor.withValues(alpha: 0.4), width: 1),
     );
   }
 

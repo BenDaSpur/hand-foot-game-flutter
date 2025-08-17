@@ -34,11 +34,11 @@ class MeldWidget extends StatelessWidget {
         decoration: BoxDecoration(
           color: canAcceptSelectedCard ? Colors.blue[50] : Colors.grey[100],
           border: Border.all(
-            color: canAcceptSelectedCard 
-                ? Colors.blue 
-                : canAddCards 
-                  ? Colors.green 
-                  : Colors.grey,
+            color: canAcceptSelectedCard
+                ? Colors.blue
+                : canAddCards
+                ? Colors.green
+                : Colors.grey,
             width: canAcceptSelectedCard || canAddCards ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(12),
@@ -57,7 +57,10 @@ class MeldWidget extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: _getMeldTypeColor(),
                     borderRadius: BorderRadius.circular(4),
@@ -74,7 +77,10 @@ class MeldWidget extends StatelessWidget {
                 if (meld.isBook) ...[
                   const SizedBox(width: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: meld.isClean ? Colors.green : Colors.red,
                       borderRadius: BorderRadius.circular(4),
@@ -92,9 +98,14 @@ class MeldWidget extends StatelessWidget {
                 if (canAddCards && compatibleCardsInHand > 0) ...[
                   const SizedBox(width: 8),
                   GestureDetector(
-                    onTap: onSelectAllCards != null ? () => onSelectAllCards!(meldIndex) : null,
+                    onTap: onSelectAllCards != null
+                        ? () => onSelectAllCards!(meldIndex)
+                        : null,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.blue,
                         borderRadius: BorderRadius.circular(4),
@@ -116,11 +127,12 @@ class MeldWidget extends StatelessWidget {
             Wrap(
               spacing: 4,
               runSpacing: 4,
-              children: meld.cards.map((card) => PlayingCardWidget(
-                card: card,
-                width: 40,
-                height: 56,
-              )).toList(),
+              children: meld.cards
+                  .map(
+                    (card) =>
+                        PlayingCardWidget(card: card, width: 40, height: 56),
+                  )
+                  .toList(),
             ),
           ],
         ),

@@ -21,8 +21,9 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late GameController _gameController;
   late BotAI _botAI;
-  
-  final List<int> _selectedCardIndices = []; // Track card indices instead of card objects
+
+  final List<int> _selectedCardIndices =
+      []; // Track card indices instead of card objects
   bool _isInitialized = false;
   String _sortMode = 'rank';
   Player? _viewingPlayerMelds; // null means viewing current player's melds
@@ -35,31 +36,19 @@ class _GameScreenState extends State<GameScreen> {
 
   void _initializeGame() {
     final players = [
-      Player(
-        id: '1',
-        name: 'You',
-        type: PlayerType.human,
-      ),
-      Player(
-        id: '2',
-        name: 'Bot 1',
-        type: PlayerType.bot,
-      ),
-      Player(
-        id: '3',
-        name: 'Bot 2',
-        type: PlayerType.bot,
-      ),
+      Player(id: '1', name: 'You', type: PlayerType.human),
+      Player(id: '2', name: 'Bot 1', type: PlayerType.bot),
+      Player(id: '3', name: 'Bot 2', type: PlayerType.bot),
     ];
 
     _gameController = GameController(players: players);
     _botAI = BotAI();
     _gameController.initializeGame();
-    
+
     // Sort the human player's initial hand
     final humanPlayer = players.firstWhere((p) => p.type == PlayerType.human);
     humanPlayer.sortHandByRank();
-    
+
     setState(() {
       _isInitialized = true;
     });
@@ -69,7 +58,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _processBotTurns() {
     if (!_isInitialized) return;
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _processBotTurn();
     });
@@ -77,12 +66,12 @@ class _GameScreenState extends State<GameScreen> {
 
   void _processBotTurn() async {
     final currentPlayer = _gameController.gameState.currentPlayer;
-    
+
     if (currentPlayer.type == PlayerType.bot) {
       await Future.delayed(const Duration(seconds: 1));
-      
+
       final decision = _botAI.makeDecision(currentPlayer, _gameController);
-      
+
       switch (decision.action) {
         case 'drawFromDeck':
           _gameController.drawFromDeck();
@@ -96,19 +85,16 @@ class _GameScreenState extends State<GameScreen> {
           break;
         case 'addToMeld':
           final data = decision.data as Map<String, dynamic>;
-          _gameController.addCardToMeld(
-            data['meldIndex'],
-            data['card'],
-          );
+          _gameController.addCardToMeld(data['meldIndex'], data['card']);
           break;
         case 'discard':
           final card = decision.data as PlayingCard;
           _gameController.discardCard(card);
           break;
       }
-      
+
       setState(() {});
-      
+
       if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
         _processBotTurn();
       }
@@ -137,12 +123,12 @@ class _GameScreenState extends State<GameScreen> {
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-    
+
     if (cardIndex >= humanPlayer.currentHand.length) return;
-    
+
     final selectedCard = humanPlayer.currentHand[cardIndex];
     final matchingIndices = <int>[];
-    
+
     // Find all cards of the same rank (including the tapped one)
     for (int i = 0; i < humanPlayer.currentHand.length; i++) {
       final card = humanPlayer.currentHand[i];
@@ -150,7 +136,7 @@ class _GameScreenState extends State<GameScreen> {
         matchingIndices.add(i);
       }
     }
-    
+
     setState(() {
       // If any matching cards are already selected, deselect all matching cards
       if (matchingIndices.any((i) => _selectedCardIndices.contains(i))) {
@@ -170,17 +156,17 @@ class _GameScreenState extends State<GameScreen> {
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-    
+
     if (meldIndex >= humanPlayer.melds.length) return;
-    
+
     final meld = humanPlayer.melds[meldIndex];
     final naturalIndices = <int>[];
     final wildIndices = <int>[];
-    
+
     // First pass: collect natural cards of the same rank and all wild cards
     for (int i = 0; i < humanPlayer.currentHand.length; i++) {
       final card = humanPlayer.currentHand[i];
-      
+
       if (card.rank == meld.rank && !card.isWild) {
         // Natural cards of the same rank as the meld
         naturalIndices.add(i);
@@ -189,29 +175,31 @@ class _GameScreenState extends State<GameScreen> {
         wildIndices.add(i);
       }
     }
-    
+
     final selectedIndices = <int>[];
-    
+
     if (meld.type == MeldType.wild) {
       // For wild melds, select all wild cards
       selectedIndices.addAll(wildIndices);
     } else if (naturalIndices.isNotEmpty) {
       // For natural/mixed melds, select natural cards of the same rank
       selectedIndices.addAll(naturalIndices);
-      
+
       // Only add wilds if we have natural cards and won't exceed the limit
       if (wildIndices.isNotEmpty) {
         final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
         final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
-        final maxAdditionalWilds = (currentNaturalsInMeld + naturalIndices.length) - currentWildsInMeld;
-        
+        final maxAdditionalWilds =
+            (currentNaturalsInMeld + naturalIndices.length) -
+            currentWildsInMeld;
+
         if (maxAdditionalWilds > 0) {
           final wildsToAdd = wildIndices.take(maxAdditionalWilds).toList();
           selectedIndices.addAll(wildsToAdd);
         }
       }
     }
-    
+
     setState(() {
       // Clear current selection and select the smart selection
       _selectedCardIndices.clear();
@@ -233,7 +221,7 @@ class _GameScreenState extends State<GameScreen> {
     if (_gameController.gameState.currentPlayer.type != PlayerType.human) {
       return false;
     }
-    
+
     if (_gameController.gameState.turnPhase != TurnPhase.meld) {
       return false;
     }
@@ -265,17 +253,17 @@ class _GameScreenState extends State<GameScreen> {
       (p) => p.type == PlayerType.human,
     );
     final currentPlayer = _gameController.gameState.currentPlayer;
-    
+
     // Only consider it stuck if:
     // 1. It's the human player's turn
     // 2. They have an empty foot (not just empty hand - that's normal transition)
     // 3. They've already picked up their foot
     // 4. They don't meet the requirements to go out
-    return currentPlayer.type == PlayerType.human && 
-           humanPlayer.hasPickedUpFoot &&
-           humanPlayer.foot.isEmpty && 
-           !humanPlayer.canGoOutWithBooks &&
-           _gameController.gameState.turnPhase == TurnPhase.meld;
+    return currentPlayer.type == PlayerType.human &&
+        humanPlayer.hasPickedUpFoot &&
+        humanPlayer.foot.isEmpty &&
+        !humanPlayer.canGoOutWithBooks &&
+        _gameController.gameState.turnPhase == TurnPhase.meld;
   }
 
   void _forceNextTurn() {
@@ -289,7 +277,9 @@ class _GameScreenState extends State<GameScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Start New Game'),
-        content: const Text('Are you sure you want to start a new game? This will reset all progress.'),
+        content: const Text(
+          'Are you sure you want to start a new game? This will reset all progress.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -314,7 +304,7 @@ class _GameScreenState extends State<GameScreen> {
       _selectedCardIndices.clear();
       _viewingPlayerMelds = null;
     });
-    
+
     _initializeGame();
   }
 
@@ -323,7 +313,6 @@ class _GameScreenState extends State<GameScreen> {
       _sortHand(_sortMode);
     }
   }
-
 
   void _onUnlockDiscard() {
     if (_gameController.unlockDiscardPile()) {
@@ -336,7 +325,7 @@ class _GameScreenState extends State<GameScreen> {
       final humanPlayer = _gameController.gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
       );
-      
+
       // If player hasn't played down yet, try to create multiple melds for play-down
       if (!humanPlayer.hasPlayedDown) {
         if (_createMultipleMelds()) {
@@ -350,7 +339,9 @@ class _GameScreenState extends State<GameScreen> {
           _sortHand(_sortMode);
           _selectedCardIndices.clear();
         } else {
-          _showErrorDialog('Invalid meld! Cards must be of the same rank or wild cards.');
+          _showErrorDialog(
+            'Invalid meld! Cards must be of the same rank or wild cards.',
+          );
         }
       }
     }
@@ -358,23 +349,25 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onAddCardToMeld(int meldIndex) {
     if (_selectedCards.isEmpty) {
-      _showErrorDialog('Select at least one card first before clicking on a meld.');
+      _showErrorDialog(
+        'Select at least one card first before clicking on a meld.',
+      );
       return;
     }
-    
+
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-    
+
     if (meldIndex >= humanPlayer.melds.length) {
       _showErrorDialog('Invalid meld selected.');
       return;
     }
-    
+
     final meld = humanPlayer.melds[meldIndex];
     final cardsToAdd = <PlayingCard>[];
     final invalidCards = <PlayingCard>[];
-    
+
     // Check which selected cards can be added to this meld
     for (final card in _selectedCards) {
       if (meld.canAddCard(card)) {
@@ -383,13 +376,15 @@ class _GameScreenState extends State<GameScreen> {
         invalidCards.add(card);
       }
     }
-    
+
     if (cardsToAdd.isEmpty) {
       final cardNames = _selectedCards.map((c) => c.displayName).join(', ');
-      _showErrorDialog('None of the selected cards ($cardNames) can be added to this meld!');
+      _showErrorDialog(
+        'None of the selected cards ($cardNames) can be added to this meld!',
+      );
       return;
     }
-    
+
     // Add all valid cards one by one
     int addedCount = 0;
     for (final card in cardsToAdd) {
@@ -397,15 +392,17 @@ class _GameScreenState extends State<GameScreen> {
         addedCount++;
       }
     }
-    
+
     if (addedCount > 0) {
       _sortHand(_sortMode);
       _selectedCardIndices.clear();
       setState(() {});
-      
+
       if (invalidCards.isNotEmpty) {
         final invalidNames = invalidCards.map((c) => c.displayName).join(', ');
-        _showErrorDialog('Added $addedCount cards to meld. Could not add: $invalidNames');
+        _showErrorDialog(
+          'Added $addedCount cards to meld. Could not add: $invalidNames',
+        );
       }
     } else {
       _showErrorDialog('Failed to add any cards to the meld.');
@@ -414,15 +411,15 @@ class _GameScreenState extends State<GameScreen> {
 
   bool _canAddCardToMeld(int meldIndex) {
     if (_selectedCards.isEmpty) return false;
-    
+
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-    
+
     if (meldIndex >= humanPlayer.melds.length) return false;
-    
+
     final meld = humanPlayer.melds[meldIndex];
-    
+
     // Return true if at least one selected card can be added
     return _selectedCards.any((card) => meld.canAddCard(card));
   }
@@ -431,13 +428,13 @@ class _GameScreenState extends State<GameScreen> {
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-    
+
     if (meldIndex >= humanPlayer.melds.length) return 0;
-    
+
     final meld = humanPlayer.melds[meldIndex];
     int naturalCount = 0;
     int wildAsWildCount = 0;
-    
+
     for (final card in humanPlayer.currentHand) {
       if (card.rank == meld.rank && !card.isWild) {
         // Natural cards of the same rank
@@ -450,75 +447,95 @@ class _GameScreenState extends State<GameScreen> {
         wildAsWildCount++;
       }
     }
-    
+
     // For wild melds, count all wild cards
     if (meld.type == MeldType.wild) {
       return wildAsWildCount;
     }
-    
+
     // For natural/mixed melds with the same rank
     if (naturalCount > 0) {
       final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
       final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
-      final maxAdditionalWilds = (currentNaturalsInMeld + naturalCount) - currentWildsInMeld;
-      final usableWilds = wildAsWildCount > maxAdditionalWilds ? maxAdditionalWilds : wildAsWildCount;
+      final maxAdditionalWilds =
+          (currentNaturalsInMeld + naturalCount) - currentWildsInMeld;
+      final usableWilds = wildAsWildCount > maxAdditionalWilds
+          ? maxAdditionalWilds
+          : wildAsWildCount;
       return naturalCount + (usableWilds > 0 ? usableWilds : 0);
     }
-    
+
     // If no natural cards of this rank, don't count wild cards
     return 0;
   }
-  
+
   bool _createMultipleMelds() {
     final gameState = _gameController.gameState;
     final meldGroups = _findMeldGroupsFromSelectedIndices();
-    
+
     if (meldGroups.isEmpty) {
-      _showErrorDialog('Cannot form any valid melds from selected cards. Each meld needs 3+ cards of the same rank.');
+      _showErrorDialog(
+        'Cannot form any valid melds from selected cards. Each meld needs 3+ cards of the same rank.',
+      );
       return false;
     }
-    
+
     // Calculate total points from all possible melds
     int totalPoints = 0;
     for (final indices in meldGroups) {
       for (final index in indices) {
-        if (index < _gameController.gameState.currentPlayer.currentHand.length) {
-          totalPoints += _gameController.gameState.currentPlayer.currentHand[index].pointValue;
+        if (index <
+            _gameController.gameState.currentPlayer.currentHand.length) {
+          totalPoints += _gameController
+              .gameState
+              .currentPlayer
+              .currentHand[index]
+              .pointValue;
         }
       }
     }
-    
+
     if (totalPoints < gameState.playDownRequirement) {
-      _showErrorDialog('Not enough points! Found $totalPoints points from valid melds, need ${gameState.playDownRequirement}.');
+      _showErrorDialog(
+        'Not enough points! Found $totalPoints points from valid melds, need ${gameState.playDownRequirement}.',
+      );
       return false;
     }
-    
+
     // Create all the melds using indices
     for (final meldIndices in meldGroups) {
       if (!_gameController.createMeldByIndices(meldIndices)) {
-        final cards = meldIndices.map((i) => 
-          i < _gameController.gameState.currentPlayer.currentHand.length 
-            ? _gameController.gameState.currentPlayer.currentHand[i].displayName 
-            : 'Unknown').join(', ');
+        final cards = meldIndices
+            .map(
+              (i) =>
+                  i < _gameController.gameState.currentPlayer.currentHand.length
+                  ? _gameController
+                        .gameState
+                        .currentPlayer
+                        .currentHand[i]
+                        .displayName
+                  : 'Unknown',
+            )
+            .join(', ');
         _showErrorDialog('Failed to create meld with: $cards');
         return false;
       }
     }
-    
+
     return true;
   }
-  
+
   List<List<int>> _findMeldGroupsFromSelectedIndices() {
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
     final hand = humanPlayer.currentHand;
     final meldGroups = <List<int>>[];
-    
+
     // Group indices by card rank
     final indicesByRank = <CardRank, List<int>>{};
     final wildIndices = <int>[];
-    
+
     for (final index in _selectedCardIndices) {
       if (index < hand.length) {
         final card = hand[index];
@@ -529,7 +546,7 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
     }
-    
+
     // Create meld groups from natural cards of the same rank
     for (final entry in indicesByRank.entries) {
       final naturalIndices = entry.value;
@@ -549,15 +566,15 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
     }
-    
+
     // If we still have 3+ wild indices, make a wild meld
     if (wildIndices.length >= 3) {
       meldGroups.add(wildIndices);
     }
-    
+
     return meldGroups;
   }
-  
+
   int _calculateSelectedPoints() {
     return _selectedCards.fold<int>(0, (sum, card) => sum + card.pointValue);
   }
@@ -567,10 +584,10 @@ class _GameScreenState extends State<GameScreen> {
       final humanPlayer = _gameController.gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
       );
-      
+
       // Check if discarding this card would empty the hand/foot
       final willBeEmpty = humanPlayer.currentHand.length == 1;
-      
+
       if (willBeEmpty) {
         // If this would be the last card, validate going out requirements
         if (!humanPlayer.hasPickedUpFoot) {
@@ -582,27 +599,30 @@ class _GameScreenState extends State<GameScreen> {
           }
           return;
         }
-        
+
         // This would end the game - check requirements
         if (!humanPlayer.canGoOutWithBooks) {
           String missingBooks = '';
           final cleanBooks = humanPlayer.melds.where((m) => m.isClean).length;
           final dirtyBooks = humanPlayer.melds.where((m) => m.isDirty).length;
           final totalBooks = humanPlayer.melds.where((m) => m.isBook).length;
-          
+
           if (!humanPlayer.hasCleanBook && !humanPlayer.hasDirtyBook) {
-            missingBooks = 'You need both a clean book (no wild cards) and a dirty book (with wild cards) to go out.';
+            missingBooks =
+                'You need both a clean book (no wild cards) and a dirty book (with wild cards) to go out.';
           } else if (!humanPlayer.hasCleanBook) {
             missingBooks = 'You need a clean book (no wild cards) to go out.';
           } else if (!humanPlayer.hasDirtyBook) {
             missingBooks = 'You need a dirty book (with wild cards) to go out.';
           }
-          
-          _showErrorDialog('Cannot go out! $missingBooks\n\nYou currently have:\n• $totalBooks book(s) total\n• $cleanBooks clean book(s)\n• $dirtyBooks dirty book(s)');
+
+          _showErrorDialog(
+            'Cannot go out! $missingBooks\n\nYou currently have:\n• $totalBooks book(s) total\n• $cleanBooks clean book(s)\n• $dirtyBooks dirty book(s)',
+          );
           return;
         }
       }
-      
+
       if (_gameController.discardCard(_selectedCards.first)) {
         setState(() {});
         _selectedCardIndices.clear();
@@ -613,20 +633,24 @@ class _GameScreenState extends State<GameScreen> {
       final humanPlayer = _gameController.gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
       );
-      
+
       if (humanPlayer.currentHand.isEmpty) {
         // If hand is empty but foot hasn't been picked up, do it automatically
         if (!humanPlayer.hasPickedUpFoot && humanPlayer.hand.isEmpty) {
           humanPlayer.pickUpFoot();
           // The logAction is private, so the GameState will handle logging internally
         }
-        
+
         // If both hand and foot are empty, but requirements aren't met
-        if (humanPlayer.hasPickedUpFoot && humanPlayer.foot.isEmpty && !humanPlayer.canGoOutWithBooks) {
-          _showErrorDialog('Cannot go out! You need both clean and dirty books to win.');
+        if (humanPlayer.hasPickedUpFoot &&
+            humanPlayer.foot.isEmpty &&
+            !humanPlayer.canGoOutWithBooks) {
+          _showErrorDialog(
+            'Cannot go out! You need both clean and dirty books to win.',
+          );
           return;
         }
-        
+
         // Force advance turn if we're truly stuck
         _gameController.gameState.nextPlayer();
         setState(() {});
@@ -696,11 +720,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final gameState = _gameController.gameState;
@@ -710,9 +730,7 @@ class _GameScreenState extends State<GameScreen> {
     );
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: BalatroTheme.primaryGradient,
-      ),
+      decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -731,7 +749,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           backgroundColor: Colors.transparent,
           elevation: 0,
-        actions: [
+          actions: [
             Container(
               margin: const EdgeInsets.all(8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -748,457 +766,545 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               ),
             ),
-          PopupMenuButton<String>(
-            onSelected: (String value) {
-              switch (value) {
-                case 'new_game':
-                  _showNewGameConfirmation();
-                  break;
-                case 'copy_seed':
-                  _copySeedToClipboard();
-                  break;
-                case 'export_game':
-                  _exportGameState();
-                  break;
-                case 'load_game':
-                  _showLoadGameDialog();
-                  break;
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'new_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('New Game'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'copy_seed',
-                child: Row(
-                  children: [
-                    Icon(Icons.copy, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Text('Copy Seed'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'export_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.download, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Export Game'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'load_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.upload, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Load Game'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Game status bar
-          Container(
-            margin: const EdgeInsets.all(8),
-            padding: const EdgeInsets.all(16),
-            decoration: BalatroTheme.glowDecoration(
-              backgroundColor: BalatroTheme.darkPurple,
-              glowColor: BalatroTheme.glowColor,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildStatusChip('Current: ${currentPlayer.name}', BalatroTheme.neonPink),
-                _buildStatusChip('Phase: ${gameState.turnPhase.name.toUpperCase()}', BalatroTheme.neonBlue),
-                _buildStatusChip('Play Down: ${gameState.playDownRequirement}', BalatroTheme.neonOrange),
-                _buildStatusChip('Deck: ${gameState.deck.size}', BalatroTheme.neonYellow),
-                if (gameState.topDiscard != null)
-                  _buildStatusChip('Top: ${gameState.topDiscard!.displayName}', BalatroTheme.neonGreen),
-              ],
-            ),
-          ),
-
-          // Recent actions
-          Container(
-            height: 100,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              border: Border.all(color: Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text(
-                    'Recent Actions',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: gameState.recentActions.length,
-                    reverse: true, // Show newest first
-                    itemBuilder: (context, index) {
-                      final action = gameState.recentActions[gameState.recentActions.length - 1 - index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 1),
-                        child: Text(
-                          action.toString(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[700],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 8),
-          
-          // Player scores (clickable to view melds)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Tap a player to view their melds:',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ),
-          Container(
-            height: 90,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: gameState.players.map((player) => GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _viewingPlayerMelds = player;
-                  });
-                },
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: _viewingPlayerMelds == player 
-                        ? Colors.green[100] 
-                        : player == currentPlayer 
-                          ? Colors.blue[100] 
-                          : Colors.white,
-                    border: Border.all(
-                      color: _viewingPlayerMelds == player 
-                          ? Colors.green 
-                          : Colors.grey,
-                      width: _viewingPlayerMelds == player ? 2 : 1,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+            PopupMenuButton<String>(
+              onSelected: (String value) {
+                switch (value) {
+                  case 'new_game':
+                    _showNewGameConfirmation();
+                    break;
+                  case 'copy_seed':
+                    _copySeedToClipboard();
+                    break;
+                  case 'export_game':
+                    _exportGameState();
+                    break;
+                  case 'load_game':
+                    _showLoadGameDialog();
+                    break;
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem<String>(
+                  value: 'new_game',
+                  child: Row(
                     children: [
-                      Text(
-                        player.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text('${player.score}'),
-                      if (player.melds.isNotEmpty)
-                        Text(
-                          '${player.melds.length} melds',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+                      Icon(Icons.refresh, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('New Game'),
                     ],
                   ),
                 ),
-              )).toList(),
-            ),
-          ),
-
-          // Melds section
-          Expanded(
-            flex: 2,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${(_viewingPlayerMelds ?? humanPlayer).name}\'s Melds:',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        if (_viewingPlayerMelds != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _viewingPlayerMelds = null;
-                                });
-                              },
-                              child: const Text('Back to yours'),
-                            ),
-                          ),
-                      ],
-                    ),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'copy_seed',
+                  child: Row(
+                    children: [
+                      Icon(Icons.copy, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Text('Copy Seed'),
+                    ],
                   ),
-                  if ((_viewingPlayerMelds ?? humanPlayer).melds.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No melds yet'),
-                    )
-                  else
-                    ...(() {
-                      // Sort melds by face value (CardRank)
-                      final player = _viewingPlayerMelds ?? humanPlayer;
-                      final indexedMelds = player.melds.asMap().entries.toList();
-                      indexedMelds.sort((a, b) => a.value.rank.index.compareTo(b.value.rank.index));
-                      
-                      return indexedMelds.map((entry) {
-                        final canAdd = _viewingPlayerMelds == null && 
-                            currentPlayer.type == PlayerType.human &&
-                            gameState.turnPhase == TurnPhase.meld;
-                        
-                        return MeldWidget(
-                          meld: entry.value,
-                          meldIndex: entry.key,
-                          canAddCards: canAdd,
-                          onTap: canAdd ? _onAddCardToMeld : null,
-                          onSelectAllCards: canAdd ? _selectAllCardsForMeld : null,
-                          canAcceptSelectedCard: canAdd && _canAddCardToMeld(entry.key),
-                          compatibleCardsInHand: canAdd ? _getCompatibleCardsCount(entry.key) : 0,
-                        );
-                      });
-                    })(),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'export_game',
+                  child: Row(
+                    children: [
+                      Icon(Icons.download, color: Colors.green),
+                      SizedBox(width: 8),
+                      Text('Export Game'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'load_game',
+                  child: Row(
+                    children: [
+                      Icon(Icons.upload, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Load Game'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // Game status bar
+            Container(
+              margin: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(16),
+              decoration: BalatroTheme.glowDecoration(
+                backgroundColor: BalatroTheme.darkPurple,
+                glowColor: BalatroTheme.glowColor,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildStatusChip(
+                    'Current: ${currentPlayer.name}',
+                    BalatroTheme.neonPink,
+                  ),
+                  _buildStatusChip(
+                    'Phase: ${gameState.turnPhase.name.toUpperCase()}',
+                    BalatroTheme.neonBlue,
+                  ),
+                  _buildStatusChip(
+                    'Play Down: ${gameState.playDownRequirement}',
+                    BalatroTheme.neonOrange,
+                  ),
+                  _buildStatusChip(
+                    'Deck: ${gameState.deck.size}',
+                    BalatroTheme.neonYellow,
+                  ),
+                  if (gameState.topDiscard != null)
+                    _buildStatusChip(
+                      'Top: ${gameState.topDiscard!.displayName}',
+                      BalatroTheme.neonGreen,
+                    ),
                 ],
               ),
             ),
-          ),
 
-          // Action buttons
-          if (currentPlayer.type == PlayerType.human) ...[
-            // Emergency recovery for stuck game
-            if (_isGameStuck())
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.red[100],
-                child: Column(
-                  children: [
-                    const Text(
-                      'Game is stuck! You went out without meeting book requirements.',
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _forceNextTurn,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text('Skip Turn (Emergency Recovery)'),
-                    ),
-                  ],
-                ),
-              ),
+            // Recent actions
             Container(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(
-                spacing: 8,
+              height: 100,
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (gameState.turnPhase == TurnPhase.draw) ...[
-                    ElevatedButton(
-                      onPressed: _onDrawFromDeck,
-                      child: const Text('Draw from Deck'),
-                    ),
-                    if (_gameController.canUnlockDiscard())
-                      ElevatedButton(
-                        onPressed: _onUnlockDiscard,
-                        child: const Text('Take Discard Pile'),
+                  const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text(
+                      'Recent Actions',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
-                  ],
-                  if (gameState.turnPhase == TurnPhase.meld) ...[
-                    ElevatedButton(
-                      onPressed: _selectedCards.length >= 3 ? _onCreateMeld : null,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      itemCount: gameState.recentActions.length,
+                      reverse: true, // Show newest first
+                      itemBuilder: (context, index) {
+                        final action =
+                            gameState.recentActions[gameState
+                                    .recentActions
+                                    .length -
+                                1 -
+                                index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 1),
+                          child: Text(
+                            action.toString(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Player scores (clickable to view melds)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Tap a player to view their melds:',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+            Container(
+              height: 90,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: gameState.players
+                    .map(
+                      (player) => GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _viewingPlayerMelds = player;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _viewingPlayerMelds == player
+                                ? Colors.green[100]
+                                : player == currentPlayer
+                                ? Colors.blue[100]
+                                : Colors.white,
+                            border: Border.all(
+                              color: _viewingPlayerMelds == player
+                                  ? Colors.green
+                                  : Colors.grey,
+                              width: _viewingPlayerMelds == player ? 2 : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                player.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text('${player.score}'),
+                              if (player.melds.isNotEmpty)
+                                Text(
+                                  '${player.melds.length} melds',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+
+            // Melds section
+            Expanded(
+              flex: 2,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
                         children: [
                           Text(
-                            humanPlayer.hasPlayedDown 
-                                ? 'Create Meld (${_selectedCards.length})' 
-                                : 'Play Down (${_selectedCards.length} cards)',
+                            '${(_viewingPlayerMelds ?? humanPlayer).name}\'s Melds:',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          if (!humanPlayer.hasPlayedDown && _selectedCards.isNotEmpty)
-                            Text(
-                              '${_calculateSelectedPoints()}/${gameState.playDownRequirement} pts',
-                              style: const TextStyle(fontSize: 10),
+                          if (_viewingPlayerMelds != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _viewingPlayerMelds = null;
+                                  });
+                                },
+                                child: const Text('Back to yours'),
+                              ),
                             ),
                         ],
                       ),
                     ),
-                    ElevatedButton(
-                      onPressed: _selectedCards.length == 1 ? _onDiscard : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedCards.length == 1 && humanPlayer.currentHand.length == 1
-                            ? (humanPlayer.hasPickedUpFoot ? Colors.orange : Colors.blue)
-                            : null,
-                      ),
-                      child: Text(
-                        _selectedCards.length == 1 && humanPlayer.currentHand.length == 1
-                            ? (humanPlayer.hasPickedUpFoot ? 'Go Out' : 'Go to Foot')
-                            : 'Discard',
-                      ),
-                    ),
-                    if (_selectedCardIndices.isNotEmpty)
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _selectedCardIndices.clear();
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey,
-                        ),
-                        child: const Text('Clear Selection'),
-                      ),
+                    if ((_viewingPlayerMelds ?? humanPlayer).melds.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('No melds yet'),
+                      )
+                    else
+                      ...(() {
+                        // Sort melds by face value (CardRank)
+                        final player = _viewingPlayerMelds ?? humanPlayer;
+                        final indexedMelds = player.melds
+                            .asMap()
+                            .entries
+                            .toList();
+                        indexedMelds.sort(
+                          (a, b) =>
+                              a.value.rank.index.compareTo(b.value.rank.index),
+                        );
+
+                        return indexedMelds.map((entry) {
+                          final canAdd =
+                              _viewingPlayerMelds == null &&
+                              currentPlayer.type == PlayerType.human &&
+                              gameState.turnPhase == TurnPhase.meld;
+
+                          return MeldWidget(
+                            meld: entry.value,
+                            meldIndex: entry.key,
+                            canAddCards: canAdd,
+                            onTap: canAdd ? _onAddCardToMeld : null,
+                            onSelectAllCards: canAdd
+                                ? _selectAllCardsForMeld
+                                : null,
+                            canAcceptSelectedCard:
+                                canAdd && _canAddCardToMeld(entry.key),
+                            compatibleCardsInHand: canAdd
+                                ? _getCompatibleCardsCount(entry.key)
+                                : 0,
+                          );
+                        });
+                      })(),
                   ],
-                ],
+                ),
               ),
             ),
 
-            // Sort controls
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Text(
-                    'Sort by: ',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+            // Action buttons
+            if (currentPlayer.type == PlayerType.human) ...[
+              // Emergency recovery for stuck game
+              if (_isGameStuck())
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.red[100],
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Game is stuck! You went out without meeting book requirements.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _forceNextTurn,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        child: const Text('Skip Turn (Emergency Recovery)'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  ...['rank', 'suit', 'value'].map((sortType) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ElevatedButton(
-                      onPressed: () => _sortHand(sortType),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _sortMode == sortType ? Colors.blue : null,
-                        foregroundColor: _sortMode == sortType ? Colors.white : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        minimumSize: Size.zero,
+                ),
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    if (gameState.turnPhase == TurnPhase.draw) ...[
+                      ElevatedButton(
+                        onPressed: _onDrawFromDeck,
+                        child: const Text('Draw from Deck'),
                       ),
-                      child: Text(
-                        sortType[0].toUpperCase() + sortType.substring(1),
-                        style: const TextStyle(fontSize: 12),
+                      if (_gameController.canUnlockDiscard())
+                        ElevatedButton(
+                          onPressed: _onUnlockDiscard,
+                          child: const Text('Take Discard Pile'),
+                        ),
+                    ],
+                    if (gameState.turnPhase == TurnPhase.meld) ...[
+                      ElevatedButton(
+                        onPressed: _selectedCards.length >= 3
+                            ? _onCreateMeld
+                            : null,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              humanPlayer.hasPlayedDown
+                                  ? 'Create Meld (${_selectedCards.length})'
+                                  : 'Play Down (${_selectedCards.length} cards)',
+                            ),
+                            if (!humanPlayer.hasPlayedDown &&
+                                _selectedCards.isNotEmpty)
+                              Text(
+                                '${_calculateSelectedPoints()}/${gameState.playDownRequirement} pts',
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )),
-                ],
+                      ElevatedButton(
+                        onPressed: _selectedCards.length == 1
+                            ? _onDiscard
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              _selectedCards.length == 1 &&
+                                  humanPlayer.currentHand.length == 1
+                              ? (humanPlayer.hasPickedUpFoot
+                                    ? Colors.orange
+                                    : Colors.blue)
+                              : null,
+                        ),
+                        child: Text(
+                          _selectedCards.length == 1 &&
+                                  humanPlayer.currentHand.length == 1
+                              ? (humanPlayer.hasPickedUpFoot
+                                    ? 'Go Out'
+                                    : 'Go to Foot')
+                              : 'Discard',
+                        ),
+                      ),
+                      if (_selectedCardIndices.isNotEmpty)
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedCardIndices.clear();
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey,
+                          ),
+                          child: const Text('Clear Selection'),
+                        ),
+                    ],
+                  ],
+                ),
               ),
-            ),
 
-            // Hand
-            Container(
-              height: 120,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Text(
-                      'Your Hand (${humanPlayer.currentHand.length} cards)',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              // Sort controls
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Sort by: ',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                  ),
-                  Expanded(
-                    child: ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(context).copyWith(
-                        dragDevices: {
-                          PointerDeviceKind.touch,
-                          PointerDeviceKind.mouse,
-                        },
-                      ),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: SizedBox(
-                          width: humanPlayer.currentHand.isNotEmpty 
-                              ? (humanPlayer.currentHand.length - 1) * 50.0 + 70.0
-                              : 70.0,
-                          child: Stack(
-                            children: humanPlayer.currentHand.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final card = entry.value;
-                              
-                              return Positioned(
-                                left: index * 50.0,
-                                child: GestureDetector(
-                                  onTap: () => _onCardTap(index),
-                                  onDoubleTap: () => _onCardDoubleTap(index),
-                                  child: PlayingCardWidget(
-                                    card: card,
-                                    width: 70,
-                                    height: 98,
-                                    isSelected: _selectedCardIndices.contains(index),
-                                    isPlayable: _isCardPlayable(card),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
+                    const SizedBox(width: 8),
+                    ...['rank', 'suit', 'value'].map(
+                      (sortType) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ElevatedButton(
+                          onPressed: () => _sortHand(sortType),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _sortMode == sortType
+                                ? Colors.blue
+                                : null,
+                            foregroundColor: _sortMode == sortType
+                                ? Colors.white
+                                : null,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                          ),
+                          child: Text(
+                            sortType[0].toUpperCase() + sortType.substring(1),
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
 
-          const SizedBox(height: 16),
-        ],
+              // Hand
+              Container(
+                height: 120,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        'Your Hand (${humanPlayer.currentHand.length} cards)',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                          },
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: SizedBox(
+                            width: humanPlayer.currentHand.isNotEmpty
+                                ? (humanPlayer.currentHand.length - 1) * 50.0 +
+                                      70.0
+                                : 70.0,
+                            child: Stack(
+                              children: humanPlayer.currentHand
+                                  .asMap()
+                                  .entries
+                                  .map((entry) {
+                                    final index = entry.key;
+                                    final card = entry.value;
+
+                                    return Positioned(
+                                      left: index * 50.0,
+                                      child: GestureDetector(
+                                        onTap: () => _onCardTap(index),
+                                        onDoubleTap: () =>
+                                            _onCardDoubleTap(index),
+                                        child: PlayingCardWidget(
+                                          card: card,
+                                          width: 70,
+                                          height: 98,
+                                          isSelected: _selectedCardIndices
+                                              .contains(index),
+                                          isPlayable: _isCardPlayable(card),
+                                        ),
+                                      ),
+                                    );
+                                  })
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );
   }
 
   void _copySeedToClipboard() {
-    final seed = _gameController.gameSeed?.toString() ?? 'No seed (legacy game)';
+    final seed =
+        _gameController.gameSeed?.toString() ?? 'No seed (legacy game)';
     Clipboard.setData(ClipboardData(text: seed));
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Game seed copied to clipboard: $seed'),
         backgroundColor: BalatroTheme.neonGreen,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -1207,15 +1313,13 @@ class _GameScreenState extends State<GameScreen> {
   void _exportGameState() {
     final gameStateJson = _gameController.exportGameState();
     Clipboard.setData(ClipboardData(text: gameStateJson));
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Game state exported to clipboard'),
         backgroundColor: BalatroTheme.neonBlue,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         action: SnackBarAction(
           label: 'VIEW',
           textColor: Colors.white,
@@ -1284,7 +1388,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _showLoadGameDialog() {
     final TextEditingController textController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1316,15 +1420,22 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
-                      borderSide: const BorderSide(color: BalatroTheme.neonBlue),
+                      borderSide: const BorderSide(
+                        color: BalatroTheme.neonBlue,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: BalatroTheme.neonBlue),
+                      borderSide: const BorderSide(
+                        color: BalatroTheme.neonBlue,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: BalatroTheme.glowColor, width: 2),
+                      borderSide: const BorderSide(
+                        color: BalatroTheme.glowColor,
+                        width: 2,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     hintText: 'Paste game state JSON here...',
@@ -1339,7 +1450,9 @@ class _GameScreenState extends State<GameScreen> {
                 children: [
                   TextButton(
                     onPressed: () async {
-                      final clipboardData = await Clipboard.getData('text/plain');
+                      final clipboardData = await Clipboard.getData(
+                        'text/plain',
+                      );
                       if (clipboardData?.text != null) {
                         textController.text = clipboardData!.text!;
                       }
@@ -1395,7 +1508,9 @@ class _GameScreenState extends State<GameScreen> {
     try {
       final newController = GameController.fromExportJson(jsonText);
       if (newController == null) {
-        _showErrorDialog('Failed to load game state. The JSON format may be invalid or corrupted.');
+        _showErrorDialog(
+          'Failed to load game state. The JSON format may be invalid or corrupted.',
+        );
         return;
       }
 
@@ -1409,12 +1524,12 @@ class _GameScreenState extends State<GameScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Game loaded successfully! Seed: ${newController.gameSeed ?? "No seed"}'),
+          content: Text(
+            'Game loaded successfully! Seed: ${newController.gameSeed ?? "No seed"}',
+          ),
           backgroundColor: BalatroTheme.neonGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           duration: const Duration(seconds: 3),
         ),
       );

@@ -1,10 +1,6 @@
 import 'card.dart';
 
-enum MeldType {
-  natural,
-  mixed,
-  wild,
-}
+enum MeldType { natural, mixed, wild }
 
 class Meld {
   final CardRank rank;
@@ -31,23 +27,15 @@ class Meld {
 
     final rank = naturalCards.first.rank;
     final allNaturalSameRank = naturalCards.every((card) => card.rank == rank);
-    
+
     if (!allNaturalSameRank) return null;
 
     if (wildCards.isEmpty) {
-      return Meld(
-        rank: rank,
-        cards: List.from(cards),
-        type: MeldType.natural,
-      );
+      return Meld(rank: rank, cards: List.from(cards), type: MeldType.natural);
     }
 
     if (wildCards.length <= naturalCards.length) {
-      return Meld(
-        rank: rank,
-        cards: List.from(cards),
-        type: MeldType.mixed,
-      );
+      return Meld(rank: rank, cards: List.from(cards), type: MeldType.mixed);
     }
 
     return null;
@@ -61,7 +49,8 @@ class Meld {
     if (card.isWild) {
       final wildCards = cards.where((c) => c.isWild).length;
       final naturalCards = cards.where((c) => !c.isWild).length;
-      return wildCards < naturalCards; // Can add wild only if it won't exceed naturals
+      return wildCards <
+          naturalCards; // Can add wild only if it won't exceed naturals
     }
 
     return card.rank == rank;
@@ -93,14 +82,16 @@ class Meld {
   }
 
   bool get isBook => cards.length >= 7;
-  
+
   // Dynamic clean/dirty detection based on current cards
   bool get isClean => isBook && !cards.any((card) => card.isWild);
   bool get isDirty => isBook && cards.any((card) => card.isWild);
 
   @override
   String toString() {
-    final rankStr = rank == CardRank.joker ? 'Wilds' : '${rank.name[0].toUpperCase()}${rank.name.substring(1)}';
+    final rankStr = rank == CardRank.joker
+        ? 'Wilds'
+        : '${rank.name[0].toUpperCase()}${rank.name.substring(1)}';
     return '$rankStr (${cards.length} cards)';
   }
 }

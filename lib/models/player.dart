@@ -1,10 +1,7 @@
 import 'card.dart';
 import 'meld.dart';
 
-enum PlayerType {
-  human,
-  bot,
-}
+enum PlayerType { human, bot }
 
 class Player {
   final String id;
@@ -32,7 +29,7 @@ class Player {
        melds = melds ?? [];
 
   List<PlayingCard> get currentHand => hasPickedUpFoot ? foot : hand;
-  
+
   bool get isHandEmpty => hand.isEmpty;
   bool get isFootEmpty => foot.isEmpty;
   bool get canGoOut => hasPickedUpFoot && foot.isEmpty && canGoOutWithBooks;
@@ -64,14 +61,15 @@ class Player {
     final removedCards = <PlayingCard>[];
     // Sort indices in descending order to remove from end to start
     // This prevents index shifting issues
-    final sortedIndices = List<int>.from(indices)..sort((a, b) => b.compareTo(a));
-    
+    final sortedIndices = List<int>.from(indices)
+      ..sort((a, b) => b.compareTo(a));
+
     for (final index in sortedIndices) {
       if (index >= 0 && index < currentHand.length) {
         removedCards.add(currentHand.removeAt(index));
       }
     }
-    
+
     // Return in original order (reverse since we removed in reverse)
     return removedCards.reversed.toList();
   }
@@ -88,12 +86,15 @@ class Player {
       // Check play down requirement if player hasn't played down yet
       if (!hasPlayedDown && playDownRequirement > 0) {
         // Calculate the point value of just the cards being laid down
-        final cardPointValue = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
+        final cardPointValue = cards.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
         if (cardPointValue < playDownRequirement) {
           return false; // Not enough points to play down
         }
       }
-      
+
       // Remove cards from hand - handle duplicates correctly
       final cardsToRemove = List<PlayingCard>.from(cards);
       for (final card in cardsToRemove) {
@@ -106,7 +107,7 @@ class Player {
           return false;
         }
       }
-      
+
       melds.add(meld);
       hasPlayedDown = true;
       return true;
@@ -155,9 +156,9 @@ class Player {
   int get bookCount => melds.where((meld) => meld.isBook).length;
 
   bool get hasCleanBook => melds.any((meld) => meld.isBook && meld.isClean);
-  
+
   bool get hasDirtyBook => melds.any((meld) => meld.isBook && meld.isDirty);
-  
+
   bool get canGoOutWithBooks => hasCleanBook && hasDirtyBook;
 
   void sortHandByRank() {
@@ -174,7 +175,7 @@ class Player {
       if (a.isJoker && b.isJoker) return 0;
       if (a.isJoker) return 1;
       if (b.isJoker) return -1;
-      
+
       final suitComparison = (a.suit?.index ?? 4).compareTo(b.suit?.index ?? 4);
       if (suitComparison != 0) return suitComparison;
       return a.meldValue.compareTo(b.meldValue);

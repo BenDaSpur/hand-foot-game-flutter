@@ -15,7 +15,7 @@ class Deck {
 
   void _initializeStandardDeck() {
     _cards.clear();
-    
+
     for (Suit suit in Suit.values) {
       for (CardRank rank in CardRank.values) {
         if (rank != CardRank.joker) {
@@ -23,7 +23,7 @@ class Deck {
         }
       }
     }
-    
+
     _cards.add(const PlayingCard(rank: CardRank.joker));
     _cards.add(const PlayingCard(rank: CardRank.joker));
   }
@@ -31,12 +31,12 @@ class Deck {
   static Deck createHandAndFootDeck(int playerCount, {int? seed}) {
     final deck = Deck(seed: seed);
     final allCards = <PlayingCard>[];
-    
+
     final deckCount = playerCount + 1;
     for (int i = 0; i < deckCount; i++) {
       allCards.addAll(deck._cards);
     }
-    
+
     return Deck.fromCards(allCards, seed: seed);
   }
 
@@ -75,15 +75,15 @@ class Deck {
   }
 
   PlayingCard? get topCard => _cards.isEmpty ? null : _cards.last;
-  
+
   int get size => _cards.length;
-  
+
   bool get isEmpty => _cards.isEmpty;
-  
+
   List<PlayingCard> get cards => List.unmodifiable(_cards);
-  
+
   int? get seed => _seed;
-  
+
   // For game state restoration - replaces the entire deck with new cards
   void replaceCards(List<PlayingCard> newCards) {
     _cards.clear();

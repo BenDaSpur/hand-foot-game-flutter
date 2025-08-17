@@ -1,9 +1,4 @@
-enum Suit {
-  hearts,
-  diamonds,
-  clubs,
-  spades,
-}
+enum Suit { hearts, diamonds, clubs, spades }
 
 enum CardRank {
   ace,
@@ -54,7 +49,7 @@ class PlayingCard {
         if (isRed) {
           return -300; // Red 3 penalty
         } else {
-          return -5;   // Black 3 penalty
+          return -5; // Black 3 penalty
         }
       default: // 4, 5, 6, 7, 8
         return 5;

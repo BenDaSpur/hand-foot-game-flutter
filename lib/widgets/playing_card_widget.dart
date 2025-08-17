@@ -36,8 +36,8 @@ class PlayingCardWidget extends StatelessWidget {
               color: isSelected
                   ? BalatroTheme.glowColor
                   : isPlayable
-                      ? BalatroTheme.neonGreen
-                      : BalatroTheme.cardBorder,
+                  ? BalatroTheme.neonGreen
+                  : BalatroTheme.cardBorder,
               width: isSelected ? 3 : 1,
             ),
             borderRadius: BorderRadius.circular(12),
@@ -71,7 +71,7 @@ class PlayingCardWidget extends StatelessWidget {
           child: Stack(
             children: [
               // Holographic shimmer effect
-              if (card.isWild) 
+              if (card.isWild)
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
@@ -104,10 +104,7 @@ class PlayingCardWidget extends StatelessWidget {
                             blurRadius: 3,
                           ),
                           if (isSelected || card.isWild)
-                            Shadow(
-                              color: _getCardColor(),
-                              blurRadius: 8,
-                            ),
+                            Shadow(color: _getCardColor(), blurRadius: 8),
                         ],
                       ),
                     ),
@@ -130,10 +127,7 @@ class PlayingCardWidget extends StatelessWidget {
                             blurRadius: 2,
                           ),
                           if (isSelected)
-                            Shadow(
-                              color: _getCardColor(),
-                              blurRadius: 4,
-                            ),
+                            Shadow(color: _getCardColor(), blurRadius: 4),
                         ],
                       ),
                     ),
@@ -158,10 +152,7 @@ class PlayingCardWidget extends StatelessWidget {
                               blurRadius: 2,
                             ),
                             if (isSelected)
-                              Shadow(
-                                color: _getCardColor(),
-                                blurRadius: 4,
-                              ),
+                              Shadow(color: _getCardColor(), blurRadius: 4),
                           ],
                         ),
                       ),
@@ -178,7 +169,7 @@ class PlayingCardWidget extends StatelessWidget {
 
   String _getCardDisplay() {
     if (card.isJoker) return 'JK';
-    
+
     switch (card.rank) {
       case CardRank.ace:
         return 'A';
@@ -197,7 +188,7 @@ class PlayingCardWidget extends StatelessWidget {
 
   String _getSuitSymbol() {
     if (card.isJoker) return '🃏';
-    
+
     switch (card.suit!) {
       case Suit.hearts:
         return '♥';
@@ -213,7 +204,7 @@ class PlayingCardWidget extends StatelessWidget {
   Color _getCardColor() {
     if (card.isJoker) return BalatroTheme.neonPink;
     if (card.isWild) return BalatroTheme.glowColor;
-    
+
     switch (card.suit) {
       case Suit.hearts:
         return BalatroTheme.heartsColor;
