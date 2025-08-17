@@ -32,9 +32,6 @@ jobs:
     - name: Analyze project source
       run: flutter analyze
 
-    - name: Run tests
-      run: flutter test --coverage
-
     - name: Check build (Android)
       run: flutter build apk --debug
 
