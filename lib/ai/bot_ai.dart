@@ -68,23 +68,19 @@ class BotAI {
   }
 
   BotDecision _makeMeldDecision(Player bot, GameController controller) {
-    final gameState = controller.gameState;
     final possibleMelds = controller.findPossibleMelds(bot);
 
-    // If player hasn't played down yet, filter melds by play-down requirement
+    // If player hasn't played down yet, use strategic multi-meld approach
     if (!bot.hasPlayedDown) {
-      final playDownRequirement = gameState.playDownRequirement;
-      final validMelds = possibleMelds.where((meld) {
-        final cardPointValue = meld.fold<int>(
-          0,
-          (sum, card) => sum + card.pointValue,
-        );
-        return cardPointValue >= playDownRequirement;
-      }).toList();
-
-      if (validMelds.isNotEmpty) {
-        final bestMeld = _chooseBestMeld(validMelds);
-        return BotDecision(action: 'createMeld', data: bestMeld);
+      final strategicPlayDown = _findStrategicPlayDown(
+        bot,
+        controller,
+        possibleMelds,
+      );
+      if (strategicPlayDown.isNotEmpty) {
+        // Create the first meld from our strategic combination
+        final firstMeld = _chooseBestMeld(strategicPlayDown);
+        return BotDecision(action: 'createMeld', data: firstMeld);
       }
     } else {
       // Already played down - be more strategic about melding
@@ -320,5 +316,196 @@ class BotAI {
     final meldValue = _calculateMeldScore(bestMeld);
 
     return meldValue >= 50 || bot.currentHand.length > 8;
+  }
+
+  /// Finds strategic multi-meld combinations for play-down that minimize points
+  /// while retaining cards for discard pile unlocking opportunities
+  List<List<PlayingCard>> _findStrategicPlayDown(
+    Player bot,
+    GameController controller,
+    List<List<PlayingCard>> possibleMelds,
+  ) {
+    final playDownRequirement = controller.gameState.playDownRequirement;
+
+    // Strategy: Find minimal point combinations that meet requirement
+    // while maximizing cards kept for discard pile unlocking
+
+    // Group possible melds by point value for analysis
+    final meldsByPoints = <int, List<List<PlayingCard>>>{};
+    for (final meld in possibleMelds) {
+      final points = meld.fold<int>(0, (sum, card) => sum + card.pointValue);
+      meldsByPoints.putIfAbsent(points, () => []).add(meld);
+    }
+
+    // Sort point values ascending (prefer lower point melds)
+    final sortedPoints = meldsByPoints.keys.toList()..sort();
+
+    // Try to find minimal combinations that meet play-down requirement
+    final viableCombinations = <List<List<PlayingCard>>>[];
+
+    // Strategy 1: Single meld if it barely exceeds requirement (avoid over-commitment)
+    for (final points in sortedPoints) {
+      if (points >= playDownRequirement && points <= playDownRequirement + 20) {
+        // Only use single meld if it's close to requirement (not massive overkill)
+        viableCombinations.add(meldsByPoints[points]!);
+        break; // Take first minimal single meld option
+      }
+    }
+
+    // Strategy 2: Multi-meld combinations (like 3 nines + 3 tens = 60)
+    if (viableCombinations.isEmpty) {
+      final combinations = _findMeldCombinations(
+        meldsByPoints,
+        playDownRequirement,
+      );
+      viableCombinations.addAll(combinations);
+    }
+
+    // Strategy 3: Evaluate unlock potential for each combination
+    if (viableCombinations.isNotEmpty) {
+      final bestCombination = _chooseBestStrategicCombination(
+        bot,
+        controller,
+        viableCombinations,
+      );
+      return bestCombination;
+    }
+
+    return [];
+  }
+
+  /// Finds multi-meld combinations that meet play-down requirement
+  List<List<List<PlayingCard>>> _findMeldCombinations(
+    Map<int, List<List<PlayingCard>>> meldsByPoints,
+    int requirement,
+  ) {
+    final combinations = <List<List<PlayingCard>>>[];
+    final sortedPoints = meldsByPoints.keys.toList()..sort();
+
+    // Try combinations of 2-3 melds
+    for (int i = 0; i < sortedPoints.length; i++) {
+      for (int j = i; j < sortedPoints.length; j++) {
+        final points1 = sortedPoints[i];
+        final points2 = sortedPoints[j];
+
+        if (points1 + points2 >= requirement) {
+          // Found 2-meld combination
+          for (final meld1 in meldsByPoints[points1]!) {
+            for (final meld2 in meldsByPoints[points2]!) {
+              if (!_meldsConflict(meld1, meld2)) {
+                combinations.add([meld1, meld2]);
+              }
+            }
+          }
+        }
+
+        // Try 3-meld combinations
+        for (int k = j; k < sortedPoints.length; k++) {
+          final points3 = sortedPoints[k];
+          if (points1 + points2 + points3 >= requirement) {
+            for (final meld1 in meldsByPoints[points1]!) {
+              for (final meld2 in meldsByPoints[points2]!) {
+                for (final meld3 in meldsByPoints[points3]!) {
+                  if (!_meldsConflict(meld1, meld2) &&
+                      !_meldsConflict(meld1, meld3) &&
+                      !_meldsConflict(meld2, meld3)) {
+                    combinations.add([meld1, meld2, meld3]);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return combinations;
+  }
+
+  /// Checks if two melds conflict (use same cards)
+  bool _meldsConflict(List<PlayingCard> meld1, List<PlayingCard> meld2) {
+    for (final card1 in meld1) {
+      for (final card2 in meld2) {
+        if (card1.rank == card2.rank && card1.suit == card2.suit) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Chooses the best strategic combination based on unlock potential
+  List<List<PlayingCard>> _chooseBestStrategicCombination(
+    Player bot,
+    GameController controller,
+    List<List<List<PlayingCard>>> combinations,
+  ) {
+    if (combinations.isEmpty) return [];
+
+    // Score each combination based on:
+    // 1. Minimizes points used (keeps more cards)
+    // 2. Maximizes discard pile unlock potential
+    // 3. Preserves natural card diversity
+
+    var bestCombination = combinations.first;
+    var bestScore = double.negativeInfinity;
+
+    for (final combination in combinations) {
+      final score = _scoreCombination(bot, controller, combination);
+      if (score > bestScore) {
+        bestScore = score;
+        bestCombination = combination;
+      }
+    }
+
+    return bestCombination;
+  }
+
+  /// Scores a meld combination based on strategic value
+  double _scoreCombination(
+    Player bot,
+    GameController controller,
+    List<List<PlayingCard>> combination,
+  ) {
+    final usedCards = <PlayingCard>[];
+    var totalPoints = 0;
+
+    for (final meld in combination) {
+      usedCards.addAll(meld);
+      totalPoints += meld.fold<int>(0, (sum, card) => sum + card.pointValue);
+    }
+
+    final remainingCards = bot.currentHand
+        .where(
+          (card) => !usedCards.any(
+            (used) => used.rank == card.rank && used.suit == card.suit,
+          ),
+        )
+        .toList();
+
+    var score = 0.0;
+
+    // Prefer minimal point usage (keep more cards)
+    score -= totalPoints * 0.1;
+
+    // Bonus for retaining pairs (unlock potential)
+    final remainingRanks = <CardRank, int>{};
+    for (final card in remainingCards) {
+      if (!card.isWild) {
+        remainingRanks[card.rank] = (remainingRanks[card.rank] ?? 0) + 1;
+      }
+    }
+
+    // Big bonus for keeping pairs (2+ of same rank for unlocking)
+    for (final count in remainingRanks.values) {
+      if (count >= 2) {
+        score += count * 10.0; // Encourage keeping pairs
+      }
+    }
+
+    // Bonus for keeping fewer but higher-count ranks vs many singletons
+    score += remainingRanks.length * -5.0; // Prefer consolidation
+
+    return score;
   }
 }

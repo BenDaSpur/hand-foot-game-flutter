@@ -57,7 +57,10 @@ class GameController {
     return _gameState.playMeld(cards);
   }
 
-  bool createMeldByIndices(List<int> cardIndices) {
+  bool createMeldByIndices(
+    List<int> cardIndices, {
+    bool skipPlayDownCheck = false,
+  }) {
     final humanPlayer = _gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
@@ -71,7 +74,8 @@ class GameController {
     final meld = Meld.createMeld(cards);
     if (meld != null) {
       // Check play down requirement if player hasn't played down yet
-      if (!humanPlayer.hasPlayedDown) {
+      // Skip this check when creating multiple melds (UI already validated total)
+      if (!skipPlayDownCheck && !humanPlayer.hasPlayedDown) {
         final cardPointValue = cards.fold<int>(
           0,
           (sum, card) => sum + card.pointValue,
