@@ -112,17 +112,18 @@ This project includes comprehensive code quality and CI/CD pipelines:
 - **Manual Script**: Run `./format_and_test.sh` to format and test manually
 
 #### Continuous Integration
+- **Fast Quality Checks**: Optimized CI pipeline (~2-3 minutes)
 - **Automated Testing**: All PRs and pushes run 74 comprehensive tests
 - **Code Analysis**: Static analysis with `flutter analyze` 
 - **Format Checking**: Ensures consistent code formatting
-- **Build Verification**: Validates that code builds successfully
+- **Dependency Verification**: Validates package dependencies
 - **Branch Protection**: Main branch requires PR reviews and passing CI checks
 
 #### Quality Gates
 - ✅ All tests must pass (74/74)
 - ✅ Code analysis must be clean
 - ✅ Formatting must be consistent
-- ✅ Builds must succeed
+- ✅ Dependencies must be valid
 - ✅ PR reviews required for main branch
 
 ## 🎪 How to Play

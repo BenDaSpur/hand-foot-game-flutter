@@ -29,8 +29,7 @@ main
 - ✅ **Require status checks to pass before merging**
   - ✅ Require branches to be up to date before merging
   - Required status checks:
-    - `test-and-analyze`
-    - `build-test`
+    - `quality-checks`
 
 - ❌ **Require conversation resolution before merging** (optional)
 - ❌ **Require signed commits** (optional)
@@ -55,14 +54,11 @@ Once configured, all changes to the main branch must:
 
 The following checks must pass:
 
-### `test-and-analyze`
-- Code formatting verification
-- All 74 tests passing
-- Static analysis (flutter analyze)
-
-### `build-test`
-- Successful debug build (APK)
-- Dependency verification
+### `quality-checks`
+- Code formatting verification (`dart format`)
+- All 74 tests passing (`flutter test`)
+- Static analysis (`flutter analyze`)
+- Dependency verification (`flutter pub deps`)
 
 ## Troubleshooting
 
