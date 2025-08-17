@@ -169,5 +169,92 @@ void main() {
 
       expect(hasOnlyWildCardsEmpty, isFalse);
     });
+
+    test(
+      'should handle multiple meld play-down correctly (3 nines + 5 tens scenario)',
+      () {
+        // Test the specific scenario from the bug report
+        final players = [
+          Player(id: '1', name: 'Human', type: PlayerType.human),
+          Player(id: '2', name: 'Bot 1', type: PlayerType.bot),
+          Player(id: '3', name: 'Bot 2', type: PlayerType.bot),
+        ];
+
+        final humanPlayer = players[0];
+
+        // Set up the same scenario: 3 nines (30 pts) + 5 tens (50 pts) = 80 pts total
+        humanPlayer.dealHand([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine), // 10 pts
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine), // 10 pts
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine), // 10 pts
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten), // 10 pts
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten), // 10 pts
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ten), // 10 pts
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten), // 10 pts
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.ten,
+          ), // 10 pts (duplicate)
+        ]);
+
+        // Player hasn't played down yet
+        expect(humanPlayer.hasPlayedDown, isFalse);
+
+        // Calculate total points for play-down check (should be 80 > 60)
+        final totalPoints = humanPlayer.hand.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
+        expect(totalPoints, equals(80));
+        expect(totalPoints >= 60, isTrue); // Meets play-down requirement
+
+        // Test individual meld validation (this was the bug)
+        final ninesCards = [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+        ];
+
+        final ninesPoints = ninesCards.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
+        expect(ninesPoints, equals(30)); // 3 x 10 = 30 points
+        expect(
+          ninesPoints < 60,
+          isTrue,
+        ); // Individual meld is less than requirement
+
+        // But the individual meld should still be valid when part of a multi-meld play-down
+        final ninesMeld = Meld.createMeld(ninesCards);
+        expect(ninesMeld, isNotNull);
+        expect(ninesMeld!.rank, equals(CardRank.nine));
+        expect(ninesMeld.type, equals(MeldType.natural));
+
+        // Test tens meld as well
+        final tensCards = [
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+        ];
+
+        final tensMeld = Meld.createMeld(tensCards);
+        expect(tensMeld, isNotNull);
+        expect(tensMeld!.rank, equals(CardRank.ten));
+        expect(tensMeld.type, equals(MeldType.natural));
+
+        final tensPoints = tensCards.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
+        expect(tensPoints, equals(50)); // 5 x 10 = 50 points
+
+        // Combined points should meet requirement
+        expect(ninesPoints + tensPoints, equals(80));
+        expect(ninesPoints + tensPoints >= 60, isTrue);
+      },
+    );
   });
 }

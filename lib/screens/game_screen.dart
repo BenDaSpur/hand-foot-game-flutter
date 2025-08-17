@@ -533,8 +533,12 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Create all the melds using indices
+    // Skip individual play-down checks since we already validated the total
     for (final meldIndices in meldGroups) {
-      if (!_gameController.createMeldByIndices(meldIndices)) {
+      if (!_gameController.createMeldByIndices(
+        meldIndices,
+        skipPlayDownCheck: true,
+      )) {
         final cards = meldIndices
             .map(
               (i) =>
