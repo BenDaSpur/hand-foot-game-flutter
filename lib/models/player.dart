@@ -98,7 +98,8 @@ class Player {
       }
 
       // Check play down requirement if player hasn't played down yet
-      if (!hasPlayedDown && playDownRequirement > 0) {
+      // Only check if this is their very first meld (no existing melds)
+      if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {
         final cardPointValue = cards.fold<int>(
           0,
           (sum, card) => sum + card.pointValue,
@@ -128,7 +129,8 @@ class Player {
     } else {
       // Create new meld since none exists for this rank
       // Check play down requirement if player hasn't played down yet
-      if (!hasPlayedDown && playDownRequirement > 0) {
+      // Only check if this is their very first meld (no existing melds)
+      if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {
         final cardPointValue = cards.fold<int>(
           0,
           (sum, card) => sum + card.pointValue,
