@@ -34,7 +34,7 @@ void main() {
       expect(meld.cards.length, equals(3));
     });
 
-    test('should create wild meld with all wild cards', () {
+    test('should reject wild-only melds (Hand & Foot rule)', () {
       final cards = [
         const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
         const PlayingCard(suit: Suit.spades, rank: CardRank.two),
@@ -43,10 +43,7 @@ void main() {
 
       final meld = Meld.createMeld(cards);
 
-      expect(meld, isNotNull);
-      expect(meld!.rank, equals(CardRank.joker));
-      expect(meld.type, equals(MeldType.wild));
-      expect(meld.cards.length, equals(3));
+      expect(meld, isNull); // Wild cards cannot form their own melds
     });
 
     test('should reject meld with less than 3 cards', () {
@@ -190,24 +187,6 @@ void main() {
         mixedBook.pointValue,
         equals(100 + 20 + 50 + 300),
       ); // (5x20) + 20 + 50 + 300 bonus
-
-      // Wild book
-      final wildBook = Meld(
-        rank: CardRank.joker,
-        cards: [
-          ...List.generate(
-            5,
-            (i) => const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          ),
-          const PlayingCard(rank: CardRank.joker),
-          const PlayingCard(rank: CardRank.joker),
-        ],
-        type: MeldType.wild,
-      );
-      expect(
-        wildBook.pointValue,
-        equals(100 + 100 + 1000),
-      ); // (5x20) + (2x50) + 1000 bonus
     });
 
     test('should add cards to meld correctly', () {
@@ -302,41 +281,29 @@ void main() {
       );
     });
 
-    test('should handle wild meld correctly', () {
-      final meld = Meld(
-        rank: CardRank.joker,
-        cards: [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
-          const PlayingCard(rank: CardRank.joker),
-        ],
-        type: MeldType.wild,
-      );
+    test('should reject all-joker melds', () {
+      final cards = [
+        const PlayingCard(rank: CardRank.joker),
+        const PlayingCard(rank: CardRank.joker),
+        const PlayingCard(rank: CardRank.joker),
+      ];
 
-      // Can add wild cards
-      expect(meld.canAddCard(const PlayingCard(rank: CardRank.joker)), isTrue);
-      expect(
-        meld.canAddCard(
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-        ),
-        isTrue,
-      );
+      final meld = Meld.createMeld(cards);
 
-      // Cannot add natural cards
-      expect(
-        meld.canAddCard(
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-        ),
-        isFalse,
-      );
+      expect(meld, isNull); // All-joker melds not allowed
+    });
 
-      // Cannot add 3s
-      expect(
-        meld.canAddCard(
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.three),
-        ),
-        isFalse,
-      );
+    test('should reject mixed wild cards without natural cards', () {
+      final cards = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+        const PlayingCard(rank: CardRank.joker),
+        const PlayingCard(rank: CardRank.joker),
+      ];
+
+      final meld = Meld.createMeld(cards);
+
+      expect(meld, isNull); // Wild-only melds not allowed
     });
   });
 }
