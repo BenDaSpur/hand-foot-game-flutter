@@ -27,8 +27,11 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.32.8'
           channel: 'stable'
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
 
       - name: Install dependencies
         run: flutter pub get
@@ -66,8 +69,11 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.32.8'
           channel: 'stable'
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
 
       - name: Install dependencies
         run: flutter pub get
@@ -95,8 +101,11 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.32.8'
           channel: 'stable'
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
 
       - name: Install dependencies
         run: flutter pub get
@@ -123,8 +132,11 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.32.8'
           channel: 'stable'
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
 
       - name: Install dependencies
         run: flutter pub get
@@ -152,7 +164,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.32.8'
           channel: 'stable'
 
       - name: Install Linux dependencies
