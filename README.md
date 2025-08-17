@@ -10,6 +10,8 @@ A beautiful Flutter implementation of the classic Hand & Foot card game featurin
 - **Multi-Round Gameplay**: Progressive difficulty with increasing play-down requirements
 - **Action Logging**: Privacy-aware game history (see your draws, not the bots')
 - **Going Out Validation**: Prevents illegal endings requiring both clean and dirty books
+- **Game State Export/Import**: Save and load complete game states for debugging
+- **Seeded Random Generation**: Reproducible games with deterministic card shuffling
 
 ## 🎨 Visual Design
 
@@ -71,7 +73,7 @@ Choose your platform:
 
 ```bash
 # Clone the repository
-git clone [your-repo-url]
+git clone https://github.com/BenDaSpur/hand-foot-game-flutter.git
 cd hand_foot_game_flutter
 
 # Install dependencies
@@ -87,12 +89,12 @@ flutter run
 # Static analysis
 flutter analyze
 
-# Run tests
-flutter test
-
 # Build for release
 flutter build apk        # Android
-flutter build ios        # iOS
+flutter build web        # Web
+flutter build windows    # Windows
+flutter build macos      # macOS
+flutter build linux      # Linux
 ```
 
 ## 🎪 How to Play
@@ -108,7 +110,14 @@ flutter build ios        # iOS
 - **Double-tap cards** to select all of the same rank
 - **Click "Select X" on melds** to auto-select compatible cards from your hand
 - **Tap player names** to view their melds on the table
-- **Use the menu** (top-right) to start a new game
+- **Use the menu** (top-right) to start a new game, copy seed, or export/load games
+
+### 🛠️ Debug Features
+
+- **Copy Seed**: Copy the game's random seed for reproducible debugging
+- **Export Game**: Save complete game state as JSON to clipboard
+- **Load Game**: Paste and restore previously exported game states
+- **Perfect Reproduction**: Loaded games recreate exact deck order and future draws
 
 ## 📁 Project Structure
 

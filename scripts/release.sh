@@ -46,4 +46,4 @@ git push origin "$TAG"
 
 echo "✅ Release $TAG created successfully!"
 echo "🔗 GitHub Actions will now build and create the release automatically."
-echo "📱 Check https://github.com/[your-username]/hand_foot_game_flutter/releases for downloads once complete."
+echo "📱 Check https://github.com/BenDaSpur/hand-foot-game-flutter/releases for downloads once complete."
