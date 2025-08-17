@@ -12,6 +12,9 @@ class Meld {
   static Meld? createMeld(List<PlayingCard> cards) {
     if (cards.length < 3) return null;
 
+    // 3s cannot be melded at all
+    if (cards.any((card) => card.isThree)) return null;
+
     final naturalCards = cards.where((card) => !card.isWild).toList();
     final wildCards = cards.where((card) => card.isWild).toList();
 
@@ -42,6 +45,9 @@ class Meld {
   }
 
   bool canAddCard(PlayingCard card) {
+    // 3s cannot be added to any meld
+    if (card.isThree) return false;
+    
     if (type == MeldType.wild) {
       return card.isWild;
     }

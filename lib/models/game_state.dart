@@ -96,6 +96,9 @@ class GameState {
     if (discardPile.isEmpty || hasDrawnFromDeck) return false;
     final topCard = topDiscard!;
     if (topCard.isWild) return false;
+    
+    // 3s cannot be melded, so discard pile cannot be unlocked when top card is a 3
+    if (topCard.isThree) return false;
 
     // Must have already met play-down requirement
     if (!currentPlayer.hasPlayedDown) return false;
