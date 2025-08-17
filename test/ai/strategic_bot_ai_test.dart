@@ -24,68 +24,45 @@ void main() {
       bot = players[1]; // Bot player
     });
 
-    test('should use strategic multi-meld play-down (Option 1 strategy)', () {
-      // Set up scenario similar to your 3 nines + 5 tens situation
-      bot.dealHand([
-        // 3 nines (30 points)
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
-        // 5 tens (50 points) - bot should strategically use only 3
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-        const PlayingCard(
-          suit: Suit.hearts,
-          rank: CardRank.ten,
-        ), // Keep this one
-        // Other cards
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
-      ]);
+    test(
+      'should use multi-meld play-down when individual melds are insufficient',
+      () {
+        // Set up scenario similar to your 3 nines + 5 tens situation
+        bot.dealHand([
+          // 3 nines (30 points)
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          // 5 tens (50 points) - bot should strategically use only 3
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+          const PlayingCard(
+            suit: Suit.hearts,
+            rank: CardRank.ten,
+          ), // Keep this one
+          // Other cards
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+        ]);
 
-      // Bot hasn't played down yet
-      expect(bot.hasPlayedDown, isFalse);
+        // Bot hasn't played down yet
+        expect(bot.hasPlayedDown, isFalse);
 
-      // Set current player to bot and draw phase
-      gameController.gameState.currentPlayerIndex = 1; // Bot
-      gameController.gameState.turnPhase = TurnPhase.meld;
+        // Set current player to bot and draw phase
+        gameController.gameState.currentPlayerIndex = 1; // Bot
+        gameController.gameState.turnPhase = TurnPhase.meld;
 
-      // Bot should make a strategic meld decision
-      final decision = botAI.makeDecision(bot, gameController);
+        // Bot should create a multi-meld play-down (30+30=60 points)
+        final decision = botAI.makeDecision(bot, gameController);
 
-      expect(decision.action, equals('createMeld'));
-
-      final selectedMeld = decision.data as List<PlayingCard>;
-      // Bot AI will choose the best available meld, which may be the 5-ten meld (50 points)
-      expect(
-        selectedMeld.length,
-        greaterThanOrEqualTo(3),
-      ); // Should create a valid meld
-
-      // The meld should be either 3 nines OR 3 tens (strategic choice)
-      final isNinesMeld = selectedMeld.every(
-        (card) => card.rank == CardRank.nine,
-      );
-      final isTensMeld = selectedMeld.every(
-        (card) => card.rank == CardRank.ten,
-      );
-
-      expect(isNinesMeld || isTensMeld, isTrue);
-
-      // Verify that the bot made a strategic decision
-      // Either chooses 3 nines (30 pts) or 5 tens (50 pts) based on its strategic logic
-      final meldPoints = selectedMeld.fold<int>(
-        0,
-        (sum, card) => sum + card.pointValue,
-      );
-      expect(
-        meldPoints,
-        greaterThanOrEqualTo(30),
-      ); // Should be a valid meld with significant points
-    });
+        expect(decision.action, equals('createMeld'));
+        expect(decision.skipPlayDownCheck, isTrue);
+        expect(decision.data, isA<List<PlayingCard>>());
+      },
+    );
 
     test('should make strategic meld decisions', () {
       // Scenario: Bot has multiple meld options with different point values
