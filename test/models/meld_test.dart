@@ -97,6 +97,35 @@ void main() {
       expect(meld, isNull);
     });
 
+    test('should reject mixed meld with equal wilds and naturals', () {
+      final cards = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace), // natural
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace), // natural
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two), // wild
+        const PlayingCard(rank: CardRank.joker), // wild
+      ];
+
+      final meld = Meld.createMeld(cards);
+
+      // According to Hand & Foot rules, wild cards must be strictly less than naturals
+      expect(meld, isNull);
+    });
+
+    test('should create mixed meld when wilds are less than naturals', () {
+      final cards = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace), // natural
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace), // natural
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace), // natural
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two), // wild
+      ];
+
+      final meld = Meld.createMeld(cards);
+
+      expect(meld, isNotNull);
+      expect(meld!.type, equals(MeldType.mixed));
+      expect(meld.rank, equals(CardRank.ace));
+    });
+
     test('should correctly identify books', () {
       final shortMeld = Meld(
         rank: CardRank.ace,
@@ -278,7 +307,7 @@ void main() {
       expect(meld.cards.length, equals(5));
     });
 
-    test('should prevent adding too many wilds to mixed meld', () {
+    test('should prevent adding wild card when it would equal naturals', () {
       final meld = Meld(
         rank: CardRank.ace,
         cards: [
@@ -289,17 +318,61 @@ void main() {
         type: MeldType.mixed,
       );
 
-      // Can add one more wild (2 naturals, 1 wild + 1 more = 2 wilds max)
-      expect(meld.canAddCard(const PlayingCard(rank: CardRank.joker)), isTrue);
-      expect(meld.addCard(const PlayingCard(rank: CardRank.joker)), isTrue);
-
-      // Cannot add another wild (would exceed naturals)
+      // Currently has 2 naturals and 1 wild
+      // Adding another wild would make it 2 naturals and 2 wilds (equal), which should be rejected
       expect(
-        meld.canAddCard(
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-        ),
+        meld.canAddCard(const PlayingCard(rank: CardRank.joker)),
         isFalse,
       );
+
+      // But we can still add a natural card
+      expect(
+        meld.canAddCard(const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace)),
+        isTrue,
+      );
+    });
+
+    test('should ensure createMeld and canAddCard are consistent', () {
+      // Create a base meld: 3 naturals, 1 wild
+      final baseMeld = Meld(
+        rank: CardRank.king,
+        cards: [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two), // wild
+        ],
+        type: MeldType.mixed,
+      );
+
+      // canAddCard should allow adding one more wild (3 naturals, 2 wilds total)
+      expect(baseMeld.canAddCard(const PlayingCard(rank: CardRank.joker)), isTrue);
+
+      // But createMeld should also allow creating a meld with 3 naturals and 2 wilds
+      final cardsFor3N2W = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+        const PlayingCard(rank: CardRank.joker),
+      ];
+      
+      final createdMeld = Meld.createMeld(cardsFor3N2W);
+      expect(createdMeld, isNotNull);
+      expect(createdMeld!.type, equals(MeldType.mixed));
+
+      // And canAddCard should NOT allow making it equal (2 naturals, 2 wilds)
+      final equalMeld = Meld(
+        rank: CardRank.jack,
+        cards: [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ],
+        type: MeldType.mixed,
+      );
+      
+      expect(equalMeld.canAddCard(const PlayingCard(rank: CardRank.joker)), isFalse);
     });
 
     test('should handle wild meld correctly', () {

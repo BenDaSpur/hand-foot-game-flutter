@@ -37,7 +37,7 @@ class Meld {
       return Meld(rank: rank, cards: List.from(cards), type: MeldType.natural);
     }
 
-    if (wildCards.length <= naturalCards.length) {
+    if (wildCards.length < naturalCards.length) {
       return Meld(rank: rank, cards: List.from(cards), type: MeldType.mixed);
     }
 
@@ -55,8 +55,9 @@ class Meld {
     if (card.isWild) {
       final wildCards = cards.where((c) => c.isWild).length;
       final naturalCards = cards.where((c) => !c.isWild).length;
-      return wildCards <
-          naturalCards; // Can add wild only if it won't exceed naturals
+      // After adding this wild card, we'll have wildCards+1 wilds and naturalCards naturals
+      // We want wildCards+1 < naturalCards, so wildCards < naturalCards-1
+      return wildCards < naturalCards - 1;
     }
 
     return card.rank == rank;
