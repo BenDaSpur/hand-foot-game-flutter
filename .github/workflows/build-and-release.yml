@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -49,13 +49,13 @@ jobs:
         run: flutter build appbundle --release
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: android-aab
           path: build/app/outputs/bundle/release/app-release.aab
@@ -87,7 +87,7 @@ jobs:
           tar -czf ../../hand-foot-web.tar.gz *
 
       - name: Upload Web artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: web-build
           path: hand-foot-web.tar.gz
@@ -118,7 +118,7 @@ jobs:
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath hand-foot-windows.zip
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: hand-foot-windows.zip
@@ -150,7 +150,7 @@ jobs:
           tar -czf ../../../../../hand-foot-macos.tar.gz hand_foot_game_flutter.app
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-build
           path: hand-foot-macos.tar.gz
@@ -184,7 +184,7 @@ jobs:
           tar -czf ../../../../../hand-foot-linux.tar.gz *
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-build
           path: hand-foot-linux.tar.gz
@@ -198,7 +198,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Get version
         id: version
@@ -210,13 +210,10 @@ jobs:
           fi
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          release_name: Hand & Foot Game ${{ steps.version.outputs.VERSION }}
+          name: Hand & Foot Game ${{ steps.version.outputs.VERSION }}
           body: |
             ## 🎮 Hand & Foot Card Game Release ${{ steps.version.outputs.VERSION }}
             
@@ -244,63 +241,10 @@ jobs:
             Enjoy the game! 🃏✨
           draft: false
           prerelease: false
-
-      - name: Upload Android APK
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: android-apk/app-release.apk
-          asset_name: hand-foot-android.apk
-          asset_content_type: application/vnd.android.package-archive
-
-      - name: Upload Android AAB
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: android-aab/app-release.aab
-          asset_name: hand-foot-android.aab
-          asset_content_type: application/octet-stream
-
-      - name: Upload Windows Build
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: windows-build/hand-foot-windows.zip
-          asset_name: hand-foot-windows.zip
-          asset_content_type: application/zip
-
-      - name: Upload macOS Build
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: macos-build/hand-foot-macos.tar.gz
-          asset_name: hand-foot-macos.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Linux Build
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: linux-build/hand-foot-linux.tar.gz
-          asset_name: hand-foot-linux.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Web Build
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: web-build/hand-foot-web.tar.gz
-          asset_name: hand-foot-web.tar.gz
-          asset_content_type: application/gzip
+          files: |
+            android-apk/app-release.apk
+            android-aab/app-release.aab
+            windows-build/hand-foot-windows.zip
+            macos-build/hand-foot-macos.tar.gz
+            linux-build/hand-foot-linux.tar.gz
+            web-build/hand-foot-web.tar.gz
