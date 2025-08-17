@@ -566,10 +566,8 @@ class _GameScreenState extends State<GameScreen> {
       }
     }
 
-    // If we still have 3+ wild indices, make a wild meld
-    if (wildIndices.length >= 3) {
-      meldGroups.add(wildIndices);
-    }
+    // Note: Wild-only melds are not allowed in Hand & Foot rules
+    // Wild cards can only supplement natural card melds
 
     return meldGroups;
   }
