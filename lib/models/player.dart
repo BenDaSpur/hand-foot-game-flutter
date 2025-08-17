@@ -82,24 +82,26 @@ class Player {
 
   bool createMeld(List<PlayingCard> cards, {int playDownRequirement = 0}) {
     if (cards.isEmpty) return false;
-    
+
     // First check if we can add to existing melds
-    final naturalCards = cards.where((card) => !card.isWild && !card.isThree).toList();
+    final naturalCards = cards
+        .where((card) => !card.isWild && !card.isThree)
+        .toList();
     if (naturalCards.isNotEmpty) {
       final targetRank = naturalCards.first.rank;
       final existingMeldIndex = findMeldByRank(targetRank);
-      
+
       if (existingMeldIndex != -1) {
         // Found existing meld - try to add cards to it
         final existingMeld = melds[existingMeldIndex];
-        
+
         // Validate that all cards can be added to the existing meld
         for (final card in cards) {
           if (!existingMeld.canAddCard(card)) {
             return false; // Cannot add this card to existing meld
           }
         }
-        
+
         // Add all cards to the existing meld
         for (final card in cards) {
           if (!existingMeld.addCard(card)) {
@@ -113,16 +115,16 @@ class Player {
             return false;
           }
         }
-        
+
         hasPlayedDown = true;
         return true;
       }
     }
-    
+
     // No existing meld found - try to create a new meld
     final meld = Meld.createMeld(cards);
     if (meld == null) return false;
-    
+
     // Check play down requirement if player hasn't played down yet
     // Only check if this is their very first meld (no existing melds)
     if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {

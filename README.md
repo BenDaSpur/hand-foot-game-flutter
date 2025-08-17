@@ -86,8 +86,13 @@ flutter run
 ### Development Commands
 
 ```bash
-# Static analysis
-flutter analyze
+# Format code and run tests (recommended)
+./format_and_test.sh
+
+# Individual commands
+dart format .            # Format all Dart files
+flutter test             # Run tests
+flutter analyze          # Static analysis
 
 # Build for release
 flutter build apk        # Android
@@ -96,6 +101,15 @@ flutter build windows    # Windows
 flutter build macos      # macOS
 flutter build linux      # Linux
 ```
+
+### Code Formatting
+
+This project includes automatic code formatting:
+
+- **Pre-commit Hook**: Automatically formats code, runs tests, and checks analysis before each commit
+- **VS Code Settings**: Auto-format on save when using VS Code
+- **Manual Script**: Run `./format_and_test.sh` to format and test manually
+- **CI/CD Integration**: All builds include formatting and testing checks
 
 ## 🎪 How to Play
 
