@@ -1,1 +1,27 @@
 include: package:flutter_lints/flutter.yaml
+
+# Additional lint rules
+linter:
+  rules:
+    # Style rules
+    prefer_single_quotes: true
+    require_trailing_commas: true
+    
+    # Code quality rules
+    avoid_empty_else: true
+    avoid_redundant_argument_values: true
+    avoid_unnecessary_containers: true
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    prefer_const_literals_to_create_immutables: true
+    
+    # Documentation rules
+    public_member_api_docs: false # Set to true if you want to enforce API docs
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  errors:
+    # Allow print statements in tests for debugging
+    avoid_print: ignore
