@@ -263,6 +263,37 @@ class GameState {
     return false;
   }
 
+  bool playMeldBypass(List<PlayingCard> cards) {
+    if (turnPhase != TurnPhase.meld) return false;
+
+    final wasFirstMeld = !currentPlayer.hasPlayedDown;
+
+    // Check if this would add to existing meld
+    final proposedMeld = Meld.createMeld(cards);
+    final existingMeldIndex = proposedMeld != null
+        ? currentPlayer.findMeldByRank(proposedMeld.rank)
+        : -1;
+    final isAddingToExisting = existingMeldIndex != -1;
+
+    // Use playDownRequirement: 0 to bypass the requirement check
+    if (currentPlayer.createMeld(cards, playDownRequirement: 0)) {
+      hasMelded = true;
+
+      final cardNames = cards.map((c) => c.displayName).join(', ');
+      if (wasFirstMeld) {
+        final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
+        _logAction('played down (multi-meld) with $points points: $cardNames');
+      } else if (isAddingToExisting) {
+        _logAction('added to existing meld: $cardNames');
+      } else {
+        _logAction('created new meld: $cardNames');
+      }
+
+      return true;
+    }
+    return false;
+  }
+
   bool addToMeld(int meldIndex, PlayingCard card) {
     if (turnPhase != TurnPhase.meld) return false;
 

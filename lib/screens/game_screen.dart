@@ -91,7 +91,12 @@ class _GameScreenState extends State<GameScreen> {
           break;
         case 'createMeld':
           final cards = decision.data as List<PlayingCard>;
-          _gameController.createMeld(cards);
+          if (decision.skipPlayDownCheck) {
+            // For multi-meld sequences, use the bypass method
+            _gameController.createMeldBypass(cards);
+          } else {
+            _gameController.createMeld(cards);
+          }
           break;
         case 'addToMeld':
           final data = decision.data as Map<String, dynamic>;

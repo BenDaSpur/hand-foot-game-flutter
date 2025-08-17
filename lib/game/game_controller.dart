@@ -57,6 +57,10 @@ class GameController {
     return _gameState.playMeld(cards);
   }
 
+  bool createMeldBypass(List<PlayingCard> cards) {
+    return _gameState.playMeldBypass(cards);
+  }
+
   bool createMeldByIndices(
     List<int> cardIndices, {
     bool skipPlayDownCheck = false,
@@ -277,9 +281,66 @@ class GameController {
           )
           .toList(),
       'exportedAt': DateTime.now().toIso8601String(),
+      'debugInfo': _generateDebugInfo(),
     };
 
     return const JsonEncoder.withIndent('  ').convert(export);
+  }
+
+  Map<String, dynamic> _generateDebugInfo() {
+    final currentPlayer = _gameState.currentPlayer;
+    final debugInfo = <String, dynamic>{
+      'currentPlayerDebug': {
+        'name': currentPlayer.name,
+        'type': currentPlayer.type.name,
+        'turnPhase': _gameState.turnPhase.name,
+      },
+    };
+
+    // Add bot-specific debugging for current player
+    if (currentPlayer.type == PlayerType.bot) {
+      final possibleMelds = findPossibleMelds(currentPlayer);
+      debugInfo['botDebug'] = {
+        'possibleMeldsCount': possibleMelds.length,
+        'possibleMelds': possibleMelds.map((meld) {
+          final points = meld.fold<int>(
+            0,
+            (sum, card) => sum + card.pointValue,
+          );
+          return {
+            'cards': meld
+                .map((c) => '${c.rank.name} of ${c.suit?.name ?? 'joker'}')
+                .toList(),
+            'points': points,
+            'meetsPlayDown': points >= _gameState.playDownRequirement,
+          };
+        }).toList(),
+        'canUnlockDiscardPile': _gameState.canDrawFromDiscard,
+        'hasPlayedDown': currentPlayer.hasPlayedDown,
+        'playDownRequirement': _gameState.playDownRequirement,
+      };
+
+      // Add discard pile analysis if relevant
+      if (_gameState.discardPile.isNotEmpty) {
+        final topDiscard = _gameState.topDiscard!;
+        final matchingNaturals = currentPlayer.currentHand
+            .where((card) => card.rank == topDiscard.rank && !card.isWild)
+            .length;
+        debugInfo['botDebug']['discardPileAnalysis'] = {
+          'topCard':
+              '${topDiscard.rank.name} of ${topDiscard.suit?.name ?? 'joker'}',
+          'matchingNaturals': matchingNaturals,
+          'canUnlock': matchingNaturals >= 2,
+          'pileSize': _gameState.discardPile.length,
+          'pileValue': _gameState.discardPile.fold<int>(
+            0,
+            (sum, card) => sum + card.pointValue,
+          ),
+        };
+      }
+    }
+
+    return debugInfo;
   }
 
   static GameController? fromExportJson(String jsonString) {
