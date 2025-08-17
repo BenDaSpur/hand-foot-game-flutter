@@ -81,82 +81,76 @@ class Player {
   }
 
   bool createMeld(List<PlayingCard> cards, {int playDownRequirement = 0}) {
+    if (cards.isEmpty) return false;
+    
+    // First check if we can add to existing melds
+    final naturalCards = cards.where((card) => !card.isWild && !card.isThree).toList();
+    if (naturalCards.isNotEmpty) {
+      final targetRank = naturalCards.first.rank;
+      final existingMeldIndex = findMeldByRank(targetRank);
+      
+      if (existingMeldIndex != -1) {
+        // Found existing meld - try to add cards to it
+        final existingMeld = melds[existingMeldIndex];
+        
+        // Validate that all cards can be added to the existing meld
+        for (final card in cards) {
+          if (!existingMeld.canAddCard(card)) {
+            return false; // Cannot add this card to existing meld
+          }
+        }
+        
+        // Add all cards to the existing meld
+        for (final card in cards) {
+          if (!existingMeld.addCard(card)) {
+            return false;
+          }
+          // Remove card from hand
+          final index = currentHand.indexOf(card);
+          if (index != -1) {
+            currentHand.removeAt(index);
+          } else {
+            return false;
+          }
+        }
+        
+        hasPlayedDown = true;
+        return true;
+      }
+    }
+    
+    // No existing meld found - try to create a new meld
     final meld = Meld.createMeld(cards);
     if (meld == null) return false;
-
-    // Check if a meld of this rank already exists
-    final existingMeldIndex = findMeldByRank(meld.rank);
-    if (existingMeldIndex != -1) {
-      // Add cards to existing meld instead of creating a new one
-      final existingMeld = melds[existingMeldIndex];
-
-      // Validate that all cards can be added to the existing meld
-      for (final card in cards) {
-        if (!existingMeld.canAddCard(card)) {
-          return false; // Cannot add this card to existing meld
-        }
+    
+    // Check play down requirement if player hasn't played down yet
+    // Only check if this is their very first meld (no existing melds)
+    if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {
+      final cardPointValue = cards.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      if (cardPointValue < playDownRequirement) {
+        return false; // Not enough points to play down
       }
-
-      // Check play down requirement if player hasn't played down yet
-      // Only check if this is their very first meld (no existing melds)
-      if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {
-        final cardPointValue = cards.fold<int>(
-          0,
-          (sum, card) => sum + card.pointValue,
-        );
-        if (cardPointValue < playDownRequirement) {
-          return false; // Not enough points to play down
-        }
-      }
-
-      // Add all cards to the existing meld
-      for (final card in cards) {
-        if (!existingMeld.addCard(card)) {
-          // This shouldn't happen since we validated above
-          return false;
-        }
-        // Remove card from hand
-        final index = currentHand.indexOf(card);
-        if (index != -1) {
-          currentHand.removeAt(index);
-        } else {
-          return false;
-        }
-      }
-
-      hasPlayedDown = true;
-      return true;
-    } else {
-      // Create new meld since none exists for this rank
-      // Check play down requirement if player hasn't played down yet
-      // Only check if this is their very first meld (no existing melds)
-      if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {
-        final cardPointValue = cards.fold<int>(
-          0,
-          (sum, card) => sum + card.pointValue,
-        );
-        if (cardPointValue < playDownRequirement) {
-          return false; // Not enough points to play down
-        }
-      }
-
-      // Remove cards from hand - handle duplicates correctly
-      final cardsToRemove = List<PlayingCard>.from(cards);
-      for (final card in cardsToRemove) {
-        // Find and remove the first matching card from hand
-        final index = currentHand.indexOf(card);
-        if (index != -1) {
-          currentHand.removeAt(index);
-        } else {
-          // This shouldn't happen if the cards were properly selected
-          return false;
-        }
-      }
-
-      melds.add(meld);
-      hasPlayedDown = true;
-      return true;
     }
+
+    // Remove cards from hand - handle duplicates correctly
+    final cardsToRemove = List<PlayingCard>.from(cards);
+    for (final card in cardsToRemove) {
+      // Find and remove the first matching card from hand
+      final index = currentHand.indexOf(card);
+      if (index != -1) {
+        currentHand.removeAt(index);
+      } else {
+        // This shouldn't happen if the cards were properly selected
+        return false;
+      }
+    }
+
+    melds.add(meld);
+    hasPlayedDown = true;
+    return true;
   }
 
   bool addToMeld(int meldIndex, PlayingCard card) {
