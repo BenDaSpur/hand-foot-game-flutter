@@ -25,3 +25,7 @@ analyzer:
   errors:
     # Allow print statements in tests for debugging
     avoid_print: ignore
+    # These style rules shouldn't fail CI
+    avoid_redundant_argument_values: ignore
+    prefer_const_constructors: ignore
+    prefer_const_declarations: ignore

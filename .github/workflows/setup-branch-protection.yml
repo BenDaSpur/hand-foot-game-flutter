@@ -1,0 +1,47 @@
+name: Setup Branch Protection
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '.github/workflows/setup-branch-protection.yml'
+
+jobs:
+  setup-protection:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Setup branch protection rules
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = context.ref.replace('refs/heads/', '');
+            
+            try {
+              await github.rest.repos.updateBranchProtection({
+                owner,
+                repo,
+                branch,
+                required_status_checks: {
+                  strict: true,
+                  contexts: ['test-and-analyze', 'build-test']
+                },
+                enforce_admins: false,
+                required_pull_request_reviews: {
+                  required_approving_review_count: 1,
+                  dismiss_stale_reviews: true,
+                  require_code_owner_reviews: false
+                },
+                restrictions: null,
+                allow_force_pushes: false,
+                allow_deletions: false
+              });
+              
+              console.log(`✅ Branch protection enabled for ${branch}`);
+            } catch (error) {
+              console.error(`❌ Failed to setup branch protection: ${error.message}`);
+              // Don't fail the workflow if branch protection fails
+              // This might happen in forks or repos without admin access
+            }
