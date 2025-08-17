@@ -82,10 +82,53 @@ class Player {
 
   bool createMeld(List<PlayingCard> cards, {int playDownRequirement = 0}) {
     final meld = Meld.createMeld(cards);
-    if (meld != null) {
+    if (meld == null) return false;
+    
+    // Check if a meld of this rank already exists
+    final existingMeldIndex = findMeldByRank(meld.rank);
+    if (existingMeldIndex != -1) {
+      // Add cards to existing meld instead of creating a new one
+      final existingMeld = melds[existingMeldIndex];
+      
+      // Validate that all cards can be added to the existing meld
+      for (final card in cards) {
+        if (!existingMeld.canAddCard(card)) {
+          return false; // Cannot add this card to existing meld
+        }
+      }
+      
       // Check play down requirement if player hasn't played down yet
       if (!hasPlayedDown && playDownRequirement > 0) {
-        // Calculate the point value of just the cards being laid down
+        final cardPointValue = cards.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
+        if (cardPointValue < playDownRequirement) {
+          return false; // Not enough points to play down
+        }
+      }
+      
+      // Add all cards to the existing meld
+      for (final card in cards) {
+        if (!existingMeld.addCard(card)) {
+          // This shouldn't happen since we validated above
+          return false;
+        }
+        // Remove card from hand
+        final index = currentHand.indexOf(card);
+        if (index != -1) {
+          currentHand.removeAt(index);
+        } else {
+          return false;
+        }
+      }
+      
+      hasPlayedDown = true;
+      return true;
+    } else {
+      // Create new meld since none exists for this rank
+      // Check play down requirement if player hasn't played down yet
+      if (!hasPlayedDown && playDownRequirement > 0) {
         final cardPointValue = cards.fold<int>(
           0,
           (sum, card) => sum + card.pointValue,
@@ -112,7 +155,6 @@ class Player {
       hasPlayedDown = true;
       return true;
     }
-    return false;
   }
 
   bool addToMeld(int meldIndex, PlayingCard card) {
@@ -186,6 +228,16 @@ class Player {
     currentHand.sort((a, b) {
       return a.pointValue.compareTo(b.pointValue);
     });
+  }
+
+  // Helper method to find existing meld by rank
+  int findMeldByRank(CardRank rank) {
+    for (int i = 0; i < melds.length; i++) {
+      if (melds[i].rank == rank) {
+        return i;
+      }
+    }
+    return -1; // Not found
   }
 
   @override

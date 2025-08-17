@@ -231,6 +231,14 @@ class GameState {
     if (turnPhase != TurnPhase.meld) return false;
 
     final wasFirstMeld = !currentPlayer.hasPlayedDown;
+    
+    // Check if this would add to existing meld
+    final proposedMeld = Meld.createMeld(cards);
+    final existingMeldIndex = proposedMeld != null 
+        ? currentPlayer.findMeldByRank(proposedMeld.rank) 
+        : -1;
+    final isAddingToExisting = existingMeldIndex != -1;
+    
     if (currentPlayer.createMeld(
       cards,
       playDownRequirement: playDownRequirement,
@@ -241,6 +249,8 @@ class GameState {
       if (wasFirstMeld) {
         final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
         _logAction('played down with $points points: $cardNames');
+      } else if (isAddingToExisting) {
+        _logAction('added to existing meld: $cardNames');
       } else {
         _logAction('created new meld: $cardNames');
       }
