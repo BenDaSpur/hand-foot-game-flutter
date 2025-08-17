@@ -18,7 +18,9 @@ void main() {
         Player(id: '3', name: 'Bot2', type: PlayerType.bot),
       ];
       gameController = GameController(players: players);
-      botAI = BotAI();
+      botAI = BotAI(
+        seed: 12345,
+      ); // Use consistent seed for test reproducibility
       bot = players[1]; // Bot player
     });
 
@@ -390,6 +392,36 @@ void main() {
           // If it chooses to discard, that's also valid behavior
           expect(decision.action, equals('discard'));
         }
+      });
+
+      test('should perform well with large hands (performance test)', () {
+        // Test bot with many possible melds to ensure performance optimizations work
+        bot.dealHand([
+          // Create multiple meld possibilities to stress-test the algorithm
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        ]);
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final stopwatch = Stopwatch()..start();
+        final decision = botAI.makeDecision(bot, gameController);
+        stopwatch.stop();
+
+        // Should complete within reasonable time (< 100ms for this scenario)
+        expect(stopwatch.elapsedMilliseconds, lessThan(100));
+        expect(decision.action, equals('createMeld'));
       });
     });
   });

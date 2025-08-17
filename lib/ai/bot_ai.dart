@@ -12,6 +12,11 @@ class BotDecision {
 }
 
 class BotAI {
+  final Random _random;
+
+  // Initialize with optional seed for test reproducibility
+  BotAI({int? seed}) : _random = seed != null ? Random(seed) : Random();
+
   // Strategic constants for better maintainability
   static const int strategicBufferPoints = 20;
   static const int aggressiveMatchingThreshold = 3;
@@ -297,7 +302,7 @@ class BotAI {
 
   bool _shouldBreakUpHighValuePair() {
     // Strategic chance to break up high-value pairs when no other options
-    return Random().nextDouble() < highValuePairBreakChance;
+    return _random.nextDouble() < highValuePairBreakChance;
   }
 
   bool _shouldMeldAfterPlayDown(
@@ -381,6 +386,7 @@ class BotAI {
       final combinations = _findMeldCombinations(
         meldsByPoints,
         playDownRequirement,
+        controller,
       );
       viableCombinations.addAll(combinations);
     }
@@ -403,6 +409,7 @@ class BotAI {
   List<List<List<PlayingCard>>> _findMeldCombinations(
     Map<int, List<List<PlayingCard>>> meldsByPoints,
     int requirement,
+    GameController gameController,
   ) {
     final combinations = <List<List<PlayingCard>>>[];
     final sortedPoints = meldsByPoints.keys.toList()..sort();
@@ -429,7 +436,11 @@ class BotAI {
           // Take only the first few combinations to avoid exponential blowup
           for (int m1 = 0; m1 < melds1.length && m1 < 2; m1++) {
             for (int m2 = 0; m2 < melds2.length && m2 < 2; m2++) {
-              if (!_meldsConflict(melds1[m1], melds2[m2])) {
+              if (!_meldsConflict(
+                melds1[m1],
+                melds2[m2],
+                playerCount: gameController.gameState.players.length,
+              )) {
                 combinations.add([melds1[m1], melds2[m2]]);
                 if (combinations.length >= maxMeldCombinations) break;
               }
@@ -445,7 +456,11 @@ class BotAI {
 
   /// Checks if two melds conflict (use same cards)
   /// Hand & Foot uses multiple decks, so we need to track actual card instances
-  bool _meldsConflict(List<PlayingCard> meld1, List<PlayingCard> meld2) {
+  bool _meldsConflict(
+    List<PlayingCard> meld1,
+    List<PlayingCard> meld2, {
+    int playerCount = 3,
+  }) {
     // Create a map to count cards by rank+suit for each meld
     final meld1Cards = <String, int>{};
     final meld2Cards = <String, int>{};
@@ -461,16 +476,25 @@ class BotAI {
     }
 
     // Check if any card type would be over-used
-    // This is a simplified check - in practice we'd need to know total available cards
+    // Hand & Foot typically uses playerCount + 1 decks (4 decks for 3 players)
+    // So we have 4 copies of each card (except jokers - 2 per deck)
     for (final entry in meld1Cards.entries) {
       final meld2Count = meld2Cards[entry.key] ?? 0;
       if (meld2Count > 0) {
-        // For now, assume we have enough cards if the total needed is reasonable
-        // In Hand & Foot with 2 standard decks, we have 2 of each card
         final totalNeeded = entry.value + meld2Count;
-        if (totalNeeded > 2) {
-          // Conservative: assume max 2 per rank+suit
-          return true;
+
+        // Determine max available cards for this rank+suit
+        // Hand & Foot uses playerCount + 1 decks
+        final deckCount = playerCount + 1;
+        int maxAvailable;
+        if (entry.key.contains('joker')) {
+          maxAvailable = 2 * deckCount; // 2 jokers per deck
+        } else {
+          maxAvailable = deckCount; // 1 per suit per deck
+        }
+
+        if (totalNeeded > maxAvailable) {
+          return true; // Would exceed available cards
         }
       }
     }
