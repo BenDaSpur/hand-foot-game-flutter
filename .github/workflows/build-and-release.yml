@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Run tests
+        run: flutter test
+
       - name: Analyze code
         run: flutter analyze
 
@@ -75,6 +78,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Run tests
+        run: flutter test
+
       - name: Build Web
         run: flutter build web --release --base-href /handfoot/
 
@@ -107,6 +113,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Run tests
+        run: flutter test
+
       - name: Build Windows
         run: flutter build windows --release
 
@@ -137,6 +146,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build macOS
         run: flutter build macos --release
@@ -171,6 +183,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build Linux
         run: flutter build linux --release
@@ -208,6 +223,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
 
       - name: Build Web for GitHub Pages
         run: flutter build web --release --base-href /hand-foot-game-flutter/
@@ -276,43 +294,52 @@ jobs:
             CHANGELOG="$CHANGELOG"$'\n'"- No changes since last release"
           fi
           
-          # Save to file for multiline output
+          # Save changelog to file
           echo "$CHANGELOG" > changelog.md
-          echo "CHANGELOG_FILE=changelog.md" >> $GITHUB_OUTPUT
+          
+          # Create complete release notes file
+          cat > release_notes.md << 'EOF'
+          ## 🎮 Hand & Foot Card Game Release ${{ steps.version.outputs.VERSION }}
+
+          A beautiful Flutter implementation of the classic Hand & Foot card game with Balatro-inspired visuals!
+
+          EOF
+          
+          # Add changelog content
+          cat changelog.md >> release_notes.md
+          
+          # Add the rest of the release notes
+          cat >> release_notes.md << 'EOF'
+
+          ### 📱 Downloads
+
+          - **Android**: Download the APK file below for Android devices
+          - **Windows**: Download and extract the Windows ZIP file
+          - **macOS**: Download and extract the macOS archive
+          - **Linux**: Download and extract the Linux archive  
+          - **Web**: Host the web archive on any web server
+          - **🌐 Play Online**: [GitHub Pages](https://bendaspur.github.io/hand-foot-game-flutter/)
+
+          ### 🎯 Game Features
+          - Smart AI opponents with strategic gameplay
+          - Stunning neon Balatro-inspired theme
+          - Complete Hand & Foot rules implementation
+          - Multi-round progression with increasing difficulty
+
+          ### 🚀 Installation
+          - **Android**: Enable "Install from unknown sources" and install the APK
+          - **Desktop**: Extract the archive and run the executable
+          - **Web**: Extract and serve the files from a web server
+
+          Enjoy the game! 🃏✨
+          EOF
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: Hand & Foot Game ${{ steps.version.outputs.VERSION }}
-          body: |
-            ## 🎮 Hand & Foot Card Game Release ${{ steps.version.outputs.VERSION }}
-
-            A beautiful Flutter implementation of the classic Hand & Foot card game with Balatro-inspired visuals!
-
-            $(cat changelog.md)
-
-            ### 📱 Downloads
-
-            - **Android**: Download the APK file below for Android devices
-            - **Windows**: Download and extract the Windows ZIP file
-            - **macOS**: Download and extract the macOS archive
-            - **Linux**: Download and extract the Linux archive  
-            - **Web**: Host the web archive on any web server
-            - **🌐 Play Online**: [GitHub Pages](https://bendaspur.github.io/hand-foot-game-flutter/)
-
-            ### 🎯 Game Features
-            - Smart AI opponents with strategic gameplay
-            - Stunning neon Balatro-inspired theme
-            - Complete Hand & Foot rules implementation
-            - Multi-round progression with increasing difficulty
-
-            ### 🚀 Installation
-            - **Android**: Enable "Install from unknown sources" and install the APK
-            - **Desktop**: Extract the archive and run the executable
-            - **Web**: Extract and serve the files from a web server
-
-            Enjoy the game! 🃏✨
+          body_path: release_notes.md
           draft: false
           prerelease: false
           files: |
