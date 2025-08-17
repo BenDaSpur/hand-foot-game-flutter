@@ -146,8 +146,6 @@ class MeldWidget extends StatelessWidget {
         return Colors.green;
       case MeldType.mixed:
         return Colors.orange;
-      case MeldType.wild:
-        return Colors.purple;
     }
   }
 }
