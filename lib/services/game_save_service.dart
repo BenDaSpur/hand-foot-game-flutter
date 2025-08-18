@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:logging/logging.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/card.dart';
@@ -8,6 +9,7 @@ import '../game/game_controller.dart';
 
 class GameSaveService {
   static const String _saveKey = 'hand_foot_game_save';
+  static final _log = Logger('GameSaveService');
 
   /// Save the current game state to local storage
   static Future<void> saveGame(GameState gameState, int? gameSeed) async {
@@ -17,9 +19,9 @@ class GameSaveService {
       final jsonString = jsonEncode(gameData);
 
       await prefs.setString(_saveKey, jsonString);
-      print('Game saved to local storage');
+      _log.info('Game saved to local storage');
     } catch (e) {
-      print('Failed to save game: $e');
+      _log.severe('Failed to save game: $e');
     }
   }
 
@@ -30,15 +32,15 @@ class GameSaveService {
       final jsonString = prefs.getString(_saveKey);
 
       if (jsonString == null) {
-        print('No saved game found');
+        _log.info('No saved game found');
         return null;
       }
 
       final gameData = jsonDecode(jsonString) as Map<String, dynamic>;
-      print('Game loaded from local storage');
+      _log.info('Game loaded from local storage');
       return gameData;
     } catch (e) {
-      print('Failed to load game: $e');
+      _log.severe('Failed to load game: $e');
       return null;
     }
   }
@@ -49,7 +51,7 @@ class GameSaveService {
       final prefs = await SharedPreferences.getInstance();
       return prefs.containsKey(_saveKey);
     } catch (e) {
-      print('Failed to check for saved game: $e');
+      _log.severe('Failed to check for saved game: $e');
       return false;
     }
   }
@@ -59,9 +61,9 @@ class GameSaveService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_saveKey);
-      print('Saved game cleared');
+      _log.info('Saved game cleared');
     } catch (e) {
-      print('Failed to clear saved game: $e');
+      _log.severe('Failed to clear saved game: $e');
     }
   }
 
@@ -86,8 +88,8 @@ class GameSaveService {
           )
           .toList(),
       'currentPlayerIndex': gameState.currentPlayerIndex,
-      'phase': gameState.phase.toString(),
-      'turnPhase': gameState.turnPhase.toString(),
+      'phase': gameState.phase.name,
+      'turnPhase': gameState.turnPhase.name,
       'round': gameState.round,
       'winner': gameState.winner?.id,
       'discardPileFrozen': gameState.discardPileFrozen,
@@ -101,7 +103,7 @@ class GameSaveService {
     return {
       'id': player.id,
       'name': player.name,
-      'type': player.type.toString(),
+      'type': player.type.name,
       'hand': player.hand.map(_serializeCard).toList(),
       'foot': player.foot.map(_serializeCard).toList(),
       'melds': player.melds.map(_serializeMeld).toList(),
@@ -114,15 +116,15 @@ class GameSaveService {
   /// Serialize a meld to a JSON-compatible map
   static Map<String, dynamic> _serializeMeld(Meld meld) {
     return {
-      'rank': meld.rank.toString(),
+      'rank': meld.rank.name,
       'cards': meld.cards.map(_serializeCard).toList(),
-      'type': meld.type.toString(),
+      'type': meld.type.name,
     };
   }
 
   /// Serialize a card to a JSON-compatible map
   static Map<String, dynamic> _serializeCard(PlayingCard card) {
-    return {'rank': card.rank.toString(), 'suit': card.suit.toString()};
+    return {'rank': card.rank.name, 'suit': card.suit?.name};
   }
 
   /// Serialize deck cards to a JSON-compatible list
@@ -150,7 +152,7 @@ class GameSaveService {
 
       return gameController;
     } catch (e) {
-      print('Failed to restore game controller: $e');
+      _log.severe('Failed to restore game controller: $e');
       return null;
     }
   }
@@ -178,9 +180,10 @@ class GameSaveService {
     gameState.recentActions.clear();
     gameState.recentActions.addAll(
       (savedData['recentActions'] as List).map(
-        (actionData) => GameAction(
+        (actionData) => GameAction.withTimestamp(
           message: actionData['message'] as String,
           playerName: actionData['playerName'] as String,
+          timestamp: DateTime.parse(actionData['timestamp'] as String),
         ),
       ),
     );
@@ -245,43 +248,38 @@ class GameSaveService {
   static PlayingCard _deserializeCard(Map<String, dynamic> cardData) {
     return PlayingCard(
       rank: _parseCardRank(cardData['rank'] as String),
-      suit: _parseSuit(cardData['suit'] as String),
+      suit: _parseSuit(cardData['suit'] as String?),
     );
   }
 
   /// Parse CardRank from string
   static CardRank _parseCardRank(String rankString) {
-    return CardRank.values.firstWhere((rank) => rank.toString() == rankString);
+    return CardRank.values.firstWhere((rank) => rank.name == rankString);
   }
 
   /// Parse Suit from string
-  static Suit _parseSuit(String suitString) {
-    return Suit.values.firstWhere((suit) => suit.toString() == suitString);
+  static Suit? _parseSuit(String? suitString) {
+    if (suitString == null) return null;
+    return Suit.values.firstWhere((suit) => suit.name == suitString);
   }
 
   /// Parse PlayerType from string
   static PlayerType _parsePlayerType(String typeString) {
-    return PlayerType.values.firstWhere(
-      (type) => type.toString() == typeString,
-    );
+    return PlayerType.values.firstWhere((type) => type.name == typeString);
   }
 
   /// Parse MeldType from string
   static MeldType _parseMeldType(String typeString) {
-    return MeldType.values.firstWhere((type) => type.toString() == typeString);
+    return MeldType.values.firstWhere((type) => type.name == typeString);
   }
 
   /// Parse GamePhase from string
   static GamePhase _parseGamePhase(String phaseString) {
-    return GamePhase.values.firstWhere(
-      (phase) => phase.toString() == phaseString,
-    );
+    return GamePhase.values.firstWhere((phase) => phase.name == phaseString);
   }
 
   /// Parse TurnPhase from string
   static TurnPhase _parseTurnPhase(String phaseString) {
-    return TurnPhase.values.firstWhere(
-      (phase) => phase.toString() == phaseString,
-    );
+    return TurnPhase.values.firstWhere((phase) => phase.name == phaseString);
   }
 }
