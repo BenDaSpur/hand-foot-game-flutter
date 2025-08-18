@@ -149,9 +149,8 @@ class GameController {
       }
     }
 
-    if (wildCards.length >= 3) {
-      possibleMelds.add(wildCards.take(3).toList());
-    }
+    // Note: Wild-only melds are not allowed in Hand & Foot rules
+    // Wild cards can only supplement natural card melds
 
     return possibleMelds;
   }
