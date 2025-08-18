@@ -85,10 +85,15 @@ class GameState {
     }
   }
 
+  /// Public method for logging game actions with proper privacy controls
+  void logAction(String message, {bool showCardDetails = true}) {
+    _logAction(message, showCardDetails: showCardDetails);
+  }
+
   String _sanitizeMessage(String message) {
     // Remove specific card details from bot actions that shouldn't be visible
-    if (message.startsWith('drew from deck:')) {
-      return 'drew 2 cards from deck';
+    if (message.startsWith('drew:')) {
+      return 'drew';
     }
     return message;
   }
@@ -172,7 +177,7 @@ class GameState {
       turnPhase = TurnPhase.meld;
 
       final cardNames = cards.map((c) => c.displayName).join(', ');
-      _logAction('drew from deck: $cardNames');
+      _logAction('drew: $cardNames');
 
       return true;
     }
