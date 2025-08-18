@@ -35,6 +35,11 @@ This project is configured with GitHub Actions to automatically build and deploy
 
 Once deployed, your app will be available at:
 ```
+https://<your-github-username>.github.io/<repository-name>/
+```
+
+For this repository:
+```
 https://bendaspur.github.io/hand-foot-game-flutter/
 ```
 
@@ -57,7 +62,7 @@ To trigger a manual deployment:
 **Common Issues:**
 
 1. **GitHub Pages not enabled**: Make sure Pages is set to "GitHub Actions" source
-2. **Wrong base URL**: The app assumes it's deployed at `/hand-foot-game-flutter/`
+2. **Wrong base URL**: The app uses dynamic repository name from GitHub context
 3. **Permissions**: The workflow requires Pages write permissions (automatically granted)
 
 **Build Failures:**
