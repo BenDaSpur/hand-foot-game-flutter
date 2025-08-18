@@ -12,8 +12,10 @@ class Meld {
 
   /// Creates a new meld with the given rank, cards, and initial type.
   ///
-  /// Note: The [type] parameter is deprecated. In future versions, this constructor
-  /// will be refactored to only require rank and cards, with type determined dynamically.
+  /// **Deprecation Plan**: The [type] parameter is deprecated and will be removed
+  /// in v2.0. Future versions will only require [rank] and [cards], with type
+  /// determined dynamically via [currentType]. This eliminates the risk of
+  /// inconsistent static vs dynamic type values.
   Meld({required this.rank, required this.cards, required this.type});
 
   static Meld? createMeld(List<PlayingCard> cards) {
@@ -75,8 +77,10 @@ class Meld {
 
   /// Calculates the total point value of this meld, including book bonuses.
   ///
-  /// Thread-safe: Caches the current type at method start to ensure consistent
-  /// calculations even if cards are modified during execution.
+  /// **Thread Safety**: This method is safe for concurrent access. It caches
+  /// the meld type at the start to ensure consistent calculations even if the
+  /// cards list is modified during execution. However, callers should ensure
+  /// that concurrent modifications to the cards list maintain game rule validity.
   int get pointValue {
     // Cache the current type to avoid race conditions
     final meldType = currentType;

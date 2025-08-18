@@ -237,6 +237,7 @@ class GameState {
       for (final card in meldCards) {
         if (!existingMeld.addCard(card)) {
           // Extra safety: if addCard fails, log and return false
+          // Note: This error logging is rare and shouldn't spam logs under normal gameplay
           final cardName = card.displayName;
           final meldRank = existingMeld.rank.name;
           _logAction(
