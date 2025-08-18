@@ -47,6 +47,11 @@ class BotAI {
   static const int postPlaydownHandSize = 8;
   static const double highValuePairBreakChance = 0.3;
 
+  // Risk management thresholds
+  static const int playDownRiskThreshold = -300;
+  static const int footTransitionRiskThreshold = -200;
+  static const int wildCardDiscardThreshold = 6;
+
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
@@ -239,22 +244,11 @@ class BotAI {
       }
     }
 
-    // Priority 2: Discard singletons, but consider unlock potential
-    final singletons = <PlayingCard>[];
-    final pairs = <PlayingCard>[];
-    final triples = <PlayingCard>[];
-
-    for (final entry in cardsByRank.entries) {
-      if (entry.key == CardRank.three) continue; // Already handled 3s
-
-      if (entry.value.length == 1) {
-        singletons.addAll(entry.value);
-      } else if (entry.value.length == 2) {
-        pairs.addAll(entry.value);
-      } else if (entry.value.length >= 3) {
-        triples.addAll(entry.value);
-      }
-    }
+    // Priority 2: Categorize cards by frequency
+    final cardCategories = _categorizeCardsByFrequency(cardsByRank);
+    final singletons = cardCategories['singletons']!;
+    final pairs = cardCategories['pairs']!;
+    final triples = cardCategories['triples']!;
 
     if (singletons.isNotEmpty) {
       // Sort by point value, prioritize low point cards
@@ -303,9 +297,10 @@ class BotAI {
     }
 
     // Last resort: discard wild cards (VERY rarely - hold wilds strategically)
-    // Only discard wilds if we have MANY (6+) or absolutely forced to (1 card left)
+    // Only discard wilds if we have MANY or absolutely forced to (1 card left)
     if (wildCards.isNotEmpty &&
-        (wildCards.length >= 6 || bot.currentHand.length == 1)) {
+        (wildCards.length >= wildCardDiscardThreshold ||
+            bot.currentHand.length == 1)) {
       wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return wildCards.first;
     }
@@ -326,6 +321,29 @@ class BotAI {
       totalValue += card.pointValue;
     }
     return totalValue;
+  }
+
+  /// Categorize cards by frequency for discard decision
+  Map<String, List<PlayingCard>> _categorizeCardsByFrequency(
+    Map<CardRank, List<PlayingCard>> cardsByRank,
+  ) {
+    final singletons = <PlayingCard>[];
+    final pairs = <PlayingCard>[];
+    final triples = <PlayingCard>[];
+
+    for (final entry in cardsByRank.entries) {
+      if (entry.key == CardRank.three) continue; // Skip 3s (handled elsewhere)
+
+      if (entry.value.length == 1) {
+        singletons.addAll(entry.value);
+      } else if (entry.value.length == 2) {
+        pairs.addAll(entry.value);
+      } else if (entry.value.length >= 3) {
+        triples.addAll(entry.value);
+      }
+    }
+
+    return {'singletons': singletons, 'pairs': pairs, 'triples': triples};
   }
 
   /// Handle play-down decision - be strategic but not completely stubborn
@@ -395,7 +413,7 @@ class BotAI {
 
     // Priority 4: Risk management - play down if we're about to go very negative
     final handValue = _calculateHandValue(bot.currentHand);
-    if (handValue <= -300) {
+    if (handValue <= playDownRiskThreshold) {
       // Significant negative penalty risk
       final strategicPlayDown = _findStrategicPlayDown(
         bot,
@@ -449,7 +467,7 @@ class BotAI {
 
     // Check for negative score risk management
     final handValue = _calculateHandValue(bot.currentHand);
-    if (handValue <= -200) {
+    if (handValue <= footTransitionRiskThreshold) {
       // Moderate risk - start melding to reduce penalties
       final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
       if (cardsToAddToMelds.isNotEmpty) {
@@ -692,19 +710,21 @@ class BotAI {
     }
 
     // Check if any card type would be over-used
-    // Hand & Foot uses 4 decks for 3 players (playerCount + 1)
     for (final entry in meld1Cards.entries) {
       final meld2Count = meld2Cards[entry.key] ?? 0;
       if (meld2Count > 0) {
         final totalNeeded = entry.value + meld2Count;
 
         // Determine max available cards for this rank+suit
-        const deckCount = 4; // Assuming 3 players + 1 deck = 4 decks
+        // Note: We use a conservative estimate since we don't have direct access to deck count here
+        // In practice, conflicts are rare due to the large deck size in Hand & Foot
         int maxAvailable;
         if (entry.key.contains('joker')) {
-          maxAvailable = 2 * deckCount; // 2 jokers per deck
+          maxAvailable =
+              8; // Conservative: 2 jokers × 4 decks (typical Hand & Foot setup)
         } else {
-          maxAvailable = deckCount; // 1 per suit per deck
+          maxAvailable =
+              4; // Conservative: 1 per suit × 4 decks (typical Hand & Foot setup)
         }
 
         if (totalNeeded > maxAvailable) {
