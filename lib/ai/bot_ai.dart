@@ -167,6 +167,19 @@ class BotAI {
       return BotDecision(action: 'addToMeld', data: cardToAdd);
     }
 
+    // Check if bot has no cards left and can go out
+    if (bot.currentHand.isEmpty && bot.canGoOut) {
+      // Bot has successfully gone out - the game should end the round
+      // Return a special decision to indicate the bot is done
+      return BotDecision(action: 'goOut');
+    }
+
+    // Check if bot has no cards but cannot go out (missing required books)
+    if (bot.currentHand.isEmpty && !bot.canGoOut) {
+      // This should not happen in normal gameplay, but handle it gracefully
+      return BotDecision(action: 'error');
+    }
+
     // No melds to make, proceed to discard
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);

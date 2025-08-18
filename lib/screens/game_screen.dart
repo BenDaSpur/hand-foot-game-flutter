@@ -8,6 +8,9 @@ import '../game/game_controller.dart';
 import '../ai/bot_ai.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/meld_widget.dart';
+import '../widgets/mobile_status_bar.dart';
+import '../widgets/collapsible_recent_actions.dart';
+import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
 
 class GameScreen extends StatefulWidget {
@@ -26,6 +29,8 @@ class _GameScreenState extends State<GameScreen> {
   bool _isInitialized = false;
   String _sortMode = 'rank';
   Player? _viewingPlayerMelds; // null means viewing current player's melds
+  bool _statusExpanded = false;
+  bool _actionsExpanded = false;
 
   @override
   void initState() {
@@ -129,6 +134,16 @@ class _GameScreenState extends State<GameScreen> {
         case 'discard':
           final card = decision.data as PlayingCard;
           _gameController.discardCard(card);
+          break;
+        case 'goOut':
+          // Bot is going out - they have no cards and meet the requirements
+          // The game should automatically end the round
+          _gameController.gameState.endRound();
+          break;
+        case 'error':
+          // Bot is stuck - should not happen, but handle gracefully
+          print('Bot ${currentPlayer.name} encountered an error state');
+          _forceNextTurn();
           break;
       }
 
@@ -451,13 +466,8 @@ class _GameScreenState extends State<GameScreen> {
           _showErrorDialog(
             'Cannot create melds with only wild cards! Wild cards (2s and Jokers) can only supplement natural card melds (4-A). Please select at least 2 natural cards of the same rank.',
           );
-        } else if (_gameController.createMeld(_selectedCards)) {
-          _sortHand(_sortMode);
-          _selectedCardIndices.clear();
         } else {
-          _showErrorDialog(
-            'Invalid meld! Cards must be of the same rank or wild cards.',
-          );
+          _createSingleMeldWithConfirmation();
         }
       }
     }
@@ -501,28 +511,15 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
-    // Add all valid cards one by one
-    int addedCount = 0;
-    for (final card in cardsToAdd) {
-      if (_gameController.addCardToMeld(meldIndex, card)) {
-        addedCount++;
-      }
+    // Check if any cards to add are wilds and need confirmation
+    final wildsToAdd = cardsToAdd.where((card) => card.isWild).toList();
+    if (wildsToAdd.isNotEmpty) {
+      _showWildCardConfirmation(meldIndex, cardsToAdd, invalidCards);
+      return;
     }
 
-    if (addedCount > 0) {
-      _sortHand(_sortMode);
-      _selectedCardIndices.clear();
-      setState(() {});
-
-      if (invalidCards.isNotEmpty) {
-        final invalidNames = invalidCards.map((c) => c.displayName).join(', ');
-        _showErrorDialog(
-          'Added $addedCount cards to meld. Could not add: $invalidNames',
-        );
-      }
-    } else {
-      _showErrorDialog('Failed to add any cards to the meld.');
-    }
+    // Add all valid cards one by one (non-wilds)
+    _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
   }
 
   bool _canAddCardToMeld(int meldIndex) {
@@ -832,23 +829,196 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildStatusChip(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color, width: 1),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+  void _showWildCardConfirmation(
+    int meldIndex,
+    List<PlayingCard> cardsToAdd,
+    List<PlayingCard> invalidCards,
+  ) {
+    final wildsToAdd = cardsToAdd.where((card) => card.isWild).toList();
+    final humanPlayer = _gameController.gameState.players.firstWhere(
+      (p) => p.type == PlayerType.human,
+    );
+    final meld = humanPlayer.melds[meldIndex];
+
+    final wildNames = wildsToAdd.map((c) => c.displayName).join(', ');
+    final meldName = '${meld.rank.name.toUpperCase()}s';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Add Wild Card?'),
+          ],
         ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You are about to add wild cards to your $meldName meld:'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                wildNames,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This will make your meld a "dirty book". Are you sure?',
+              style: TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add Wild Cards'),
+          ),
+        ],
       ),
     );
+  }
+
+  void _addCardsToMeld(
+    int meldIndex,
+    List<PlayingCard> cardsToAdd,
+    List<PlayingCard> invalidCards,
+  ) {
+    int addedCount = 0;
+    for (final card in cardsToAdd) {
+      if (_gameController.addCardToMeld(meldIndex, card)) {
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      _sortHand(_sortMode);
+      _selectedCardIndices.clear();
+      setState(() {});
+
+      if (invalidCards.isNotEmpty) {
+        final invalidNames = invalidCards.map((c) => c.displayName).join(', ');
+        _showErrorDialog(
+          'Added $addedCount cards to meld. Could not add: $invalidNames',
+        );
+      }
+    } else {
+      _showErrorDialog('Failed to add any cards to the meld.');
+    }
+  }
+
+  void _createSingleMeldWithConfirmation() {
+    final wildsInSelection = _selectedCards
+        .where((card) => card.isWild)
+        .toList();
+
+    if (wildsInSelection.isNotEmpty) {
+      final wildNames = wildsInSelection.map((c) => c.displayName).join(', ');
+      final naturalCards = _selectedCards
+          .where((card) => !card.isWild)
+          .toList();
+      final meldType = naturalCards.isNotEmpty
+          ? '${naturalCards.first.rank.name.toUpperCase()}s'
+          : 'Unknown';
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Create Meld with Wilds?'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('You are about to create a $meldType meld with wild cards:'),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  wildNames,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'This will create a "dirty book" from the start. Are you sure?',
+                style: TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _executeMeldCreation();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Create Meld'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // No wilds, create meld directly
+      _executeMeldCreation();
+    }
+  }
+
+  void _executeMeldCreation() {
+    if (_gameController.createMeld(_selectedCards)) {
+      _sortHand(_sortMode);
+      _selectedCardIndices.clear();
+      setState(() {});
+    } else {
+      _showErrorDialog(
+        'Invalid meld! Cards must be of the same rank or wild cards.',
+      );
+    }
   }
 
   @override
@@ -979,163 +1149,46 @@ class _GameScreenState extends State<GameScreen> {
         ),
         body: Column(
           children: [
-            // Game status bar
-            Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.all(16),
-              decoration: BalatroTheme.glowDecoration(
-                backgroundColor: BalatroTheme.darkPurple,
-                glowColor: BalatroTheme.glowColor,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildStatusChip(
-                    'Current: ${currentPlayer.name}',
-                    BalatroTheme.neonPink,
-                  ),
-                  _buildStatusChip(
-                    'Phase: ${gameState.turnPhase.name.toUpperCase()}',
-                    BalatroTheme.neonBlue,
-                  ),
-                  _buildStatusChip(
-                    'Play Down: ${gameState.playDownRequirement}',
-                    BalatroTheme.neonOrange,
-                  ),
-                  _buildStatusChip(
-                    'Deck: ${gameState.deck.size}',
-                    BalatroTheme.neonYellow,
-                  ),
-                  if (gameState.topDiscard != null)
-                    _buildStatusChip(
-                      'Top: ${gameState.topDiscard!.displayName}',
-                      BalatroTheme.neonGreen,
-                    ),
-                ],
-              ),
+            // Mobile-optimized status bar
+            MobileStatusBar(
+              gameState: gameState,
+              isExpanded: _statusExpanded,
+              onToggle: () {
+                setState(() {
+                  _statusExpanded = !_statusExpanded;
+                });
+              },
             ),
 
-            // Recent actions
-            Container(
-              height: 100,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text(
-                      'Recent Actions',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      itemCount: gameState.recentActions.length,
-                      reverse: true, // Show newest first
-                      itemBuilder: (context, index) {
-                        final action =
-                            gameState.recentActions[gameState
-                                    .recentActions
-                                    .length -
-                                1 -
-                                index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 1),
-                          child: Text(
-                            action.toString(),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[700],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+            // Collapsible recent actions
+            CollapsibleRecentActions(
+              gameState: gameState,
+              isExpanded: _actionsExpanded,
+              onToggle: () {
+                setState(() {
+                  _actionsExpanded = !_actionsExpanded;
+                });
+              },
             ),
 
             const SizedBox(height: 8),
 
-            // Player scores (clickable to view melds)
+            // Compact player scores
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
                 'Tap a player to view their melds:',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ),
-            Container(
-              height: 90,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: gameState.players
-                    .map(
-                      (player) => GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _viewingPlayerMelds = player;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: _viewingPlayerMelds == player
-                                ? Colors.green[100]
-                                : player == currentPlayer
-                                ? Colors.blue[100]
-                                : Colors.white,
-                            border: Border.all(
-                              color: _viewingPlayerMelds == player
-                                  ? Colors.green
-                                  : Colors.grey,
-                              width: _viewingPlayerMelds == player ? 2 : 1,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                player.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text('${player.score}'),
-                              if (player.melds.isNotEmpty)
-                                Text(
-                                  '${player.melds.length} melds',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
+            CompactPlayerScores(
+              gameState: gameState,
+              viewingPlayerMelds: _viewingPlayerMelds,
+              onPlayerTap: (player) {
+                setState(() {
+                  _viewingPlayerMelds = player;
+                });
+              },
             ),
 
             // Melds section
