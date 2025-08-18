@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-- **Run the app**: `flutter run`
+- **Run the app**: `./run_with_env.sh` (loads Firebase config from .env) or `flutter run`
 - **Build for release**: `flutter build apk` (Android) or `flutter build ios` (iOS)
 - **Static analysis**: `flutter analyze`
 - **Run tests**: `flutter test`
@@ -51,7 +51,7 @@ This is a Flutter implementation of the Hand & Foot card game with sophisticated
 
 ### Game Rules Implementation
 
-The game follows official Hand & Foot rules (documented in `family_hand_and_foot_full_rules.md`):
+The game follows official Hand & Foot rules (documented in `docs/family_hand_and_foot_full_rules.md`):
 
 **Play-down Requirements**: Dynamic point thresholds (Round 1: 60pts, +30 each round)
 **Wild Card Limits**: Enforced rule that wilds ≤ naturals in any meld

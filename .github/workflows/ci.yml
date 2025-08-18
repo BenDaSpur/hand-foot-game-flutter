@@ -22,10 +22,15 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Generate Firebase config
-        run: |
-          # Generate firebase_options.dart from template
-          envsubst < lib/firebase_options.dart.template > lib/firebase_options.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Run tests
+        run: ./.github/scripts/flutter_with_firebase.sh test
         env:
           FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
           FIREBASE_WEB_APP_ID: ${{ secrets.FIREBASE_WEB_APP_ID }}
@@ -41,15 +46,6 @@ jobs:
           FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed .
-
-      - name: Run tests
-        run: flutter test
 
       - name: Analyze code
         run: flutter analyze --no-fatal-warnings
