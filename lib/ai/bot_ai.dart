@@ -51,6 +51,11 @@ class BotAI {
   static const int playDownRiskThreshold = -300;
   static const int footTransitionRiskThreshold = -200;
   static const int wildCardDiscardThreshold = 6;
+  static const int strongPlayDownBuffer = 10;
+
+  // Discard decision thresholds
+  static const int veryLowValuePairThreshold = 5;
+  static const int lowValuePairThreshold = 10;
 
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
@@ -215,98 +220,126 @@ class BotAI {
 
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = List<PlayingCard>.from(bot.currentHand);
-
-    // Separate wild cards and natural cards
     final wildCards = hand.where((c) => c.isWild).toList();
     final naturalCards = hand.where((c) => !c.isWild).toList();
 
-    // Group natural cards by rank
+    // Group natural cards by rank for analysis
     final cardsByRank = <CardRank, List<PlayingCard>>{};
     for (final card in naturalCards) {
       cardsByRank.putIfAbsent(card.rank, () => []).add(card);
     }
 
+    // Try discard priorities in order
+    PlayingCard? result;
+
     // Priority 1: Discard 3s strategically
+    result = _tryDiscardThrees(bot, naturalCards);
+    if (result != null) return result;
+
+    // Priority 2-5: Handle natural cards by frequency
+    result = _tryDiscardNaturalCards(bot, cardsByRank);
+    if (result != null) return result;
+
+    // Last resort: discard wild cards (very rarely)
+    result = _tryDiscardWildCards(bot, wildCards);
+    if (result != null) return result;
+
+    // Fallback (should never happen)
+    return hand.first;
+  }
+
+  /// Try to discard 3s strategically
+  PlayingCard? _tryDiscardThrees(Player bot, List<PlayingCard> naturalCards) {
     final threeCards = naturalCards
         .where((c) => c.rank == CardRank.three)
         .toList();
-    if (threeCards.isNotEmpty) {
-      // If we're preparing to go to foot (hand is small), keep 3s as easy discards
-      if (bot.hasPickedUpFoot || bot.currentHand.length <= 4) {
-        // Sort by point value - discard red 3s first (more negative)
-        threeCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-        return threeCards.first;
-      }
-      // Otherwise, discard 3s early to avoid penalties
-      else {
-        threeCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-        return threeCards.first;
-      }
-    }
 
-    // Priority 2: Categorize cards by frequency
+    if (threeCards.isEmpty) return null;
+
+    // Sort by point value - discard red 3s first (more negative)
+    threeCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+    return threeCards.first;
+  }
+
+  /// Try to discard natural cards based on frequency analysis
+  PlayingCard? _tryDiscardNaturalCards(
+    Player bot,
+    Map<CardRank, List<PlayingCard>> cardsByRank,
+  ) {
     final cardCategories = _categorizeCardsByFrequency(cardsByRank);
     final singletons = cardCategories['singletons']!;
     final pairs = cardCategories['pairs']!;
     final triples = cardCategories['triples']!;
 
+    // Priority 2: Discard singletons first (lowest meld potential)
     if (singletons.isNotEmpty) {
-      // Sort by point value, prioritize low point cards
       singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return singletons.first;
     }
 
     // Priority 3: Break up pairs strategically
-    if (pairs.isNotEmpty) {
-      // Sort pairs by point value
-      pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+    final pairResult = _tryDiscardFromPairs(bot, pairs);
+    if (pairResult != null) return pairResult;
 
-      // If we haven't picked up foot yet, be very careful with pairs (unlock potential)
-      if (!bot.hasPickedUpFoot && bot.hasPlayedDown) {
-        // Only break up very low-value pairs (4-8 points)
-        final veryLowValuePairs = pairs
-            .where((c) => c.pointValue <= 5)
-            .toList();
-        if (veryLowValuePairs.isNotEmpty) {
-          return veryLowValuePairs.first;
-        }
-        // Otherwise, don't break up pairs if we're still on hand pile
-      } else {
-        // On foot pile or haven't played down - normal pair breaking logic
-        final lowValuePairs = pairs.where((c) => c.pointValue < 10).toList();
-        if (lowValuePairs.isNotEmpty) {
-          return lowValuePairs.first;
-        }
-
-        if (pairs.isNotEmpty && _shouldBreakUpHighValuePair()) {
-          return pairs.first;
-        }
-      }
-    }
-
-    // Priority 4: Discard from triples+ (keeping the meld potential)
+    // Priority 4: Discard from triples+ (keeping most of the meld potential)
     if (triples.isNotEmpty) {
       triples.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return triples.first;
     }
 
-    // Priority 5: If we must break up high-value pairs
+    // Priority 5: Force break up high-value pairs if no other options
     if (pairs.isNotEmpty) {
       pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return pairs.first;
     }
 
-    // Last resort: discard wild cards (VERY rarely - hold wilds strategically)
+    return null;
+  }
+
+  /// Try to discard from pairs with strategic considerations
+  PlayingCard? _tryDiscardFromPairs(Player bot, List<PlayingCard> pairs) {
+    if (pairs.isEmpty) return null;
+
+    pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+
+    // If on hand pile and played down, be very careful with pairs (unlock potential)
+    if (!bot.hasPickedUpFoot && bot.hasPlayedDown) {
+      final veryLowValuePairs = pairs
+          .where((c) => c.pointValue <= veryLowValuePairThreshold)
+          .toList();
+      if (veryLowValuePairs.isNotEmpty) {
+        return veryLowValuePairs.first;
+      }
+      return null; // Don't break up pairs on hand pile unless very low value
+    }
+
+    // On foot pile or haven't played down - normal pair breaking logic
+    final lowValuePairs = pairs
+        .where((c) => c.pointValue < lowValuePairThreshold)
+        .toList();
+    if (lowValuePairs.isNotEmpty) {
+      return lowValuePairs.first;
+    }
+
+    if (pairs.isNotEmpty && _shouldBreakUpHighValuePair()) {
+      return pairs.first;
+    }
+
+    return null;
+  }
+
+  /// Try to discard wild cards (very conservative)
+  PlayingCard? _tryDiscardWildCards(Player bot, List<PlayingCard> wildCards) {
+    if (wildCards.isEmpty) return null;
+
     // Only discard wilds if we have MANY or absolutely forced to (1 card left)
-    if (wildCards.isNotEmpty &&
-        (wildCards.length >= wildCardDiscardThreshold ||
-            bot.currentHand.length == 1)) {
+    if (wildCards.length >= wildCardDiscardThreshold ||
+        bot.currentHand.length == 1) {
       wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return wildCards.first;
     }
 
-    // Fallback (should never happen)
-    return hand.first;
+    return null;
   }
 
   bool _shouldBreakUpHighValuePair() {
@@ -398,9 +431,9 @@ class BotAI {
       }
     }
 
-    // Priority 3: Play down if we have a decent single meld (10+ points over requirement)
+    // Priority 3: Play down if we have a decent single meld (buffer points over requirement)
     // This handles cases where the bot has a viable meld but hasn't unlocked discard
-    final strongThreshold = playDownRequirement + 10;
+    final strongThreshold = playDownRequirement + strongPlayDownBuffer;
     for (final meld in possibleMelds) {
       final meldPoints = meld.fold<int>(
         0,
@@ -606,14 +639,21 @@ class BotAI {
   ) {
     if (possibleMelds.isEmpty) return [];
 
+    final deckCount = controller.gameState.players.length + 1;
+
     // Try 2-meld combinations first (most common case)
-    final twoCombination = _findTwoMeldCombination(possibleMelds, requirement);
+    final twoCombination = _findTwoMeldCombination(
+      possibleMelds,
+      requirement,
+      deckCount,
+    );
     if (twoCombination.isNotEmpty) return twoCombination;
 
     // Try 3-meld combinations if needed (less common)
     final threeCombination = _findThreeMeldCombination(
       possibleMelds,
       requirement,
+      deckCount,
     );
     if (threeCombination.isNotEmpty) return threeCombination;
 
@@ -625,6 +665,7 @@ class BotAI {
   List<List<PlayingCard>> _findTwoMeldCombination(
     List<List<PlayingCard>> possibleMelds,
     int requirement,
+    int deckCount,
   ) {
     for (int i = 0; i < possibleMelds.length; i++) {
       for (int j = i + 1; j < possibleMelds.length; j++) {
@@ -632,7 +673,7 @@ class BotAI {
         final meld2 = possibleMelds[j];
 
         // Check if the melds conflict (use same cards)
-        if (_meldsConflict(meld1, meld2)) continue;
+        if (_meldsConflict(meld1, meld2, deckCount)) continue;
 
         final totalPoints =
             meld1.fold<int>(0, (sum, card) => sum + card.pointValue) +
@@ -664,6 +705,7 @@ class BotAI {
   List<List<PlayingCard>> _findThreeMeldCombination(
     List<List<PlayingCard>> possibleMelds,
     int requirement,
+    int deckCount,
   ) {
     for (int i = 0; i < possibleMelds.length; i++) {
       for (int j = i + 1; j < possibleMelds.length; j++) {
@@ -673,9 +715,9 @@ class BotAI {
           final meld3 = possibleMelds[k];
 
           // Check if any melds conflict
-          if (_meldsConflict(meld1, meld2) ||
-              _meldsConflict(meld1, meld3) ||
-              _meldsConflict(meld2, meld3)) {
+          if (_meldsConflict(meld1, meld2, deckCount) ||
+              _meldsConflict(meld1, meld3, deckCount) ||
+              _meldsConflict(meld2, meld3, deckCount)) {
             continue;
           }
 
@@ -694,7 +736,11 @@ class BotAI {
   }
 
   /// Checks if two melds conflict (use same cards)
-  bool _meldsConflict(List<PlayingCard> meld1, List<PlayingCard> meld2) {
+  bool _meldsConflict(
+    List<PlayingCard> meld1,
+    List<PlayingCard> meld2,
+    int deckCount,
+  ) {
     // Create a map to count cards by rank+suit for each meld
     final meld1Cards = <String, int>{};
     final meld2Cards = <String, int>{};
@@ -716,15 +762,13 @@ class BotAI {
         final totalNeeded = entry.value + meld2Count;
 
         // Determine max available cards for this rank+suit
-        // Note: We use a conservative estimate since we don't have direct access to deck count here
-        // In practice, conflicts are rare due to the large deck size in Hand & Foot
+        // Hand & Foot uses (players + 1) decks, each with standard card counts
         int maxAvailable;
         if (entry.key.contains('joker')) {
-          maxAvailable =
-              8; // Conservative: 2 jokers × 4 decks (typical Hand & Foot setup)
+          maxAvailable = 2 * deckCount; // 2 jokers per standard deck
         } else {
           maxAvailable =
-              4; // Conservative: 1 per suit × 4 decks (typical Hand & Foot setup)
+              4 * deckCount; // 4 cards per rank per deck (one per suit)
         }
 
         if (totalNeeded > maxAvailable) {
