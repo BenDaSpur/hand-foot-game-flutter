@@ -258,6 +258,127 @@ void main() {
       expect(gameState.discardPile.length, equals(0)); // All cards taken
     });
 
+    test(
+      'should add unlocked cards to existing meld instead of creating new one',
+      () {
+        final testPlayers = [
+          Player(id: '1', name: 'Player 1', type: PlayerType.human),
+          Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+        ];
+        final deck = Deck.createHandAndFootDeck(testPlayers.length);
+        final gameState = GameState(players: testPlayers, deck: deck);
+        gameState.startRound();
+
+        // Give first player an existing meld of nines
+        final existingNines = [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+        ];
+        final existingMeld = Meld.createMeld(existingNines)!;
+        testPlayers[0].melds.add(existingMeld);
+        testPlayers[0].hasPlayedDown = true;
+
+        // Give first player 2 matching natural cards for the top discard
+        testPlayers[0].currentHand.addAll([
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+        ]);
+
+        // Set up discard pile with 9 on top
+        gameState.discardPile.addAll([
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine), // Top card
+        ]);
+
+        final initialMeldCount = testPlayers[0].melds.length;
+        final initialMeldSize = existingMeld.cards.length;
+
+        final success = gameState.unlockDiscard();
+
+        expect(success, isTrue);
+
+        // Should not have created a new meld
+        expect(testPlayers[0].melds.length, equals(initialMeldCount));
+
+        // Should have added to existing meld
+        expect(
+          existingMeld.cards.length,
+          equals(initialMeldSize + 3),
+        ); // 2 from hand + 1 from discard
+
+        // Existing meld should now have 6 nines total
+        expect(existingMeld.cards.length, equals(6));
+        expect(
+          existingMeld.cards.every((card) => card.rank == CardRank.nine),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'should create new meld when unlocking discard with no existing meld of that rank',
+      () {
+        final testPlayers2 = [
+          Player(id: '1', name: 'Player 1', type: PlayerType.human),
+          Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+        ];
+        final deck2 = Deck.createHandAndFootDeck(testPlayers2.length);
+        final gameState2 = GameState(players: testPlayers2, deck: deck2);
+        gameState2.startRound();
+
+        // Give first player an existing meld of kings (different rank)
+        final existingKings = [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        ];
+        final existingMeld = Meld.createMeld(existingKings)!;
+        testPlayers2[0].melds.add(existingMeld);
+        testPlayers2[0].hasPlayedDown = true;
+
+        // Give first player 2 matching natural cards for the top discard (different rank)
+        testPlayers2[0].currentHand.addAll([
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+        ]);
+
+        // Set up discard pile with 9 on top (different from existing meld)
+        gameState2.discardPile.addAll([
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine), // Top card
+        ]);
+
+        final initialMeldCount = testPlayers2[0].melds.length;
+
+        final success = gameState2.unlockDiscard();
+
+        expect(success, isTrue);
+
+        // Should have created a new meld since no existing nine meld
+        expect(testPlayers2[0].melds.length, equals(initialMeldCount + 1));
+
+        // New meld should contain the 3 nines
+        final nineMeld = testPlayers2[0].melds.firstWhere(
+          (m) => m.rank == CardRank.nine,
+        );
+        expect(nineMeld.cards.length, equals(3));
+        expect(
+          nineMeld.cards.every((card) => card.rank == CardRank.nine),
+          isTrue,
+        );
+
+        // Existing king meld should be unchanged
+        expect(existingMeld.cards.length, equals(3));
+        expect(
+          existingMeld.cards.every((card) => card.rank == CardRank.king),
+          isTrue,
+        );
+      },
+    );
+
     test('should create meld correctly', () {
       gameState.turnPhase = TurnPhase.meld;
 

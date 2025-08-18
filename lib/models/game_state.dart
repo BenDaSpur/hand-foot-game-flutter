@@ -211,15 +211,31 @@ class GameState {
     // Take the top discard card
     final discardCard = discardPile.removeLast();
 
-    // Create the meld (no wild cards allowed for unlock)
+    // Check if we should add to existing meld or create new one
     final meldCards = [...matchingCards, discardCard];
-    final meld = Meld.createMeld(meldCards);
-    if (meld != null) {
-      currentPlayer.melds.add(meld);
-      currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
+    final existingMeldIndex = currentPlayer.findMeldByRank(discardCard.rank);
+
+    if (existingMeldIndex != -1) {
+      // Add to existing meld
+      final existingMeld = currentPlayer.melds[existingMeldIndex];
+      for (final card in meldCards) {
+        existingMeld.addCard(card);
+      }
       final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
-      _logAction('unlocked discard pile and melded: $meldCardNames');
+      _logAction(
+        'unlocked discard pile and added to existing meld: $meldCardNames',
+      );
+    } else {
+      // Create new meld
+      final meld = Meld.createMeld(meldCards);
+      if (meld != null) {
+        currentPlayer.melds.add(meld);
+        final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
+        _logAction('unlocked discard pile and melded: $meldCardNames');
+      }
     }
+
+    currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
 
     // Take the next 5 cards from discard pile (or what's available)
     final additionalDiscards = <PlayingCard>[];
