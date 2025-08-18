@@ -216,8 +216,18 @@ class GameState {
     final existingMeldIndex = currentPlayer.findMeldByRank(discardCard.rank);
 
     if (existingMeldIndex != -1) {
-      // Add to existing meld
+      // Add to existing meld - validate each card can be added
       final existingMeld = currentPlayer.melds[existingMeldIndex];
+
+      // First validate all cards can be added
+      for (final card in meldCards) {
+        if (!existingMeld.canAddCard(card)) {
+          // This shouldn't happen with proper unlock validation, but safety check
+          return false;
+        }
+      }
+
+      // Add all cards (we know they're valid)
       for (final card in meldCards) {
         existingMeld.addCard(card);
       }
