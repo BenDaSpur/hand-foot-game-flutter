@@ -444,6 +444,19 @@ class _GameScreenState extends State<GameScreen> {
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
       _sortHand(_sortMode);
+    } else {
+      // Check if deck is empty or insufficient
+      if (_gameController.gameState.deck.isEmpty) {
+        _showErrorDialog(
+          'Cannot draw from deck: The deck is empty!\n\n'
+          'The round will continue until a player goes out or all players pass.',
+        );
+      } else if (_gameController.gameState.deck.size < 2) {
+        _showErrorDialog(
+          'Cannot draw from deck: Only ${_gameController.gameState.deck.size} card(s) remaining.\n\n'
+          'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
+        );
+      }
     }
   }
 
