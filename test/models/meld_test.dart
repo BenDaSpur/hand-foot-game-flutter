@@ -305,5 +305,84 @@ void main() {
 
       expect(meld, isNull); // Wild-only melds not allowed
     });
+
+    test('should change type dynamically when wild cards are added', () {
+      // Start with natural meld
+      final naturalCards = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+      ];
+
+      final meld = Meld.createMeld(naturalCards)!;
+      // ignore: deprecated_member_use_from_same_package
+      expect(meld.type, equals(MeldType.natural)); // Testing original field
+      expect(meld.type, equals(MeldType.natural));
+      expect(meld.isClean, isFalse); // Not 7+ cards yet
+      expect(meld.isDirty, isFalse);
+
+      // Add a wild card - should change type dynamically
+      final wildCard = const PlayingCard(suit: Suit.clubs, rank: CardRank.two);
+      final success = meld.addCard(wildCard);
+
+      expect(success, isTrue);
+      expect(
+        meld.type,
+        equals(MeldType.mixed),
+      ); // Type should be mixed after adding wild card
+      expect(meld.cards.length, equals(4));
+
+      // Make it a book (7+ cards)
+      final moreKings = [
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ];
+
+      for (final card in moreKings) {
+        meld.addCard(card);
+      }
+
+      expect(meld.isBook, isTrue);
+      expect(meld.isClean, isFalse); // Has wild cards
+      expect(meld.isDirty, isTrue); // Book with wild cards
+
+      // Point value should use dirty book bonus (300) not clean (500)
+      final expectedPoints =
+          (6 * 10) + (1 * 20) + 300; // 6 kings + 1 two + dirty bonus
+      expect(meld.pointValue, equals(expectedPoints));
+    });
+
+    test('should handle natural book becoming dirty through card addition', () {
+      // Create natural book (7+ cards, no wilds)
+      final naturalBookCards = List.generate(
+        7,
+        (i) => const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+      );
+
+      final meld = Meld.createMeld(naturalBookCards)!;
+      expect(meld.isBook, isTrue);
+      expect(meld.isClean, isTrue);
+      expect(meld.isDirty, isFalse);
+      expect(meld.type, equals(MeldType.natural));
+
+      // Point value should include clean book bonus
+      final initialPoints = (7 * 10) + 500; // 7 queens + clean bonus
+      expect(meld.pointValue, equals(initialPoints));
+
+      // Add a wild card - should become dirty
+      final joker = const PlayingCard(rank: CardRank.joker);
+      final success = meld.addCard(joker);
+
+      expect(success, isTrue);
+      expect(meld.isBook, isTrue);
+      expect(meld.isClean, isFalse); // No longer clean
+      expect(meld.isDirty, isTrue); // Now dirty
+      expect(meld.type, equals(MeldType.mixed));
+
+      // Point value should now use dirty book bonus
+      final finalPoints = (7 * 10) + 50 + 300; // 7 queens + joker + dirty bonus
+      expect(meld.pointValue, equals(finalPoints));
+    });
   });
 }

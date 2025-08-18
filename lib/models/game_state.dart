@@ -211,15 +211,56 @@ class GameState {
     // Take the top discard card
     final discardCard = discardPile.removeLast();
 
-    // Create the meld (no wild cards allowed for unlock)
+    // Check if we should add to existing meld or create new one
     final meldCards = [...matchingCards, discardCard];
-    final meld = Meld.createMeld(meldCards);
-    if (meld != null) {
-      currentPlayer.melds.add(meld);
-      currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
+    final existingMeldIndex = currentPlayer.findMeldByRank(discardCard.rank);
+
+    if (existingMeldIndex != -1) {
+      // Add to existing meld - validate each card can be added
+      final existingMeld = currentPlayer.melds[existingMeldIndex];
+
+      // First validate all cards can be added
+      for (final card in meldCards) {
+        if (!existingMeld.canAddCard(card)) {
+          // This shouldn't happen with proper unlock validation, but safety check
+          // Log the issue for debugging if needed
+          final cardName = card.displayName;
+          final meldRank = existingMeld.rank.name;
+          _logAction(
+            'ERROR: Could not add $cardName to $meldRank meld during unlock',
+          );
+          return false;
+        }
+      }
+
+      // Add all cards - double-check each addition for robustness
+      for (final card in meldCards) {
+        if (!existingMeld.addCard(card)) {
+          // Extra safety: if addCard fails, log and return false
+          // Note: This error logging is rare and shouldn't spam logs under normal gameplay
+          final cardName = card.displayName;
+          final meldRank = existingMeld.rank.name;
+          _logAction(
+            'ERROR: Failed to add $cardName to $meldRank meld during unlock',
+          );
+          return false;
+        }
+      }
       final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
-      _logAction('unlocked discard pile and melded: $meldCardNames');
+      _logAction(
+        'unlocked discard pile and added to existing meld: $meldCardNames',
+      );
+    } else {
+      // Create new meld
+      final meld = Meld.createMeld(meldCards);
+      if (meld != null) {
+        currentPlayer.melds.add(meld);
+        final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
+        _logAction('unlocked discard pile and melded: $meldCardNames');
+      }
     }
+
+    currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
 
     // Take the next 5 cards from discard pile (or what's available)
     final additionalDiscards = <PlayingCard>[];
