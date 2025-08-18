@@ -74,6 +74,12 @@ class Deck {
     _cards.addAll(cards);
   }
 
+  /// Returns a card to the deck, placing it where it can be drawn again next.
+  /// Cards are added to the end of the internal list, which is where [drawCard] removes from.
+  void returnCard(PlayingCard card) {
+    _cards.add(card);
+  }
+
   PlayingCard? get topCard => _cards.isEmpty ? null : _cards.last;
 
   int get size => _cards.length;

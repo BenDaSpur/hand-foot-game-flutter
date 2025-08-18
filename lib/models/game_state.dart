@@ -26,6 +26,10 @@ class GameAction {
 }
 
 class GameState {
+  static const int requiredDrawCount = 2;
+  static const int minDiscardForReshuffle = 2;
+  static const int additionalDiscardPickup = 5;
+
   final List<Player> players;
   final Deck deck;
   final List<PlayingCard> discardPile;
@@ -166,34 +170,50 @@ class GameState {
     }
   }
 
+  /// Draws exactly [requiredDrawCount] cards from the deck.
+  /// If deck becomes insufficient during draw, attempts to reshuffle discard pile.
+  /// Returns true if successful, false if unable to draw required number of cards.
   bool drawFromDeck() {
     if (hasDrawnFromDeck) return false;
 
-    // Edge Case 2: Automatically reshuffle discard pile if deck is insufficient
-    if (deck.size < 2 && discardPile.length > 1) {
-      _reshuffleDiscardIntoDeck();
+    final cardsDrawn = <PlayingCard>[];
+
+    // Attempt to draw required number of cards
+    for (int i = 0; i < requiredDrawCount; i++) {
+      PlayingCard? card;
+
+      if (!deck.isEmpty) {
+        card = deck.drawCard();
+      } else if (discardPile.length > minDiscardForReshuffle) {
+        // Try reshuffling if deck is empty but discard pile has cards
+        _reshuffleDiscardIntoDeck();
+        if (!deck.isEmpty) {
+          card = deck.drawCard();
+        }
+      }
+
+      if (card != null) {
+        cardsDrawn.add(card);
+      } else {
+        // Unable to draw required cards - return what we drew and fail
+        for (final drawnCard in cardsDrawn) {
+          deck.returnCard(drawnCard);
+        }
+        _logAction(
+          'cannot draw - insufficient cards available even after attempting reshuffle',
+        );
+        return false;
+      }
     }
 
-    // Must draw exactly 2 cards from deck according to Hand & Foot rules
-    if (deck.size < 2) {
-      _logAction(
-        'cannot draw - deck has only ${deck.size} cards remaining and no cards to reshuffle',
-      );
-      return false;
-    }
+    currentPlayer.addCardsToHand(cardsDrawn);
+    hasDrawnFromDeck = true;
+    turnPhase = TurnPhase.meld;
 
-    final cards = deck.drawCards(2);
-    if (cards.length == 2) {
-      currentPlayer.addCardsToHand(cards);
-      hasDrawnFromDeck = true;
-      turnPhase = TurnPhase.meld;
+    final cardNames = cardsDrawn.map((c) => c.displayName).join(', ');
+    _logAction('drew: $cardNames');
 
-      final cardNames = cards.map((c) => c.displayName).join(', ');
-      _logAction('drew: $cardNames');
-
-      return true;
-    }
-    return false;
+    return true;
   }
 
   bool drawFromDiscard() {
@@ -274,14 +294,18 @@ class GameState {
 
     currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
 
-    // Take the next 5 cards from discard pile (or what's available)
+    // Take the next cards from discard pile (or what's available)
     final additionalDiscards = <PlayingCard>[];
-    for (int i = 0; i < 5 && discardPile.isNotEmpty; i++) {
+    for (
+      int i = 0;
+      i < additionalDiscardPickup && discardPile.isNotEmpty;
+      i++
+    ) {
       additionalDiscards.add(discardPile.removeLast());
     }
 
     // Edge Case 1: If no additional cards in discard, take remaining from deck
-    final remainingNeeded = 5 - additionalDiscards.length;
+    final remainingNeeded = additionalDiscardPickup - additionalDiscards.length;
     if (remainingNeeded > 0) {
       // Edge Case 2: Reshuffle discard if deck doesn't have enough cards
       if (deck.size < remainingNeeded && discardPile.length > 1) {
@@ -556,11 +580,14 @@ class GameState {
     return ordered;
   }
 
-  /// Edge Case 2: Reshuffles discard pile into deck when deck runs low
-  /// Keeps the top discard card to maintain game state
+  /// Reshuffles discard pile into deck when deck runs low.
+  ///
+  /// Maintains game state by keeping the top discard card in place.
+  /// Requires at least [minDiscardForReshuffle] cards in discard pile to perform reshuffle.
+  /// The remaining cards (excluding top card) are added to deck and shuffled.
   void _reshuffleDiscardIntoDeck() {
-    if (discardPile.length <= 1) {
-      // Need at least 2 cards in discard pile to reshuffle (keep top card)
+    if (discardPile.length <= minDiscardForReshuffle) {
+      // Need sufficient cards in discard pile to reshuffle (keep top card)
       return;
     }
 
