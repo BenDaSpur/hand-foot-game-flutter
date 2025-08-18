@@ -2,9 +2,9 @@ name: Deploy Flutter Web to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch: # Allow manual triggering
 
 permissions:
@@ -18,19 +18,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Build job
+  # Build job (only on PRs for validation)
   build:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.3'
-          channel: 'stable'
-          cache: true
+          flutter-version: "3.32.8"
+          channel: "stable"
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
 
       - name: Install dependencies
         run: flutter pub get
@@ -41,29 +44,51 @@ jobs:
       - name: Analyze code
         run: flutter analyze
 
-      - name: Build Flutter web
-        run: |
-          flutter build web --release --web-renderer canvaskit \
-            --base-href "/hand-foot-game-flutter/"
+      - name: Build Web (validation only)
+        run: flutter build web --release --base-href /hand-foot-game-flutter/
+
+  # Deployment job (reusing working steps from build-and-release.yml)
+  deploy-pages:
+    runs-on: ubuntu-latest
+    # Only deploy on pushes to main (not on PRs)
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: "stable"
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Web for GitHub Pages
+        run: flutter build web --release --base-href /hand-foot-game-flutter/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload artifact
+      - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
 
-  # Deployment job
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    # Only deploy on pushes to main (not on PRs)
-    if: github.ref == 'refs/heads/main'
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
