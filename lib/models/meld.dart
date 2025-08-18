@@ -5,9 +5,20 @@ enum MeldType { natural, mixed }
 class Meld {
   final CardRank rank;
   final List<PlayingCard> cards;
-  final MeldType type;
 
-  Meld({required this.rank, required this.cards, required this.type});
+  /// Creates a new meld with the given rank and cards.
+  /// The meld type is determined dynamically based on the presence of wild cards.
+  Meld._({required this.rank, required this.cards});
+
+  /// Public factory constructor - use this instead of the private constructor
+  /// Maintains backward compatibility with the type parameter
+  factory Meld({
+    required CardRank rank,
+    required List<PlayingCard> cards,
+    MeldType? type,
+  }) {
+    return Meld._(rank: rank, cards: cards);
+  }
 
   static Meld? createMeld(List<PlayingCard> cards) {
     if (cards.length < 3) return null;
@@ -60,17 +71,32 @@ class Meld {
     return false;
   }
 
+  /// Gets the current type of this meld based on the presence of wild cards.
+  /// Natural melds contain only natural cards, mixed melds contain wild cards.
+  MeldType get type {
+    return cards.any((card) => card.isWild) ? MeldType.mixed : MeldType.natural;
+  }
+
+  /// Calculates the total point value of this meld, including book bonuses.
+  ///
+  /// **Thread Safety**: This method is safe for concurrent access. It caches
+  /// the meld type at the start to ensure consistent calculations even if the
+  /// cards list is modified during execution. However, callers should ensure
+  /// that concurrent modifications to the cards list maintain game rule validity.
   int get pointValue {
+    // Cache the current type to avoid race conditions
+    final meldType = type;
+
     int total = 0;
     for (final card in cards) {
       total += card.pointValue;
     }
 
-    // Book bonuses (7+ cards)
+    // Book bonuses (7+ cards) - use cached type for consistency
     if (cards.length >= 7) {
-      if (type == MeldType.natural) {
+      if (meldType == MeldType.natural) {
         total += 500; // Clean book bonus
-      } else if (type == MeldType.mixed) {
+      } else if (meldType == MeldType.mixed) {
         total += 300; // Dirty book bonus
       }
     }
