@@ -258,6 +258,12 @@ class GameState {
         _logAction('created new meld: $cardNames');
       }
 
+      // Check if hand is empty after melding and pick up foot if needed
+      if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
+        currentPlayer.pickUpFoot();
+        _logAction('picked up foot pile');
+      }
+
       return true;
     }
     return false;
@@ -289,6 +295,12 @@ class GameState {
         _logAction('created new meld: $cardNames');
       }
 
+      // Check if hand is empty after melding and pick up foot if needed
+      if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
+        currentPlayer.pickUpFoot();
+        _logAction('picked up foot pile');
+      }
+
       return true;
     }
     return false;
@@ -299,6 +311,13 @@ class GameState {
 
     if (currentPlayer.addToMeld(meldIndex, card)) {
       _logAction('added ${card.displayName} to existing meld');
+
+      // Check if hand is empty after adding to meld and pick up foot if needed
+      if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
+        currentPlayer.pickUpFoot();
+        _logAction('picked up foot pile');
+      }
+
       return true;
     }
     return false;
