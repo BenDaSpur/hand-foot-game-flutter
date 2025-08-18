@@ -229,11 +229,7 @@ void main() {
         final ninesMeld = Meld.createMeld(ninesCards);
         expect(ninesMeld, isNotNull);
         expect(ninesMeld!.rank, equals(CardRank.nine));
-        // ignore: deprecated_member_use_from_same_package
-        expect(
-          ninesMeld.type,
-          equals(MeldType.natural),
-        ); // Testing original field
+        expect(ninesMeld.type, equals(MeldType.natural));
 
         // Test tens meld as well
         final tensCards = [
@@ -247,11 +243,7 @@ void main() {
         final tensMeld = Meld.createMeld(tensCards);
         expect(tensMeld, isNotNull);
         expect(tensMeld!.rank, equals(CardRank.ten));
-        // ignore: deprecated_member_use_from_same_package
-        expect(
-          tensMeld.type,
-          equals(MeldType.natural),
-        ); // Testing original field
+        expect(tensMeld.type, equals(MeldType.natural));
 
         final tensPoints = tensCards.fold<int>(
           0,

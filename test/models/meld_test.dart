@@ -15,8 +15,7 @@ void main() {
 
       expect(meld, isNotNull);
       expect(meld!.rank, equals(CardRank.ace));
-      // ignore: deprecated_member_use_from_same_package
-      expect(meld.type, equals(MeldType.natural)); // Testing original field
+      expect(meld.type, equals(MeldType.natural));
       expect(meld.cards.length, equals(3));
     });
 
@@ -31,8 +30,7 @@ void main() {
 
       expect(meld, isNotNull);
       expect(meld!.rank, equals(CardRank.king));
-      // ignore: deprecated_member_use_from_same_package
-      expect(meld.type, equals(MeldType.mixed)); // Testing original field
+      expect(meld.type, equals(MeldType.mixed));
       expect(meld.cards.length, equals(3));
     });
 
@@ -319,7 +317,7 @@ void main() {
       final meld = Meld.createMeld(naturalCards)!;
       // ignore: deprecated_member_use_from_same_package
       expect(meld.type, equals(MeldType.natural)); // Testing original field
-      expect(meld.currentType, equals(MeldType.natural));
+      expect(meld.type, equals(MeldType.natural));
       expect(meld.isClean, isFalse); // Not 7+ cards yet
       expect(meld.isDirty, isFalse);
 
@@ -328,12 +326,10 @@ void main() {
       final success = meld.addCard(wildCard);
 
       expect(success, isTrue);
-      // ignore: deprecated_member_use_from_same_package
-      expect(meld.type, equals(MeldType.natural)); // Original type unchanged
       expect(
-        meld.currentType,
+        meld.type,
         equals(MeldType.mixed),
-      ); // Current type should be mixed
+      ); // Type should be mixed after adding wild card
       expect(meld.cards.length, equals(4));
 
       // Make it a book (7+ cards)
@@ -368,7 +364,7 @@ void main() {
       expect(meld.isBook, isTrue);
       expect(meld.isClean, isTrue);
       expect(meld.isDirty, isFalse);
-      expect(meld.currentType, equals(MeldType.natural));
+      expect(meld.type, equals(MeldType.natural));
 
       // Point value should include clean book bonus
       final initialPoints = (7 * 10) + 500; // 7 queens + clean bonus
@@ -382,7 +378,7 @@ void main() {
       expect(meld.isBook, isTrue);
       expect(meld.isClean, isFalse); // No longer clean
       expect(meld.isDirty, isTrue); // Now dirty
-      expect(meld.currentType, equals(MeldType.mixed));
+      expect(meld.type, equals(MeldType.mixed));
 
       // Point value should now use dirty book bonus
       final finalPoints = (7 * 10) + 50 + 300; // 7 queens + joker + dirty bonus

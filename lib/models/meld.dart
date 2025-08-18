@@ -5,18 +5,20 @@ enum MeldType { natural, mixed }
 class Meld {
   final CardRank rank;
   final List<PlayingCard> cards;
-  @Deprecated(
-    'Use currentType instead - this field may not reflect dynamic changes',
-  )
-  final MeldType type;
 
-  /// Creates a new meld with the given rank, cards, and initial type.
-  ///
-  /// **Deprecation Plan**: The [type] parameter is deprecated and will be removed
-  /// in v2.0. Future versions will only require [rank] and [cards], with type
-  /// determined dynamically via [currentType]. This eliminates the risk of
-  /// inconsistent static vs dynamic type values.
-  Meld({required this.rank, required this.cards, required this.type});
+  /// Creates a new meld with the given rank and cards.
+  /// The meld type is determined dynamically based on the presence of wild cards.
+  Meld._({required this.rank, required this.cards});
+
+  /// Public factory constructor - use this instead of the private constructor
+  /// Maintains backward compatibility with the type parameter
+  factory Meld({
+    required CardRank rank,
+    required List<PlayingCard> cards,
+    MeldType? type,
+  }) {
+    return Meld._(rank: rank, cards: cards);
+  }
 
   static Meld? createMeld(List<PlayingCard> cards) {
     if (cards.length < 3) return null;
@@ -69,9 +71,9 @@ class Meld {
     return false;
   }
 
-  // Dynamic type detection based on current cards
-  // This is the preferred way to check meld type as it reflects the current state
-  MeldType get currentType {
+  /// Gets the current type of this meld based on the presence of wild cards.
+  /// Natural melds contain only natural cards, mixed melds contain wild cards.
+  MeldType get type {
     return cards.any((card) => card.isWild) ? MeldType.mixed : MeldType.natural;
   }
 
@@ -83,7 +85,7 @@ class Meld {
   /// that concurrent modifications to the cards list maintain game rule validity.
   int get pointValue {
     // Cache the current type to avoid race conditions
-    final meldType = currentType;
+    final meldType = type;
 
     int total = 0;
     for (final card in cards) {

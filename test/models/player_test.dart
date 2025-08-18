@@ -546,7 +546,7 @@ void main() {
         final success = bookToBeDirty.addCard(wildCard);
 
         expect(success, isTrue);
-        expect(bookToBeDirty.currentType, equals(MeldType.mixed));
+        expect(bookToBeDirty.type, equals(MeldType.mixed));
         expect(bookToBeDirty.isDirty, isTrue);
 
         // Now should be able to go out
