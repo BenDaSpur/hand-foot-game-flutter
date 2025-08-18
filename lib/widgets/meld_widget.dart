@@ -141,7 +141,7 @@ class MeldWidget extends StatelessWidget {
   }
 
   Color _getMeldTypeColor() {
-    switch (meld.type) {
+    switch (meld.currentType) {
       case MeldType.natural:
         return Colors.green;
       case MeldType.mixed:

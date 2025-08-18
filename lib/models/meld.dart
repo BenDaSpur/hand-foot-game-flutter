@@ -60,17 +60,22 @@ class Meld {
     return false;
   }
 
+  // Dynamic type detection based on current cards
+  MeldType get currentType {
+    return cards.any((card) => card.isWild) ? MeldType.mixed : MeldType.natural;
+  }
+
   int get pointValue {
     int total = 0;
     for (final card in cards) {
       total += card.pointValue;
     }
 
-    // Book bonuses (7+ cards)
+    // Book bonuses (7+ cards) - use current type
     if (cards.length >= 7) {
-      if (type == MeldType.natural) {
+      if (currentType == MeldType.natural) {
         total += 500; // Clean book bonus
-      } else if (type == MeldType.mixed) {
+      } else if (currentType == MeldType.mixed) {
         total += 300; // Dirty book bonus
       }
     }

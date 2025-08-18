@@ -1215,7 +1215,15 @@ class _GameScreenState extends State<GameScreen> {
                       child: Row(
                         children: [
                           Text(
-                            '${(_viewingPlayerMelds ?? humanPlayer).name}\'s Melds:',
+                            () {
+                              final player = _viewingPlayerMelds ?? humanPlayer;
+                              final playerName = player.name;
+                              if (playerName == 'You') {
+                                return 'Your Melds:';
+                              } else {
+                                return '$playerName\'s Melds:';
+                              }
+                            }(),
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

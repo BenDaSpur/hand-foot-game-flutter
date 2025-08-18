@@ -118,7 +118,7 @@ class GameSaveService {
     return {
       'rank': meld.rank.name,
       'cards': meld.cards.map(_serializeCard).toList(),
-      'type': meld.type.name,
+      'type': meld.currentType.name,
     };
   }
 

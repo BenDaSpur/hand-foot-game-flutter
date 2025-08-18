@@ -240,7 +240,7 @@ class GameController {
               'melds': player.melds
                   .map(
                     (meld) => {
-                      'type': meld.type.name,
+                      'type': meld.currentType.name,
                       'cards': meld.cards
                           .map(
                             (card) => {
