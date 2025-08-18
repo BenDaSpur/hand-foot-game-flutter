@@ -152,6 +152,22 @@ class BotAI {
             data: strategicPlayDown.first,
           );
         }
+      } else {
+        // No strategic play-down found, but we have possible melds
+        // This might be a bug - if we have melds that meet requirement, we should play them
+        if (possibleMelds.isNotEmpty) {
+          // Check if any single meld meets the play-down requirement
+          final playDownRequirement = controller.gameState.playDownRequirement;
+          for (final meld in possibleMelds) {
+            final points = meld.fold<int>(
+              0,
+              (sum, card) => sum + card.pointValue,
+            );
+            if (points >= playDownRequirement) {
+              return BotDecision(action: 'createMeld', data: meld);
+            }
+          }
+        }
       }
     } else {
       // Already played down - be more strategic about melding
