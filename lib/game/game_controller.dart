@@ -5,6 +5,7 @@ import '../models/deck.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/meld.dart';
+import '../services/game_save_service.dart';
 
 class GameController {
   final GameState _gameState;
@@ -129,6 +130,12 @@ class GameController {
 
     for (final entry in cardsByRank.entries) {
       final naturalCards = entry.value;
+
+      // Skip 3s - they cannot be melded in Hand & Foot
+      if (entry.key == CardRank.three) {
+        continue;
+      }
+
       if (naturalCards.length >= 3) {
         possibleMelds.add(naturalCards);
       } else if (naturalCards.length >= 2 && wildCards.isNotEmpty) {
@@ -522,5 +529,29 @@ class GameController {
 
   static bool _cardsEqual(PlayingCard a, PlayingCard b) {
     return a.rank == b.rank && a.suit == b.suit;
+  }
+
+  /// Save the current game state to local storage
+  Future<void> saveGame() async {
+    await GameSaveService.saveGame(_gameState, gameSeed);
+  }
+
+  /// Load a saved game from local storage
+  static Future<GameController?> loadSavedGame() async {
+    final savedData = await GameSaveService.loadGame();
+    if (savedData != null) {
+      return GameSaveService.restoreGameController(savedData);
+    }
+    return null;
+  }
+
+  /// Check if there is a saved game available
+  static Future<bool> hasSavedGame() async {
+    return await GameSaveService.hasSavedGame();
+  }
+
+  /// Clear the saved game from local storage
+  static Future<void> clearSavedGame() async {
+    await GameSaveService.clearSavedGame();
   }
 }

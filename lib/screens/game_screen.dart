@@ -33,7 +33,19 @@ class _GameScreenState extends State<GameScreen> {
     _initializeGame();
   }
 
-  void _initializeGame() {
+  void _initializeGame() async {
+    // Check if there's a saved game
+    final hasSaved = await GameController.hasSavedGame();
+
+    if (hasSaved) {
+      _showRestoreGameDialog();
+      return;
+    }
+
+    _startFreshGame();
+  }
+
+  void _startFreshGame() {
     final players = [
       Player(id: '1', name: 'You', type: PlayerType.human),
       Player(id: '2', name: 'Bot 1', type: PlayerType.bot),
@@ -52,6 +64,11 @@ class _GameScreenState extends State<GameScreen> {
       _isInitialized = true;
     });
 
+    // If the first player is human, save the initial game state
+    if (_gameController.gameState.currentPlayer.type == PlayerType.human) {
+      _saveGameState();
+    }
+
     _processBotTurns();
   }
 
@@ -64,6 +81,13 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _processBotTurn() async {
+    // Check if game has ended
+    if (_gameController.gameState.phase == GamePhase.gameEnd) {
+      // Game is over, clear the saved game
+      await GameController.clearSavedGame();
+      return;
+    }
+
     // Check if round has ended and automatically start next round
     if (_gameController.gameState.phase == GamePhase.roundEnd) {
       await Future.delayed(
@@ -112,6 +136,9 @@ class _GameScreenState extends State<GameScreen> {
 
       if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
         _processBotTurn();
+      } else {
+        // It's now the human player's turn - save the game state
+        _saveGameState();
       }
     }
   }
@@ -281,6 +308,72 @@ class _GameScreenState extends State<GameScreen> {
     _processBotTurns();
   }
 
+  void _saveGameState() async {
+    try {
+      await _gameController.saveGame();
+    } catch (e) {
+      print('Failed to save game state: $e');
+    }
+  }
+
+  void _showRestoreGameDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Saved Game Found'),
+        content: const Text(
+          'Would you like to continue your previous game or start a new one?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startFreshGame();
+            },
+            child: const Text('New Game'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _restoreSavedGame();
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _restoreSavedGame() async {
+    try {
+      final savedController = await GameController.loadSavedGame();
+
+      if (savedController != null) {
+        _gameController = savedController;
+        _botAI = BotAI();
+
+        // Sort the human player's hand
+        final humanPlayer = _gameController.gameState.players.firstWhere(
+          (p) => p.type == PlayerType.human,
+        );
+        humanPlayer.sortHandByRank();
+
+        setState(() {
+          _isInitialized = true;
+        });
+
+        // Continue game flow
+        _processBotTurns();
+      } else {
+        _showErrorDialog('Failed to load saved game. Starting new game.');
+        _startFreshGame();
+      }
+    } catch (e) {
+      _showErrorDialog('Error loading saved game: ${e.toString()}');
+      _startFreshGame();
+    }
+  }
+
   void _showNewGameConfirmation() {
     showDialog(
       context: context,
@@ -307,14 +400,18 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _startNewGame() {
+  void _startNewGame() async {
+    // Clear any saved game when explicitly starting new
+    await GameController.clearSavedGame();
+
     setState(() {
       _isInitialized = false;
       _selectedCardIndices.clear();
       _viewingPlayerMelds = null;
     });
 
-    _initializeGame();
+    // Start a fresh game directly (not checking for saves)
+    _startFreshGame();
   }
 
   void _onDrawFromDeck() {
