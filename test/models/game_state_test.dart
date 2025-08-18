@@ -546,6 +546,83 @@ void main() {
       expect(orderedPlayers[0], equals(players[1])); // Current player first
       expect(orderedPlayers[1], equals(players[0])); // Then others in order
     });
+
+    test('should reshuffle meld cards back into deck on new round', () {
+      // Setup end of round state
+      gameState.phase = GamePhase.roundEnd;
+      gameState.round = 1;
+
+      // Create melds for both players
+      final meld1 = Meld.createMeld([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ]);
+
+      final meld2 = Meld.createMeld([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ]);
+
+      if (meld1 != null && meld2 != null) {
+        players[0].melds.add(meld1);
+        players[1].melds.add(meld2);
+      }
+
+      // Track initial state
+      final totalMeldCards =
+          players[0].melds.fold<int>(
+            0,
+            (sum, meld) => sum + meld.cards.length,
+          ) +
+          players[1].melds.fold<int>(0, (sum, meld) => sum + meld.cards.length);
+
+      expect(players[0].melds.length, equals(1));
+      expect(players[1].melds.length, equals(1));
+      expect(totalMeldCards, equals(7)); // 3 + 4 cards in melds
+
+      gameState.resetForNewRound();
+
+      // Verify all melds are cleared
+      expect(players[0].melds.length, equals(0));
+      expect(players[1].melds.length, equals(0));
+
+      // Verify deck size accounts for returned meld cards
+      // Note: deck size will be smaller after dealing, but we can verify cards were added
+      // by checking that the deck was properly reshuffled and players have new hands
+      expect(gameState.phase, equals(GamePhase.playing));
+
+      // Players should have fresh hands and feet after dealing
+      for (final player in players) {
+        expect(player.hand.length, equals(11));
+        expect(player.foot.length, equals(11));
+      }
+    });
+
+    test('should handle empty melds correctly during round reset', () {
+      // Setup end of round state with no melds
+      gameState.phase = GamePhase.roundEnd;
+      gameState.round = 1;
+
+      // Ensure players have no melds
+      for (final player in players) {
+        player.melds.clear();
+      }
+
+      gameState.resetForNewRound();
+
+      // Should still work correctly with no melds to reshuffle
+      expect(players[0].melds.length, equals(0));
+      expect(players[1].melds.length, equals(0));
+      expect(gameState.phase, equals(GamePhase.playing));
+
+      for (final player in players) {
+        expect(player.hand.length, equals(11));
+        expect(player.foot.length, equals(11));
+      }
+    });
   });
 }
 

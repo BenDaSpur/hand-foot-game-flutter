@@ -562,8 +562,13 @@ class GameState {
     for (final player in players) {
       deck.addCards(player.hand);
       deck.addCards(player.foot);
+      // Add all melded cards back to deck for reshuffling
+      for (final meld in player.melds) {
+        deck.addCards(meld.cards);
+      }
       player.hand.clear();
       player.foot.clear();
+      player.melds.clear();
     }
 
     deck.shuffle();
