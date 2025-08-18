@@ -223,13 +223,27 @@ class GameState {
       for (final card in meldCards) {
         if (!existingMeld.canAddCard(card)) {
           // This shouldn't happen with proper unlock validation, but safety check
+          // Log the issue for debugging if needed
+          final cardName = card.displayName;
+          final meldRank = existingMeld.rank.name;
+          _logAction(
+            'ERROR: Could not add $cardName to $meldRank meld during unlock',
+          );
           return false;
         }
       }
 
-      // Add all cards (we know they're valid)
+      // Add all cards - double-check each addition for robustness
       for (final card in meldCards) {
-        existingMeld.addCard(card);
+        if (!existingMeld.addCard(card)) {
+          // Extra safety: if addCard fails, log and return false
+          final cardName = card.displayName;
+          final meldRank = existingMeld.rank.name;
+          _logAction(
+            'ERROR: Failed to add $cardName to $meldRank meld during unlock',
+          );
+          return false;
+        }
       }
       final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
       _logAction(
