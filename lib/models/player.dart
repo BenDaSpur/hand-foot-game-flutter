@@ -142,6 +142,7 @@ class Player {
     if (meld == null) return false;
 
     // Check play down requirement if player hasn't played down yet
+    bool meetsPlayDownRequirement = true;
     if (!hasPlayedDown && playDownRequirement > 0 && melds.isEmpty) {
       final cardPointValue = cards.fold<int>(
         0,
@@ -150,6 +151,10 @@ class Player {
       if (cardPointValue < playDownRequirement) {
         return false;
       }
+      meetsPlayDownRequirement = true;
+    } else if (!hasPlayedDown && melds.isEmpty) {
+      // First meld but no requirement check (bypass mode)
+      meetsPlayDownRequirement = false;
     }
 
     // Find indices of cards to remove from hand
@@ -161,7 +166,12 @@ class Player {
     // Remove cards from hand using indices (handles duplicates correctly)
     removeCardsByIndices(indicesToRemove);
     melds.add(meld);
-    hasPlayedDown = true;
+
+    // Only mark as played down if this is first meld AND requirement was met
+    if (!hasPlayedDown && meetsPlayDownRequirement) {
+      hasPlayedDown = true;
+    }
+
     return true;
   }
 
