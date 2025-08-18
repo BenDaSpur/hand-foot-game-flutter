@@ -63,7 +63,20 @@ export FIREBASE_PROJECT_ID="hand-foot-game-flutter"
 
 ## GitHub Actions Setup
 
-If using GitHub Actions, the secrets will be automatically injected as environment variables during builds.
+The repository includes automated CI/CD workflows that properly handle Firebase secrets:
+
+### CI Workflow (`ci.yml`)
+- Automatically generates `firebase_options.dart` from template
+- Runs tests and analysis with proper Firebase configuration
+- Triggered on all pushes and pull requests
+
+### Firebase Build Workflow (`firebase-build.yml`)
+- Comprehensive build pipeline for all platforms
+- Generates Firebase config for Android, Web, iOS, macOS, Linux
+- Creates releases with proper Firebase integration
+- Deploys to GitHub Pages with Firebase enabled
+
+Both workflows use the GitHub Secrets listed above to generate the Firebase configuration at build time.
 
 ## Security Notes
 
