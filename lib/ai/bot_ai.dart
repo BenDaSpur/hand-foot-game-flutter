@@ -34,7 +34,7 @@ class BotAI {
 
   // Strategic constants for better maintainability
   static const int strategicBufferPoints = 20;
-  static const int aggressiveMatchingThreshold = 3;
+  static const int minCardsForAggressiveUnlock = 3;
   static const int valuablePileThreshold = 60;
   static const int largePileThreshold = 4;
   static const int footPileValueThreshold = 30;
@@ -46,6 +46,25 @@ class BotAI {
   static const int postPlaydownMeldValue = 50;
   static const int postPlaydownHandSize = 8;
   static const double highValuePairBreakChance = 0.3;
+
+  // Risk management thresholds
+  static const int playDownRiskThreshold = -300;
+  static const int footTransitionRiskThreshold = -200;
+  static const int wildCardDiscardThreshold = 6;
+  static const int strongPlayDownBuffer = 10;
+
+  // Discard decision thresholds
+  static const int veryLowValuePairThreshold = 5;
+  static const int lowValuePairThreshold = 10;
+
+  // Game rule constants
+  static const int minCardsToUnlockDiscard = 2;
+  static const int minCardsForFootTransition = 2;
+  static const int bookMinSize = 7;
+  static const int naturalBookBonus = 500;
+  static const int mixedBookBonus = 300;
+  static const int wildBookBonus = 1000;
+  static const int minWildCardsForWildBook = 3;
 
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
@@ -72,14 +91,14 @@ class BotAI {
           .where((card) => card.rank == topDiscard.rank && !card.isWild)
           .length;
 
-      if (matchingNaturals >= 2) {
+      if (matchingNaturals >= minCardsToUnlockDiscard) {
         final discardPileValue = _calculateDiscardPileValue(
           gameState.discardPile,
         );
         final discardPileSize = gameState.discardPile.length;
 
         // More aggressive if we have many matching cards or valuable pile
-        if (matchingNaturals >= aggressiveMatchingThreshold ||
+        if (matchingNaturals >= minCardsForAggressiveUnlock ||
             discardPileValue > valuablePileThreshold ||
             discardPileSize > largePileThreshold) {
           return BotDecision(action: 'drawFromDiscard');
@@ -124,81 +143,20 @@ class BotAI {
       );
     }
 
-    final possibleMelds = controller.findPossibleMelds(bot);
+    // New strategic decision tree: 1. Play down, 2. Go to foot, 3. Go out
 
-    // If player hasn't played down yet, use strategic multi-meld approach
+    // Priority 1: If not played down yet, check if we can/should play down
     if (!bot.hasPlayedDown) {
-      final strategicPlayDown = _findStrategicPlayDown(
-        bot,
-        controller,
-        possibleMelds,
-      );
-      if (strategicPlayDown.isNotEmpty) {
-        // Check if this is a multi-meld play-down
-        if (strategicPlayDown.length > 1) {
-          // Set up multi-meld sequence
-          _plannedMelds = List.from(strategicPlayDown);
-          _currentMeldIndex = 1; // We'll return the first one immediately
-          _inMultiMeldSequence = true;
-          return BotDecision(
-            action: 'createMeld',
-            data: strategicPlayDown.first,
-            skipPlayDownCheck: true,
-          );
-        } else {
-          // Single meld play-down
-          return BotDecision(
-            action: 'createMeld',
-            data: strategicPlayDown.first,
-          );
-        }
-      } else {
-        // No strategic play-down found, but we have possible melds
-        // This might be a bug - if we have melds that meet requirement, we should play them
-        if (possibleMelds.isNotEmpty) {
-          // Check if any single meld meets the play-down requirement
-          final playDownRequirement = controller.gameState.playDownRequirement;
-          for (final meld in possibleMelds) {
-            final points = meld.fold<int>(
-              0,
-              (sum, card) => sum + card.pointValue,
-            );
-            if (points >= playDownRequirement) {
-              return BotDecision(action: 'createMeld', data: meld);
-            }
-          }
-        }
-      }
-    } else {
-      // Already played down - be more strategic about melding
-      if (_shouldMeldAfterPlayDown(bot, controller, possibleMelds)) {
-        final bestMeld = _chooseBestMeld(possibleMelds);
-        return BotDecision(action: 'createMeld', data: bestMeld);
-      }
+      return _handlePlayDownDecision(bot, controller);
     }
 
-    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
-    if (cardsToAddToMelds.isNotEmpty) {
-      final cardToAdd = cardsToAddToMelds.first;
-      return BotDecision(action: 'addToMeld', data: cardToAdd);
+    // Priority 2: If on hand pile, check if we should transition to foot
+    if (!bot.hasPickedUpFoot) {
+      return _handleFootTransitionDecision(bot, controller);
     }
 
-    // Check if bot has no cards left and can go out
-    if (bot.currentHand.isEmpty && bot.canGoOut) {
-      // Bot has successfully gone out - the game should end the round
-      // Return a special decision to indicate the bot is done
-      return BotDecision(action: 'goOut');
-    }
-
-    // Check if bot has no cards but cannot go out (missing required books)
-    if (bot.currentHand.isEmpty && !bot.canGoOut) {
-      // This should not happen in normal gameplay, but handle it gracefully
-      return BotDecision(action: 'error');
-    }
-
-    // No melds to make, proceed to discard
-    final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    // Priority 3: If on foot pile, check if we can go out
+    return _handleGoOutDecision(bot, controller);
   }
 
   BotDecision _makeDiscardDecision(Player bot, GameController controller) {
@@ -230,12 +188,16 @@ class BotAI {
     final naturalCards = cards.where((c) => !c.isWild).length;
     final wildCards = cards.where((c) => c.isWild).length;
 
-    if (wildCards == 0 && cards.length >= 7) {
-      score += 500;
-    } else if (wildCards > 0 && wildCards < naturalCards && cards.length >= 7) {
-      score += 300;
-    } else if (wildCards >= 3 && naturalCards == 0 && cards.length >= 7) {
-      score += 1000;
+    if (wildCards == 0 && cards.length >= bookMinSize) {
+      score += naturalBookBonus;
+    } else if (wildCards > 0 &&
+        wildCards < naturalCards &&
+        cards.length >= bookMinSize) {
+      score += mixedBookBonus;
+    } else if (wildCards >= minWildCardsForWildBook &&
+        naturalCards == 0 &&
+        cards.length >= bookMinSize) {
+      score += wildBookBonus;
     }
 
     return score;
@@ -271,42 +233,152 @@ class BotAI {
 
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = List<PlayingCard>.from(bot.currentHand);
-
-    // Separate wild cards and natural cards
     final wildCards = hand.where((c) => c.isWild).toList();
     final naturalCards = hand.where((c) => !c.isWild).toList();
 
-    // Group natural cards by rank
+    // Group natural cards by rank for analysis
     final cardsByRank = <CardRank, List<PlayingCard>>{};
     for (final card in naturalCards) {
       cardsByRank.putIfAbsent(card.rank, () => []).add(card);
     }
 
+    // Try discard priorities in order
+    PlayingCard? result;
+
     // Priority 1: Discard 3s strategically
+    result = _tryDiscardThrees(bot, naturalCards);
+    if (result != null) return result;
+
+    // Priority 2-5: Handle natural cards by frequency
+    result = _tryDiscardNaturalCards(bot, cardsByRank);
+    if (result != null) return result;
+
+    // Last resort: discard wild cards (very rarely)
+    result = _tryDiscardWildCards(bot, wildCards);
+    if (result != null) return result;
+
+    // Fallback (should never happen)
+    return hand.first;
+  }
+
+  /// Try to discard 3s strategically
+  PlayingCard? _tryDiscardThrees(Player bot, List<PlayingCard> naturalCards) {
     final threeCards = naturalCards
         .where((c) => c.rank == CardRank.three)
         .toList();
-    if (threeCards.isNotEmpty) {
-      // If we're preparing to go to foot (hand is small), keep 3s as easy discards
-      if (bot.hasPickedUpFoot || bot.currentHand.length <= 4) {
-        // Sort by point value - discard red 3s first (more negative)
-        threeCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-        return threeCards.first;
-      }
-      // Otherwise, discard 3s early to avoid penalties
-      else {
-        threeCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-        return threeCards.first;
-      }
+
+    if (threeCards.isEmpty) return null;
+
+    // Sort by point value - discard red 3s first (more negative)
+    threeCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+    return threeCards.first;
+  }
+
+  /// Try to discard natural cards based on frequency analysis
+  PlayingCard? _tryDiscardNaturalCards(
+    Player bot,
+    Map<CardRank, List<PlayingCard>> cardsByRank,
+  ) {
+    final cardCategories = _categorizeCardsByFrequency(cardsByRank);
+    final singletons = cardCategories['singletons']!;
+    final pairs = cardCategories['pairs']!;
+    final triples = cardCategories['triples']!;
+
+    // Priority 2: Discard singletons first (lowest meld potential)
+    if (singletons.isNotEmpty) {
+      singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return singletons.first;
     }
 
-    // Priority 2: Discard singletons, but consider unlock potential
+    // Priority 3: Break up pairs strategically
+    final pairResult = _tryDiscardFromPairs(bot, pairs);
+    if (pairResult != null) return pairResult;
+
+    // Priority 4: Discard from triples+ (keeping most of the meld potential)
+    if (triples.isNotEmpty) {
+      triples.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return triples.first;
+    }
+
+    // Priority 5: Force break up high-value pairs if no other options
+    if (pairs.isNotEmpty) {
+      pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return pairs.first;
+    }
+
+    return null;
+  }
+
+  /// Try to discard from pairs with strategic considerations
+  PlayingCard? _tryDiscardFromPairs(Player bot, List<PlayingCard> pairs) {
+    if (pairs.isEmpty) return null;
+
+    pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+
+    // If on hand pile and played down, be very careful with pairs (unlock potential)
+    if (!bot.hasPickedUpFoot && bot.hasPlayedDown) {
+      final veryLowValuePairs = pairs
+          .where((c) => c.pointValue <= veryLowValuePairThreshold)
+          .toList();
+      if (veryLowValuePairs.isNotEmpty) {
+        return veryLowValuePairs.first;
+      }
+      return null; // Don't break up pairs on hand pile unless very low value
+    }
+
+    // On foot pile or haven't played down - normal pair breaking logic
+    final lowValuePairs = pairs
+        .where((c) => c.pointValue < lowValuePairThreshold)
+        .toList();
+    if (lowValuePairs.isNotEmpty) {
+      return lowValuePairs.first;
+    }
+
+    if (pairs.isNotEmpty && _shouldBreakUpHighValuePair()) {
+      return pairs.first;
+    }
+
+    return null;
+  }
+
+  /// Try to discard wild cards (very conservative)
+  PlayingCard? _tryDiscardWildCards(Player bot, List<PlayingCard> wildCards) {
+    if (wildCards.isEmpty) return null;
+
+    // Only discard wilds if we have MANY or absolutely forced to (1 card left)
+    if (wildCards.length >= wildCardDiscardThreshold ||
+        bot.currentHand.length == 1) {
+      wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return wildCards.first;
+    }
+
+    return null;
+  }
+
+  bool _shouldBreakUpHighValuePair() {
+    // Strategic chance to break up high-value pairs when no other options
+    return _random.nextDouble() < highValuePairBreakChance;
+  }
+
+  /// Calculate total point value of cards in hand (negative for penalty cards)
+  int _calculateHandValue(List<PlayingCard> hand) {
+    int totalValue = 0;
+    for (final card in hand) {
+      totalValue += card.pointValue;
+    }
+    return totalValue;
+  }
+
+  /// Categorize cards by frequency for discard decision
+  Map<String, List<PlayingCard>> _categorizeCardsByFrequency(
+    Map<CardRank, List<PlayingCard>> cardsByRank,
+  ) {
     final singletons = <PlayingCard>[];
     final pairs = <PlayingCard>[];
     final triples = <PlayingCard>[];
 
     for (final entry in cardsByRank.entries) {
-      if (entry.key == CardRank.three) continue; // Already handled 3s
+      if (entry.key == CardRank.three) continue; // Skip 3s (handled elsewhere)
 
       if (entry.value.length == 1) {
         singletons.addAll(entry.value);
@@ -317,106 +389,292 @@ class BotAI {
       }
     }
 
-    if (singletons.isNotEmpty) {
-      // Sort by point value, prioritize low point cards
-      singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return singletons.first;
-    }
-
-    // Priority 3: Break up pairs strategically
-    if (pairs.isNotEmpty) {
-      // Sort pairs by point value
-      pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-
-      // If we haven't picked up foot yet, be very careful with pairs (unlock potential)
-      if (!bot.hasPickedUpFoot && bot.hasPlayedDown) {
-        // Only break up very low-value pairs (4-8 points)
-        final veryLowValuePairs = pairs
-            .where((c) => c.pointValue <= 5)
-            .toList();
-        if (veryLowValuePairs.isNotEmpty) {
-          return veryLowValuePairs.first;
-        }
-        // Otherwise, don't break up pairs if we're still on hand pile
-      } else {
-        // On foot pile or haven't played down - normal pair breaking logic
-        final lowValuePairs = pairs.where((c) => c.pointValue < 10).toList();
-        if (lowValuePairs.isNotEmpty) {
-          return lowValuePairs.first;
-        }
-
-        if (pairs.isNotEmpty && _shouldBreakUpHighValuePair()) {
-          return pairs.first;
-        }
-      }
-    }
-
-    // Priority 4: Discard from triples+ (keeping the meld potential)
-    if (triples.isNotEmpty) {
-      triples.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return triples.first;
-    }
-
-    // Priority 5: If we must break up high-value pairs
-    if (pairs.isNotEmpty) {
-      pairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return pairs.first;
-    }
-
-    // Last resort: discard wild cards (should rarely happen)
-    if (wildCards.isNotEmpty) {
-      wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return wildCards.first;
-    }
-
-    // Fallback (should never happen)
-    return hand.first;
+    return {'singletons': singletons, 'pairs': pairs, 'triples': triples};
   }
 
-  bool _shouldBreakUpHighValuePair() {
-    // Strategic chance to break up high-value pairs when no other options
-    return _random.nextDouble() < highValuePairBreakChance;
+  /// Handle play-down decision - be strategic but not completely stubborn
+  BotDecision _handlePlayDownDecision(Player bot, GameController controller) {
+    final possibleMelds = controller.findPossibleMelds(bot);
+    final gameState = controller.gameState;
+    final playDownRequirement = gameState.playDownRequirement;
+
+    // Try different play-down strategies in priority order
+    BotDecision? result;
+
+    // Priority 1: Forced play-down after unlocking discard pile
+    result = _tryForcedPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (result != null) return result;
+
+    // Priority 2: Strategic multi-meld play-down
+    result = _tryStrategicPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (result != null) return result;
+
+    // Priority 3: Strong single meld opportunity
+    result = _tryStrongSingleMeldPlayDown(possibleMelds, playDownRequirement);
+    if (result != null) return result;
+
+    // Priority 4: Risk management play-down
+    result = _tryRiskManagementPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (result != null) return result;
+
+    // Otherwise, HOLD cards and proceed to discard
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
-  bool _shouldMeldAfterPlayDown(
+  /// Try forced play-down after unlocking discard pile
+  BotDecision? _tryForcedPlayDown(
     Player bot,
     GameController controller,
     List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
   ) {
-    if (possibleMelds.isEmpty) return false;
+    final gameState = controller.gameState;
+    final justUnlockedDiscard =
+        gameState.hasDrawnFromDeck == false && gameState.discardPile.isNotEmpty;
 
-    // If we're close to running out of hand, be aggressive
-    if (bot.currentHand.length <= lowHandCardThreshold) {
-      return true;
+    if (!justUnlockedDiscard) return null;
+
+    // Forced to play down after unlocking discard pile
+    final strategicPlayDown = _findStrategicPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+    );
+    if (strategicPlayDown.isNotEmpty) {
+      return _executePlayDown(strategicPlayDown);
     }
 
-    // If we haven't picked up our foot yet, be more conservative to keep unlock options
-    if (!bot.hasPickedUpFoot) {
-      // Only meld if we have 4+ of the same rank (keep some for unlocking)
-      for (final meld in possibleMelds) {
-        final naturalCards = meld.where((c) => !c.isWild).toList();
-        if (naturalCards.isEmpty) continue;
-
-        final rank = naturalCards.first.rank;
-        final totalOfThisRank = bot.currentHand
-            .where((c) => c.rank == rank && !c.isWild)
-            .length;
-
-        // Only meld if we have enough of this rank (keep 2 for potential unlock)
-        if (totalOfThisRank >= meldRetentionThreshold) {
-          return true;
-        }
+    // Fallback: Find any meld that meets play-down requirement
+    for (final meld in possibleMelds) {
+      final meldPoints = meld.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      if (meldPoints >= playDownRequirement) {
+        return BotDecision(action: 'createMeld', data: meld);
       }
-      return false;
     }
 
-    // On foot pile - more aggressive, but still strategic
-    // Meld if we have high-value melds or many cards in hand
-    final bestMeld = _chooseBestMeld(possibleMelds);
-    final meldValue = _calculateMeldScore(bestMeld);
+    return null;
+  }
 
-    return meldValue >= postPlaydownMeldValue ||
-        bot.currentHand.length > postPlaydownHandSize;
+  /// Try strategic multi-meld play-down if viable
+  BotDecision? _tryStrategicPlayDown(
+    Player bot,
+    GameController controller,
+    List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
+  ) {
+    final strategicPlayDown = _findStrategicPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+    );
+    if (strategicPlayDown.isEmpty) return null;
+
+    final totalPoints = strategicPlayDown.fold<int>(
+      0,
+      (sum, meld) =>
+          sum + meld.fold<int>(0, (meldSum, card) => meldSum + card.pointValue),
+    );
+
+    if (totalPoints >= playDownRequirement) {
+      return _executePlayDown(strategicPlayDown);
+    }
+
+    return null;
+  }
+
+  /// Try strong single meld play-down (significant buffer over requirement)
+  BotDecision? _tryStrongSingleMeldPlayDown(
+    List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
+  ) {
+    final strongThreshold = playDownRequirement + strongPlayDownBuffer;
+
+    for (final meld in possibleMelds) {
+      final meldPoints = meld.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      if (meldPoints >= strongThreshold) {
+        return BotDecision(action: 'createMeld', data: meld);
+      }
+    }
+
+    return null;
+  }
+
+  /// Try risk management play-down when facing significant penalties
+  BotDecision? _tryRiskManagementPlayDown(
+    Player bot,
+    GameController controller,
+    List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
+  ) {
+    final handValue = _calculateHandValue(bot.currentHand);
+    if (handValue > playDownRiskThreshold) return null;
+
+    // Significant negative penalty risk - try strategic approach first
+    final strategicPlayDown = _findStrategicPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+    );
+    if (strategicPlayDown.isNotEmpty) {
+      return _executePlayDown(strategicPlayDown);
+    }
+
+    // Emergency fallback for negative risk
+    for (final meld in possibleMelds) {
+      final meldPoints = meld.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      if (meldPoints >= playDownRequirement) {
+        return BotDecision(action: 'createMeld', data: meld);
+      }
+    }
+
+    return null;
+  }
+
+  /// Handle foot transition decision - VERY conservative, hold cards until ready
+  BotDecision _handleFootTransitionDecision(
+    Player bot,
+    GameController controller,
+  ) {
+    // ONLY meld when we're getting close to going to foot and need to use wilds
+
+    // Check if we're about to transition to foot (few cards left)
+    if (bot.currentHand.length <= minCardsForFootTransition) {
+      // Now we need to be aggressive to use up remaining cards before foot transition
+      final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+      if (cardsToAddToMelds.isNotEmpty) {
+        final cardToAdd = cardsToAddToMelds.first;
+        return BotDecision(action: 'addToMeld', data: cardToAdd);
+      }
+
+      // Try to create new melds to use up remaining cards
+      final possibleMelds = controller.findPossibleMelds(bot);
+      if (possibleMelds.isNotEmpty) {
+        final bestMeld = _chooseBestMeld(possibleMelds);
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
+    }
+
+    // Check for negative score risk management
+    final handValue = _calculateHandValue(bot.currentHand);
+    if (handValue <= footTransitionRiskThreshold) {
+      // Moderate risk - start melding to reduce penalties
+      final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+      if (cardsToAddToMelds.isNotEmpty) {
+        final cardToAdd = cardsToAddToMelds.first;
+        return BotDecision(action: 'addToMeld', data: cardToAdd);
+      }
+    }
+
+    // Otherwise, HOLD cards and discard strategically
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Handle go-out decision - NOW be aggressive to use all cards and go out
+  BotDecision _handleGoOutDecision(Player bot, GameController controller) {
+    // On foot - be aggressive! Use wilds to dirty books if needed
+
+    // Priority 1: Add cards to existing melds to clear hand
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+    if (cardsToAddToMelds.isNotEmpty) {
+      final cardToAdd = cardsToAddToMelds.first;
+      return BotDecision(action: 'addToMeld', data: cardToAdd);
+    }
+
+    // Priority 2: Create new melds, including dirty books with wilds if needed
+    final possibleMelds = controller.findPossibleMelds(bot);
+    if (possibleMelds.isNotEmpty) {
+      // Prefer natural melds first, but use dirty melds if we have excess wilds
+      final naturalMelds = _findNaturalMeldOpportunities(bot, possibleMelds);
+      final wildCards = bot.currentHand.where((c) => c.isWild).toList();
+
+      if (naturalMelds.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: naturalMelds.first);
+      } else if (wildCards.length >= 3) {
+        // We have many wilds - use them in dirty books to clear hand
+        final bestMeld = _chooseBestMeld(possibleMelds);
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      } else if (possibleMelds.isNotEmpty) {
+        // Use any available meld
+        final bestMeld = _chooseBestMeld(possibleMelds);
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
+    }
+
+    // Check if we can go out
+    if (bot.currentHand.isEmpty && bot.canGoOut) {
+      return BotDecision(action: 'goOut');
+    }
+
+    if (bot.currentHand.isEmpty && !bot.canGoOut) {
+      return BotDecision(action: 'error');
+    }
+
+    // Discard remaining cards
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Execute a play-down sequence (single or multi-meld)
+  BotDecision _executePlayDown(List<List<PlayingCard>> strategicPlayDown) {
+    if (strategicPlayDown.length > 1) {
+      // Set up multi-meld sequence
+      _plannedMelds = List.from(strategicPlayDown);
+      _currentMeldIndex = 1;
+      _inMultiMeldSequence = true;
+      return BotDecision(
+        action: 'createMeld',
+        data: strategicPlayDown.first,
+        skipPlayDownCheck: true,
+      );
+    } else {
+      // Single meld play-down
+      return BotDecision(action: 'createMeld', data: strategicPlayDown.first);
+    }
+  }
+
+  /// Find natural meld opportunities (no wild cards)
+  List<List<PlayingCard>> _findNaturalMeldOpportunities(
+    Player bot,
+    List<List<PlayingCard>> possibleMelds,
+  ) {
+    final naturalMelds = <List<PlayingCard>>[];
+
+    for (final meld in possibleMelds) {
+      final hasWildCards = meld.any((card) => card.isWild);
+      if (!hasWildCards) {
+        naturalMelds.add(meld);
+      }
+    }
+
+    // Sort by length (prefer longer natural melds)
+    naturalMelds.sort((a, b) => b.length.compareTo(a.length));
+    return naturalMelds;
   }
 
   /// Finds strategic multi-meld combinations for play-down that minimize points
@@ -431,25 +689,20 @@ class BotAI {
     // Strategy: Find minimal point combinations that meet requirement
     // while maximizing cards kept for discard pile unlocking
 
-    // Group possible melds by point value for analysis
-    final meldsByPoints = <int, List<List<PlayingCard>>>{};
-    for (final meld in possibleMelds) {
-      final points = meld.fold<int>(0, (sum, card) => sum + card.pointValue);
-      meldsByPoints.putIfAbsent(points, () => []).add(meld);
+    // Prefer natural melds over dirty melds
+    final naturalMelds = _findNaturalMeldOpportunities(bot, possibleMelds);
+
+    // Try natural melds first
+    final naturalPlayDown = _findBestMeldCombination(
+      naturalMelds,
+      playDownRequirement,
+      controller,
+    );
+    if (naturalPlayDown.isNotEmpty) {
+      return naturalPlayDown;
     }
 
-    // Sort point values ascending (prefer lower point melds)
-    final sortedPoints = meldsByPoints.keys.toList()..sort();
-
-    // Strategy 1: Single meld if it meets requirement
-    for (final points in sortedPoints) {
-      if (points >= playDownRequirement) {
-        // Return single meld as a list (for consistency with multi-meld)
-        return [meldsByPoints[points]!.first];
-      }
-    }
-
-    // Strategy 2: Multi-meld combinations
+    // Fall back to mixed strategy if needed
     final bestCombination = _findBestMeldCombination(
       possibleMelds,
       playDownRequirement,
@@ -467,14 +720,21 @@ class BotAI {
   ) {
     if (possibleMelds.isEmpty) return [];
 
+    final deckCount = controller.gameState.players.length + 1;
+
     // Try 2-meld combinations first (most common case)
-    final twoCombination = _findTwoMeldCombination(possibleMelds, requirement);
+    final twoCombination = _findTwoMeldCombination(
+      possibleMelds,
+      requirement,
+      deckCount,
+    );
     if (twoCombination.isNotEmpty) return twoCombination;
 
     // Try 3-meld combinations if needed (less common)
     final threeCombination = _findThreeMeldCombination(
       possibleMelds,
       requirement,
+      deckCount,
     );
     if (threeCombination.isNotEmpty) return threeCombination;
 
@@ -486,6 +746,7 @@ class BotAI {
   List<List<PlayingCard>> _findTwoMeldCombination(
     List<List<PlayingCard>> possibleMelds,
     int requirement,
+    int deckCount,
   ) {
     for (int i = 0; i < possibleMelds.length; i++) {
       for (int j = i + 1; j < possibleMelds.length; j++) {
@@ -493,7 +754,7 @@ class BotAI {
         final meld2 = possibleMelds[j];
 
         // Check if the melds conflict (use same cards)
-        if (_meldsConflict(meld1, meld2)) continue;
+        if (_meldsConflict(meld1, meld2, deckCount)) continue;
 
         final totalPoints =
             meld1.fold<int>(0, (sum, card) => sum + card.pointValue) +
@@ -525,6 +786,7 @@ class BotAI {
   List<List<PlayingCard>> _findThreeMeldCombination(
     List<List<PlayingCard>> possibleMelds,
     int requirement,
+    int deckCount,
   ) {
     for (int i = 0; i < possibleMelds.length; i++) {
       for (int j = i + 1; j < possibleMelds.length; j++) {
@@ -534,9 +796,9 @@ class BotAI {
           final meld3 = possibleMelds[k];
 
           // Check if any melds conflict
-          if (_meldsConflict(meld1, meld2) ||
-              _meldsConflict(meld1, meld3) ||
-              _meldsConflict(meld2, meld3)) {
+          if (_meldsConflict(meld1, meld2, deckCount) ||
+              _meldsConflict(meld1, meld3, deckCount) ||
+              _meldsConflict(meld2, meld3, deckCount)) {
             continue;
           }
 
@@ -555,7 +817,11 @@ class BotAI {
   }
 
   /// Checks if two melds conflict (use same cards)
-  bool _meldsConflict(List<PlayingCard> meld1, List<PlayingCard> meld2) {
+  bool _meldsConflict(
+    List<PlayingCard> meld1,
+    List<PlayingCard> meld2,
+    int deckCount,
+  ) {
     // Create a map to count cards by rank+suit for each meld
     final meld1Cards = <String, int>{};
     final meld2Cards = <String, int>{};
@@ -571,19 +837,19 @@ class BotAI {
     }
 
     // Check if any card type would be over-used
-    // Hand & Foot uses 4 decks for 3 players (playerCount + 1)
     for (final entry in meld1Cards.entries) {
       final meld2Count = meld2Cards[entry.key] ?? 0;
       if (meld2Count > 0) {
         final totalNeeded = entry.value + meld2Count;
 
         // Determine max available cards for this rank+suit
-        const deckCount = 4; // Assuming 3 players + 1 deck = 4 decks
+        // Hand & Foot uses (players + 1) decks, each with standard card counts
         int maxAvailable;
         if (entry.key.contains('joker')) {
-          maxAvailable = 2 * deckCount; // 2 jokers per deck
+          maxAvailable = 2 * deckCount; // 2 jokers per standard deck
         } else {
-          maxAvailable = deckCount; // 1 per suit per deck
+          maxAvailable =
+              4 * deckCount; // 4 cards per rank per deck (one per suit)
         }
 
         if (totalNeeded > maxAvailable) {
