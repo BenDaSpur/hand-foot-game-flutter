@@ -167,11 +167,23 @@ class GameState {
   }
 
   bool drawFromDeck() {
-    if (hasDrawnFromDeck || deck.isEmpty) return false;
+    if (hasDrawnFromDeck) return false;
 
-    // Draw 2 cards from deck by default
+    // Edge Case 2: Automatically reshuffle discard pile if deck is insufficient
+    if (deck.size < 2 && discardPile.length > 1) {
+      _reshuffleDiscardIntoDeck();
+    }
+
+    // Must draw exactly 2 cards from deck according to Hand & Foot rules
+    if (deck.size < 2) {
+      _logAction(
+        'cannot draw - deck has only ${deck.size} cards remaining and no cards to reshuffle',
+      );
+      return false;
+    }
+
     final cards = deck.drawCards(2);
-    if (cards.isNotEmpty) {
+    if (cards.length == 2) {
       currentPlayer.addCardsToHand(cards);
       hasDrawnFromDeck = true;
       turnPhase = TurnPhase.meld;
@@ -267,6 +279,29 @@ class GameState {
     for (int i = 0; i < 5 && discardPile.isNotEmpty; i++) {
       additionalDiscards.add(discardPile.removeLast());
     }
+
+    // Edge Case 1: If no additional cards in discard, take remaining from deck
+    final remainingNeeded = 5 - additionalDiscards.length;
+    if (remainingNeeded > 0) {
+      // Edge Case 2: Reshuffle discard if deck doesn't have enough cards
+      if (deck.size < remainingNeeded && discardPile.length > 1) {
+        _reshuffleDiscardIntoDeck();
+      }
+
+      if (!deck.isEmpty) {
+        final cardsFromDeck = deck.drawCards(remainingNeeded);
+        if (cardsFromDeck.isNotEmpty) {
+          currentPlayer.addCardsToHand(cardsFromDeck);
+          final deckCardNames = cardsFromDeck
+              .map((c) => c.displayName)
+              .join(', ');
+          _logAction(
+            'took ${cardsFromDeck.length} cards from deck to complete pickup: $deckCardNames',
+          );
+        }
+      }
+    }
+
     if (additionalDiscards.isNotEmpty) {
       currentPlayer.addCardsToHand(additionalDiscards);
       final additionalNames = additionalDiscards
@@ -519,5 +554,30 @@ class GameState {
       ordered.add(players[index]);
     }
     return ordered;
+  }
+
+  /// Edge Case 2: Reshuffles discard pile into deck when deck runs low
+  /// Keeps the top discard card to maintain game state
+  void _reshuffleDiscardIntoDeck() {
+    if (discardPile.length <= 1) {
+      // Need at least 2 cards in discard pile to reshuffle (keep top card)
+      return;
+    }
+
+    // Keep the top discard card (last item in the list)
+    final topCard = discardPile.removeLast();
+
+    // Take all other discard cards and add them to deck
+    final cardsToShuffle = List<PlayingCard>.from(discardPile);
+    discardPile.clear();
+    discardPile.add(topCard);
+
+    // Add the cards to deck and shuffle
+    deck.addCards(cardsToShuffle);
+    deck.shuffle();
+
+    _logAction(
+      'reshuffled ${cardsToShuffle.length} cards from discard pile into deck',
+    );
   }
 }
