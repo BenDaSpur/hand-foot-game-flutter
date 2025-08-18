@@ -74,6 +74,10 @@ class Deck {
     _cards.addAll(cards);
   }
 
+  void addCardToTop(PlayingCard card) {
+    _cards.add(card);
+  }
+
   PlayingCard? get topCard => _cards.isEmpty ? null : _cards.last;
 
   int get size => _cards.length;

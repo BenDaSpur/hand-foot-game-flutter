@@ -169,31 +169,55 @@ class GameState {
   bool drawFromDeck() {
     if (hasDrawnFromDeck) return false;
 
-    // Edge Case 2: Automatically reshuffle discard pile if deck is insufficient
-    if (deck.size < 2 && discardPile.length > 1) {
+    final cardsDrawn = <PlayingCard>[];
+
+    // Draw first card if available
+    if (!deck.isEmpty) {
+      final firstCard = deck.drawCard();
+      if (firstCard != null) {
+        cardsDrawn.add(firstCard);
+      }
+    }
+
+    // If we need a second card and deck is empty, try to reshuffle
+    if (cardsDrawn.length == 1 && deck.isEmpty && discardPile.length > 1) {
       _reshuffleDiscardIntoDeck();
+
+      // Draw second card from reshuffled deck
+      if (!deck.isEmpty) {
+        final secondCard = deck.drawCard();
+        if (secondCard != null) {
+          cardsDrawn.add(secondCard);
+        }
+      }
+    } else if (cardsDrawn.length == 1 && !deck.isEmpty) {
+      // Draw second card normally if deck has cards
+      final secondCard = deck.drawCard();
+      if (secondCard != null) {
+        cardsDrawn.add(secondCard);
+      }
     }
 
     // Must draw exactly 2 cards from deck according to Hand & Foot rules
-    if (deck.size < 2) {
+    if (cardsDrawn.length < 2) {
+      // Return any drawn cards back to deck
+      for (final card in cardsDrawn) {
+        deck.addCardToTop(card);
+      }
       _logAction(
-        'cannot draw - deck has only ${deck.size} cards remaining and no cards to reshuffle',
+        'cannot draw - insufficient cards available even after attempting reshuffle',
       );
       return false;
     }
 
-    final cards = deck.drawCards(2);
-    if (cards.length == 2) {
-      currentPlayer.addCardsToHand(cards);
-      hasDrawnFromDeck = true;
-      turnPhase = TurnPhase.meld;
+    currentPlayer.addCardsToHand(cardsDrawn);
+    hasDrawnFromDeck = true;
+    turnPhase = TurnPhase.meld;
 
-      final cardNames = cards.map((c) => c.displayName).join(', ');
-      _logAction('drew: $cardNames');
+    final cardNames = cardsDrawn.map((c) => c.displayName).join(', ');
+    _logAction('drew: $cardNames');
 
-      return true;
-    }
-    return false;
+    return true;
   }
 
   bool drawFromDiscard() {
