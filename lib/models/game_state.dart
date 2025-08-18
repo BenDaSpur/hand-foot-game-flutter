@@ -15,6 +15,12 @@ class GameAction {
   GameAction({required this.message, required this.playerName})
     : timestamp = DateTime.now();
 
+  GameAction.withTimestamp({
+    required this.message,
+    required this.playerName,
+    required this.timestamp,
+  });
+
   @override
   String toString() => '$playerName: $message';
 }
