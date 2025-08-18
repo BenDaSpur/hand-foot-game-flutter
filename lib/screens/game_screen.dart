@@ -143,12 +143,10 @@ class _GameScreenState extends State<GameScreen> {
         case 'error':
           // Bot is stuck - should not happen, but handle gracefully
           print('Bot ${currentPlayer.name} encountered an error state');
-          // Log this as a regular action since no public logAction method exists
-          _gameController.gameState.recentActions.add(
-            GameAction(
-              message: 'encountered error state - skipping turn',
-              playerName: currentPlayer.name,
-            ),
+          // Use proper logging with privacy controls
+          _gameController.gameState.logAction(
+            'encountered error state - skipping turn',
+            showCardDetails: false,
           );
           _forceNextTurn();
           break;
@@ -170,6 +168,13 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
+    final humanPlayer = _gameController.gameState.players.firstWhere(
+      (p) => p.type == PlayerType.human,
+    );
+
+    // Bounds checking
+    if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
+
     setState(() {
       if (_selectedCardIndices.contains(cardIndex)) {
         _selectedCardIndices.remove(cardIndex);
@@ -188,7 +193,7 @@ class _GameScreenState extends State<GameScreen> {
       (p) => p.type == PlayerType.human,
     );
 
-    if (cardIndex >= humanPlayer.currentHand.length) return;
+    if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
 
     final selectedCard = humanPlayer.currentHand[cardIndex];
     final matchingIndices = <int>[];

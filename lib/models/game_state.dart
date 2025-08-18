@@ -85,6 +85,11 @@ class GameState {
     }
   }
 
+  /// Public method for logging game actions with proper privacy controls
+  void logAction(String message, {bool showCardDetails = true}) {
+    _logAction(message, showCardDetails: showCardDetails);
+  }
+
   String _sanitizeMessage(String message) {
     // Remove specific card details from bot actions that shouldn't be visible
     if (message.startsWith('drew:')) {
