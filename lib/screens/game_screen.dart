@@ -143,6 +143,13 @@ class _GameScreenState extends State<GameScreen> {
         case 'error':
           // Bot is stuck - should not happen, but handle gracefully
           print('Bot ${currentPlayer.name} encountered an error state');
+          // Log this as a regular action since no public logAction method exists
+          _gameController.gameState.recentActions.add(
+            GameAction(
+              message: 'encountered error state - skipping turn',
+              playerName: currentPlayer.name,
+            ),
+          );
           _forceNextTurn();
           break;
       }

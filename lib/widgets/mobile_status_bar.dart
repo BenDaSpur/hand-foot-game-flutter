@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../theme/balatro_theme.dart';
+import '../constants/ui_constants.dart';
 
 class MobileStatusBar extends StatelessWidget {
   final GameState gameState;
@@ -17,10 +18,10 @@ class MobileStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
+    final isSmallScreen = screenWidth < UIConstants.smallScreenBreakpoint;
 
     return Container(
-      margin: const EdgeInsets.all(8),
+      margin: const EdgeInsets.all(UIConstants.defaultMargin),
       decoration: BalatroTheme.glowDecoration(
         backgroundColor: BalatroTheme.darkPurple,
         glowColor: BalatroTheme.glowColor,
@@ -30,7 +31,7 @@ class MobileStatusBar extends StatelessWidget {
         children: [
           // Always visible: Current player and phase
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(UIConstants.statusBarPadding),
             child: Row(
               children: [
                 Expanded(
@@ -41,7 +42,7 @@ class MobileStatusBar extends StatelessWidget {
                         BalatroTheme.neonPink,
                         icon: Icons.person,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: UIConstants.mediumSpacing),
                       _buildCompactChip(
                         gameState.turnPhase.name.toUpperCase(),
                         BalatroTheme.neonBlue,
@@ -55,6 +56,7 @@ class MobileStatusBar extends StatelessWidget {
                   icon: Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
                     color: BalatroTheme.glowColor,
+                    size: UIConstants.statusBarIconSize,
                   ),
                   tooltip: isExpanded ? 'Show less' : 'Show more info',
                 ),
@@ -66,7 +68,7 @@ class MobileStatusBar extends StatelessWidget {
           if (isExpanded) ...[
             const Divider(color: BalatroTheme.glowColor, height: 1),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(UIConstants.statusBarPadding),
               child: isSmallScreen
                   ? _buildVerticalLayout()
                   : _buildHorizontalLayout(),
@@ -89,7 +91,7 @@ class MobileStatusBar extends StatelessWidget {
                 icon: Icons.casino,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: UIConstants.mediumSpacing),
             Expanded(
               child: _buildCompactChip(
                 'Deck: ${gameState.deck.size}',
@@ -100,7 +102,7 @@ class MobileStatusBar extends StatelessWidget {
           ],
         ),
         if (gameState.topDiscard != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: UIConstants.mediumSpacing),
           _buildCompactChip(
             'Top: ${gameState.topDiscard!.displayName}',
             BalatroTheme.neonGreen,
@@ -113,8 +115,8 @@ class MobileStatusBar extends StatelessWidget {
 
   Widget _buildHorizontalLayout() {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: UIConstants.mediumSpacing,
+      runSpacing: UIConstants.mediumSpacing,
       children: [
         _buildCompactChip(
           'Play Down: ${gameState.playDownRequirement}',
@@ -138,23 +140,28 @@ class MobileStatusBar extends StatelessWidget {
 
   Widget _buildCompactChip(String text, Color color, {IconData? icon}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: UIConstants.defaultPadding,
+        vertical: UIConstants.smallSpacing,
+      ),
       decoration: BalatroTheme.glowDecoration(
         glowColor: color,
-        backgroundColor: BalatroTheme.darkPurple.withValues(alpha: 0.3),
+        backgroundColor: BalatroTheme.darkPurple.withValues(
+          alpha: UIConstants.semiTransparent,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 4),
+            Icon(icon, size: UIConstants.statusBarIconSize, color: color),
+            const SizedBox(width: UIConstants.smallSpacing),
           ],
           Flexible(
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: UIConstants.statusBarCompactChipFontSize,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),

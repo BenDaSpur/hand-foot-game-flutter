@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
+import '../constants/ui_constants.dart';
 
 class CollapsibleRecentActions extends StatelessWidget {
   final GameState gameState;
@@ -20,11 +21,11 @@ class CollapsibleRecentActions extends StatelessWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: UIConstants.defaultMargin),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -33,11 +34,11 @@ class CollapsibleRecentActions extends StatelessWidget {
           InkWell(
             onTap: onToggle,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(UIConstants.defaultPadding),
               child: Row(
                 children: [
                   Icon(Icons.history, size: 16, color: Colors.grey[700]),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: UIConstants.mediumSpacing),
                   Expanded(
                     child: Text(
                       isExpanded ? 'Recent Actions' : _getLastActionPreview(),
@@ -63,9 +64,14 @@ class CollapsibleRecentActions extends StatelessWidget {
           if (isExpanded) ...[
             const Divider(height: 1),
             Container(
-              constraints: const BoxConstraints(maxHeight: 120),
+              constraints: const BoxConstraints(
+                maxHeight: UIConstants.recentActionsMaxHeight,
+              ),
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: UIConstants.defaultPadding,
+                  vertical: UIConstants.smallSpacing,
+                ),
                 itemCount: gameState.recentActions.length,
                 reverse: true,
                 itemBuilder: (context, index) {
@@ -74,13 +80,15 @@ class CollapsibleRecentActions extends StatelessWidget {
                           1 -
                           index];
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: UIConstants.recentActionsVerticalPadding,
+                    ),
                     child: Text(
                       action.toString(),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: UIConstants.recentActionsFontSize,
                         color: Colors.grey[700],
-                        height: 1.2, // Better line spacing for readability
+                        height: UIConstants.recentActionsLineHeight,
                       ),
                       softWrap: true, // Enable word wrapping
                     ),
@@ -100,6 +108,8 @@ class CollapsibleRecentActions extends StatelessWidget {
     }
     final lastAction = gameState.recentActions.last;
     final preview = lastAction.toString();
-    return preview.length > 40 ? '${preview.substring(0, 40)}...' : preview;
+    return preview.length > UIConstants.recentActionsPreviewLength
+        ? '${preview.substring(0, UIConstants.recentActionsPreviewLength)}...'
+        : preview;
   }
 }

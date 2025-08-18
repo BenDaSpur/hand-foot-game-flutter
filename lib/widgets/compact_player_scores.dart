@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../theme/balatro_theme.dart';
+import '../constants/ui_constants.dart';
 
 class CompactPlayerScores extends StatelessWidget {
   final GameState gameState;
@@ -18,8 +19,10 @@ class CompactPlayerScores extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: UIConstants.playerScoresHeight,
+      padding: const EdgeInsets.symmetric(
+        horizontal: UIConstants.defaultPadding,
+      ),
       child: Row(
         children: gameState.players.map((player) {
           final isViewing = viewingPlayerMelds == player;
@@ -50,7 +53,9 @@ class CompactPlayerScores extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(
+                    UIConstants.defaultBorderRadius,
+                  ),
                   border: Border.all(
                     color: isViewing
                         ? BalatroTheme.neonGreen
@@ -72,13 +77,13 @@ class CompactPlayerScores extends StatelessWidget {
                           if (isHuman)
                             const Icon(
                               Icons.person,
-                              size: 10,
+                              size: UIConstants.playerScoresIconSize,
                               color: Colors.white,
                             )
                           else
                             const Icon(
                               Icons.smart_toy,
-                              size: 10,
+                              size: UIConstants.playerScoresIconSize,
                               color: Colors.white,
                             ),
                           const SizedBox(width: 2),
@@ -87,7 +92,7 @@ class CompactPlayerScores extends StatelessWidget {
                               player.name,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 10,
+                                fontSize: UIConstants.playerScoresNameFontSize,
                                 color: Colors.white,
                                 shadows: [
                                   Shadow(
@@ -114,14 +119,20 @@ class CompactPlayerScores extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: player.hasPickedUpFoot
-                              ? Colors.orange.withValues(alpha: 0.8)
-                              : Colors.blue.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(6),
+                              ? Colors.orange.withValues(
+                                  alpha: UIConstants.mediumTransparent,
+                                )
+                              : Colors.blue.withValues(
+                                  alpha: UIConstants.mediumTransparent,
+                                ),
+                          borderRadius: BorderRadius.circular(
+                            UIConstants.mediumBorderRadius,
+                          ),
                         ),
                         child: Text(
                           player.hasPickedUpFoot ? 'FOOT' : 'HAND',
                           style: const TextStyle(
-                            fontSize: 8,
+                            fontSize: UIConstants.playerScoresHandFootFontSize,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             shadows: [
@@ -145,7 +156,7 @@ class CompactPlayerScores extends StatelessWidget {
                           Text(
                             '${player.score}',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: UIConstants.playerScoresScoreFontSize,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                               shadows: [
@@ -165,13 +176,18 @@ class CompactPlayerScores extends StatelessWidget {
                                 vertical: 1,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(4),
+                                color: Colors.white.withValues(
+                                  alpha: UIConstants.semiTransparent,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  UIConstants.smallBorderRadius,
+                                ),
                               ),
                               child: Text(
                                 '${player.melds.length}M',
                                 style: const TextStyle(
-                                  fontSize: 8,
+                                  fontSize:
+                                      UIConstants.playerScoresMeldFontSize,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                   shadows: [
