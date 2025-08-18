@@ -15,7 +15,8 @@ void main() {
 
       expect(meld, isNotNull);
       expect(meld!.rank, equals(CardRank.ace));
-      expect(meld.type, equals(MeldType.natural));
+      // ignore: deprecated_member_use_from_same_package
+      expect(meld.type, equals(MeldType.natural)); // Testing original field
       expect(meld.cards.length, equals(3));
     });
 
@@ -30,7 +31,8 @@ void main() {
 
       expect(meld, isNotNull);
       expect(meld!.rank, equals(CardRank.king));
-      expect(meld.type, equals(MeldType.mixed));
+      // ignore: deprecated_member_use_from_same_package
+      expect(meld.type, equals(MeldType.mixed)); // Testing original field
       expect(meld.cards.length, equals(3));
     });
 
@@ -315,7 +317,8 @@ void main() {
       ];
 
       final meld = Meld.createMeld(naturalCards)!;
-      expect(meld.type, equals(MeldType.natural));
+      // ignore: deprecated_member_use_from_same_package
+      expect(meld.type, equals(MeldType.natural)); // Testing original field
       expect(meld.currentType, equals(MeldType.natural));
       expect(meld.isClean, isFalse); // Not 7+ cards yet
       expect(meld.isDirty, isFalse);
@@ -325,6 +328,7 @@ void main() {
       final success = meld.addCard(wildCard);
 
       expect(success, isTrue);
+      // ignore: deprecated_member_use_from_same_package
       expect(meld.type, equals(MeldType.natural)); // Original type unchanged
       expect(
         meld.currentType,

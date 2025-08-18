@@ -5,6 +5,9 @@ enum MeldType { natural, mixed }
 class Meld {
   final CardRank rank;
   final List<PlayingCard> cards;
+  @Deprecated(
+    'Use currentType instead - this field may not reflect dynamic changes',
+  )
   final MeldType type;
 
   Meld({required this.rank, required this.cards, required this.type});
@@ -61,21 +64,25 @@ class Meld {
   }
 
   // Dynamic type detection based on current cards
+  // This is the preferred way to check meld type as it reflects the current state
   MeldType get currentType {
     return cards.any((card) => card.isWild) ? MeldType.mixed : MeldType.natural;
   }
 
   int get pointValue {
+    // Cache the current type to avoid race conditions
+    final meldType = currentType;
+
     int total = 0;
     for (final card in cards) {
       total += card.pointValue;
     }
 
-    // Book bonuses (7+ cards) - use current type
+    // Book bonuses (7+ cards) - use cached type for consistency
     if (cards.length >= 7) {
-      if (currentType == MeldType.natural) {
+      if (meldType == MeldType.natural) {
         total += 500; // Clean book bonus
-      } else if (currentType == MeldType.mixed) {
+      } else if (meldType == MeldType.mixed) {
         total += 300; // Dirty book bonus
       }
     }
