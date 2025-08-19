@@ -62,9 +62,6 @@ class _GameScreenState extends State<GameScreen> {
     _botAI = BotAI();
     _gameController.initializeGame();
 
-    // Clear any stale newly drawn card highlighting
-    _gameController.clearAllNewlyDrawnCards();
-
     // Sort the human player's initial hand
     final humanPlayer = players.firstWhere((p) => p.type == PlayerType.human);
     humanPlayer.sortHandByRank();

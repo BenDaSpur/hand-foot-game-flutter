@@ -133,13 +133,13 @@ class GameState {
   }
 
   void nextPlayer() {
-    // Clear newly drawn cards from the current player before switching
-    currentPlayer.clearNewlyDrawnCards();
-
     currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
     turnPhase = TurnPhase.draw;
     hasDrawnFromDeck = false;
     hasMelded = false;
+
+    // Clear newly drawn cards from the new current player at the start of their turn
+    currentPlayer.clearNewlyDrawnCards();
   }
 
   void startRound() {
