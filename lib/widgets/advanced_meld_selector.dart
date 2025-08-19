@@ -4,6 +4,17 @@ import '../models/player.dart';
 import '../models/meld.dart';
 import '../widgets/playing_card_widget.dart';
 
+// Constants for advanced meld selector
+class _AdvancedMeldSelectorConstants {
+  static const int minNaturalCardsForMeld = 2;
+  static const int minTotalCardsForMeld = 3;
+  static const int gridCrossAxisCount = 6;
+  static const double cardAspectRatio = 0.7;
+  static const double cardSpacing = 8.0;
+  static const double cardWidth = 60.0;
+  static const double cardHeight = 84.0;
+}
+
 /// Advanced meld selection widget for multi-meld play-downs with wild card assignment control
 /// This version uses indices to avoid card object reference issues
 class AdvancedMeldSelector extends StatefulWidget {
@@ -41,21 +52,27 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   void _refreshAvailableCards() {
-    // Always refresh with current hand state
-    availableCardIndices = List.generate(
-      widget.player.currentHand.length,
-      (index) => index,
+    // Always refresh with current hand state and clean up invalid indices
+    final currentHandSize = widget.player.currentHand.length;
+
+    // Remove any stale indices that are now out of bounds
+    availableCardIndices.removeWhere(
+      (index) => index >= currentHandSize || index < 0,
     );
+
+    // Generate fresh indices for current hand size
+    availableCardIndices = List.generate(currentHandSize, (index) => index);
     selectedAvailableIndices.clear();
 
-    // Debug info
-    print(
-      'Advanced Meld Selector: Hand has ${widget.player.currentHand.length} cards',
-    );
-    for (int i = 0; i < widget.player.currentHand.length; i++) {
-      final card = widget.player.currentHand[i];
-      print('  Index $i: ${card.displayName}');
-    }
+    // Debug info (only in debug mode)
+    assert(() {
+      print('Advanced Meld Selector: Hand has $currentHandSize cards');
+      for (int i = 0; i < currentHandSize; i++) {
+        final card = widget.player.currentHand[i];
+        print('  Index $i: ${card.displayName}');
+      }
+      return true;
+    }());
   }
 
   @override
@@ -319,7 +336,10 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                     const SizedBox(width: 8),
                     IconButton(
                       onPressed: () => _removeMeld(meldIndex),
-                      icon: const Icon(Icons.delete, color: Colors.red),
+                      icon: Icon(
+                        Icons.delete,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                       constraints: const BoxConstraints(),
                       padding: EdgeInsets.zero,
                     ),
@@ -363,7 +383,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: Colors.red,
+                  color: Theme.of(context).colorScheme.error,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -400,21 +420,34 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           Expanded(
             child: GridView.builder(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 6,
-                childAspectRatio: 0.7,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
+                crossAxisCount:
+                    _AdvancedMeldSelectorConstants.gridCrossAxisCount,
+                childAspectRatio:
+                    _AdvancedMeldSelectorConstants.cardAspectRatio,
+                crossAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
+                mainAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
               ),
               itemCount: availableCardIndices.length,
               itemBuilder: (context, index) {
                 final handIndex = availableCardIndices[index];
 
-                // Validate index to prevent out-of-bounds errors
+                // Validate index to prevent out-of-bounds errors (shouldn't happen now with proper cleanup)
                 if (handIndex >= widget.player.currentHand.length ||
                     handIndex < 0) {
-                  print(
-                    'Error: Invalid hand index $handIndex, hand size ${widget.player.currentHand.length}',
-                  );
+                  assert(() {
+                    print(
+                      'Error: Invalid hand index $handIndex, hand size ${widget.player.currentHand.length}',
+                    );
+                    return true;
+                  }());
+                  // Trigger refresh to clean up stale state
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() {
+                        _refreshAvailableCards();
+                      });
+                    }
+                  });
                   return const SizedBox.shrink();
                 }
 
@@ -429,7 +462,9 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.blue.withValues(alpha: 0.5),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.5),
                                 spreadRadius: 2,
                                 blurRadius: 8,
                                 offset: const Offset(0, 0),
@@ -439,8 +474,8 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                         : null,
                     child: PlayingCardWidget(
                       card: card,
-                      width: 60,
-                      height: 84,
+                      width: _AdvancedMeldSelectorConstants.cardWidth,
+                      height: _AdvancedMeldSelectorConstants.cardHeight,
                       isSelected: isSelected,
                     ),
                   ),
@@ -500,7 +535,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
 
   bool _canCreateNewMeld() {
     return selectedAvailableIndices.length >=
-        2; // Need at least 2 naturals or 1 natural + wilds
+        _AdvancedMeldSelectorConstants.minNaturalCardsForMeld;
   }
 
   void _createNewMeld() {
@@ -516,9 +551,13 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     final naturalCards = selectedCards.where((card) => !card.isWild).toList();
     final wildCards = selectedCards.where((card) => card.isWild).toList();
 
-    if (naturalCards.length < 2 &&
-        (naturalCards.length + wildCards.length) < 3) {
-      _showError('Need at least 2 natural cards or 3 total cards for a meld');
+    if (naturalCards.length <
+            _AdvancedMeldSelectorConstants.minNaturalCardsForMeld &&
+        (naturalCards.length + wildCards.length) <
+            _AdvancedMeldSelectorConstants.minTotalCardsForMeld) {
+      _showError(
+        'Need at least ${_AdvancedMeldSelectorConstants.minNaturalCardsForMeld} natural cards or ${_AdvancedMeldSelectorConstants.minTotalCardsForMeld} total cards for a meld',
+      );
       return;
     }
 
@@ -631,8 +670,12 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   void _showError(String message) {
+    final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: theme.colorScheme.error,
+      ),
     );
   }
 }

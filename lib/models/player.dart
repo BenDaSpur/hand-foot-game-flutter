@@ -205,22 +205,26 @@ class Player {
   /// Handles duplicate cards correctly by tracking which instances have been used
   List<int> _findCardIndices(List<PlayingCard> cardsToFind) {
     final indices = <int>[];
-    final remainingCards = List<PlayingCard>.from(cardsToFind);
 
-    for (
-      int handIndex = 0;
-      handIndex < currentHand.length && remainingCards.isNotEmpty;
-      handIndex++
-    ) {
+    // Create a map for O(1) lookups - using string key for card identity
+    final cardToFindMap = <String, int>{};
+    for (final card in cardsToFind) {
+      final key = '${card.rank.name}_${card.suit?.name ?? 'joker'}';
+      cardToFindMap[key] = (cardToFindMap[key] ?? 0) + 1;
+    }
+
+    // Single pass through hand - O(n) complexity
+    for (int handIndex = 0; handIndex < currentHand.length; handIndex++) {
       final handCard = currentHand[handIndex];
+      final key = '${handCard.rank.name}_${handCard.suit?.name ?? 'joker'}';
 
-      // Find if this hand card matches any remaining card we need
-      for (int i = 0; i < remainingCards.length; i++) {
-        final cardToFind = remainingCards[i];
-        if (handCard.rank == cardToFind.rank &&
-            handCard.suit == cardToFind.suit) {
-          indices.add(handIndex);
-          remainingCards.removeAt(i);
+      final count = cardToFindMap[key];
+      if (count != null && count > 0) {
+        indices.add(handIndex);
+        cardToFindMap[key] = count - 1;
+
+        // Early exit if we've found all cards
+        if (indices.length == cardsToFind.length) {
           break;
         }
       }
