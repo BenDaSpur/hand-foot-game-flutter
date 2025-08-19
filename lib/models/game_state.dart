@@ -133,6 +133,9 @@ class GameState {
   }
 
   void nextPlayer() {
+    // Clear newly drawn cards from the current player before switching
+    currentPlayer.clearNewlyDrawnCards();
+
     currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
     turnPhase = TurnPhase.draw;
     hasDrawnFromDeck = false;
@@ -206,7 +209,7 @@ class GameState {
       }
     }
 
-    currentPlayer.addCardsToHand(cardsDrawn);
+    currentPlayer.addNewlyDrawnCards(cardsDrawn);
     hasDrawnFromDeck = true;
     turnPhase = TurnPhase.meld;
 
@@ -315,7 +318,7 @@ class GameState {
       if (!deck.isEmpty) {
         final cardsFromDeck = deck.drawCards(remainingNeeded);
         if (cardsFromDeck.isNotEmpty) {
-          currentPlayer.addCardsToHand(cardsFromDeck);
+          currentPlayer.addNewlyDrawnCards(cardsFromDeck);
           final deckCardNames = cardsFromDeck
               .map((c) => c.displayName)
               .join(', ');
@@ -327,7 +330,7 @@ class GameState {
     }
 
     if (additionalDiscards.isNotEmpty) {
-      currentPlayer.addCardsToHand(additionalDiscards);
+      currentPlayer.addNewlyDrawnCards(additionalDiscards);
       final additionalNames = additionalDiscards
           .map((c) => c.displayName)
           .join(', ');

@@ -556,5 +556,78 @@ void main() {
         expect(player.canGoOut, isTrue);
       },
     );
+
+    test('should track newly drawn cards correctly with duplicate cards', () {
+      // Setup initial hand with Queen of Spades
+      player.hand.clear();
+      player.hand.addAll([
+        const PlayingCard(
+          suit: Suit.spades,
+          rank: CardRank.queen,
+        ), // Existing card
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.king,
+        ), // Other cards
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ]);
+
+      // Clear any existing newly drawn tracking
+      player.clearNewlyDrawnCards();
+
+      // Verify initial state - no newly drawn cards
+      expect(player.isCardIndexNewlyDrawn(0), false); // Queen of Spades
+      expect(player.isCardIndexNewlyDrawn(1), false); // King
+      expect(player.isCardIndexNewlyDrawn(2), false); // Ace
+
+      // Draw another Queen of Spades (same rank/suit but different object)
+      final newQueenOfSpades = PlayingCard(
+        suit: Suit.spades,
+        rank: CardRank.queen,
+      );
+      player.addNewlyDrawnCard(newQueenOfSpades);
+
+      // Verify hand state
+      expect(player.currentHand.length, 4);
+      expect(player.currentHand[3], newQueenOfSpades);
+
+      // Check newly drawn status by index
+      expect(
+        player.isCardIndexNewlyDrawn(0),
+        false,
+      ); // Original Queen - not newly drawn
+      expect(player.isCardIndexNewlyDrawn(1), false); // King - not newly drawn
+      expect(player.isCardIndexNewlyDrawn(2), false); // Ace - not newly drawn
+      expect(player.isCardIndexNewlyDrawn(3), true); // New Queen - newly drawn
+
+      // Test object-based method works correctly with identical instances
+      expect(
+        player.isCardNewlyDrawn(player.currentHand[0]),
+        false,
+      ); // Original Queen
+      expect(player.isCardNewlyDrawn(player.currentHand[3]), true); // New Queen
+
+      // Remove the original Queen (index 0) - should shift indices
+      final removedCard = player.removeCardFromHand(player.currentHand[0]);
+      expect(removedCard, isNotNull);
+
+      // Verify indices shifted correctly after removal
+      expect(player.currentHand.length, 3);
+      expect(
+        player.isCardIndexNewlyDrawn(2),
+        true,
+      ); // New Queen shifted from index 3 to 2
+      expect(
+        player.isCardIndexNewlyDrawn(3),
+        false,
+      ); // Index 3 no longer exists
+
+      // Clear newly drawn cards
+      player.clearNewlyDrawnCards();
+      expect(
+        player.isCardIndexNewlyDrawn(2),
+        false,
+      ); // No longer marked as newly drawn
+    });
   });
 }

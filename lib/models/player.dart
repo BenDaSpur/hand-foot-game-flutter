@@ -10,6 +10,8 @@ class Player {
   final List<PlayingCard> hand;
   final List<PlayingCard> foot;
   final List<Meld> melds;
+  final Set<int>
+  newlyDrawnCardIndices; // Track indices of cards drawn this turn
   bool hasPickedUpFoot;
   bool hasPlayedDown;
   int score;
@@ -21,12 +23,14 @@ class Player {
     List<PlayingCard>? hand,
     List<PlayingCard>? foot,
     List<Meld>? melds,
+    Set<int>? newlyDrawnCardIndices,
     this.hasPickedUpFoot = false,
     this.hasPlayedDown = false,
     this.score = 0,
   }) : hand = hand ?? [],
        foot = foot ?? [],
-       melds = melds ?? [];
+       melds = melds ?? [],
+       newlyDrawnCardIndices = newlyDrawnCardIndices ?? {};
 
   List<PlayingCard> get currentHand => hasPickedUpFoot ? foot : hand;
 
@@ -52,9 +56,48 @@ class Player {
     currentHand.addAll(cards);
   }
 
+  void addNewlyDrawnCard(PlayingCard card) {
+    final newIndex = currentHand.length;
+    currentHand.add(card);
+    newlyDrawnCardIndices.add(newIndex);
+  }
+
+  void addNewlyDrawnCards(List<PlayingCard> cards) {
+    final startIndex = currentHand.length;
+    currentHand.addAll(cards);
+    for (int i = 0; i < cards.length; i++) {
+      newlyDrawnCardIndices.add(startIndex + i);
+    }
+  }
+
+  void clearNewlyDrawnCards() {
+    newlyDrawnCardIndices.clear();
+  }
+
+  bool isCardNewlyDrawn(PlayingCard card) {
+    // Find the index of this specific card instance in the current hand
+    for (int i = 0; i < currentHand.length; i++) {
+      if (identical(currentHand[i], card)) {
+        return newlyDrawnCardIndices.contains(i);
+      }
+    }
+    return false;
+  }
+
+  bool isCardIndexNewlyDrawn(int index) {
+    return newlyDrawnCardIndices.contains(index);
+  }
+
   PlayingCard? removeCardFromHand(PlayingCard card) {
-    final removed = currentHand.remove(card);
-    return removed ? card : null;
+    // Find the exact index of this card instance
+    for (int i = 0; i < currentHand.length; i++) {
+      if (identical(currentHand[i], card)) {
+        final removedCard = currentHand.removeAt(i);
+        _updateIndicesAfterRemoval([i]);
+        return removedCard;
+      }
+    }
+    return null;
   }
 
   List<PlayingCard> removeCardsByIndices(List<int> indices) {
@@ -66,12 +109,45 @@ class Player {
 
     for (final index in sortedIndices) {
       if (index >= 0 && index < currentHand.length) {
-        removedCards.add(currentHand.removeAt(index));
+        final card = currentHand.removeAt(index);
+        removedCards.add(card);
       }
     }
 
+    // Update newly drawn indices after all removals
+    _updateIndicesAfterRemoval(indices);
+
     // Return in original order (reverse since we removed in reverse)
     return removedCards.reversed.toList();
+  }
+
+  /// Update newly drawn card indices after card removal
+  /// Handles index shifting when cards are removed from the hand
+  void _updateIndicesAfterRemoval(List<int> removedIndices) {
+    final sortedRemovedIndices = List<int>.from(removedIndices)..sort();
+
+    final updatedIndices = <int>{};
+
+    for (final drawnIndex in newlyDrawnCardIndices) {
+      // Count how many removed indices are less than this drawn index
+      int shiftAmount = 0;
+      for (final removedIndex in sortedRemovedIndices) {
+        if (removedIndex < drawnIndex) {
+          shiftAmount++;
+        } else {
+          break;
+        }
+      }
+
+      // If this drawn index wasn't removed, shift it left by the removal count
+      if (!removedIndices.contains(drawnIndex)) {
+        updatedIndices.add(drawnIndex - shiftAmount);
+      }
+      // If it was removed, don't add it to the updated set (it's no longer newly drawn)
+    }
+
+    newlyDrawnCardIndices.clear();
+    newlyDrawnCardIndices.addAll(updatedIndices);
   }
 
   void pickUpFoot() {
@@ -179,22 +255,26 @@ class Player {
   /// Handles duplicate cards correctly by tracking which instances have been used
   List<int> _findCardIndices(List<PlayingCard> cardsToFind) {
     final indices = <int>[];
-    final remainingCards = List<PlayingCard>.from(cardsToFind);
 
-    for (
-      int handIndex = 0;
-      handIndex < currentHand.length && remainingCards.isNotEmpty;
-      handIndex++
-    ) {
+    // Create a map for O(1) lookups - using string key for card identity
+    final cardToFindMap = <String, int>{};
+    for (final card in cardsToFind) {
+      final key = '${card.rank.name}_${card.suit?.name ?? 'joker'}';
+      cardToFindMap[key] = (cardToFindMap[key] ?? 0) + 1;
+    }
+
+    // Single pass through hand - O(n) complexity
+    for (int handIndex = 0; handIndex < currentHand.length; handIndex++) {
       final handCard = currentHand[handIndex];
+      final key = '${handCard.rank.name}_${handCard.suit?.name ?? 'joker'}';
 
-      // Find if this hand card matches any remaining card we need
-      for (int i = 0; i < remainingCards.length; i++) {
-        final cardToFind = remainingCards[i];
-        if (handCard.rank == cardToFind.rank &&
-            handCard.suit == cardToFind.suit) {
-          indices.add(handIndex);
-          remainingCards.removeAt(i);
+      final count = cardToFindMap[key];
+      if (count != null && count > 0) {
+        indices.add(handIndex);
+        cardToFindMap[key] = count - 1;
+
+        // Early exit if we've found all cards
+        if (indices.length == cardsToFind.length) {
           break;
         }
       }

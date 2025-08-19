@@ -2,7 +2,7 @@
   // Format on save
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
-  
+
   // Dart/Flutter specific settings
   "[dart]": {
     "editor.formatOnSave": true,
@@ -14,16 +14,16 @@
     "editor.tabCompletion": "onlySnippets",
     "editor.wordBasedSuggestions": false
   },
-  
+
   // Auto-fix on save
   "editor.codeActionsOnSave": {
-    "source.fixAll": true
+    "source.fixAll": "explicit"
   },
-  
+
   // Dart analyzer settings
   "dart.previewFlutterUiGuides": true,
   "dart.previewFlutterUiGuidesCustomTracking": true,
-  
+
   // File associations
   "files.associations": {
     "*.dart": "dart"

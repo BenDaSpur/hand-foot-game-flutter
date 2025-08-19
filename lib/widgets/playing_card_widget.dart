@@ -6,6 +6,7 @@ class PlayingCardWidget extends StatelessWidget {
   final PlayingCard card;
   final bool isSelected;
   final bool isPlayable;
+  final bool isNewlyDrawn;
   final VoidCallback? onTap;
   final double width;
   final double height;
@@ -15,6 +16,7 @@ class PlayingCardWidget extends StatelessWidget {
     required this.card,
     this.isSelected = false,
     this.isPlayable = false,
+    this.isNewlyDrawn = false,
     this.onTap,
     this.width = 60,
     this.height = 84,
@@ -35,10 +37,16 @@ class PlayingCardWidget extends StatelessWidget {
             border: Border.all(
               color: isSelected
                   ? BalatroTheme.glowColor
+                  : isNewlyDrawn
+                  ? BalatroTheme.neonYellow
                   : isPlayable
                   ? BalatroTheme.neonGreen
                   : BalatroTheme.cardBorder,
-              width: isSelected ? 3 : 1,
+              width: isSelected
+                  ? 3
+                  : isNewlyDrawn
+                  ? 2
+                  : 1,
             ),
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
@@ -52,6 +60,12 @@ class PlayingCardWidget extends StatelessWidget {
                   color: BalatroTheme.glowColor.withValues(alpha: 0.3),
                   blurRadius: 20,
                   spreadRadius: 4,
+                ),
+              ] else if (isNewlyDrawn) ...[
+                BoxShadow(
+                  color: BalatroTheme.neonYellow.withValues(alpha: 0.4),
+                  blurRadius: 10,
+                  spreadRadius: 2,
                 ),
               ] else if (isPlayable) ...[
                 BoxShadow(
@@ -94,7 +108,7 @@ class PlayingCardWidget extends StatelessWidget {
                     child: Text(
                       _getSuitSymbol(),
                       style: TextStyle(
-                        fontSize: height > 60 ? 28 : 16,
+                        fontSize: height > 60 ? 30 : 18,
                         color: _getCardColor(),
                         shadows: [
                           // Dark outline for all cards to improve visibility
@@ -116,7 +130,7 @@ class PlayingCardWidget extends StatelessWidget {
                     child: Text(
                       _getCardDisplay(),
                       style: TextStyle(
-                        fontSize: height > 60 ? 12 : 9,
+                        fontSize: height > 60 ? 14 : 11,
                         fontWeight: FontWeight.bold,
                         color: _getCardColor(),
                         shadows: [
@@ -141,7 +155,7 @@ class PlayingCardWidget extends StatelessWidget {
                       child: Text(
                         _getCardDisplay(),
                         style: TextStyle(
-                          fontSize: height > 60 ? 12 : 9,
+                          fontSize: height > 60 ? 14 : 11,
                           fontWeight: FontWeight.bold,
                           color: _getCardColor(),
                           shadows: [
