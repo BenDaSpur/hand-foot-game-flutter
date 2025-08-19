@@ -63,16 +63,6 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     // Generate fresh indices for current hand size
     availableCardIndices = List.generate(currentHandSize, (index) => index);
     selectedAvailableIndices.clear();
-
-    // Debug info (only in debug mode)
-    assert(() {
-      print('Advanced Meld Selector: Hand has $currentHandSize cards');
-      for (int i = 0; i < currentHandSize; i++) {
-        final card = widget.player.currentHand[i];
-        print('  Index $i: ${card.displayName}');
-      }
-      return true;
-    }());
   }
 
   @override
@@ -418,7 +408,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: GridView.builder(
+            child: GridView.custom(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount:
                     _AdvancedMeldSelectorConstants.gridCrossAxisCount,
@@ -427,60 +417,52 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 crossAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
                 mainAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
               ),
-              itemCount: availableCardIndices.length,
-              itemBuilder: (context, index) {
-                final handIndex = availableCardIndices[index];
+              childrenDelegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final handIndex = availableCardIndices[index];
 
-                // Validate index to prevent out-of-bounds errors (shouldn't happen now with proper cleanup)
-                if (handIndex >= widget.player.currentHand.length ||
-                    handIndex < 0) {
-                  assert(() {
-                    print(
-                      'Error: Invalid hand index $handIndex, hand size ${widget.player.currentHand.length}',
-                    );
-                    return true;
-                  }());
-                  // Trigger refresh to clean up stale state
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() {
-                        _refreshAvailableCards();
-                      });
+                  // Validate index to prevent out-of-bounds errors (shouldn't happen now with proper cleanup)
+                  if (handIndex >= widget.player.currentHand.length ||
+                      handIndex < 0) {
+                    // Trigger refresh to clean up stale state
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        setState(() {
+                          _refreshAvailableCards();
+                        });
+                      }
+                    });
+                    return const SizedBox.shrink();
+                  }
+
+                  final card = widget.player.currentHand[handIndex];
+                  final isSelected = selectedAvailableIndices.contains(index);
+
+                  return _AvailableCardWidget(
+                    key: ValueKey('card_${handIndex}_$isSelected'),
+                    card: card,
+                    isSelected: isSelected,
+                    onTap: () => _toggleCardSelection(index),
+                  );
+                },
+                childCount: availableCardIndices.length,
+                findChildIndexCallback: (Key key) {
+                  // Optimize rebuilds by providing stable keys
+                  if (key is ValueKey<String>) {
+                    final keyString = key.value;
+                    if (keyString.startsWith('card_')) {
+                      final parts = keyString.split('_');
+                      if (parts.length >= 2) {
+                        final handIndex = int.tryParse(parts[1]);
+                        if (handIndex != null) {
+                          return availableCardIndices.indexOf(handIndex);
+                        }
+                      }
                     }
-                  });
-                  return const SizedBox.shrink();
-                }
-
-                final card = widget.player.currentHand[handIndex];
-                final isSelected = selectedAvailableIndices.contains(index);
-
-                return GestureDetector(
-                  onTap: () => _toggleCardSelection(index),
-                  child: Container(
-                    decoration: isSelected
-                        ? BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.5),
-                                spreadRadius: 2,
-                                blurRadius: 8,
-                                offset: const Offset(0, 0),
-                              ),
-                            ],
-                          )
-                        : null,
-                    child: PlayingCardWidget(
-                      card: card,
-                      width: _AdvancedMeldSelectorConstants.cardWidth,
-                      height: _AdvancedMeldSelectorConstants.cardHeight,
-                      isSelected: isSelected,
-                    ),
-                  ),
-                );
-              },
+                  }
+                  return null;
+                },
+              ),
             ),
           ),
         ],
@@ -675,6 +657,50 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       SnackBar(
         content: Text(message),
         backgroundColor: theme.colorScheme.error,
+      ),
+    );
+  }
+}
+
+/// Optimized card widget for available cards section with const constructor
+class _AvailableCardWidget extends StatelessWidget {
+  const _AvailableCardWidget({
+    super.key,
+    required this.card,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final PlayingCard card;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: isSelected
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.5),
+                    spreadRadius: 2,
+                    blurRadius: 8,
+                    offset: const Offset(0, 0),
+                  ),
+                ],
+              )
+            : null,
+        child: PlayingCardWidget(
+          card: card,
+          width: _AdvancedMeldSelectorConstants.cardWidth,
+          height: _AdvancedMeldSelectorConstants.cardHeight,
+          isSelected: isSelected,
+        ),
       ),
     );
   }

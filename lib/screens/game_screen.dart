@@ -580,11 +580,6 @@ class _GameScreenState extends State<GameScreen> {
       (p) => p.type == PlayerType.human,
     );
 
-    print('Game Screen - Opening advanced selector:');
-    print('Player hand size: ${humanPlayer.currentHand.length}');
-    print('Player has played down: ${humanPlayer.hasPlayedDown}');
-    print('Current melds: ${humanPlayer.melds.length}');
-
     // Safety check: Ensure we're in the correct turn phase
     if (_gameController.gameState.turnPhase != TurnPhase.meld) {
       _showErrorDialog('You can only create melds during the meld phase.');
@@ -612,22 +607,6 @@ class _GameScreenState extends State<GameScreen> {
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-
-    print('Executing advanced meld creation with ${meldIndices.length} melds');
-    print('Current hand size: ${humanPlayer.currentHand.length}');
-    for (int i = 0; i < meldIndices.length; i++) {
-      print('Meld ${i + 1}: indices ${meldIndices[i]}');
-      for (final index in meldIndices[i]) {
-        if (index < humanPlayer.currentHand.length) {
-          final card = humanPlayer.currentHand[index];
-          print('  Index $index: ${card.displayName}');
-        } else {
-          print(
-            '  Index $index: INVALID (hand size ${humanPlayer.currentHand.length})',
-          );
-        }
-      }
-    }
 
     // Safety check: Validate all indices are valid
     for (final indices in meldIndices) {
@@ -743,25 +722,17 @@ class _GameScreenState extends State<GameScreen> {
       return maxB.compareTo(maxA); // Descending order
     });
 
-    print('Processing melds in order to avoid index shifting:');
-    for (int i = 0; i < sortedMeldIndices.length; i++) {
-      print('  Meld ${i + 1}: indices ${sortedMeldIndices[i]}');
-    }
-
     for (final indices in sortedMeldIndices) {
       if (_gameController.createMeldByIndices(
         indices,
         skipPlayDownCheck: true,
       )) {
         meldsCreated++;
-        print('Successfully created meld with indices: $indices');
       } else {
         success = false;
         final humanPlayer = _gameController.gameState.players.firstWhere(
           (p) => p.type == PlayerType.human,
         );
-        print('Failed to create meld with indices: $indices');
-        print('Current hand size: ${humanPlayer.currentHand.length}');
 
         if (indices.any((i) => i >= humanPlayer.currentHand.length)) {
           _showErrorDialog(
@@ -1455,7 +1426,7 @@ class _GameScreenState extends State<GameScreen> {
                                               .contains(index),
                                           isPlayable: _isCardPlayable(card),
                                           isNewlyDrawn: humanPlayer
-                                              .isCardNewlyDrawn(card),
+                                              .isCardIndexNewlyDrawn(index),
                                         ),
                                       ),
                                     );

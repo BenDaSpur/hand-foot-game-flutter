@@ -10,7 +10,8 @@ class Player {
   final List<PlayingCard> hand;
   final List<PlayingCard> foot;
   final List<Meld> melds;
-  final Set<PlayingCard> newlyDrawnCards; // Track cards drawn this turn
+  final Set<int>
+  newlyDrawnCardIndices; // Track indices of cards drawn this turn
   bool hasPickedUpFoot;
   bool hasPlayedDown;
   int score;
@@ -22,14 +23,14 @@ class Player {
     List<PlayingCard>? hand,
     List<PlayingCard>? foot,
     List<Meld>? melds,
-    Set<PlayingCard>? newlyDrawnCards,
+    Set<int>? newlyDrawnCardIndices,
     this.hasPickedUpFoot = false,
     this.hasPlayedDown = false,
     this.score = 0,
   }) : hand = hand ?? [],
        foot = foot ?? [],
        melds = melds ?? [],
-       newlyDrawnCards = newlyDrawnCards ?? {};
+       newlyDrawnCardIndices = newlyDrawnCardIndices ?? {};
 
   List<PlayingCard> get currentHand => hasPickedUpFoot ? foot : hand;
 
@@ -56,29 +57,47 @@ class Player {
   }
 
   void addNewlyDrawnCard(PlayingCard card) {
+    final newIndex = currentHand.length;
     currentHand.add(card);
-    newlyDrawnCards.add(card);
+    newlyDrawnCardIndices.add(newIndex);
   }
 
   void addNewlyDrawnCards(List<PlayingCard> cards) {
+    final startIndex = currentHand.length;
     currentHand.addAll(cards);
-    newlyDrawnCards.addAll(cards);
+    for (int i = 0; i < cards.length; i++) {
+      newlyDrawnCardIndices.add(startIndex + i);
+    }
   }
 
   void clearNewlyDrawnCards() {
-    newlyDrawnCards.clear();
+    newlyDrawnCardIndices.clear();
   }
 
   bool isCardNewlyDrawn(PlayingCard card) {
-    return newlyDrawnCards.contains(card);
+    // Find the index of this specific card instance in the current hand
+    for (int i = 0; i < currentHand.length; i++) {
+      if (identical(currentHand[i], card)) {
+        return newlyDrawnCardIndices.contains(i);
+      }
+    }
+    return false;
+  }
+
+  bool isCardIndexNewlyDrawn(int index) {
+    return newlyDrawnCardIndices.contains(index);
   }
 
   PlayingCard? removeCardFromHand(PlayingCard card) {
-    final removed = currentHand.remove(card);
-    if (removed) {
-      newlyDrawnCards.remove(card); // Remove from newly drawn when played
+    // Find the exact index of this card instance
+    for (int i = 0; i < currentHand.length; i++) {
+      if (identical(currentHand[i], card)) {
+        final removedCard = currentHand.removeAt(i);
+        _updateIndicesAfterRemoval([i]);
+        return removedCard;
+      }
     }
-    return removed ? card : null;
+    return null;
   }
 
   List<PlayingCard> removeCardsByIndices(List<int> indices) {
@@ -92,12 +111,43 @@ class Player {
       if (index >= 0 && index < currentHand.length) {
         final card = currentHand.removeAt(index);
         removedCards.add(card);
-        newlyDrawnCards.remove(card); // Remove from newly drawn when played
       }
     }
 
+    // Update newly drawn indices after all removals
+    _updateIndicesAfterRemoval(indices);
+
     // Return in original order (reverse since we removed in reverse)
     return removedCards.reversed.toList();
+  }
+
+  /// Update newly drawn card indices after card removal
+  /// Handles index shifting when cards are removed from the hand
+  void _updateIndicesAfterRemoval(List<int> removedIndices) {
+    final sortedRemovedIndices = List<int>.from(removedIndices)..sort();
+
+    final updatedIndices = <int>{};
+
+    for (final drawnIndex in newlyDrawnCardIndices) {
+      // Count how many removed indices are less than this drawn index
+      int shiftAmount = 0;
+      for (final removedIndex in sortedRemovedIndices) {
+        if (removedIndex < drawnIndex) {
+          shiftAmount++;
+        } else {
+          break;
+        }
+      }
+
+      // If this drawn index wasn't removed, shift it left by the removal count
+      if (!removedIndices.contains(drawnIndex)) {
+        updatedIndices.add(drawnIndex - shiftAmount);
+      }
+      // If it was removed, don't add it to the updated set (it's no longer newly drawn)
+    }
+
+    newlyDrawnCardIndices.clear();
+    newlyDrawnCardIndices.addAll(updatedIndices);
   }
 
   void pickUpFoot() {
