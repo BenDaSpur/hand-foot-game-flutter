@@ -8,11 +8,34 @@ import '../widgets/playing_card_widget.dart';
 class _AdvancedMeldSelectorConstants {
   static const int minNaturalCardsForMeld = 2;
   static const int minTotalCardsForMeld = 3;
-  static const int gridCrossAxisCount = 6;
+  // Responsive grid cross axis count based on screen size
+  static int getGridCrossAxisCount(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth > 1200) return 8; // Desktop
+    if (screenWidth > 800) return 7; // Tablet landscape
+    if (screenWidth > 600) return 6; // Tablet portrait
+    return 5; // Mobile
+  }
+
   static const double cardAspectRatio = 0.7;
   static const double cardSpacing = 8.0;
-  static const double cardWidth = 60.0;
-  static const double cardHeight = 84.0;
+
+  // Responsive card dimensions based on screen size
+  static double getCardWidth(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final crossAxisCount = getGridCrossAxisCount(context);
+    final availableWidth = screenWidth * 0.9 - 40; // Modal width minus padding
+    final cardWidthFromGrid =
+        (availableWidth - (cardSpacing * (crossAxisCount - 1))) /
+        crossAxisCount;
+
+    // Clamp between reasonable min/max values
+    return cardWidthFromGrid.clamp(40.0, 65.0);
+  }
+
+  static double getCardHeight(BuildContext context) {
+    return getCardWidth(context) / cardAspectRatio;
+  }
 }
 
 /// Advanced meld selection widget for multi-meld play-downs with wild card assignment control
@@ -127,52 +150,61 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          widget.player.hasPlayedDown
-              ? 'Multi-Meld Manager'
-              : 'Multi-Meld Play-Down',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: [
-              Shadow(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: meetsRequirement
-                  ? [const Color(0xFF10B981), const Color(0xFF059669)]
-                  : [const Color(0xFFF59E0B), const Color(0xFFD97706)],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    (meetsRequirement
-                            ? const Color(0xFF10B981)
-                            : const Color(0xFFF59E0B))
-                        .withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+        Expanded(
           child: Text(
             widget.player.hasPlayedDown
-                ? '$totalPoints pts'
-                : '$totalPoints / ${widget.playDownRequirement} pts',
-            style: const TextStyle(
-              color: Colors.white,
+                ? 'Multi-Meld Manager'
+                : 'Multi-Meld Play-Down',
+            style: TextStyle(
+              fontSize: 22,
               fontWeight: FontWeight.bold,
-              fontSize: 14,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: meetsRequirement
+                    ? [const Color(0xFF10B981), const Color(0xFF059669)]
+                    : [const Color(0xFFF59E0B), const Color(0xFFD97706)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                      (meetsRequirement
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFF59E0B))
+                          .withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.player.hasPlayedDown
+                    ? '$totalPoints pts'
+                    : '$totalPoints / ${widget.playDownRequirement} pts',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
             ),
           ),
         ),
@@ -409,9 +441,11 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           const SizedBox(height: 8),
           Expanded(
             child: GridView.custom(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount:
-                    _AdvancedMeldSelectorConstants.gridCrossAxisCount,
+                    _AdvancedMeldSelectorConstants.getGridCrossAxisCount(
+                      context,
+                    ),
                 childAspectRatio:
                     _AdvancedMeldSelectorConstants.cardAspectRatio,
                 crossAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
@@ -500,15 +534,19 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: Text(
-            meetsRequirement
-                ? (widget.player.hasPlayedDown
-                      ? 'Confirm Melds'
-                      : 'Confirm Play-Down')
-                : (widget.player.hasPlayedDown
-                      ? 'Select Cards to Create Melds'
-                      : 'Need ${widget.playDownRequirement - _calculateTotalPoints()} more points'),
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              meetsRequirement
+                  ? (widget.player.hasPlayedDown
+                        ? 'Confirm Melds'
+                        : 'Confirm Play-Down')
+                  : (widget.player.hasPlayedDown
+                        ? 'Select Cards'
+                        : 'Need ${widget.playDownRequirement - _calculateTotalPoints()} more'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       ],
@@ -697,8 +735,8 @@ class _AvailableCardWidget extends StatelessWidget {
             : null,
         child: PlayingCardWidget(
           card: card,
-          width: _AdvancedMeldSelectorConstants.cardWidth,
-          height: _AdvancedMeldSelectorConstants.cardHeight,
+          width: _AdvancedMeldSelectorConstants.getCardWidth(context),
+          height: _AdvancedMeldSelectorConstants.getCardHeight(context),
           isSelected: isSelected,
         ),
       ),
