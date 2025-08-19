@@ -31,11 +31,18 @@ class _GameScreenState extends State<GameScreen> {
   Player? _viewingPlayerMelds; // null means viewing current player's melds
   bool _statusExpanded = false;
   bool _actionsExpanded = false;
+  bool _disposed = false; // Track disposal state
 
   @override
   void initState() {
     super.initState();
     _initializeGame();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   void _initializeGame() async {
@@ -86,6 +93,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _processBotTurn() async {
+    // Check if widget has been disposed
+    if (_disposed || !mounted) return;
+
     // Check if game has ended
     if (_gameController.gameState.phase == GamePhase.gameEnd) {
       // Game is over, clear the saved game
@@ -98,6 +108,7 @@ class _GameScreenState extends State<GameScreen> {
       await Future.delayed(
         const Duration(seconds: 2),
       ); // Brief pause to show scores
+      if (_disposed || !mounted) return; // Check again after delay
       _gameController.nextRound();
       setState(() {});
       _processBotTurns(); // Resume game flow
@@ -152,6 +163,7 @@ class _GameScreenState extends State<GameScreen> {
           break;
       }
 
+      if (_disposed || !mounted) return; // Check before setState
       setState(() {});
 
       if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {

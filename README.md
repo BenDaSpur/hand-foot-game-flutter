@@ -1,34 +1,18 @@
 # Hand & Foot Card Game
 
+![CI Status](https://github.com/BenDaSpur/hand-foot-game-flutter/workflows/CI/badge.svg)
+
 A beautiful Flutter implementation of the classic Hand & Foot card game featuring intelligent AI opponents and a stunning Balatro-inspired neon aesthetic.
 
-## 🎮 Game Features
+🎮 **[Play Now](https://bendaspur.github.io/hand-foot-game-flutter/)** | 📥 **[Download](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
 
-- **Complete Hand & Foot Rules**: Full implementation following official game rules
-- **Smart AI Opponents**: Sophisticated bot players with strategic decision-making
-- **Balatro-Inspired Theme**: Neon colors, glow effects, and holographic wild cards
-- **Multi-Round Gameplay**: Progressive difficulty with increasing play-down requirements
-- **Action Logging**: Privacy-aware game history (see your draws, not the bots')
-- **Going Out Validation**: Prevents illegal endings requiring both clean and dirty books
-- **Game State Export/Import**: Save and load complete game states for debugging
-- **Seeded Random Generation**: Reproducible games with deterministic card shuffling
+## ✨ Features
 
-## 🎨 Visual Design
-
-- **Dark Neon Theme**: Deep purple gradients with bright accent colors
-- **Glowing Cards**: Dynamic lighting effects for selected and playable cards
-- **Holographic Wilds**: Special shimmer effects for wild cards (2s and Jokers)
-- **Enhanced Visibility**: Bright suit colors and text shadows for perfect readability
-- **Modern UI**: Rounded corners, elevated shadows, and smooth animations
-
-## 🤖 AI Intelligence
-
-The bot players feature advanced strategy including:
-
-- **Unlock Preservation**: Keeping cards to potentially unlock the discard pile
-- **Strategic 3s Management**: Using 3s as easy discards during foot transitions
-- **Meld Timing**: Balancing between building melds and maintaining hand flexibility
-- **Foot Transition Planning**: Different strategies for hand vs foot phases
+- **Complete Hand & Foot Rules** with smart AI opponents
+- **Balatro-Inspired Theme** - neon colors, glow effects, holographic wild cards
+- **Progressive Gameplay** - increasing difficulty across rounds
+- **Game State Export/Import** - save/load games for debugging
+- **Privacy-Aware Logging** - see your draws, not the bots'
 
 ## 🎯 Game Rules Summary
 
@@ -42,25 +26,9 @@ The bot players feature advanced strategy including:
 
 ## 📱 Download & Play
 
-### 🎮 Ready-to-Play Downloads
-
 **[📥 Download Latest Release](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
 
-Choose your platform:
-
-- **🤖 Android**: Download `hand-foot-android.apk`
-- **🪟 Windows**: Download `hand-foot-windows.zip`
-- **🍎 macOS**: Download `hand-foot-macos.tar.gz`
-- **🐧 Linux**: Download `hand-foot-linux.tar.gz`
-- **🌐 Web**: Download `hand-foot-web.tar.gz` (host on web server)
-
-### Installation Instructions
-
-- **Android**: Enable "Install from unknown sources" in settings, then install the APK
-- **Windows**: Extract ZIP file and run `hand_foot_game_flutter.exe`
-- **macOS**: Extract archive and run the `.app` file
-- **Linux**: Extract archive and run the executable
-- **Web**: Extract files and serve from any web server
+Available for: Android (APK) | Windows | macOS | Linux | Web
 
 ## 🚀 Development Setup
 
@@ -102,29 +70,12 @@ flutter build macos      # macOS
 flutter build linux      # Linux
 ```
 
-### Code Formatting & CI/CD
+### Testing & Quality
 
-This project includes comprehensive code quality and CI/CD pipelines:
-
-#### Local Development
-- **Pre-commit Hook**: Automatically formats code, runs tests, and checks analysis before each commit
-- **VS Code Settings**: Auto-format on save when using VS Code
-- **Manual Script**: Run `./format_and_test.sh` to format and test manually
-
-#### Continuous Integration
-- **Fast Quality Checks**: Optimized CI pipeline (~2-3 minutes)
-- **Automated Testing**: All PRs and pushes run 74 comprehensive tests
-- **Code Analysis**: Static analysis with `flutter analyze` 
-- **Format Checking**: Ensures consistent code formatting
-- **Dependency Verification**: Validates package dependencies
-- **Branch Protection**: Main branch requires PR reviews and passing CI checks
-
-#### Quality Gates
-- ✅ All tests must pass (74/74)
-- ✅ Code analysis must be clean
-- ✅ Formatting must be consistent
-- ✅ Dependencies must be valid
-- ✅ PR reviews required for main branch
+- **161+ comprehensive tests** (161 unit + E2E)
+- **Multi-platform CI/CD** - Ubuntu (unit tests) + macOS (E2E tests)
+- **Branch protection** - all checks must pass to merge
+- **Pre-commit hooks** for formatting
 
 ## 🎪 How to Play
 
@@ -143,10 +94,8 @@ This project includes comprehensive code quality and CI/CD pipelines:
 
 ### 🛠️ Debug Features
 
-- **Copy Seed**: Copy the game's random seed for reproducible debugging
-- **Export Game**: Save complete game state as JSON to clipboard
-- **Load Game**: Paste and restore previously exported game states
-- **Perfect Reproduction**: Loaded games recreate exact deck order and future draws
+- **Copy Seed** - reproducible games
+- **Export/Load Game** - save complete game states
 
 ## 📁 Project Structure
 
@@ -162,44 +111,10 @@ lib/
 
 ## 🛠️ Technical Highlights
 
-- **Index-Based Selection**: Handles multiple identical cards from multiple decks
-- **Dynamic Book Detection**: Real-time clean/dirty book status updates
-- **State Management**: Centralized game state with action logging
-- **Responsive Design**: Adapts to different screen sizes and orientations
-- **Error Recovery**: Built-in systems to handle edge cases and stuck states
-
-## 🎨 Balatro Inspiration
-
-This game draws visual inspiration from the indie hit **Balatro**, featuring:
-
-- Deep space purple backgrounds with neon gradients
-- Glowing UI elements with colored shadows
-- Holographic effects on special cards
-- Bright, contrasting colors on dark themes
-- Modern card game aesthetics with retro-futuristic flair
-
-## 🚀 Releases & Updates
-
-This project uses automated builds via GitHub Actions. Every tagged release automatically builds for:
-
-- Android (APK + AAB)
-- Windows (ZIP)
-- macOS (tar.gz)
-- Linux (tar.gz)
-- Web (tar.gz)
-
-### Creating a Release (for maintainers)
-
-```bash
-# Use the release script
-./scripts/release.sh 1.0.0
-
-# Or manually create a git tag
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The GitHub Action will automatically build all platforms and create a release with downloadable assets.
+- **Index-Based Selection** - handles multiple identical cards
+- **Dynamic Book Detection** - real-time status updates  
+- **Centralized State Management** with action logging
+- **Responsive Design** - adapts to all screen sizes
 
 ## 🤝 Contributing
 
