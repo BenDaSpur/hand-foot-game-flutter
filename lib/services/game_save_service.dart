@@ -150,6 +150,10 @@ class GameSaveService {
       // Restore game state
       _restoreGameState(gameController.gameState, savedData);
 
+      // Clear newly drawn cards since they're not serialized properly
+      // This prevents incorrect highlighting after game restore
+      gameController.clearAllNewlyDrawnCards();
+
       return gameController;
     } catch (e) {
       _log.severe('Failed to restore game controller: $e');

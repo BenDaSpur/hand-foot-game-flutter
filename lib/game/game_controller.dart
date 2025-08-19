@@ -622,4 +622,12 @@ class GameController {
   static Future<void> clearSavedGame() async {
     await GameSaveService.clearSavedGame();
   }
+
+  /// Clear newly drawn card highlighting for all players
+  /// Useful when game state becomes inconsistent after export/import
+  void clearAllNewlyDrawnCards() {
+    for (final player in _gameState.players) {
+      player.clearNewlyDrawnCards();
+    }
+  }
 }
