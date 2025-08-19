@@ -330,7 +330,7 @@ class Player {
   bool get canGoOutWithBooks => hasCleanBook && hasDirtyBook;
 
   void sortHandByRank() {
-    currentHand.sort((a, b) {
+    _sortHandPreservingNewlyDrawnCards((a, b) {
       if (a.isJoker && b.isJoker) return 0;
       if (a.isJoker) return 1;
       if (b.isJoker) return -1;
@@ -339,7 +339,7 @@ class Player {
   }
 
   void sortHandBySuit() {
-    currentHand.sort((a, b) {
+    _sortHandPreservingNewlyDrawnCards((a, b) {
       if (a.isJoker && b.isJoker) return 0;
       if (a.isJoker) return 1;
       if (b.isJoker) return -1;
@@ -351,9 +351,41 @@ class Player {
   }
 
   void sortHandByValue() {
-    currentHand.sort((a, b) {
+    _sortHandPreservingNewlyDrawnCards((a, b) {
       return a.pointValue.compareTo(b.pointValue);
     });
+  }
+
+  /// Helper method to sort the hand while preserving newly drawn card indices
+  void _sortHandPreservingNewlyDrawnCards(
+    int Function(PlayingCard, PlayingCard) compare,
+  ) {
+    if (newlyDrawnCardIndices.isEmpty) {
+      // No newly drawn cards to track, sort normally
+      currentHand.sort(compare);
+      return;
+    }
+
+    // Step 1: Remember which cards are newly drawn (by object reference)
+    final newlyDrawnCards = <PlayingCard>{};
+    for (final index in newlyDrawnCardIndices) {
+      if (index < currentHand.length) {
+        newlyDrawnCards.add(currentHand[index]);
+      }
+    }
+
+    // Step 2: Sort the hand
+    currentHand.sort(compare);
+
+    // Step 3: Find the new indices of the newly drawn cards and update tracking
+    newlyDrawnCardIndices.clear();
+    for (int i = 0; i < currentHand.length; i++) {
+      if (newlyDrawnCards.contains(currentHand[i])) {
+        newlyDrawnCardIndices.add(i);
+        // Remove from set to handle duplicates correctly
+        newlyDrawnCards.remove(currentHand[i]);
+      }
+    }
   }
 
   // Helper method to find existing meld by rank

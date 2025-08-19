@@ -28,7 +28,6 @@ class _GameScreenState extends State<GameScreen> {
   final List<int> _selectedCardIndices =
       []; // Track card indices instead of card objects
   bool _isInitialized = false;
-  String _sortMode = 'rank';
   Player? _viewingPlayerMelds; // null means viewing current player's melds
   bool _statusExpanded = false;
   bool _actionsExpanded = false;
@@ -61,9 +60,6 @@ class _GameScreenState extends State<GameScreen> {
     _gameController = GameController(players: players);
     _botAI = BotAI();
     _gameController.initializeGame();
-
-    // Clear any stale newly drawn card highlighting
-    _gameController.clearAllNewlyDrawnCards();
 
     // Sort the human player's initial hand
     final humanPlayer = players.firstWhere((p) => p.type == PlayerType.human);
@@ -447,7 +443,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
-      _sortHand(_sortMode);
+      _sortHand('rank');
     } else {
       // Check if deck is empty or insufficient
       if (_gameController.gameState.deck.isEmpty) {
@@ -466,7 +462,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onUnlockDiscard() {
     if (_gameController.unlockDiscardPile()) {
-      _sortHand(_sortMode);
+      _sortHand('rank');
     }
   }
 
@@ -751,7 +747,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     if (success && meldsCreated > 0) {
-      _sortHand(_sortMode);
+      _sortHand('rank');
       setState(() {});
 
       // Show success message
@@ -862,9 +858,7 @@ class _GameScreenState extends State<GameScreen> {
         break;
     }
 
-    setState(() {
-      _sortMode = sortType;
-    });
+    setState(() {});
     _selectedCardIndices.clear();
   }
 
@@ -970,7 +964,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     if (addedCount > 0) {
-      _sortHand(_sortMode);
+      _sortHand('rank');
       _selectedCardIndices.clear();
       setState(() {});
 
@@ -1209,10 +1203,21 @@ class _GameScreenState extends State<GameScreen> {
                             .asMap()
                             .entries
                             .toList();
-                        indexedMelds.sort(
-                          (a, b) =>
-                              a.value.rank.index.compareTo(b.value.rank.index),
-                        );
+                        indexedMelds.sort((a, b) {
+                          // Special handling for Aces - put them at the end
+                          final aRank = a.value.rank;
+                          final bRank = b.value.rank;
+
+                          if (aRank == CardRank.ace && bRank != CardRank.ace) {
+                            return 1; // a (ace) comes after b
+                          }
+                          if (bRank == CardRank.ace && aRank != CardRank.ace) {
+                            return -1; // b (ace) comes after a
+                          }
+
+                          // For non-ace cards or both aces, use normal index comparison
+                          return aRank.index.compareTo(bRank.index);
+                        });
 
                         return indexedMelds.map((entry) {
                           final canAdd =
@@ -1325,48 +1330,6 @@ class _GameScreenState extends State<GameScreen> {
                           child: const Text('Clear Selection'),
                         ),
                     ],
-                  ],
-                ),
-              ),
-
-              // Sort controls
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Sort by: ',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 8),
-                    ...['rank', 'suit', 'value'].map(
-                      (sortType) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ElevatedButton(
-                          onPressed: () => _sortHand(sortType),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _sortMode == sortType
-                                ? Colors.blue
-                                : null,
-                            foregroundColor: _sortMode == sortType
-                                ? Colors.white
-                                : null,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            minimumSize: Size.zero,
-                          ),
-                          child: Text(
-                            sortType[0].toUpperCase() + sortType.substring(1),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
