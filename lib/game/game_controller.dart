@@ -70,31 +70,100 @@ class GameController {
       (p) => p.type == PlayerType.human,
     );
 
+    // Validate all indices first - must be within bounds and non-negative
+    for (final index in cardIndices) {
+      if (index < 0 || index >= humanPlayer.currentHand.length) {
+        return false; // Invalid index
+      }
+    }
+
     // Get the actual cards at these indices
     final cards = cardIndices
-        .where((index) => index < humanPlayer.currentHand.length)
         .map((index) => humanPlayer.currentHand[index])
         .toList();
 
+    // Check play down requirement if player hasn't played down yet
+    // Skip this check when creating multiple melds (UI already validated total)
+    if (!skipPlayDownCheck && !humanPlayer.hasPlayedDown) {
+      final cardPointValue = cards.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      if (cardPointValue < _gameState.playDownRequirement) {
+        return false;
+      }
+    }
+
+    // First, check if we should add to an existing meld
+    final naturalCards = cards.where((card) => !card.isWild).toList();
+    if (naturalCards.isNotEmpty) {
+      final rank = naturalCards.first.rank;
+      final existingMeldIndex = humanPlayer.findMeldByRank(rank);
+
+      if (existingMeldIndex != -1) {
+        // Add to existing meld
+        final existingMeld = humanPlayer.melds[existingMeldIndex];
+
+        // Validate all cards can be added to existing meld
+        for (final card in cards) {
+          if (!existingMeld.canAddCard(card)) {
+            return false; // Can't add this card to existing meld
+          }
+        }
+
+        // Remove cards from hand first
+        humanPlayer.removeCardsByIndices(cardIndices);
+
+        // Add all cards to existing meld
+        for (final card in cards) {
+          existingMeld.addCard(card);
+        }
+
+        // Use the game state method to handle all side effects properly
+        _gameState.hasMelded = true;
+
+        // Log the action
+        final cardNames = cards.map((c) => c.displayName).join(', ');
+        _gameState.logAction('added to existing meld: $cardNames');
+
+        // Check for foot pickup
+        if (humanPlayer.isHandEmpty && !humanPlayer.hasPickedUpFoot) {
+          humanPlayer.pickUpFoot();
+          _gameState.logAction('picked up foot pile');
+        }
+
+        humanPlayer.hasPlayedDown = true;
+        return true;
+      }
+    }
+
+    // No existing meld, try to create new meld
     final meld = Meld.createMeld(cards);
     if (meld != null) {
-      // Check play down requirement if player hasn't played down yet
-      // Skip this check when creating multiple melds (UI already validated total)
-      if (!skipPlayDownCheck && !humanPlayer.hasPlayedDown) {
-        final cardPointValue = cards.fold<int>(
-          0,
-          (sum, card) => sum + card.pointValue,
-        );
-        if (cardPointValue < _gameState.playDownRequirement) {
-          return false;
-        }
-      }
-
-      // Remove cards by indices (this handles duplicates correctly)
+      // Create new meld
       humanPlayer.removeCardsByIndices(cardIndices);
       humanPlayer.melds.add(meld);
-      humanPlayer.hasPlayedDown = true;
 
+      // Use the game state method to handle all side effects properly
+      _gameState.hasMelded = true;
+
+      // Log the action
+      final cardNames = cards.map((c) => c.displayName).join(', ');
+      final wasFirstMeld = !humanPlayer.hasPlayedDown;
+      if (wasFirstMeld) {
+        final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
+        _gameState.logAction('played down with $points points: $cardNames');
+      } else {
+        _gameState.logAction('created new meld: $cardNames');
+      }
+
+      // Check for foot pickup
+      if (humanPlayer.isHandEmpty && !humanPlayer.hasPickedUpFoot) {
+        humanPlayer.pickUpFoot();
+        _gameState.logAction('picked up foot pile');
+      }
+
+      humanPlayer.hasPlayedDown = true;
       return true;
     }
     return false;

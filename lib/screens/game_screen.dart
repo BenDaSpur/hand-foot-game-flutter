@@ -12,6 +12,7 @@ import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
+import '../widgets/advanced_meld_selector.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -466,38 +467,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _onCreateMeld() {
-    if (_selectedCards.length >= 3) {
-      final humanPlayer = _gameController.gameState.players.firstWhere(
-        (p) => p.type == PlayerType.human,
-      );
-
-      // If player hasn't played down yet, try to create multiple melds for play-down
-      if (!humanPlayer.hasPlayedDown) {
-        if (_createMultipleMelds()) {
-          _sortHand(_sortMode);
-          _selectedCardIndices.clear();
-        }
-        // Error handling is now done inside _createMultipleMelds()
-      } else {
-        // Player has already played down, create a single meld
-
-        // Check for wild-only selection
-        final hasOnlyWildCards =
-            _selectedCards.isNotEmpty &&
-            _selectedCards.every((card) => card.isWild);
-
-        if (hasOnlyWildCards) {
-          _showErrorDialog(
-            'Cannot create melds with only wild cards! Wild cards (2s and Jokers) can only supplement natural card melds (4-A). Please select at least 2 natural cards of the same rank.',
-          );
-        } else {
-          _createSingleMeldWithConfirmation();
-        }
-      }
-    }
-  }
-
   void _onAddCardToMeld(int meldIndex) {
     if (_selectedCards.isEmpty) {
       _showErrorDialog(
@@ -603,136 +572,223 @@ class _GameScreenState extends State<GameScreen> {
     return 0;
   }
 
-  bool _createMultipleMelds() {
-    final gameState = _gameController.gameState;
+  void _showAdvancedMeldSelector() {
+    // Force a UI refresh first to ensure we have the latest game state
+    setState(() {});
 
-    // Check if user selected only wild cards before processing meld groups
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
-    final selectedCards = _selectedCardIndices
-        .where((index) => index < humanPlayer.currentHand.length)
-        .map((index) => humanPlayer.currentHand[index])
-        .toList();
 
-    final hasOnlyWildCards =
-        selectedCards.isNotEmpty && selectedCards.every((card) => card.isWild);
+    print('Game Screen - Opening advanced selector:');
+    print('Player hand size: ${humanPlayer.currentHand.length}');
+    print('Player has played down: ${humanPlayer.hasPlayedDown}');
+    print('Current melds: ${humanPlayer.melds.length}');
 
-    if (hasOnlyWildCards) {
-      _showErrorDialog(
-        'Cannot create melds with only wild cards! Wild cards (2s and Jokers) can only supplement natural card melds (4-A). Please select at least 2 natural cards of the same rank.',
-      );
-      return false;
+    // Safety check: Ensure we're in the correct turn phase
+    if (_gameController.gameState.turnPhase != TurnPhase.meld) {
+      _showErrorDialog('You can only create melds during the meld phase.');
+      return;
     }
 
-    final meldGroups = _findMeldGroupsFromSelectedIndices();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AdvancedMeldSelector(
+        player: humanPlayer,
+        playDownRequirement: _gameController.gameState.playDownRequirement,
+        onCancel: () {
+          Navigator.of(context).pop();
+        },
+        onConfirm: (meldIndices) {
+          Navigator.of(context).pop();
+          _executeAdvancedMeldCreation(meldIndices);
+        },
+      ),
+    );
+  }
 
-    if (meldGroups.isEmpty) {
-      _showErrorDialog(
-        'Cannot form any valid melds from selected cards. Each meld needs 3+ cards of the same rank.',
-      );
-      return false;
-    }
+  void _executeAdvancedMeldCreation(List<List<int>> meldIndices) {
+    final humanPlayer = _gameController.gameState.players.firstWhere(
+      (p) => p.type == PlayerType.human,
+    );
 
-    // Calculate total points from all possible melds
-    int totalPoints = 0;
-    for (final indices in meldGroups) {
-      for (final index in indices) {
-        if (index <
-            _gameController.gameState.currentPlayer.currentHand.length) {
-          totalPoints += _gameController
-              .gameState
-              .currentPlayer
-              .currentHand[index]
-              .pointValue;
+    print('Executing advanced meld creation with ${meldIndices.length} melds');
+    print('Current hand size: ${humanPlayer.currentHand.length}');
+    for (int i = 0; i < meldIndices.length; i++) {
+      print('Meld ${i + 1}: indices ${meldIndices[i]}');
+      for (final index in meldIndices[i]) {
+        if (index < humanPlayer.currentHand.length) {
+          final card = humanPlayer.currentHand[index];
+          print('  Index $index: ${card.displayName}');
+        } else {
+          print(
+            '  Index $index: INVALID (hand size ${humanPlayer.currentHand.length})',
+          );
         }
       }
     }
 
-    if (totalPoints < gameState.playDownRequirement) {
-      _showErrorDialog(
-        'Not enough points! Found $totalPoints points from valid melds, need ${gameState.playDownRequirement}.',
-      );
-      return false;
+    // Safety check: Validate all indices are valid
+    for (final indices in meldIndices) {
+      if (indices.any((index) => index >= humanPlayer.currentHand.length)) {
+        _showErrorDialog('Invalid card selection. Please try again.');
+        return;
+      }
     }
 
-    // Create all the melds using indices
-    // Skip individual play-down checks since we already validated the total
-    for (final meldIndices in meldGroups) {
-      if (!_gameController.createMeldByIndices(
+    // Check for wild cards across all melds and show warning if needed
+    final allWildCards = <PlayingCard>[];
+    final allMeldCards = <List<PlayingCard>>[];
+
+    for (final indices in meldIndices) {
+      final cards = indices.map((i) => humanPlayer.currentHand[i]).toList();
+      allMeldCards.add(cards);
+      allWildCards.addAll(cards.where((card) => card.isWild));
+    }
+
+    if (allWildCards.isNotEmpty) {
+      _showWildCardConfirmationForMultiMeld(
         meldIndices,
+        allMeldCards,
+        allWildCards,
+      );
+    } else {
+      _performMultiMeldCreation(meldIndices);
+    }
+  }
+
+  void _showWildCardConfirmationForMultiMeld(
+    List<List<int>> meldIndices,
+    List<List<PlayingCard>> allMeldCards,
+    List<PlayingCard> allWildCards,
+  ) {
+    final wildNames = allWildCards.map((c) => c.displayName).join(', ');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Create Melds with Wilds?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You are about to create ${meldIndices.length} meld(s) with wild cards:',
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                wildNames,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This will create "dirty book(s)" from the start. Are you sure?',
+              style: TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _performMultiMeldCreation(meldIndices);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Create Melds'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performMultiMeldCreation(List<List<int>> meldIndices) {
+    bool success = true;
+    int meldsCreated = 0;
+
+    // Sort melds by highest index first to avoid index shifting issues
+    final sortedMeldIndices = List<List<int>>.from(meldIndices);
+    sortedMeldIndices.sort((a, b) {
+      // Compare by the highest index in each meld
+      final maxA = a.isNotEmpty
+          ? a.reduce((max, current) => current > max ? current : max)
+          : 0;
+      final maxB = b.isNotEmpty
+          ? b.reduce((max, current) => current > max ? current : max)
+          : 0;
+      return maxB.compareTo(maxA); // Descending order
+    });
+
+    print('Processing melds in order to avoid index shifting:');
+    for (int i = 0; i < sortedMeldIndices.length; i++) {
+      print('  Meld ${i + 1}: indices ${sortedMeldIndices[i]}');
+    }
+
+    for (final indices in sortedMeldIndices) {
+      if (_gameController.createMeldByIndices(
+        indices,
         skipPlayDownCheck: true,
       )) {
-        final cards = meldIndices
-            .map(
-              (i) =>
-                  i < _gameController.gameState.currentPlayer.currentHand.length
-                  ? _gameController
-                        .gameState
-                        .currentPlayer
-                        .currentHand[i]
-                        .displayName
-                  : 'Unknown',
-            )
-            .join(', ');
-        _showErrorDialog('Failed to create meld with: $cards');
-        return false;
-      }
-    }
+        meldsCreated++;
+        print('Successfully created meld with indices: $indices');
+      } else {
+        success = false;
+        final humanPlayer = _gameController.gameState.players.firstWhere(
+          (p) => p.type == PlayerType.human,
+        );
+        print('Failed to create meld with indices: $indices');
+        print('Current hand size: ${humanPlayer.currentHand.length}');
 
-    return true;
-  }
-
-  List<List<int>> _findMeldGroupsFromSelectedIndices() {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-    final hand = humanPlayer.currentHand;
-    final meldGroups = <List<int>>[];
-
-    // Group indices by card rank
-    final indicesByRank = <CardRank, List<int>>{};
-    final wildIndices = <int>[];
-
-    for (final index in _selectedCardIndices) {
-      if (index < hand.length) {
-        final card = hand[index];
-        if (card.isWild) {
-          wildIndices.add(index);
+        if (indices.any((i) => i >= humanPlayer.currentHand.length)) {
+          _showErrorDialog(
+            'Card selection changed during meld creation. Please try again.',
+          );
         } else {
-          indicesByRank.putIfAbsent(card.rank, () => []).add(index);
+          final cards = indices.map((i) => humanPlayer.currentHand[i]).toList();
+          final cardNames = cards.map((c) => c.displayName).join(', ');
+          _showErrorDialog('Failed to create meld: $cardNames');
         }
+        break;
       }
     }
 
-    // Create meld groups from natural cards of the same rank
-    for (final entry in indicesByRank.entries) {
-      final naturalIndices = entry.value;
-      if (naturalIndices.length >= 3) {
-        meldGroups.add(naturalIndices);
-      } else if (naturalIndices.length >= 2 && wildIndices.isNotEmpty) {
-        // Can create a mixed meld with wilds
-        final wildsNeeded = 3 - naturalIndices.length;
-        if (wildIndices.length >= wildsNeeded) {
-          final meldIndices = List<int>.from(naturalIndices);
-          meldIndices.addAll(wildIndices.take(wildsNeeded));
-          meldGroups.add(meldIndices);
-          // Remove used wild indices
-          for (int i = 0; i < wildsNeeded; i++) {
-            wildIndices.removeAt(0);
-          }
-        }
-      }
+    if (success && meldsCreated > 0) {
+      _sortHand(_sortMode);
+      setState(() {});
+
+      // Show success message
+      final message = meldsCreated == 1
+          ? 'Successfully created meld!'
+          : 'Successfully created $meldsCreated melds for play-down!';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
+      );
     }
-
-    // Note: Wild-only melds are not allowed in Hand & Foot rules
-    // Wild cards can only supplement natural card melds
-
-    return meldGroups;
-  }
-
-  int _calculateSelectedPoints() {
-    return _selectedCards.fold<int>(0, (sum, card) => sum + card.pointValue);
   }
 
   void _onDiscard() {
@@ -952,97 +1008,6 @@ class _GameScreenState extends State<GameScreen> {
       }
     } else {
       _showErrorDialog('Failed to add any cards to the meld.');
-    }
-  }
-
-  void _createSingleMeldWithConfirmation() {
-    final wildsInSelection = _selectedCards
-        .where((card) => card.isWild)
-        .toList();
-
-    if (wildsInSelection.isNotEmpty) {
-      final wildNames = wildsInSelection.map((c) => c.displayName).join(', ');
-      final naturalCards = _selectedCards
-          .where((card) => !card.isWild)
-          .toList();
-      final meldType = naturalCards.isNotEmpty
-          ? '${naturalCards.first.rank.name.toUpperCase()}s'
-          : 'Unknown';
-
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.warning, color: Colors.orange),
-              SizedBox(width: 8),
-              Text('Create Meld with Wilds?'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('You are about to create a $meldType meld with wild cards:'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Text(
-                  wildNames,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'This will create a "dirty book" from the start. Are you sure?',
-                style: TextStyle(fontSize: 14),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _executeMeldCreation();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Create Meld'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      // No wilds, create meld directly
-      _executeMeldCreation();
-    }
-  }
-
-  void _executeMeldCreation() {
-    if (_gameController.createMeld(_selectedCards)) {
-      _sortHand(_sortMode);
-      _selectedCardIndices.clear();
-      setState(() {});
-    } else {
-      _showErrorDialog(
-        'Invalid meld! Cards must be of the same rank or wild cards.',
-      );
     }
   }
 
@@ -1348,25 +1313,8 @@ class _GameScreenState extends State<GameScreen> {
                     ],
                     if (gameState.turnPhase == TurnPhase.meld) ...[
                       ElevatedButton(
-                        onPressed: _selectedCards.length >= 3
-                            ? _onCreateMeld
-                            : null,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              humanPlayer.hasPlayedDown
-                                  ? 'Create Meld (${_selectedCards.length})'
-                                  : 'Play Down (${_selectedCards.length} cards)',
-                            ),
-                            if (!humanPlayer.hasPlayedDown &&
-                                _selectedCards.isNotEmpty)
-                              Text(
-                                '${_calculateSelectedPoints()}/${gameState.playDownRequirement} pts',
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                          ],
-                        ),
+                        onPressed: () => _showAdvancedMeldSelector(),
+                        child: const Text('Play Cards'),
                       ),
                       ElevatedButton(
                         onPressed: _selectedCards.length == 1
@@ -1506,6 +1454,8 @@ class _GameScreenState extends State<GameScreen> {
                                           isSelected: _selectedCardIndices
                                               .contains(index),
                                           isPlayable: _isCardPlayable(card),
+                                          isNewlyDrawn: humanPlayer
+                                              .isCardNewlyDrawn(card),
                                         ),
                                       ),
                                     );

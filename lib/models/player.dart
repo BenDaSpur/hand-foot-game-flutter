@@ -10,6 +10,7 @@ class Player {
   final List<PlayingCard> hand;
   final List<PlayingCard> foot;
   final List<Meld> melds;
+  final Set<PlayingCard> newlyDrawnCards; // Track cards drawn this turn
   bool hasPickedUpFoot;
   bool hasPlayedDown;
   int score;
@@ -21,12 +22,14 @@ class Player {
     List<PlayingCard>? hand,
     List<PlayingCard>? foot,
     List<Meld>? melds,
+    Set<PlayingCard>? newlyDrawnCards,
     this.hasPickedUpFoot = false,
     this.hasPlayedDown = false,
     this.score = 0,
   }) : hand = hand ?? [],
        foot = foot ?? [],
-       melds = melds ?? [];
+       melds = melds ?? [],
+       newlyDrawnCards = newlyDrawnCards ?? {};
 
   List<PlayingCard> get currentHand => hasPickedUpFoot ? foot : hand;
 
@@ -52,8 +55,29 @@ class Player {
     currentHand.addAll(cards);
   }
 
+  void addNewlyDrawnCard(PlayingCard card) {
+    currentHand.add(card);
+    newlyDrawnCards.add(card);
+  }
+
+  void addNewlyDrawnCards(List<PlayingCard> cards) {
+    currentHand.addAll(cards);
+    newlyDrawnCards.addAll(cards);
+  }
+
+  void clearNewlyDrawnCards() {
+    newlyDrawnCards.clear();
+  }
+
+  bool isCardNewlyDrawn(PlayingCard card) {
+    return newlyDrawnCards.contains(card);
+  }
+
   PlayingCard? removeCardFromHand(PlayingCard card) {
     final removed = currentHand.remove(card);
+    if (removed) {
+      newlyDrawnCards.remove(card); // Remove from newly drawn when played
+    }
     return removed ? card : null;
   }
 
@@ -66,7 +90,9 @@ class Player {
 
     for (final index in sortedIndices) {
       if (index >= 0 && index < currentHand.length) {
-        removedCards.add(currentHand.removeAt(index));
+        final card = currentHand.removeAt(index);
+        removedCards.add(card);
+        newlyDrawnCards.remove(card); // Remove from newly drawn when played
       }
     }
 
