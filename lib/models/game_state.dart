@@ -424,6 +424,9 @@ class GameState {
   bool addToMeld(int meldIndex, PlayingCard card) {
     if (turnPhase != TurnPhase.meld) return false;
 
+    // Players must have played down before they can add cards to existing melds
+    if (!currentPlayer.hasPlayedDown) return false;
+
     if (currentPlayer.addToMeld(meldIndex, card)) {
       hasMelded = true; // Mark that player has melded this turn
       _logAction('added ${card.displayName} to existing meld');

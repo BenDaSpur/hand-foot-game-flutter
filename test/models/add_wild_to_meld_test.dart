@@ -202,5 +202,35 @@ void main() {
         isTrue,
       ); // Should remain in hand
     });
+
+    test('should reject adding wild when player has not played down yet', () {
+      // Create an existing meld with 3 Kings
+      final existingMeld = Meld.createMeld([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ]);
+
+      expect(existingMeld, isNotNull);
+      player.melds.add(existingMeld!);
+
+      // IMPORTANT: Do NOT set hasPlayedDown = true (simulating player hasn't played down)
+      expect(player.hasPlayedDown, isFalse);
+
+      // Add a wild card (2) to player's hand
+      final wildCard = const PlayingCard(suit: Suit.spades, rank: CardRank.two);
+      player.hand.add(wildCard);
+
+      // Set game state to meld phase
+      gameState.turnPhase = TurnPhase.meld;
+
+      // Try to add wild card to the existing meld - should fail due to play-down requirement
+      final success = gameState.addToMeld(0, wildCard);
+
+      expect(success, isFalse);
+      expect(existingMeld.cards.length, equals(3)); // Should remain unchanged
+      expect(existingMeld.cards.contains(wildCard), isFalse);
+      expect(player.hand.contains(wildCard), isTrue); // Should remain in hand
+    });
   });
 }
