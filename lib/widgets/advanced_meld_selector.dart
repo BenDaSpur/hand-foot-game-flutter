@@ -559,12 +559,13 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   void _createNewMeld() {
+    // Convert selected available indices to hand indices first
     final selectedHandIndices = selectedAvailableIndices
-        .map((index) => availableCardIndices[index])
+        .map((availableIndex) => availableCardIndices[availableIndex])
         .toList();
 
     final selectedCards = selectedHandIndices
-        .map((index) => widget.player.currentHand[index])
+        .map((handIndex) => widget.player.currentHand[handIndex])
         .toList();
 
     // Validate meld creation
@@ -589,22 +590,36 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       }
     }
 
-    // Create the meld
+    // Create the meld with proper state management
     setState(() {
+      // Add the meld
       proposedMeldIndices.add(selectedHandIndices);
 
-      // Remove cards from available cards (in reverse order to maintain indices)
-      final sortedIndices = selectedAvailableIndices.toList()
+      // Remove selected hand indices from available cards
+      // Sort hand indices in descending order to avoid index shifting issues
+      final sortedHandIndices = selectedHandIndices.toList()
         ..sort((a, b) => b.compareTo(a));
-      for (final index in sortedIndices) {
-        availableCardIndices.removeAt(index);
+
+      for (final handIndex in sortedHandIndices) {
+        availableCardIndices.remove(handIndex);
       }
 
+      // Clear selection completely and regenerate available indices
       selectedAvailableIndices.clear();
+
+      // Force refresh to ensure consistent state
+      _sortAvailableCardIndices();
     });
   }
 
   void _toggleCardSelection(int availableIndex) {
+    // Validate bounds to prevent crashes
+    if (availableIndex < 0 || availableIndex >= availableCardIndices.length) {
+      // Force refresh if we encounter invalid state
+      _refreshAvailableCards();
+      return;
+    }
+
     setState(() {
       if (selectedAvailableIndices.contains(availableIndex)) {
         selectedAvailableIndices.remove(availableIndex);
