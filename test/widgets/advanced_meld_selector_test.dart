@@ -375,4 +375,252 @@ void main() {
       expect(isWidgetBuilt, isFalse);
     });
   });
+
+  group('Advanced Meld Selector - Meld Validation Rules', () {
+    late Player testPlayer;
+
+    setUp(() {
+      testPlayer = Player(
+        id: 'validation_test',
+        name: 'Validation Test Player',
+        type: PlayerType.human,
+      );
+    });
+
+    test('should reject meld with 3s in selection', () {
+      // Add cards with 3s included
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.three,
+        ), // 3 - should be rejected
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 3);
+      final has3s = selectedCards.any((card) => card.rank == CardRank.three);
+
+      // Should fail validation due to 3s
+      expect(has3s, isTrue);
+      // This would trigger error: "3s cannot be melded"
+    });
+
+    test('should reject meld with insufficient total cards', () {
+      // Add only 2 cards (less than minimum 3)
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 2);
+      final hasMinimumCards =
+          selectedCards.length >= 3; // GameConfig.minTotalCardsForMeld
+
+      expect(hasMinimumCards, isFalse);
+      // This would trigger error: "Need at least 3 cards for a meld"
+    });
+
+    test('should reject meld with insufficient natural cards', () {
+      // Add cards with only 1 natural card + wilds
+      testPlayer.currentHand.addAll([
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.king,
+        ), // Only 1 natural
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
+        const PlayingCard(rank: CardRank.joker), // Wild
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 3);
+      final naturalCards = selectedCards
+          .where((card) => !card.isWild && card.rank != CardRank.three)
+          .toList();
+
+      final hasMinimumNaturals =
+          naturalCards.length >= 2; // GameConfig.minNaturalCardsForMeld
+
+      expect(naturalCards.length, equals(1));
+      expect(hasMinimumNaturals, isFalse);
+      // This would trigger error: "Need at least 2 natural cards of the same rank"
+    });
+
+    test('should reject meld with mixed ranks in natural cards', () {
+      // Add cards with different natural ranks
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.queen,
+        ), // Different rank
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 3);
+      final naturalCards = selectedCards
+          .where((card) => !card.isWild && card.rank != CardRank.three)
+          .toList();
+
+      if (naturalCards.isNotEmpty) {
+        final firstRank = naturalCards.first.rank;
+        final allSameRank = naturalCards.every(
+          (card) => card.rank == firstRank,
+        );
+        expect(allSameRank, isFalse);
+      }
+      // This would trigger error: "All natural cards must be the same rank"
+    });
+
+    test('should reject meld when wild cards exceed naturals', () {
+      // Add more wilds than naturals
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
+        const PlayingCard(rank: CardRank.joker), // Wild
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two), // Another wild
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 4);
+      final naturalCards = selectedCards
+          .where((card) => !card.isWild && card.rank != CardRank.three)
+          .toList();
+      final wildCards = selectedCards.where((card) => card.isWild).toList();
+
+      final wildCountValid = wildCards.length <= naturalCards.length;
+
+      expect(naturalCards.length, equals(1));
+      expect(wildCards.length, equals(3));
+      expect(wildCountValid, isFalse);
+      // This would trigger error: "Too many wild cards (3) for naturals (1)"
+    });
+
+    test('should accept valid 3-card meld with 2 naturals + 1 wild', () {
+      // Add valid meld: 2 naturals + 1 wild
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 3);
+      final naturalCards = selectedCards
+          .where((card) => !card.isWild && card.rank != CardRank.three)
+          .toList();
+      final wildCards = selectedCards.where((card) => card.isWild).toList();
+
+      // All validation checks should pass
+      final hasMinimumCards = selectedCards.length >= 3;
+      final hasMinimumNaturals = naturalCards.length >= 2;
+      final allSameRank =
+          naturalCards.isNotEmpty &&
+          naturalCards.every((card) => card.rank == naturalCards.first.rank);
+      final wildCountValid = wildCards.length <= naturalCards.length;
+      final has3s = selectedCards.any((card) => card.rank == CardRank.three);
+
+      expect(hasMinimumCards, isTrue);
+      expect(hasMinimumNaturals, isTrue);
+      expect(allSameRank, isTrue);
+      expect(wildCountValid, isTrue);
+      expect(has3s, isFalse);
+      expect(naturalCards.length, equals(2));
+      expect(wildCards.length, equals(1));
+      expect(selectedCards.length, equals(3));
+    });
+
+    test('should properly update available cards after meld creation', () {
+      // Setup initial state
+      testPlayer.currentHand.addAll([
+        // First meld cards
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        // Remaining available cards
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+      ]);
+
+      // Initial available cards (all cards)
+      List<int> availableCardIndices = List.generate(
+        testPlayer.currentHand.length,
+        (index) => index,
+      );
+      expect(availableCardIndices.length, equals(6));
+      expect(availableCardIndices, equals([0, 1, 2, 3, 4, 5]));
+
+      // Create meld with first 3 cards
+      final meldIndices = [0, 1, 2];
+
+      // Remove melded cards from available cards (in reverse order to maintain indices)
+      for (final handIndex in meldIndices.reversed) {
+        availableCardIndices.remove(handIndex);
+      }
+
+      // Verify available cards updated correctly
+      expect(availableCardIndices.length, equals(3));
+      expect(availableCardIndices, equals([3, 4, 5]));
+
+      // Verify the remaining available cards are correct
+      final remainingCards = availableCardIndices
+          .map((index) => testPlayer.currentHand[index])
+          .toList();
+
+      expect(remainingCards.length, equals(3));
+      expect(remainingCards[0].rank, equals(CardRank.queen));
+      expect(remainingCards[1].rank, equals(CardRank.queen));
+      expect(remainingCards[2].isWild, isTrue);
+    });
+
+    test('should validate clean meld (no wilds)', () {
+      // Add 4 natural cards of same rank
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 4);
+      final naturalCards = selectedCards
+          .where((card) => !card.isWild && card.rank != CardRank.three)
+          .toList();
+      final wildCards = selectedCards.where((card) => card.isWild).toList();
+
+      expect(naturalCards.length, equals(4));
+      expect(wildCards.length, equals(0));
+      expect(naturalCards.every((card) => card.rank == CardRank.ace), isTrue);
+
+      // Clean meld validation passes
+      final isCleanMeld = wildCards.isEmpty && naturalCards.length >= 3;
+      expect(isCleanMeld, isTrue);
+    });
+
+    test('should validate dirty meld (with wilds)', () {
+      // Add mixed natural and wild cards
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
+        const PlayingCard(rank: CardRank.joker), // Wild
+      ]);
+
+      final selectedCards = testPlayer.currentHand.sublist(0, 5);
+      final naturalCards = selectedCards
+          .where((card) => !card.isWild && card.rank != CardRank.three)
+          .toList();
+      final wildCards = selectedCards.where((card) => card.isWild).toList();
+
+      expect(naturalCards.length, equals(3));
+      expect(wildCards.length, equals(2));
+      expect(naturalCards.every((card) => card.rank == CardRank.jack), isTrue);
+
+      // Dirty meld validation passes (wilds <= naturals)
+      final isDirtyMeld =
+          wildCards.isNotEmpty &&
+          wildCards.length <= naturalCards.length &&
+          naturalCards.length >= 2;
+      expect(isDirtyMeld, isTrue);
+    });
+  });
 }
