@@ -170,7 +170,12 @@ class GameController {
   }
 
   bool addCardToMeld(int meldIndex, PlayingCard card) {
-    return _gameState.addToMeld(meldIndex, card);
+    final result = _gameState.addToMeld(meldIndex, card);
+
+    // Defensive validation after potentially critical game state change
+    _gameState.validateGameState();
+
+    return result;
   }
 
   bool discardCard(PlayingCard card) {

@@ -388,7 +388,24 @@ class GameState {
       // Check if player has gone out after melding
       if (currentPlayer.canGoOut) {
         _logAction('went out and ended the round!');
+
+        // Defensive logging for going out via playMeld
+        _logAction(
+          'GOING OUT DEBUG (playMeld): footSize=${currentPlayer.foot.length}, '
+          'hasCleanBook=${currentPlayer.hasCleanBook}, '
+          'hasDirtyBook=${currentPlayer.hasDirtyBook}',
+        );
+
         endRound();
+
+        // Defensive check: Verify round actually ended
+        if (phase != GamePhase.roundEnd) {
+          _logAction(
+            'ERROR: endRound() called from playMeld but phase is still $phase!',
+          );
+          phase = GamePhase.roundEnd;
+        }
+
         return true;
       }
 
@@ -432,7 +449,24 @@ class GameState {
       // Check if player has gone out after melding
       if (currentPlayer.canGoOut) {
         _logAction('went out and ended the round!');
+
+        // Defensive logging for going out via playMeldBypass
+        _logAction(
+          'GOING OUT DEBUG (playMeldBypass): footSize=${currentPlayer.foot.length}, '
+          'hasCleanBook=${currentPlayer.hasCleanBook}, '
+          'hasDirtyBook=${currentPlayer.hasDirtyBook}',
+        );
+
         endRound();
+
+        // Defensive check: Verify round actually ended
+        if (phase != GamePhase.roundEnd) {
+          _logAction(
+            'ERROR: endRound() called from playMeldBypass but phase is still $phase!',
+          );
+          phase = GamePhase.roundEnd;
+        }
+
         return true;
       }
 
@@ -447,6 +481,17 @@ class GameState {
     // Players must have played down before they can add cards to existing melds
     if (!currentPlayer.hasPlayedDown) return false;
 
+    // Capture pre-operation state for debugging
+    final preOpState = {
+      'footSize': currentPlayer.foot.length,
+      'handSize': currentPlayer.hand.length,
+      'hasCleanBook': currentPlayer.hasCleanBook,
+      'hasDirtyBook': currentPlayer.hasDirtyBook,
+      'canGoOutWithBooks': currentPlayer.canGoOutWithBooks,
+      'canGoOut': currentPlayer.canGoOut,
+      'phase': phase.toString(),
+    };
+
     if (currentPlayer.addToMeld(meldIndex, card)) {
       hasMelded = true; // Mark that player has melded this turn
       _logAction('added ${card.displayName} to existing meld');
@@ -457,11 +502,47 @@ class GameState {
         _logAction('picked up foot pile');
       }
 
+      // Capture post-operation state for debugging
+      final postOpState = {
+        'footSize': currentPlayer.foot.length,
+        'handSize': currentPlayer.hand.length,
+        'hasCleanBook': currentPlayer.hasCleanBook,
+        'hasDirtyBook': currentPlayer.hasDirtyBook,
+        'canGoOutWithBooks': currentPlayer.canGoOutWithBooks,
+        'canGoOut': currentPlayer.canGoOut,
+        'phase': phase.toString(),
+      };
+
       // Check if player has gone out after adding to meld
       if (currentPlayer.canGoOut) {
         _logAction('went out and ended the round!');
+
+        // Defensive logging: Record the going out decision
+        _logAction('GOING OUT DEBUG: Pre-op: $preOpState');
+        _logAction('GOING OUT DEBUG: Post-op: $postOpState');
+
         endRound();
+
+        // Defensive check: Verify round actually ended
+        if (phase != GamePhase.roundEnd) {
+          _logAction(
+            'ERROR: endRound() called but phase is still $phase - this should not happen!',
+          );
+          // Force the phase to roundEnd as a fallback
+          phase = GamePhase.roundEnd;
+        }
+
         return true;
+      }
+
+      // Defensive check: If player meets going out conditions but canGoOut is false, log it
+      if (currentPlayer.canGoOutWithBooks &&
+          currentPlayer.hasPickedUpFoot &&
+          currentPlayer.foot.isEmpty) {
+        _logAction(
+          'WARNING: Player meets all going out conditions but canGoOut returned false!',
+        );
+        _logAction('DEBUG STATE: $postOpState');
       }
 
       return true;
@@ -618,6 +699,69 @@ class GameState {
       ordered.add(players[index]);
     }
     return ordered;
+  }
+
+  /// Validates the current game state for consistency and logs any issues found.
+  /// This is a defensive measure to catch edge cases where the game state becomes inconsistent.
+  void validateGameState() {
+    final validationErrors = <String>[];
+
+    // Check if any player meets going out conditions but game is still in playing phase
+    for (final player in players) {
+      if (player.canGoOut && phase == GamePhase.playing) {
+        validationErrors.add(
+          'Player ${player.name} can go out but game phase is still playing',
+        );
+      }
+
+      // Check if player has picked up foot but hand is not empty
+      if (player.hasPickedUpFoot && !player.isHandEmpty) {
+        validationErrors.add(
+          'Player ${player.name} has picked up foot but hand is not empty',
+        );
+      }
+
+      // Check for impossible meld states
+      for (int i = 0; i < player.melds.length; i++) {
+        final meld = player.melds[i];
+        if (meld.cards.isEmpty) {
+          validationErrors.add(
+            'Player ${player.name} has empty meld at index $i',
+          );
+        }
+        if (meld.cards.length < 3) {
+          validationErrors.add(
+            'Player ${player.name} has meld with fewer than 3 cards at index $i',
+          );
+        }
+      }
+    }
+
+    // Check if round should have ended but hasn't
+    if (phase == GamePhase.playing) {
+      final playersWhoCanGoOut = players.where((p) => p.canGoOut).toList();
+      if (playersWhoCanGoOut.isNotEmpty) {
+        for (final player in playersWhoCanGoOut) {
+          validationErrors.add(
+            'CRITICAL: Player ${player.name} can go out but round has not ended!',
+          );
+        }
+      }
+    }
+
+    // Log validation errors
+    if (validationErrors.isNotEmpty) {
+      _logAction('GAME STATE VALIDATION ERRORS FOUND:');
+      for (final error in validationErrors) {
+        _logAction('  - $error');
+      }
+
+      // Also log current game state for debugging
+      _logAction(
+        'CURRENT STATE: phase=$phase, currentPlayer=${currentPlayer.name}, '
+        'turnPhase=$turnPhase',
+      );
+    }
   }
 
   /// Attempts to reshuffle discard pile when deck is completely empty.
