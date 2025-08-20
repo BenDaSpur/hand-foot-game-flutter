@@ -385,6 +385,13 @@ class GameState {
         _logAction('picked up foot pile');
       }
 
+      // Check if player has gone out after melding
+      if (currentPlayer.canGoOut) {
+        _logAction('went out and ended the round!');
+        endRound();
+        return true;
+      }
+
       return true;
     }
     return false;
@@ -422,6 +429,13 @@ class GameState {
         _logAction('picked up foot pile');
       }
 
+      // Check if player has gone out after melding
+      if (currentPlayer.canGoOut) {
+        _logAction('went out and ended the round!');
+        endRound();
+        return true;
+      }
+
       return true;
     }
     return false;
@@ -441,6 +455,13 @@ class GameState {
       if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
         currentPlayer.pickUpFoot();
         _logAction('picked up foot pile');
+      }
+
+      // Check if player has gone out after adding to meld
+      if (currentPlayer.canGoOut) {
+        _logAction('went out and ended the round!');
+        endRound();
+        return true;
       }
 
       return true;
