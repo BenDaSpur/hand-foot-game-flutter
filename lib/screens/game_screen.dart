@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/card.dart';
 import '../models/player.dart';
+import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../ai/bot_ai.dart';
@@ -909,11 +910,15 @@ class _GameScreenState extends State<GameScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Add Wild Card?'),
+            const Icon(Icons.warning, color: Colors.orange),
+            const SizedBox(width: 8),
+            Text(
+              meld.type == MeldType.natural
+                  ? 'Make Meld Dirty?'
+                  : 'Add Wild Cards?',
+            ),
           ],
         ),
         content: Column(
@@ -938,9 +943,11 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'This will make your meld a "dirty book". Are you sure?',
-              style: TextStyle(fontSize: 14),
+            Text(
+              meld.type == MeldType.natural
+                  ? 'This will make your meld a "dirty book" and you will lose the clean book bonus (500 pts). Are you sure?'
+                  : 'This will add more wild cards to your existing dirty meld. Are you sure?',
+              style: const TextStyle(fontSize: 14),
             ),
           ],
         ),
@@ -958,7 +965,9 @@ class _GameScreenState extends State<GameScreen> {
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Add Wild Cards'),
+            child: Text(
+              meld.type == MeldType.natural ? 'Make Dirty' : 'Add Wilds',
+            ),
           ),
         ],
       ),

@@ -425,6 +425,7 @@ class GameState {
     if (turnPhase != TurnPhase.meld) return false;
 
     if (currentPlayer.addToMeld(meldIndex, card)) {
+      hasMelded = true; // Mark that player has melded this turn
       _logAction('added ${card.displayName} to existing meld');
 
       // Check if hand is empty after adding to meld and pick up foot if needed

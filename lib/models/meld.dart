@@ -55,9 +55,10 @@ class Meld {
 
     if (card.isWild) {
       final wildCards = cards.where((c) => c.isWild).length;
-      final naturalCards = cards.where((c) => !c.isWild).length;
-      return wildCards <
-          naturalCards; // Can add wild only if it won't exceed naturals
+      final naturalCards = cards.where((c) => !c.isWild && !c.isThree).length;
+      final wouldHaveWilds = wildCards + 1;
+      final canAdd = wouldHaveWilds <= naturalCards;
+      return canAdd;
     }
 
     return card.rank == rank;
