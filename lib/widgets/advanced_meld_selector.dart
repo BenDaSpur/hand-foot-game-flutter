@@ -152,24 +152,33 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           ],
         ),
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with point info
-            _buildHeader(totalPoints, meetsRequirement),
-            const SizedBox(height: 20),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: SizedBox(
+            height:
+                MediaQuery.of(context).size.height *
+                    GameConfig.modalHeightRatio -
+                40,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with point info
+                _buildHeader(totalPoints, meetsRequirement),
+                const SizedBox(height: 20),
 
-            // Proposed melds section
-            _buildProposedMeldsSection(),
-            const SizedBox(height: 20),
+                // Proposed melds section
+                _buildProposedMeldsSection(),
+                const SizedBox(height: 20),
 
-            // Available cards section
-            _buildAvailableCardsSection(),
-            const SizedBox(height: 20),
+                // Available cards section
+                _buildAvailableCardsSection(),
+                const SizedBox(height: 20),
 
-            // Action buttons
-            _buildActionButtons(meetsRequirement),
-          ],
+                // Action buttons
+                _buildActionButtons(meetsRequirement),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -501,7 +510,8 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: GridView.custom(
+            child: GridView.builder(
+              physics: const BouncingScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: _ResponsiveHelper.getGridCrossAxisCount(
                   context,
@@ -510,48 +520,30 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 crossAxisSpacing: GameConfig.cardSpacing,
                 mainAxisSpacing: GameConfig.cardSpacing,
               ),
-              childrenDelegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final handIndex = availableCardIndices[index];
+              itemCount: availableCardIndices.length,
+              itemBuilder: (context, index) {
+                final handIndex = availableCardIndices[index];
 
-                  // Validate index to prevent out-of-bounds errors (shouldn't happen now with proper cleanup)
-                  if (handIndex >= widget.player.currentHand.length ||
-                      handIndex < 0) {
-                    // Trigger immediate refresh to clean up stale state
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _refreshAvailableCards(immediate: true);
-                    });
-                    return const SizedBox.shrink();
-                  }
+                // Validate index to prevent out-of-bounds errors
+                if (handIndex >= widget.player.currentHand.length ||
+                    handIndex < 0) {
+                  // Trigger immediate refresh to clean up stale state
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _refreshAvailableCards(immediate: true);
+                  });
+                  return const SizedBox.shrink();
+                }
 
-                  final card = widget.player.currentHand[handIndex];
-                  final isSelected = selectedAvailableIndices.contains(index);
+                final card = widget.player.currentHand[handIndex];
+                final isSelected = selectedAvailableIndices.contains(index);
 
-                  return _AvailableCardWidget(
-                    key: ValueKey('card_${handIndex}_$isSelected'),
-                    card: card,
-                    isSelected: isSelected,
-                    onTap: () => _toggleCardSelection(index),
-                  );
-                },
-                childCount: availableCardIndices.length,
-                findChildIndexCallback: (Key key) {
-                  // Optimize rebuilds by providing stable keys
-                  if (key is ValueKey<String>) {
-                    final keyString = key.value;
-                    if (keyString.startsWith('card_')) {
-                      final parts = keyString.split('_');
-                      if (parts.length >= 2) {
-                        final handIndex = int.tryParse(parts[1]);
-                        if (handIndex != null) {
-                          return availableCardIndices.indexOf(handIndex);
-                        }
-                      }
-                    }
-                  }
-                  return null;
-                },
-              ),
+                return _MobileCardWidget(
+                  key: ValueKey('mobile_card_$handIndex'),
+                  card: card,
+                  isSelected: isSelected,
+                  onTap: () => _toggleCardSelection(index),
+                );
+              },
             ),
           ),
         ],
@@ -741,17 +733,21 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       return;
     }
 
-    final totalPoints = validMeldIndices
-        .expand(
-          (meldIndices) => meldIndices.map((i) => widget.player.currentHand[i]),
-        )
-        .fold<int>(0, (sum, card) => sum + card.pointValue);
+    // Only check point requirement if player hasn't played down yet
+    if (!widget.player.hasPlayedDown) {
+      final totalPoints = validMeldIndices
+          .expand(
+            (meldIndices) =>
+                meldIndices.map((i) => widget.player.currentHand[i]),
+          )
+          .fold<int>(0, (sum, card) => sum + card.pointValue);
 
-    if (totalPoints < widget.playDownRequirement) {
-      _showError(
-        'Total points ($totalPoints) do not meet requirement (${widget.playDownRequirement})',
-      );
-      return;
+      if (totalPoints < widget.playDownRequirement) {
+        _showError(
+          'Total points ($totalPoints) do not meet requirement (${widget.playDownRequirement})',
+        );
+        return;
+      }
     }
 
     widget.onConfirm(validMeldIndices);
@@ -785,9 +781,9 @@ class _MeldData {
   });
 }
 
-/// Optimized card widget for available cards section with keep-alive support
-class _AvailableCardWidget extends StatefulWidget {
-  const _AvailableCardWidget({
+/// Mobile-optimized card widget for better touch and scroll performance
+class _MobileCardWidget extends StatelessWidget {
+  const _MobileCardWidget({
     super.key,
     required this.card,
     required this.isSelected,
@@ -799,41 +795,34 @@ class _AvailableCardWidget extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_AvailableCardWidget> createState() => _AvailableCardWidgetState();
-}
-
-class _AvailableCardWidgetState extends State<_AvailableCardWidget>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => GameConfig.enableKeepAlive;
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: Container(
-        decoration: widget.isSelected
-            ? BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.5),
-                    spreadRadius: 2,
-                    blurRadius: 8,
-                    offset: const Offset(0, 0),
-                  ),
-                ],
-              )
-            : null,
-        child: PlayingCardWidget(
-          card: widget.card,
-          width: _ResponsiveHelper.getCardWidth(context),
-          height: _ResponsiveHelper.getCardHeight(context),
-          isSelected: widget.isSelected,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: isSelected
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.5),
+                      spreadRadius: 2,
+                      blurRadius: 8,
+                      offset: const Offset(0, 0),
+                    ),
+                  ],
+                )
+              : null,
+          child: PlayingCardWidget(
+            card: card,
+            width: _ResponsiveHelper.getCardWidth(context),
+            height: _ResponsiveHelper.getCardHeight(context),
+            isSelected: isSelected,
+          ),
         ),
       ),
     );
