@@ -30,6 +30,8 @@ main
   - ✅ Require branches to be up to date before merging
   - Required status checks:
     - `quality-checks`
+    - `e2e-tests`
+    - `claude-review`
 
 - ❌ **Require conversation resolution before merging** (optional)
 - ❌ **Require signed commits** (optional)
@@ -54,11 +56,21 @@ Once configured, all changes to the main branch must:
 
 The following checks must pass:
 
-### `quality-checks`
+### `quality-checks` (Ubuntu, ~3 minutes)
 - Code formatting verification (`dart format`)
-- All 74 tests passing (`flutter test`)
+- All 161 unit tests passing (`flutter test`)
 - Static analysis (`flutter analyze`)
 - Dependency verification (`flutter pub deps`)
+
+### `e2e-tests` (macOS, ~2 minutes) 
+- Desktop app startup verification
+- Core game flow testing (draw, meld, discard)
+- UI interaction validation  
+- Menu and dialog functionality
+
+### `claude-review` (AI-powered, ~1 minute)
+- Automated code analysis and suggestions
+- Best practices validation
 
 ## Troubleshooting
 

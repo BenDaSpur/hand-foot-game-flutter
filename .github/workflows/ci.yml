@@ -36,3 +36,29 @@ jobs:
 
       - name: Verify dependencies
         run: flutter pub deps
+
+  e2e-tests:
+    runs-on: macos-latest
+    needs: quality-checks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: "stable"
+
+      - name: Disable Flutter analytics
+        run: flutter config --no-analytics
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Run E2E Tests
+        run: flutter test e2e_test/basic_flow_test.dart -d macos
+        timeout-minutes: 10

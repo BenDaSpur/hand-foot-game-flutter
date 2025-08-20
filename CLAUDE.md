@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run the app**: `flutter run`
 - **Build for release**: `flutter build apk` (Android) or `flutter build ios` (iOS)
 - **Static analysis**: `flutter analyze`
-- **Run tests**: `flutter test`
+- **Run tests**: `flutter test test/` for unit tests, `flutter test e2e_test/ -d macos` for E2E tests (see `docs/TESTING.md` for comprehensive testing guide)
 - **Hot reload**: Available when running with `flutter run` - press `r` to reload
 
 ## Architecture Overview
@@ -51,7 +51,7 @@ This is a Flutter implementation of the Hand & Foot card game with sophisticated
 
 ### Game Rules Implementation
 
-The game follows official Hand & Foot rules (documented in `family_hand_and_foot_full_rules.md`):
+The game follows official Hand & Foot rules (documented in `docs/family_hand_and_foot_full_rules.md`):
 
 **Play-down Requirements**: Dynamic point thresholds (Round 1: 60pts, +30 each round)
 **Wild Card Limits**: Enforced rule that wilds ≤ naturals in any meld
