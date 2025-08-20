@@ -601,7 +601,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   bool _canCreateNewMeld() {
-    return selectedAvailableIndices.length >= GameConfig.minNaturalCardsForMeld;
+    return selectedAvailableIndices.length >= GameConfig.minTotalCardsForMeld;
   }
 
   void _createNewMeld() {
@@ -614,25 +614,43 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
         .map((handIndex) => widget.player.currentHand[handIndex])
         .toList();
 
-    // Validate meld creation
+    // Validate meld creation using the same logic as Meld.createMeld
     final naturalCards = selectedCards.where((card) => !card.isWild).toList();
     final wildCards = selectedCards.where((card) => card.isWild).toList();
 
-    if (naturalCards.length < GameConfig.minNaturalCardsForMeld &&
-        (naturalCards.length + wildCards.length) <
-            GameConfig.minTotalCardsForMeld) {
+    // Check for 3s (cannot be melded)
+    if (selectedCards.any((card) => card.isThree)) {
+      _showError('3s cannot be melded');
+      return;
+    }
+
+    // Must have at least 3 total cards
+    if (selectedCards.length < GameConfig.minTotalCardsForMeld) {
       _showError(
-        'Need at least ${GameConfig.minNaturalCardsForMeld} natural cards or ${GameConfig.minTotalCardsForMeld} total cards for a meld',
+        'Need at least ${GameConfig.minTotalCardsForMeld} total cards for a meld',
       );
       return;
     }
 
-    if (naturalCards.isNotEmpty) {
-      final rank = naturalCards.first.rank;
-      if (!naturalCards.every((card) => card.rank == rank)) {
-        _showError('All natural cards must be the same rank');
-        return;
-      }
+    // Must have at least 2 natural cards (wilds alone cannot form a meld)
+    if (naturalCards.length < GameConfig.minNaturalCardsForMeld) {
+      _showError(
+        'Need at least ${GameConfig.minNaturalCardsForMeld} natural cards of the same rank',
+      );
+      return;
+    }
+
+    // All natural cards must be the same rank
+    final rank = naturalCards.first.rank;
+    if (!naturalCards.every((card) => card.rank == rank)) {
+      _showError('All natural cards must be the same rank');
+      return;
+    }
+
+    // Wild cards cannot exceed natural cards
+    if (wildCards.length > naturalCards.length) {
+      _showError('Wild cards cannot outnumber natural cards in a meld');
+      return;
     }
 
     // Create the meld with proper state management
