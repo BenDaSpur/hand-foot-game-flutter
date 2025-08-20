@@ -187,9 +187,9 @@ class GameState {
 
       if (!deck.isEmpty) {
         card = deck.drawCard();
-      } else if (discardPile.length > minDiscardForReshuffle) {
-        // Try reshuffling if deck is empty but discard pile has cards
-        _reshuffleDiscardIntoDeck();
+      } else {
+        // Deck is empty - try reshuffling discard pile
+        _attemptReshuffleForEmptyDeck();
         if (!deck.isEmpty) {
           card = deck.drawCard();
         }
@@ -198,12 +198,13 @@ class GameState {
       if (card != null) {
         cardsDrawn.add(card);
       } else {
-        // Unable to draw required cards - return what we drew and fail
+        // Still unable to draw - this should be extremely rare
+        // Return any cards we managed to draw
         for (final drawnCard in cardsDrawn) {
           deck.returnCard(drawnCard);
         }
         _logAction(
-          'cannot draw - insufficient cards available even after attempting reshuffle',
+          'cannot draw - insufficient cards available even after exhaustive reshuffle attempt',
         );
         return false;
       }
@@ -586,6 +587,59 @@ class GameState {
       ordered.add(players[index]);
     }
     return ordered;
+  }
+
+  /// Attempts to reshuffle discard pile when deck is completely empty.
+  ///
+  /// This is more aggressive than the normal reshuffle - will attempt to reshuffle
+  /// even with minimal discard cards to prevent game from breaking.
+  void _attemptReshuffleForEmptyDeck() {
+    if (discardPile.isEmpty) {
+      // Nothing to reshuffle
+      _logAction(
+        'deck empty and no discard cards to reshuffle - game may be stuck',
+      );
+      return;
+    }
+
+    if (discardPile.length == 1) {
+      // Only one card in discard pile - this is the absolute edge case
+      // Log this rare occurrence but don't reshuffle as it would leave no discard
+      _logAction(
+        'deck empty with only 1 discard card - cannot reshuffle safely',
+      );
+      return;
+    }
+
+    // We have at least 2 cards in discard pile - force reshuffle regardless of normal rules
+    _forceReshuffleForEmptyDeck();
+
+    if (!deck.isEmpty) {
+      _logAction('emergency reshuffle successful - deck restored');
+    } else {
+      _logAction('emergency reshuffle failed - this should not happen');
+    }
+  }
+
+  /// Forces a reshuffle when deck is empty, bypassing normal restrictions.
+  void _forceReshuffleForEmptyDeck() {
+    if (discardPile.length < 2) return;
+
+    // Keep the top discard card (last item in the list)
+    final topCard = discardPile.removeLast();
+
+    // Take all other discard cards and add them to deck
+    final cardsToShuffle = List<PlayingCard>.from(discardPile);
+    discardPile.clear();
+    discardPile.add(topCard);
+
+    // Add the cards to deck and shuffle
+    deck.addCards(cardsToShuffle);
+    deck.shuffle();
+
+    _logAction(
+      'force reshuffled ${cardsToShuffle.length} cards from discard into deck',
+    );
   }
 
   /// Reshuffles discard pile into deck when deck runs low.
