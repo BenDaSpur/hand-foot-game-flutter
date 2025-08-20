@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run the app**: `flutter run`
 - **Build for release**: `flutter build apk` (Android) or `flutter build ios` (iOS)
 - **Static analysis**: `flutter analyze`
-- **Run tests**: `flutter test test/` for unit tests, `flutter test e2e_test/ -d macos` for E2E tests (see `docs/TESTING.md` for comprehensive testing guide)
+- **Run tests**: `flutter test test/` for unit tests, `flutter test integration_test/ -d macos` for fast integration tests
 - **Hot reload**: Available when running with `flutter run` - press `r` to reload
+- **Clean build**: `flutter clean && flutter pub get` to resolve dependency issues
 
 ## Architecture Overview
 
@@ -58,6 +59,28 @@ The game follows official Hand & Foot rules (documented in `docs/family_hand_and
 **Going Out Validation**: Requires both clean book (no wilds) AND dirty book (with wilds)
 **Discard Pile Unlocking**: Complex rules requiring 2+ matching naturals + already played down
 
+#### Meld Creation Rules (Advanced Modal)
+
+**Minimum Requirements**: 
+- Melds must contain at least 3 cards total
+- Must have minimum 2 natural cards of the same rank
+- Wild cards (2s and Jokers) can substitute for naturals
+
+**Valid Meld Types**:
+- Clean melds: All natural cards of same rank (no wilds)
+- Dirty melds: Natural cards + wilds, but wilds ≤ naturals
+- Books: 7+ cards (clean book = 500 bonus, dirty book = 300 bonus)
+
+**Forbidden Cards**:
+- 3s cannot be melded (red 3s = +100pts, black 3s = -100pts when held)
+- Different ranks cannot be mixed (Kings + Queens = invalid)
+- Cannot exceed wild card limit (more wilds than naturals)
+
+**Point Validation**:
+- First play-down must meet round requirement (only checked if !hasPlayedDown)
+- Subsequent melds after playing down have no point restrictions
+- Multiple melds in advanced modal are validated together for initial play-down
+
 ### Index-Based Selection System
 
 **Critical Implementation Detail**: The UI uses index-based card selection rather than object-based to handle multiple identical cards from multiple decks. This prevents bugs where selecting "King of Hearts" would select all Kings of Hearts in hand.
@@ -89,13 +112,46 @@ The game follows official Hand & Foot rules (documented in `docs/family_hand_and
 
 **Advanced Meld Modal**: 
 - Debounced state refresh (300ms) to prevent excessive updates during rapid interactions
-- AutomaticKeepAliveClientMixin for efficient GridView scrolling performance
 - Responsive card sizing and grid layout based on screen dimensions
 - Memory leak prevention with proper Timer disposal
+
+**Mobile Browser Compatibility**:
+- Replaced GridView.custom with GridView.builder for better touch handling
+- Added BouncingScrollPhysics for smooth mobile scrolling
+- Removed AutomaticKeepAliveClientMixin to prevent touch event interference
+- Wrapped content in SingleChildScrollView for reliable mobile interaction
 
 **Configuration Management**: Centralized game constants in GameConfig class for maintainability
 
 **Code Quality**: 
 - Modular component design with extracted sub-methods
-- Comprehensive test coverage: 175+ unit tests plus E2E accessibility tests
+- Comprehensive test coverage: 175+ unit tests plus integration tests
 - Static analysis compliance with zero issues
+
+## Game Configuration Constants
+
+Key constants defined in `GameConfig`:
+- `minTotalCardsForMeld: 3` - Minimum cards needed for any meld
+- `minNaturalCardsForMeld: 2` - Minimum natural cards of same rank required
+- `maxWildCardsInMeld` - Wild cards cannot exceed natural cards
+- `cleanBookBonus: 500` - Points for 7+ cards with no wilds
+- `dirtyBookBonus: 300` - Points for 7+ cards with wilds
+- `basePlayDownRequirement: 60` - Round 1 requirement (+30 per round)
+
+## Development Workflows
+
+**Mobile Browser Testing**: Always test on actual mobile browsers, not just desktop responsive mode. Common issues:
+- Touch events not registering → Use GridView.builder over GridView.custom
+- Scroll performance → Add BouncingScrollPhysics
+- Card selection frozen → Remove AutomaticKeepAliveClientMixin
+
+**Meld Validation Debugging**: When meld creation fails:
+1. Check if player has played down (`hasPlayedDown`)
+2. Verify minimum natural cards of same rank
+3. Ensure wild card count ≤ natural card count
+4. Confirm no 3s are included in meld selection
+
+**Git Workflow**: 
+- Branch naming: `bs/feature-description` (developer-initials/description)
+- Always run `flutter analyze` before committing
+- Commit only lib/ changes unless specifically adding tests
