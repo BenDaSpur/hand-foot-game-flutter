@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/deck.dart';
@@ -119,12 +120,12 @@ void main() {
         reason: 'Game should be in playing phase initially',
       );
 
-      print('Before addToMeld:');
-      print('  - Player canGoOut: ${player.canGoOut}');
-      print('  - Player foot size: ${player.foot.length}');
-      print('  - Player has clean book: ${player.hasCleanBook}');
-      print('  - Player has dirty book: ${player.hasDirtyBook}');
-      print('  - Game phase: ${gameState.phase}');
+      debugPrint('Before addToMeld:');
+      debugPrint('  - Player canGoOut: ${player.canGoOut}');
+      debugPrint('  - Player foot size: ${player.foot.length}');
+      debugPrint('  - Player has clean book: ${player.hasCleanBook}');
+      debugPrint('  - Player has dirty book: ${player.hasDirtyBook}');
+      debugPrint('  - Game phase: ${gameState.phase}');
 
       // Add the final card to the incomplete meld - this should end the round
       final success = gameState.addToMeld(
@@ -132,11 +133,11 @@ void main() {
         finalCard,
       ); // Add to third meld (index 2)
 
-      print('After addToMeld:');
-      print('  - Success: $success');
-      print('  - Player foot size: ${player.foot.length}');
-      print('  - Player canGoOut: ${player.canGoOut}');
-      print('  - Game phase: ${gameState.phase}');
+      debugPrint('After addToMeld:');
+      debugPrint('  - Success: $success');
+      debugPrint('  - Player foot size: ${player.foot.length}');
+      debugPrint('  - Player canGoOut: ${player.canGoOut}');
+      debugPrint('  - Game phase: ${gameState.phase}');
 
       // Verify the operation succeeded
       expect(success, isTrue, reason: 'Adding card to meld should succeed');

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
@@ -25,10 +26,18 @@ class GameAction {
   String toString() => '$playerName: $message';
 }
 
-class GameState {
+class GameConfig {
+  static const int maxRecentActions = 10;
+  static const int goingOutBonus = 100;
   static const int requiredDrawCount = 2;
   static const int minDiscardForReshuffle = 2;
   static const int additionalDiscardPickup = 5;
+}
+
+class GameState {
+  static const int requiredDrawCount = GameConfig.requiredDrawCount;
+  static const int minDiscardForReshuffle = GameConfig.minDiscardForReshuffle;
+  static const int additionalDiscardPickup = GameConfig.additionalDiscardPickup;
 
   final List<Player> players;
   final Deck deck;
@@ -83,8 +92,8 @@ class GameState {
       GameAction(message: finalMessage, playerName: currentPlayer.name),
     );
 
-    // Keep only the last 10 actions to avoid memory issues
-    if (recentActions.length > 10) {
+    // Keep only the last N actions to avoid memory issues
+    if (recentActions.length > GameConfig.maxRecentActions) {
       recentActions.removeAt(0);
     }
   }
@@ -390,11 +399,13 @@ class GameState {
         _logAction('went out and ended the round!');
 
         // Defensive logging for going out via playMeld
-        _logAction(
-          'GOING OUT DEBUG (playMeld): footSize=${currentPlayer.foot.length}, '
-          'hasCleanBook=${currentPlayer.hasCleanBook}, '
-          'hasDirtyBook=${currentPlayer.hasDirtyBook}',
-        );
+        if (kDebugMode) {
+          _logAction(
+            'GOING OUT DEBUG (playMeld): footSize=${currentPlayer.foot.length}, '
+            'hasCleanBook=${currentPlayer.hasCleanBook}, '
+            'hasDirtyBook=${currentPlayer.hasDirtyBook}',
+          );
+        }
 
         endRound();
 
@@ -451,11 +462,13 @@ class GameState {
         _logAction('went out and ended the round!');
 
         // Defensive logging for going out via playMeldBypass
-        _logAction(
-          'GOING OUT DEBUG (playMeldBypass): footSize=${currentPlayer.foot.length}, '
-          'hasCleanBook=${currentPlayer.hasCleanBook}, '
-          'hasDirtyBook=${currentPlayer.hasDirtyBook}',
-        );
+        if (kDebugMode) {
+          _logAction(
+            'GOING OUT DEBUG (playMeldBypass): footSize=${currentPlayer.foot.length}, '
+            'hasCleanBook=${currentPlayer.hasCleanBook}, '
+            'hasDirtyBook=${currentPlayer.hasDirtyBook}',
+          );
+        }
 
         endRound();
 
@@ -476,13 +489,27 @@ class GameState {
   }
 
   bool addToMeld(int meldIndex, PlayingCard card) {
+    if (!_canAddToMeld()) return false;
+
+    final preOpState = _capturePlayerState();
+    if (!_performAddToMeld(meldIndex, card)) return false;
+
+    _handlePostMeldEffects(preOpState);
+    return true;
+  }
+
+  /// Check if the current game state allows adding to meld
+  bool _canAddToMeld() {
     if (turnPhase != TurnPhase.meld) return false;
-
     // Players must have played down before they can add cards to existing melds
-    if (!currentPlayer.hasPlayedDown) return false;
+    return currentPlayer.hasPlayedDown;
+  }
 
-    // Capture pre-operation state for debugging
-    final preOpState = {
+  /// Capture the current player state for debugging purposes
+  Map<String, dynamic> _capturePlayerState() {
+    if (!kDebugMode) return <String, dynamic>{};
+
+    return {
       'footSize': currentPlayer.foot.length,
       'handSize': currentPlayer.hand.length,
       'hasCleanBook': currentPlayer.hasCleanBook,
@@ -491,63 +518,62 @@ class GameState {
       'canGoOut': currentPlayer.canGoOut,
       'phase': phase.toString(),
     };
+  }
 
-    if (currentPlayer.addToMeld(meldIndex, card)) {
-      hasMelded = true; // Mark that player has melded this turn
-      _logAction('added ${card.displayName} to existing meld');
+  /// Perform the actual meld operation
+  bool _performAddToMeld(int meldIndex, PlayingCard card) {
+    if (!currentPlayer.addToMeld(meldIndex, card)) return false;
 
-      // Check if hand is empty after adding to meld and pick up foot if needed
-      if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
-        currentPlayer.pickUpFoot();
-        _logAction('picked up foot pile');
-      }
+    hasMelded = true; // Mark that player has melded this turn
+    _logAction('added ${card.displayName} to existing meld');
 
-      // Capture post-operation state for debugging
-      final postOpState = {
-        'footSize': currentPlayer.foot.length,
-        'handSize': currentPlayer.hand.length,
-        'hasCleanBook': currentPlayer.hasCleanBook,
-        'hasDirtyBook': currentPlayer.hasDirtyBook,
-        'canGoOutWithBooks': currentPlayer.canGoOutWithBooks,
-        'canGoOut': currentPlayer.canGoOut,
-        'phase': phase.toString(),
-      };
+    // Check if hand is empty after adding to meld and pick up foot if needed
+    if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
+      currentPlayer.pickUpFoot();
+      _logAction('picked up foot pile');
+    }
 
-      // Check if player has gone out after adding to meld
-      if (currentPlayer.canGoOut) {
-        _logAction('went out and ended the round!');
+    return true;
+  }
 
-        // Defensive logging: Record the going out decision
+  /// Handle post-meld effects including going out checks
+  void _handlePostMeldEffects(Map<String, dynamic> preOpState) {
+    final postOpState = _capturePlayerState();
+
+    // Check if player has gone out after adding to meld
+    if (currentPlayer.canGoOut) {
+      _logAction('went out and ended the round!');
+
+      // Defensive logging: Record the going out decision
+      if (kDebugMode) {
         _logAction('GOING OUT DEBUG: Pre-op: $preOpState');
         _logAction('GOING OUT DEBUG: Post-op: $postOpState');
-
-        endRound();
-
-        // Defensive check: Verify round actually ended
-        if (phase != GamePhase.roundEnd) {
-          _logAction(
-            'ERROR: endRound() called but phase is still $phase - this should not happen!',
-          );
-          // Force the phase to roundEnd as a fallback
-          phase = GamePhase.roundEnd;
-        }
-
-        return true;
       }
 
-      // Defensive check: If player meets going out conditions but canGoOut is false, log it
-      if (currentPlayer.canGoOutWithBooks &&
-          currentPlayer.hasPickedUpFoot &&
-          currentPlayer.foot.isEmpty) {
+      endRound();
+
+      // Defensive check: Verify round actually ended
+      if (phase != GamePhase.roundEnd) {
         _logAction(
-          'WARNING: Player meets all going out conditions but canGoOut returned false!',
+          'ERROR: endRound() called but phase is still $phase - this should not happen!',
         );
+        // Force the phase to roundEnd as a fallback
+        phase = GamePhase.roundEnd;
+      }
+      return;
+    }
+
+    // Defensive check: If player meets going out conditions but canGoOut is false, log it
+    if (currentPlayer.canGoOutWithBooks &&
+        currentPlayer.hasPickedUpFoot &&
+        currentPlayer.foot.isEmpty) {
+      _logAction(
+        'WARNING: Player meets all going out conditions but canGoOut returned false!',
+      );
+      if (kDebugMode) {
         _logAction('DEBUG STATE: $postOpState');
       }
-
-      return true;
     }
-    return false;
   }
 
   bool discard(PlayingCard card) {
@@ -654,7 +680,7 @@ class GameState {
 
       // Add going out bonus
       if (player == playerWhoWentOut) {
-        roundScore += 100;
+        roundScore += GameConfig.goingOutBonus;
       }
 
       player.updateScore(roundScore);

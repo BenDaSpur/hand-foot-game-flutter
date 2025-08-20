@@ -55,11 +55,21 @@ class GameController {
   }
 
   bool createMeld(List<PlayingCard> cards) {
-    return _gameState.playMeld(cards);
+    final result = _gameState.playMeld(cards);
+
+    // Defensive validation after potentially critical game state change
+    _gameState.validateGameState();
+
+    return result;
   }
 
   bool createMeldBypass(List<PlayingCard> cards) {
-    return _gameState.playMeldBypass(cards);
+    final result = _gameState.playMeldBypass(cards);
+
+    // Defensive validation after potentially critical game state change
+    _gameState.validateGameState();
+
+    return result;
   }
 
   bool createMeldByIndices(
@@ -179,7 +189,12 @@ class GameController {
   }
 
   bool discardCard(PlayingCard card) {
-    return _gameState.discard(card);
+    final result = _gameState.discard(card);
+
+    // Defensive validation after potentially critical game state change
+    _gameState.validateGameState();
+
+    return result;
   }
 
   bool canPlayerGoOut() {
