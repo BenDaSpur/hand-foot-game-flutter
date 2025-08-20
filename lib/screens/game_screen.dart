@@ -545,12 +545,13 @@ class _GameScreenState extends State<GameScreen> {
     return _selectedCards.any((card) => meld.canAddCard(card));
   }
 
-  int _getCompatibleCardsCount(int meldIndex) {
+  ({int count, bool areWilds}) _getCompatibleCardsInfo(int meldIndex) {
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
 
-    if (meldIndex >= humanPlayer.melds.length) return 0;
+    if (meldIndex >= humanPlayer.melds.length)
+      return (count: 0, areWilds: false);
 
     final meld = humanPlayer.melds[meldIndex];
     int naturalCount = 0;
@@ -569,7 +570,7 @@ class _GameScreenState extends State<GameScreen> {
     // For existing melds, prioritize natural cards over wilds
     if (naturalCount > 0) {
       // Only count natural cards when they're available for existing melds
-      return naturalCount;
+      return (count: naturalCount, areWilds: false);
     }
 
     // If no natural cards available, count wilds that could be added
@@ -580,10 +581,12 @@ class _GameScreenState extends State<GameScreen> {
       final usableWilds = wildAsWildCount > maxAdditionalWilds
           ? maxAdditionalWilds
           : wildAsWildCount;
-      return usableWilds > 0 ? usableWilds : 0;
+      return usableWilds > 0
+          ? (count: usableWilds, areWilds: true)
+          : (count: 0, areWilds: false);
     }
 
-    return 0;
+    return (count: 0, areWilds: false);
   }
 
   void _showAdvancedMeldSelector() {
@@ -1248,6 +1251,10 @@ class _GameScreenState extends State<GameScreen> {
                               currentPlayer.type == PlayerType.human &&
                               gameState.turnPhase == TurnPhase.meld;
 
+                          final compatibleInfo = canAdd
+                              ? _getCompatibleCardsInfo(entry.key)
+                              : (count: 0, areWilds: false);
+
                           return MeldWidget(
                             meld: entry.value,
                             meldIndex: entry.key,
@@ -1258,9 +1265,8 @@ class _GameScreenState extends State<GameScreen> {
                                 : null,
                             canAcceptSelectedCard:
                                 canAdd && _canAddCardToMeld(entry.key),
-                            compatibleCardsInHand: canAdd
-                                ? _getCompatibleCardsCount(entry.key)
-                                : 0,
+                            compatibleCardsInHand: compatibleInfo.count,
+                            compatibleCardsAreWilds: compatibleInfo.areWilds,
                           );
                         });
                       })(),
