@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hand_foot_game_flutter/main.dart' as app;
+import 'test_app.dart';
 
 /// Utility class for E2E testing with improved timing and state management
 class E2ETestUtils {
-  /// Start the app with clean state and proper initialization
+  /// Start the app with clean state and deterministic seed
   static Future<void> startAppWithCleanState(WidgetTester tester) async {
     // Try to clear any saved games, but don't fail if SharedPreferences isn't available
     try {
@@ -15,8 +15,8 @@ class E2ETestUtils {
       print('⚠️ SharedPreferences not available in test environment');
     }
 
-    // Start the app
-    app.main();
+    // Start the app with deterministic seed for consistent testing
+    await tester.pumpWidget(const TestApp(seed: 12345));
 
     // Wait for initial build and stabilize
     await tester.pumpAndSettle(const Duration(seconds: 3));
