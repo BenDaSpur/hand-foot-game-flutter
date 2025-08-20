@@ -8,6 +8,15 @@ enum GamePhase { setup, playing, roundEnd, gameEnd }
 
 enum TurnPhase { draw, meld, discard }
 
+/// Exception thrown when game state becomes inconsistent
+class GameStateException implements Exception {
+  final String message;
+  const GameStateException(this.message);
+
+  @override
+  String toString() => 'GameStateException: $message';
+}
+
 class GameAction {
   final String message;
   final DateTime timestamp;
@@ -414,7 +423,9 @@ class GameState {
           _logAction(
             'ERROR: endRound() called from playMeld but phase is still $phase!',
           );
-          phase = GamePhase.roundEnd;
+          throw GameStateException(
+            'Round should have ended but phase is still $phase after playMeld',
+          );
         }
 
         return true;
@@ -477,7 +488,9 @@ class GameState {
           _logAction(
             'ERROR: endRound() called from playMeldBypass but phase is still $phase!',
           );
-          phase = GamePhase.roundEnd;
+          throw GameStateException(
+            'Round should have ended but phase is still $phase after playMeldBypass',
+          );
         }
 
         return true;
@@ -557,8 +570,9 @@ class GameState {
         _logAction(
           'ERROR: endRound() called but phase is still $phase - this should not happen!',
         );
-        // Force the phase to roundEnd as a fallback
-        phase = GamePhase.roundEnd;
+        throw GameStateException(
+          'Round should have ended but phase is still $phase after addToMeld',
+        );
       }
       return;
     }
