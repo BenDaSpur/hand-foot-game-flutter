@@ -15,7 +15,9 @@ import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  final int? testSeed; // For deterministic testing
+
+  const GameScreen({super.key, this.testSeed});
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -64,7 +66,7 @@ class _GameScreenState extends State<GameScreen> {
       Player(id: '3', name: 'Bot 2', type: PlayerType.bot),
     ];
 
-    _gameController = GameController(players: players);
+    _gameController = GameController(players: players, seed: widget.testSeed);
     _botAI = BotAI();
     _gameController.initializeGame();
 
