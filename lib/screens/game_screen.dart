@@ -550,8 +550,9 @@ class _GameScreenState extends State<GameScreen> {
       (p) => p.type == PlayerType.human,
     );
 
-    if (meldIndex >= humanPlayer.melds.length)
+    if (meldIndex >= humanPlayer.melds.length) {
       return (count: 0, areWilds: false);
+    }
 
     final meld = humanPlayer.melds[meldIndex];
     int naturalCount = 0;
