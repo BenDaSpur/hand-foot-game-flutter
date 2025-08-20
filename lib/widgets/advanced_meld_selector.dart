@@ -1,40 +1,43 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
 import '../widgets/playing_card_widget.dart';
+import '../game/game_config.dart';
 
-// Constants for advanced meld selector
-class _AdvancedMeldSelectorConstants {
-  static const int minNaturalCardsForMeld = 2;
-  static const int minTotalCardsForMeld = 3;
-  // Responsive grid cross axis count based on screen size
+// Helper class for responsive UI calculations
+class _ResponsiveHelper {
   static int getGridCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    if (screenWidth > 1200) return 8; // Desktop
-    if (screenWidth > 800) return 7; // Tablet landscape
-    if (screenWidth > 600) return 6; // Tablet portrait
-    return 5; // Mobile
+    if (screenWidth > GameConfig.desktopBreakpoint) {
+      return GameConfig.gridCrossAxisCounts['desktop']!;
+    }
+    if (screenWidth > GameConfig.tabletLandscapeBreakpoint) {
+      return GameConfig.gridCrossAxisCounts['tablet_landscape']!;
+    }
+    if (screenWidth > GameConfig.tabletPortraitBreakpoint) {
+      return GameConfig.gridCrossAxisCounts['tablet_portrait']!;
+    }
+    return GameConfig.gridCrossAxisCounts['mobile']!;
   }
 
-  static const double cardAspectRatio = 0.7;
-  static const double cardSpacing = 8.0;
-
-  // Responsive card dimensions based on screen size
   static double getCardWidth(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = getGridCrossAxisCount(context);
-    final availableWidth = screenWidth * 0.9 - 40; // Modal width minus padding
+    final availableWidth = screenWidth * GameConfig.modalWidthRatio - 40;
     final cardWidthFromGrid =
-        (availableWidth - (cardSpacing * (crossAxisCount - 1))) /
+        (availableWidth - (GameConfig.cardSpacing * (crossAxisCount - 1))) /
         crossAxisCount;
 
-    // Clamp between reasonable min/max values
-    return cardWidthFromGrid.clamp(40.0, 65.0);
+    return cardWidthFromGrid.clamp(
+      GameConfig.minCardWidth,
+      GameConfig.maxCardWidth,
+    );
   }
 
   static double getCardHeight(BuildContext context) {
-    return getCardWidth(context) / cardAspectRatio;
+    return getCardWidth(context) / GameConfig.cardAspectRatio;
   }
 }
 
@@ -68,14 +71,35 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   // Track selected cards in available cards (for adding to melds)
   Set<int> selectedAvailableIndices = {};
 
+  // Debouncing for state refresh
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
-    _refreshAvailableCards();
+    _refreshAvailableCards(immediate: true);
   }
 
-  void _refreshAvailableCards() {
-    // Always refresh with current hand state and clean up invalid indices
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _refreshAvailableCards({bool immediate = false}) {
+    if (immediate) {
+      _refreshTimer?.cancel();
+      _performRefresh();
+    } else {
+      // Debounce rapid refresh calls
+      _refreshTimer?.cancel();
+      _refreshTimer = Timer(GameConfig.debounceDelay, _performRefresh);
+    }
+  }
+
+  void _performRefresh() {
+    if (!mounted) return;
+
     final currentHandSize = widget.player.currentHand.length;
 
     // Remove any stale indices that are now out of bounds
@@ -86,6 +110,10 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     // Generate fresh indices for current hand size
     availableCardIndices = List.generate(currentHandSize, (index) => index);
     selectedAvailableIndices.clear();
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -98,8 +126,9 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.8,
+        width: MediaQuery.of(context).size.width * GameConfig.modalWidthRatio,
+        height:
+            MediaQuery.of(context).size.height * GameConfig.modalHeightRatio,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -275,113 +304,145 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   Widget _buildMeldCard(int meldIndex) {
+    final meldData = _getMeldData(meldIndex);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: const Color(0xFF1F2937).withValues(alpha: 0.8),
+      elevation: 4,
+      shape: _getMeldCardShape(meldData.isValid),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildMeldHeader(meldIndex, meldData),
+            const SizedBox(height: 8),
+            _buildMeldCardChips(meldIndex, meldData.meldIndices),
+          ],
+        ),
+      ),
+    );
+  }
+
+  _MeldData _getMeldData(int meldIndex) {
     final meldIndices = proposedMeldIndices[meldIndex];
     final meldCards = meldIndices
         .map((i) => widget.player.currentHand[i])
         .toList();
     final points = meldCards.fold<int>(0, (sum, card) => sum + card.pointValue);
     final isValid = Meld.createMeld(meldCards) != null;
-
-    // Check if this would add to an existing meld
     final willAddToExisting =
         isValid &&
         meldCards.isNotEmpty &&
         widget.player.findMeldByRank(meldCards.first.rank) != -1;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: const Color(0xFF1F2937).withValues(alpha: 0.8),
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isValid
-              ? const Color(0xFF10B981).withValues(alpha: 0.3)
-              : const Color(0xFFEF4444).withValues(alpha: 0.3),
-          width: 1,
+    return _MeldData(
+      meldIndices: meldIndices,
+      meldCards: meldCards,
+      points: points,
+      isValid: isValid,
+      willAddToExisting: willAddToExisting,
+    );
+  }
+
+  ShapeBorder _getMeldCardShape(bool isValid) {
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(
+        color: isValid
+            ? const Color(0xFF10B981).withValues(alpha: 0.3)
+            : const Color(0xFFEF4444).withValues(alpha: 0.3),
+        width: 1,
+      ),
+    );
+  }
+
+  Widget _buildMeldHeader(int meldIndex, _MeldData meldData) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _buildMeldInfo(meldIndex, meldData),
+        _buildMeldActions(meldIndex, meldData),
+      ],
+    );
+  }
+
+  Widget _buildMeldInfo(int meldIndex, _MeldData meldData) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Meld ${meldIndex + 1} (${meldData.meldCards.length} cards)',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 16,
+          ),
+        ),
+        if (meldData.willAddToExisting)
+          Text(
+            'Will add to existing ${meldData.meldCards.isNotEmpty ? meldData.meldCards.first.rank.name : ''} meld',
+            style: const TextStyle(
+              color: Colors.blue,
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMeldActions(int meldIndex, _MeldData meldData) {
+    return Row(
+      children: [
+        _buildPointsChip(meldData),
+        const SizedBox(width: 8),
+        _buildDeleteButton(meldIndex),
+      ],
+    );
+  }
+
+  Widget _buildPointsChip(_MeldData meldData) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: meldData.isValid
+            ? const Color(0xFF10B981).withValues(alpha: 0.2)
+            : const Color(0xFFEF4444).withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        meldData.isValid ? '${meldData.points} pts' : 'Invalid',
+        style: TextStyle(
+          color: meldData.isValid
+              ? const Color(0xFF10B981)
+              : const Color(0xFFEF4444),
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Meld ${meldIndex + 1} (${meldCards.length} cards)',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
-                    ),
-                    if (willAddToExisting)
-                      Text(
-                        'Will add to existing ${meldCards.isNotEmpty ? meldCards.first.rank.name : ''} meld',
-                        style: const TextStyle(
-                          color: Colors.blue,
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isValid
-                            ? const Color(0xFF10B981).withValues(alpha: 0.2)
-                            : const Color(0xFFEF4444).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        isValid ? '$points pts' : 'Invalid',
-                        style: TextStyle(
-                          color: isValid
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFFEF4444),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () => _removeMeld(meldIndex),
-                      icon: Icon(
-                        Icons.delete,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      constraints: const BoxConstraints(),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 4,
-              children: meldIndices.asMap().entries.map((entry) {
-                final cardIndex = entry.key;
-                final handIndex = entry.value;
-                final card = widget.player.currentHand[handIndex];
-                return _buildMeldCardChip(meldIndex, cardIndex, card);
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
+    );
+  }
+
+  Widget _buildDeleteButton(int meldIndex) {
+    return IconButton(
+      onPressed: () => _removeMeld(meldIndex),
+      icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
+      constraints: const BoxConstraints(),
+      padding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildMeldCardChips(int meldIndex, List<int> meldIndices) {
+    return Wrap(
+      spacing: 4,
+      children: meldIndices.asMap().entries.map((entry) {
+        final cardIndex = entry.key;
+        final handIndex = entry.value;
+        final card = widget.player.currentHand[handIndex];
+        return _buildMeldCardChip(meldIndex, cardIndex, card);
+      }).toList(),
     );
   }
 
@@ -442,14 +503,12 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           Expanded(
             child: GridView.custom(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount:
-                    _AdvancedMeldSelectorConstants.getGridCrossAxisCount(
-                      context,
-                    ),
-                childAspectRatio:
-                    _AdvancedMeldSelectorConstants.cardAspectRatio,
-                crossAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
-                mainAxisSpacing: _AdvancedMeldSelectorConstants.cardSpacing,
+                crossAxisCount: _ResponsiveHelper.getGridCrossAxisCount(
+                  context,
+                ),
+                childAspectRatio: GameConfig.cardAspectRatio,
+                crossAxisSpacing: GameConfig.cardSpacing,
+                mainAxisSpacing: GameConfig.cardSpacing,
               ),
               childrenDelegate: SliverChildBuilderDelegate(
                 (context, index) {
@@ -458,13 +517,9 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                   // Validate index to prevent out-of-bounds errors (shouldn't happen now with proper cleanup)
                   if (handIndex >= widget.player.currentHand.length ||
                       handIndex < 0) {
-                    // Trigger refresh to clean up stale state
+                    // Trigger immediate refresh to clean up stale state
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        setState(() {
-                          _refreshAvailableCards();
-                        });
-                      }
+                      _refreshAvailableCards(immediate: true);
                     });
                     return const SizedBox.shrink();
                   }
@@ -554,29 +609,28 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   bool _canCreateNewMeld() {
-    return selectedAvailableIndices.length >=
-        _AdvancedMeldSelectorConstants.minNaturalCardsForMeld;
+    return selectedAvailableIndices.length >= GameConfig.minNaturalCardsForMeld;
   }
 
   void _createNewMeld() {
+    // Convert selected available indices to hand indices first
     final selectedHandIndices = selectedAvailableIndices
-        .map((index) => availableCardIndices[index])
+        .map((availableIndex) => availableCardIndices[availableIndex])
         .toList();
 
     final selectedCards = selectedHandIndices
-        .map((index) => widget.player.currentHand[index])
+        .map((handIndex) => widget.player.currentHand[handIndex])
         .toList();
 
     // Validate meld creation
     final naturalCards = selectedCards.where((card) => !card.isWild).toList();
     final wildCards = selectedCards.where((card) => card.isWild).toList();
 
-    if (naturalCards.length <
-            _AdvancedMeldSelectorConstants.minNaturalCardsForMeld &&
+    if (naturalCards.length < GameConfig.minNaturalCardsForMeld &&
         (naturalCards.length + wildCards.length) <
-            _AdvancedMeldSelectorConstants.minTotalCardsForMeld) {
+            GameConfig.minTotalCardsForMeld) {
       _showError(
-        'Need at least ${_AdvancedMeldSelectorConstants.minNaturalCardsForMeld} natural cards or ${_AdvancedMeldSelectorConstants.minTotalCardsForMeld} total cards for a meld',
+        'Need at least ${GameConfig.minNaturalCardsForMeld} natural cards or ${GameConfig.minTotalCardsForMeld} total cards for a meld',
       );
       return;
     }
@@ -589,22 +643,36 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       }
     }
 
-    // Create the meld
+    // Create the meld with proper state management
     setState(() {
+      // Add the meld
       proposedMeldIndices.add(selectedHandIndices);
 
-      // Remove cards from available cards (in reverse order to maintain indices)
-      final sortedIndices = selectedAvailableIndices.toList()
+      // Remove selected hand indices from available cards
+      // Sort hand indices in descending order to avoid index shifting issues
+      final sortedHandIndices = selectedHandIndices.toList()
         ..sort((a, b) => b.compareTo(a));
-      for (final index in sortedIndices) {
-        availableCardIndices.removeAt(index);
+
+      for (final handIndex in sortedHandIndices) {
+        availableCardIndices.remove(handIndex);
       }
 
+      // Clear selection completely and regenerate available indices
       selectedAvailableIndices.clear();
+
+      // Force refresh to ensure consistent state
+      _sortAvailableCardIndices();
     });
   }
 
   void _toggleCardSelection(int availableIndex) {
+    // Validate bounds to prevent crashes
+    if (availableIndex < 0 || availableIndex >= availableCardIndices.length) {
+      // Force immediate refresh if we encounter invalid state
+      _refreshAvailableCards(immediate: true);
+      return;
+    }
+
     setState(() {
       if (selectedAvailableIndices.contains(availableIndex)) {
         selectedAvailableIndices.remove(availableIndex);
@@ -700,8 +768,25 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 }
 
-/// Optimized card widget for available cards section with const constructor
-class _AvailableCardWidget extends StatelessWidget {
+/// Data class to hold meld information
+class _MeldData {
+  final List<int> meldIndices;
+  final List<PlayingCard> meldCards;
+  final int points;
+  final bool isValid;
+  final bool willAddToExisting;
+
+  const _MeldData({
+    required this.meldIndices,
+    required this.meldCards,
+    required this.points,
+    required this.isValid,
+    required this.willAddToExisting,
+  });
+}
+
+/// Optimized card widget for available cards section with keep-alive support
+class _AvailableCardWidget extends StatefulWidget {
   const _AvailableCardWidget({
     super.key,
     required this.card,
@@ -714,11 +799,22 @@ class _AvailableCardWidget extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_AvailableCardWidget> createState() => _AvailableCardWidgetState();
+}
+
+class _AvailableCardWidgetState extends State<_AvailableCardWidget>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => GameConfig.enableKeepAlive;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
-        decoration: isSelected
+        decoration: widget.isSelected
             ? BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -734,10 +830,10 @@ class _AvailableCardWidget extends StatelessWidget {
               )
             : null,
         child: PlayingCardWidget(
-          card: card,
-          width: _AdvancedMeldSelectorConstants.getCardWidth(context),
-          height: _AdvancedMeldSelectorConstants.getCardHeight(context),
-          isSelected: isSelected,
+          card: widget.card,
+          width: _ResponsiveHelper.getCardWidth(context),
+          height: _ResponsiveHelper.getCardHeight(context),
+          isSelected: widget.isSelected,
         ),
       ),
     );
