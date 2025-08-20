@@ -179,6 +179,12 @@ class GameState {
   bool drawFromDeck() {
     if (hasDrawnFromDeck) return false;
 
+    // Check if deck has insufficient cards BEFORE starting the draw
+    // Reshuffle proactively when deck has fewer cards than required
+    if (deck.size < requiredDrawCount) {
+      _attemptReshuffleForEmptyDeck();
+    }
+
     final cardsDrawn = <PlayingCard>[];
 
     // Attempt to draw required number of cards
@@ -188,7 +194,7 @@ class GameState {
       if (!deck.isEmpty) {
         card = deck.drawCard();
       } else {
-        // Deck is empty - try reshuffling discard pile
+        // Deck is still empty after reshuffle attempt - try once more
         _attemptReshuffleForEmptyDeck();
         if (!deck.isEmpty) {
           card = deck.drawCard();
