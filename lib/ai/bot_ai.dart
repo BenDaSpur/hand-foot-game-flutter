@@ -27,6 +27,10 @@ class BotAI {
   // Turn tracking for strategic play-down timing
   final Map<String, int> _playerTurnCounts = {};
 
+  // Performance optimization - cache possible melds during decision cycle
+  List<List<PlayingCard>>? _cachedPossibleMelds;
+  String? _cachedPlayerId;
+
   // Initialize with optional seed for test reproducibility
   BotAI({int? seed}) : _random = seed != null ? Random(seed) : Random();
 
@@ -81,6 +85,12 @@ class BotAI {
     // Track turn counts for strategic play-down timing
     _trackPlayerTurn(bot.id, gameState);
 
+    // Clear cached melds if this is a different player or meld phase
+    if (_cachedPlayerId != bot.id || gameState.turnPhase == TurnPhase.meld) {
+      _cachedPossibleMelds = null;
+      _cachedPlayerId = bot.id;
+    }
+
     switch (gameState.turnPhase) {
       case TurnPhase.draw:
         return _makeDrawDecision(bot, controller);
@@ -103,6 +113,18 @@ class BotAI {
 
   int _getTurnCount(String playerId) {
     return _playerTurnCounts[playerId] ?? 0;
+  }
+
+  /// Get possible melds with caching for performance optimization
+  List<List<PlayingCard>> _getPossibleMelds(
+    Player bot,
+    GameController controller,
+  ) {
+    if (_cachedPossibleMelds == null || _cachedPlayerId != bot.id) {
+      _cachedPossibleMelds = controller.findPossibleMelds(bot);
+      _cachedPlayerId = bot.id;
+    }
+    return _cachedPossibleMelds!;
   }
 
   BotDecision _makeDrawDecision(Player bot, GameController controller) {
@@ -387,53 +409,74 @@ class BotAI {
 
   /// Handle play-down decision with new strategic approach
   BotDecision _handlePlayDownDecision(Player bot, GameController controller) {
-    final possibleMelds = controller.findPossibleMelds(bot);
+    final possibleMelds = _getPossibleMelds(bot, controller);
     final gameState = controller.gameState;
     final playDownRequirement = gameState.playDownRequirement;
     final turnCount = _getTurnCount(bot.id);
 
     // STRATEGIC CHANGE: Hold cards until turn 5, then play minimal points
     if (turnCount < maxTurnsBeforeForcePlayDown) {
-      // Before turn 5: Only play down if forced (drew from discard) or exceptional opportunity
-
-      // Priority 1: Forced play-down after unlocking discard pile
-      final result = _tryForcedPlayDown(
+      return _handleEarlyGamePlayDown(
         bot,
         controller,
         possibleMelds,
         playDownRequirement,
       );
-      if (result != null) return result;
-
-      // Priority 2: Natural meld opportunity (no wilds) - play minimal points needed to unlock discard pickup
-      final naturalMeldResult = _tryNaturalMeldPlayDown(
-        possibleMelds,
-        playDownRequirement,
-      );
-      if (naturalMeldResult != null) return naturalMeldResult;
-
-      // Priority 3: Exceptional opportunity (way over requirement)
-      final exceptionalResult = _tryExceptionalPlayDown(
-        possibleMelds,
-        playDownRequirement,
-      );
-      if (exceptionalResult != null) return exceptionalResult;
-
-      // Otherwise, HOLD cards and discard strategically
-      final cardToDiscard = _chooseCardToDiscard(bot);
-      return BotDecision(action: 'discard', data: cardToDiscard);
     } else {
-      // Turn 5+: Play down with minimal points to unlock discard pile ability
-      final minimalResult = _tryMinimalPlayDown(
-        possibleMelds,
-        playDownRequirement,
-      );
-      if (minimalResult != null) return minimalResult;
-
-      // Emergency fallback
-      final cardToDiscard = _chooseCardToDiscard(bot);
-      return BotDecision(action: 'discard', data: cardToDiscard);
+      return _handleLateGamePlayDown(possibleMelds, playDownRequirement);
     }
+  }
+
+  /// Handle early game play-down (before turn 5) - conservative strategy
+  BotDecision _handleEarlyGamePlayDown(
+    Player bot,
+    GameController controller,
+    List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
+  ) {
+    // Priority 1: Forced play-down after unlocking discard pile
+    final forcedResult = _tryForcedPlayDown(
+      bot,
+      controller,
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (forcedResult != null) return forcedResult;
+
+    // Priority 2: Natural meld opportunity - play minimal points needed
+    final naturalResult = _tryNaturalMeldPlayDown(
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (naturalResult != null) return naturalResult;
+
+    // Priority 3: Exceptional opportunity (way over requirement)
+    final exceptionalResult = _tryExceptionalPlayDown(
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (exceptionalResult != null) return exceptionalResult;
+
+    // Otherwise, HOLD cards and discard strategically
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Handle late game play-down (turn 5+) - forced minimal play-down
+  BotDecision _handleLateGamePlayDown(
+    List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
+  ) {
+    // Turn 5+: Play down with minimal points to unlock discard pile ability
+    final minimalResult = _tryMinimalPlayDown(
+      possibleMelds,
+      playDownRequirement,
+    );
+    if (minimalResult != null) return minimalResult;
+
+    // Emergency fallback - must discard to complete turn
+    // This should rarely happen since turn 5+ usually forces play-down
+    return BotDecision(action: 'error'); // Will be caught by failsafe
   }
 
   /// Try forced play-down after unlocking discard pile
@@ -594,7 +637,7 @@ class BotAI {
     final canPlayAllCards = _canPlayMostCards(bot, controller);
     if (canPlayAllCards) {
       // Find the best meld opportunity to use maximum cards
-      final possibleMelds = controller.findPossibleMelds(bot);
+      final possibleMelds = _getPossibleMelds(bot, controller);
       if (possibleMelds.isNotEmpty) {
         // Choose meld that uses most cards
         final bestMeld = _chooseLargestMeld(possibleMelds);
@@ -651,7 +694,7 @@ class BotAI {
       }
 
       // Priority 3: Create new melds that can become books
-      final possibleMelds = controller.findPossibleMelds(bot);
+      final possibleMelds = _getPossibleMelds(bot, controller);
       if (possibleMelds.isNotEmpty) {
         final bookPotentialMeld = _findBestBookPotentialMeld(possibleMelds);
         return BotDecision(action: 'createMeld', data: bookPotentialMeld);
@@ -775,7 +818,7 @@ class BotAI {
           .where((m) => m.cards.length >= 5)
           .length;
       return meldsCloseToBooks > 0 ||
-          controller.findPossibleMelds(bot).isNotEmpty;
+          _getPossibleMelds(bot, controller).isNotEmpty;
     }
 
     return false;
@@ -1139,6 +1182,6 @@ class BotAI {
       }
     }
 
-    return false; // Conflicts detected
+    return false; // No conflicts detected
   }
 }
