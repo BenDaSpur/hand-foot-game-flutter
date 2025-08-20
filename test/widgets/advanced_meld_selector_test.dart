@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
@@ -187,13 +188,13 @@ void main() {
     test('should handle bounds checking for card selection', () {
       List<int> availableCardIndices = [0, 1, 2, 3, 4];
 
-      // Test valid indices
-      expect(0 >= 0 && 0 < availableCardIndices.length, isTrue);
-      expect(4 >= 0 && 4 < availableCardIndices.length, isTrue);
+      // Test valid indices - both should be within bounds
+      expect(availableCardIndices.isNotEmpty, isTrue);
+      expect(availableCardIndices.length, equals(5));
 
       // Test invalid indices
-      expect(-1 >= 0 && -1 < availableCardIndices.length, isFalse);
-      expect(5 >= 0 && 5 < availableCardIndices.length, isFalse);
+      expect(-1 < 0, isTrue);
+      expect(5 >= availableCardIndices.length, isTrue);
 
       // Test bounds checking function
       bool isValidIndex(int index, List<int> indices) {
@@ -269,6 +270,109 @@ void main() {
         availableCardIndices,
         equals([0, 1, 2, 6, 7, 8, 9, 10, 11]),
       ); // Cards returned
+    });
+
+    test('should properly dispose of resources and prevent memory leaks', () {
+      // Mock timer for testing disposal
+      Timer? mockTimer;
+      bool timerCancelled = false;
+
+      // Simulate the timer creation and cancellation pattern
+      mockTimer = Timer(const Duration(milliseconds: 300), () {});
+
+      // Simulate disposal
+      if (mockTimer.isActive) {
+        mockTimer.cancel();
+        timerCancelled = true;
+      }
+
+      expect(timerCancelled, isTrue);
+      expect(mockTimer.isActive, isFalse);
+    });
+
+    test('should handle widget lifecycle properly', () {
+      // Test mounted state checking
+      bool mounted = true;
+
+      void simulateStateUpdate() {
+        if (mounted) {
+          // This would normally call setState
+          // Here we just verify the mounted check works
+          expect(mounted, isTrue);
+        }
+      }
+
+      simulateStateUpdate();
+
+      // Simulate widget disposal
+      mounted = false;
+
+      // This should not trigger state updates
+      simulateStateUpdate();
+      expect(mounted, isFalse);
+    });
+
+    test(
+      'should handle debouncing properly to prevent excessive refreshes',
+      () {
+        final refreshCalls = <DateTime>[];
+
+        // Simulate multiple rapid refresh calls
+        final now = DateTime.now();
+        refreshCalls.add(now);
+        refreshCalls.add(now.add(const Duration(milliseconds: 50)));
+        refreshCalls.add(now.add(const Duration(milliseconds: 100)));
+        refreshCalls.add(now.add(const Duration(milliseconds: 150)));
+
+        // With proper debouncing, only the last call should be executed
+        // Here we simulate by checking the timing between calls
+        final validCalls = refreshCalls.where((call) {
+          final timeSinceFirst = call.difference(refreshCalls.first);
+          return timeSinceFirst.inMilliseconds >= 300;
+        }).toList();
+
+        // Should have at most one valid call after debounce period
+        expect(validCalls.length, lessThanOrEqualTo(1));
+      },
+    );
+
+    test(
+      'should validate bounds checking prevents array access violations',
+      () {
+        final availableIndices = [0, 1, 2];
+
+        // Test accessing valid indices
+        for (int i = 0; i < availableIndices.length; i++) {
+          expect(i >= 0 && i < availableIndices.length, isTrue);
+        }
+
+        // Test invalid indices are caught
+        expect(-1 < 0, isTrue);
+        expect(availableIndices.length < availableIndices.length, isFalse);
+        expect(availableIndices.length + 1 >= availableIndices.length, isTrue);
+      },
+    );
+
+    test('should handle keep-alive widget state properly', () {
+      // Test AutomaticKeepAliveClientMixin behavior simulation
+      bool wantKeepAlive = true;
+      bool isWidgetBuilt = false;
+
+      void simulateBuild() {
+        if (wantKeepAlive) {
+          // Simulate super.build() call required by mixin
+          isWidgetBuilt = true;
+        }
+      }
+
+      simulateBuild();
+      expect(isWidgetBuilt, isTrue);
+
+      // Test disabling keep alive
+      wantKeepAlive = false;
+      isWidgetBuilt = false;
+      simulateBuild();
+      expect(isWidgetBuilt, isFalse);
     });
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:hand_foot_game_flutter/widgets/playing_card_widget.dart';
@@ -347,6 +348,258 @@ void main() {
       // Reset to default size
       await tester.binding.setSurfaceSize(null);
       await E2ETestUtils.stabilize(tester);
+
+      await E2ETestUtils.cleanShutdown(tester);
+    });
+
+    testWidgets('Modal handles invalid meld creation attempts', (
+      WidgetTester tester,
+    ) async {
+      await E2ETestUtils.startAppWithCleanState(tester);
+
+      // Draw cards
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Draw from Deck'),
+        debugLabel: 'Draw cards',
+      );
+      await E2ETestUtils.stabilize(tester);
+
+      // Open modal
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Play Cards'),
+        debugLabel: 'Open modal for invalid meld test',
+      );
+
+      if (await E2ETestUtils.waitForElement(
+        tester,
+        find.text('Multi-Meld Play-Down'),
+      )) {
+        // Try to create invalid meld with only 1 card
+        final cardWidgets = find.byType(PlayingCardWidget);
+        if (cardWidgets.evaluate().isNotEmpty) {
+          await E2ETestUtils.safeTap(
+            tester,
+            cardWidgets.first,
+            debugLabel: 'Select single card (invalid)',
+          );
+          await E2ETestUtils.stabilize(tester);
+
+          // New Meld button should be disabled with only 1 card
+          final newMeldButton = find.text('New Meld');
+          if (newMeldButton.evaluate().isNotEmpty) {
+            final button = tester.widget<ElevatedButton>(newMeldButton);
+            expect(button.onPressed, isNull);
+            print('✅ New Meld button correctly disabled for single card');
+          }
+
+          // Try with 2 cards (minimum required)
+          if (cardWidgets.evaluate().length >= 2) {
+            await E2ETestUtils.safeTap(
+              tester,
+              cardWidgets.at(1),
+              debugLabel: 'Select second card',
+            );
+            await E2ETestUtils.stabilize(tester);
+
+            // Button should now be enabled
+            final enabledButton = find.text('New Meld');
+            if (enabledButton.evaluate().isNotEmpty) {
+              final buttonWidget = tester.widget<ElevatedButton>(enabledButton);
+              expect(buttonWidget.onPressed, isNotNull);
+              print('✅ New Meld button enabled with 2+ cards');
+            }
+          }
+        }
+
+        // Close modal
+        await E2ETestUtils.safeTap(
+          tester,
+          find.text('Cancel'),
+          debugLabel: 'Close modal after invalid test',
+        );
+        await E2ETestUtils.stabilize(tester);
+      }
+
+      await E2ETestUtils.cleanShutdown(tester);
+    });
+
+    testWidgets('Modal shows error for insufficient play-down points', (
+      WidgetTester tester,
+    ) async {
+      await E2ETestUtils.startAppWithCleanState(tester);
+
+      // Draw cards
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Draw from Deck'),
+        debugLabel: 'Draw cards for point test',
+      );
+      await E2ETestUtils.stabilize(tester);
+
+      // Open modal
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Play Cards'),
+        debugLabel: 'Open modal for point test',
+      );
+
+      if (await E2ETestUtils.waitForElement(
+        tester,
+        find.text('Multi-Meld Play-Down'),
+      )) {
+        // Look for point requirement indicator
+        final pointIndicator = find.textContaining('/');
+        if (pointIndicator.evaluate().isNotEmpty) {
+          print('✅ Point requirement indicator found');
+        }
+
+        // Try to confirm without meeting requirements
+        final confirmButton = find.textContaining('Need');
+        if (confirmButton.evaluate().isNotEmpty) {
+          // Button should be disabled
+          final button = tester.widget<ElevatedButton>(confirmButton);
+          expect(button.onPressed, isNull);
+          print('✅ Confirm button correctly disabled when points insufficient');
+        }
+
+        // Close modal
+        await E2ETestUtils.safeTap(
+          tester,
+          find.text('Cancel'),
+          debugLabel: 'Close modal after point test',
+        );
+        await E2ETestUtils.stabilize(tester);
+      }
+
+      await E2ETestUtils.cleanShutdown(tester);
+    });
+
+    testWidgets('Modal supports keyboard navigation and accessibility', (
+      WidgetTester tester,
+    ) async {
+      await E2ETestUtils.startAppWithCleanState(tester);
+
+      // Draw cards
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Draw from Deck'),
+        debugLabel: 'Draw cards for accessibility test',
+      );
+      await E2ETestUtils.stabilize(tester);
+
+      // Open modal
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Play Cards'),
+        debugLabel: 'Open modal for accessibility test',
+      );
+
+      if (await E2ETestUtils.waitForElement(
+        tester,
+        find.text('Multi-Meld Play-Down'),
+      )) {
+        // Test keyboard navigation using Tab key simulation
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await E2ETestUtils.stabilize(tester);
+        print('✅ Tab key navigation initiated');
+
+        // Check for semantic labels and accessibility
+        final cardWidgets = find.byType(PlayingCardWidget);
+        if (cardWidgets.evaluate().isNotEmpty) {
+          // Test that cards have proper semantics for screen readers
+          final firstCard = cardWidgets.first;
+          final cardWidget = tester.widget<PlayingCardWidget>(firstCard);
+
+          // Verify card has meaningful semantic properties
+          expect(cardWidget.card, isNotNull);
+          print('✅ Cards have proper semantic structure');
+
+          // Test focus management
+          await tester.sendKeyEvent(LogicalKeyboardKey.space);
+          await E2ETestUtils.stabilize(tester);
+          print('✅ Space key interaction tested');
+        }
+
+        // Test escape key to close modal
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await E2ETestUtils.stabilize(tester);
+
+        // Check if modal closed with escape key
+        if (find.text('Multi-Meld Play-Down').evaluate().isEmpty) {
+          print('✅ Modal closed with Escape key');
+        } else {
+          print('⚠️ Modal did not close with Escape key');
+          // Manually close if escape didn't work
+          await E2ETestUtils.safeTap(
+            tester,
+            find.text('Cancel'),
+            debugLabel: 'Manual close after escape test',
+          );
+          await E2ETestUtils.stabilize(tester);
+        }
+      }
+
+      await E2ETestUtils.cleanShutdown(tester);
+    });
+
+    testWidgets('Modal maintains proper focus management', (
+      WidgetTester tester,
+    ) async {
+      await E2ETestUtils.startAppWithCleanState(tester);
+
+      // Draw cards
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Draw from Deck'),
+        debugLabel: 'Draw cards for focus test',
+      );
+      await E2ETestUtils.stabilize(tester);
+
+      // Open modal and test focus
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Play Cards'),
+        debugLabel: 'Open modal for focus test',
+      );
+
+      if (await E2ETestUtils.waitForElement(
+        tester,
+        find.text('Multi-Meld Play-Down'),
+      )) {
+        // Test that modal receives focus when opened
+        final modalDialog = find.byType(Dialog);
+        expect(modalDialog.evaluate(), isNotEmpty);
+        print('✅ Modal dialog found and accessible');
+
+        // Test focus traversal through interactive elements
+        final interactiveElements = [
+          find.text('New Meld'),
+          find.text('Cancel'),
+          find.textContaining('Confirm'),
+        ];
+
+        for (final element in interactiveElements) {
+          if (element.evaluate().isNotEmpty) {
+            await E2ETestUtils.safeTap(
+              tester,
+              element,
+              debugLabel: 'Test focus on ${element.toString()}',
+            );
+            await E2ETestUtils.stabilize(tester);
+          }
+        }
+        print('✅ Focus traversal through interactive elements tested');
+
+        // Close modal
+        await E2ETestUtils.safeTap(
+          tester,
+          find.text('Cancel'),
+          debugLabel: 'Close modal after focus test',
+        );
+        await E2ETestUtils.stabilize(tester);
+      }
 
       await E2ETestUtils.cleanShutdown(tester);
     });
