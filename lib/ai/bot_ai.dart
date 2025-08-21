@@ -63,12 +63,26 @@ class BotAI {
   // Risk management thresholds
   static const int playDownRiskThreshold = -300;
   static const int footTransitionRiskThreshold = -200;
-  static const int wildCardDiscardThreshold = 6;
+  static const int wildCardDiscardThreshold =
+      10; // Much higher - wilds are valuable
   static const int strongPlayDownBuffer = 10;
 
   // Discard decision thresholds
   static const int veryLowValuePairThreshold = 5;
   static const int lowValuePairThreshold = 10;
+  static const int emergencyMeldBreakThreshold =
+      10; // Break small melds if needed
+
+  // High round detection and thresholds
+  static const int highRoundHandSizeThreshold = 15;
+  static const int highRoundPlayDownThreshold = 120; // Round 3+
+  static const int emergencyHandSizeThreshold = 20;
+  static const int emergencyFootSizeThreshold = 15;
+  static const int lowValueCardThreshold = 5;
+  static const int mediumValueCardThreshold = 10;
+  static const int highValueCardThreshold = 15;
+  static const int smallMeldPointThreshold = 50;
+  static const int meldBreakSafetyBuffer = 20;
 
   // Game rule constants
   static const int minCardsToUnlockDiscard = 2;
@@ -313,7 +327,7 @@ class BotAI {
     return threeCards.first;
   }
 
-  /// Try to discard natural cards - MUCH more conservative now
+  /// Try to discard natural cards - Adaptive based on game situation
   PlayingCard? _tryDiscardNaturalCards(
     Player bot,
     Map<CardRank, List<PlayingCard>> cardsByRank,
@@ -321,53 +335,142 @@ class BotAI {
     final cardCategories = _categorizeCardsByFrequency(cardsByRank);
     final singletons = cardCategories['singletons']!;
     final pairs = cardCategories['pairs']!;
+    final handSize = bot.currentHand.length;
+    final isHighRound = _isHighRoundSituation(bot, handSize);
 
-    // STRATEGIC CHANGE: Only discard very low value cards
+    // Priority 2: Try to discard low-value singletons first
+    final singletonResult = _tryDiscardSingletons(singletons, isHighRound);
+    if (singletonResult != null) return singletonResult;
 
-    // Priority 2: Only discard low-value singletons (5 points or less)
+    // Priority 3: Try to break up pairs based on situation
+    final pairResult = _tryDiscardPairs(bot, pairs, isHighRound);
+    if (pairResult != null) return pairResult;
+
+    // Priority 4: Emergency discard if too many cards
+    final emergencyResult = _tryEmergencyDiscard(singletons, handSize);
+    if (emergencyResult != null) return emergencyResult;
+
+    return null; // Usually hold onto valuable cards
+  }
+
+  /// Check if we're in a high round situation requiring more flexible strategy
+  bool _isHighRoundSituation(Player bot, int handSize) {
+    return !bot.hasPlayedDown && handSize > highRoundHandSizeThreshold;
+  }
+
+  /// Try to discard singleton cards with appropriate value thresholds
+  PlayingCard? _tryDiscardSingletons(
+    List<PlayingCard> singletons,
+    bool isHighRound,
+  ) {
+    final lowValueThreshold = isHighRound
+        ? mediumValueCardThreshold
+        : lowValueCardThreshold;
     final lowValueSingletons = singletons
-        .where((card) => card.pointValue <= 5)
+        .where((card) => card.pointValue <= lowValueThreshold)
         .toList();
     if (lowValueSingletons.isNotEmpty) {
       lowValueSingletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return lowValueSingletons.first;
     }
+    return null;
+  }
 
-    // Priority 3: Only break up very low value pairs if forced
+  /// Try to discard from pairs based on game state and round
+  PlayingCard? _tryDiscardPairs(
+    Player bot,
+    List<PlayingCard> pairs,
+    bool isHighRound,
+  ) {
     if (!bot.hasPlayedDown) {
-      // Before playing down, be VERY conservative with pairs
-      final veryLowPairs = pairs.where((card) => card.pointValue <= 5).toList();
+      return _tryDiscardPairsBeforePlayDown(pairs, isHighRound);
+    } else {
+      return _tryDiscardPairsAfterPlayDown(pairs);
+    }
+  }
+
+  /// Try to discard from pairs before playing down (more conservative)
+  PlayingCard? _tryDiscardPairsBeforePlayDown(
+    List<PlayingCard> pairs,
+    bool isHighRound,
+  ) {
+    if (isHighRound) {
+      // Higher rounds: be more willing to break up medium-value pairs
+      final mediumPairs = pairs
+          .where((card) => card.pointValue <= highValueCardThreshold)
+          .toList();
+      if (mediumPairs.isNotEmpty) {
+        mediumPairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+        return mediumPairs.first;
+      }
+    } else {
+      // Early rounds: only very low value pairs
+      final veryLowPairs = pairs
+          .where((card) => card.pointValue <= lowValueCardThreshold)
+          .toList();
       if (veryLowPairs.isNotEmpty && _shouldBreakUpHighValuePair()) {
         veryLowPairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
         return veryLowPairs.first;
       }
-    } else {
-      // After playing down, slightly more willing to discard from pairs
-      final lowPairs = pairs.where((card) => card.pointValue <= 10).toList();
-      if (lowPairs.isNotEmpty) {
-        lowPairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-        return lowPairs.first;
-      }
     }
-
-    // Priority 4: NEVER break up triples unless absolutely forced
-    // (This will rarely happen now)
-
-    return null; // Usually hold onto valuable cards
+    return null;
   }
 
-  /// Try to discard wild cards (very conservative)
+  /// Try to discard from pairs after playing down (more liberal)
+  PlayingCard? _tryDiscardPairsAfterPlayDown(List<PlayingCard> pairs) {
+    final lowPairs = pairs
+        .where((card) => card.pointValue <= mediumValueCardThreshold)
+        .toList();
+    if (lowPairs.isNotEmpty) {
+      lowPairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return lowPairs.first;
+    }
+    return null;
+  }
+
+  /// Emergency discard when hand is too large
+  PlayingCard? _tryEmergencyDiscard(
+    List<PlayingCard> singletons,
+    int handSize,
+  ) {
+    if (handSize >= emergencyHandSizeThreshold && singletons.isNotEmpty) {
+      singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return singletons.first;
+    }
+    return null;
+  }
+
+  /// Try to discard wild cards (EXTREMELY conservative - absolute last resort)
   PlayingCard? _tryDiscardWildCards(Player bot, List<PlayingCard> wildCards) {
     if (wildCards.isEmpty) return null;
 
-    // Only discard wilds if we have MANY or absolutely forced to (1 card left)
-    if (wildCards.length >= wildCardDiscardThreshold ||
-        bot.currentHand.length == 1) {
+    // ONLY discard wilds in these emergency situations:
+    // 1. We have 10+ wild cards (excessive hoarding)
+    // 2. We have exactly 1 card left and must discard (going out impossible)
+    // 3. We're on foot with 15+ cards and can't make any melds
+
+    final handSize = bot.currentHand.length;
+    final isOnFoot = bot.hasPickedUpFoot;
+
+    // Emergency case 1: Excessive wild hoarding
+    if (wildCards.length >= wildCardDiscardThreshold) {
       wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return wildCards.first;
     }
 
-    return null;
+    // Emergency case 2: Must discard last card but can't go out
+    if (handSize == 1 && !bot.canGoOut) {
+      return wildCards.first;
+    }
+
+    // Emergency case 3: On foot with huge hand and no meld opportunities
+    if (isOnFoot && handSize >= emergencyFootSizeThreshold) {
+      // Only if we really can't use the wilds anywhere
+      wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return wildCards.first;
+    }
+
+    return null; // Almost never discard wilds
   }
 
   bool _shouldBreakUpHighValuePair() {
@@ -450,7 +553,19 @@ class BotAI {
     );
     if (naturalResult != null) return naturalResult;
 
-    // Priority 3: Exceptional opportunity (way over requirement)
+    // Priority 3: HIGH ROUND STRATEGY - break up existing small melds if needed
+    if (playDownRequirement > highRoundPlayDownThreshold) {
+      // Later rounds (Round 3+)
+      final meldBreakResult = _tryHighPointWildMeldForHighRounds(
+        bot,
+        controller,
+        possibleMelds,
+        playDownRequirement,
+      );
+      if (meldBreakResult != null) return meldBreakResult;
+    }
+
+    // Priority 4: Exceptional opportunity (way over requirement)
     final exceptionalResult = _tryExceptionalPlayDown(
       possibleMelds,
       playDownRequirement,
@@ -608,6 +723,79 @@ class BotAI {
 
     if (bestMeld != null) {
       return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    return null;
+  }
+
+  /// NEW: Try high-value wild card melds for high round requirements
+  ///
+  /// NOTE: This method analyzes small existing melds that could theoretically be broken up
+  /// but actually tries to create new wild-heavy melds to meet high point requirements.
+  /// It does NOT actually break existing melds - that would require game controller support.
+  BotDecision? _tryHighPointWildMeldForHighRounds(
+    Player bot,
+    GameController controller,
+    List<List<PlayingCard>> possibleMelds,
+    int playDownRequirement,
+  ) {
+    // Only consider this in higher rounds where requirements are tough
+    if (bot.melds.isEmpty) return null;
+
+    // Find small, low-value melds that we could break up
+    final breakableMelds = <int>[];
+    int totalBreakablePoints = 0;
+
+    for (int i = 0; i < bot.melds.length; i++) {
+      final meld = bot.melds[i];
+      final meldPoints = meld.pointValue;
+
+      // Only break up small melds (not books) and relatively low point value
+      if (meld.cards.length < bookMinSize &&
+          meldPoints <= smallMeldPointThreshold) {
+        breakableMelds.add(i);
+        totalBreakablePoints += meldPoints;
+      }
+    }
+
+    if (breakableMelds.isEmpty) return null;
+
+    // Calculate available points including wild cards (actual values: 2s=20, Jokers=50)
+    final handPoints = _calculateHandValue(bot.currentHand);
+    final wildCards = bot.currentHand.where((c) => c.isWild).toList();
+    final wildCardPoints = wildCards.fold<int>(
+      0,
+      (sum, card) => sum + card.pointValue,
+    );
+
+    final potentialPoints = handPoints + totalBreakablePoints + wildCardPoints;
+
+    // Only break melds if we can definitely meet the requirement
+    if (potentialPoints >= playDownRequirement + meldBreakSafetyBuffer) {
+      // For now, recommend using wild cards more aggressively
+      // Try to create a meld using wilds to boost points
+      final meldsWithWilds = possibleMelds
+          .where((meld) => meld.any((card) => card.isWild))
+          .toList();
+
+      if (meldsWithWilds.isNotEmpty) {
+        // Sort by point value, prioritize higher point melds
+        meldsWithWilds.sort((a, b) {
+          final aPoints = a.fold<int>(0, (sum, card) => sum + card.pointValue);
+          final bPoints = b.fold<int>(0, (sum, card) => sum + card.pointValue);
+          return bPoints.compareTo(aPoints);
+        });
+
+        final bestWildMeld = meldsWithWilds.first;
+        final meldPoints = bestWildMeld.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
+
+        if (meldPoints >= playDownRequirement) {
+          return BotDecision(action: 'createMeld', data: bestWildMeld);
+        }
+      }
     }
 
     return null;
