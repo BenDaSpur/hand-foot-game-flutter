@@ -95,6 +95,18 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  Future<void> _checkAndHandleRoundEnd() async {
+    if (_gameController.gameState.phase == GamePhase.roundEnd) {
+      await Future.delayed(
+        const Duration(seconds: 2),
+      ); // Brief pause to show scores
+      if (_disposed || !mounted) return; // Check again after delay
+      _gameController.nextRound();
+      setState(() {});
+      _processBotTurns(); // Resume game flow
+    }
+  }
+
   void _processBotTurn() async {
     // Check if widget has been disposed
     if (_disposed || !mounted) return;
@@ -107,14 +119,9 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Check if round has ended and automatically start next round
-    if (_gameController.gameState.phase == GamePhase.roundEnd) {
-      await Future.delayed(
-        const Duration(seconds: 2),
-      ); // Brief pause to show scores
-      if (_disposed || !mounted) return; // Check again after delay
-      _gameController.nextRound();
-      setState(() {});
-      _processBotTurns(); // Resume game flow
+    await _checkAndHandleRoundEnd();
+    if (_gameController.gameState.phase == GamePhase.roundEnd ||
+        _gameController.gameState.phase == GamePhase.gameEnd) {
       return;
     }
 
@@ -780,7 +787,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _onDiscard() {
+  void _onDiscard() async {
     if (_selectedCards.length == 1) {
       final humanPlayer = _gameController.gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
@@ -796,6 +803,7 @@ class _GameScreenState extends State<GameScreen> {
           if (_gameController.discardCard(_selectedCards.first)) {
             setState(() {});
             _selectedCardIndices.clear();
+            await _checkAndHandleRoundEnd();
             _processBotTurns();
           }
           return;
@@ -827,6 +835,7 @@ class _GameScreenState extends State<GameScreen> {
       if (_gameController.discardCard(_selectedCards.first)) {
         setState(() {});
         _selectedCardIndices.clear();
+        await _checkAndHandleRoundEnd();
         _processBotTurns();
       }
     } else {
