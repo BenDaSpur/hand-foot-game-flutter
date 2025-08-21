@@ -11,6 +11,7 @@ class MeldWidget extends StatelessWidget {
   final bool canAcceptSelectedCard;
   final int meldIndex;
   final int compatibleCardsInHand;
+  final bool compatibleCardsAreWilds;
 
   const MeldWidget({
     super.key,
@@ -22,6 +23,7 @@ class MeldWidget extends StatelessWidget {
     this.onSelectAllCards,
     this.canAcceptSelectedCard = false,
     this.compatibleCardsInHand = 0,
+    this.compatibleCardsAreWilds = false,
   });
 
   @override
@@ -111,7 +113,9 @@ class MeldWidget extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        'Select $compatibleCardsInHand',
+                        compatibleCardsAreWilds
+                            ? 'Select $compatibleCardsInHand wilds'
+                            : 'Select $compatibleCardsInHand',
                         style: const TextStyle(
                           fontSize: 10,
                           color: Colors.white,
