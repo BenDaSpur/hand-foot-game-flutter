@@ -488,7 +488,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _onAddCardToMeld(int meldIndex) {
+  Future<void> _onAddCardToMeld(int meldIndex) async {
     if (_selectedCards.isEmpty) {
       _showErrorDialog(
         'Select at least one card first before clicking on a meld.',
@@ -534,7 +534,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Add all valid cards one by one (non-wilds)
-    _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
+    await _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
   }
 
   bool _canAddCardToMeld(int meldIndex) {
@@ -730,7 +730,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _performMultiMeldCreation(List<List<int>> meldIndices) {
+  Future<void> _performMultiMeldCreation(List<List<int>> meldIndices) async {
     bool success = true;
     int meldsCreated = 0;
 
@@ -776,14 +776,19 @@ class _GameScreenState extends State<GameScreen> {
       _sortHand('rank');
       setState(() {});
 
+      // Check if creating melds caused the round to end
+      await _checkAndHandleRoundEnd();
+
       // Show success message
       final message = meldsCreated == 1
           ? 'Successfully created meld!'
           : 'Successfully created $meldsCreated melds for play-down!';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.green),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.green),
+        );
+      }
     }
   }
 
@@ -970,9 +975,9 @@ class _GameScreenState extends State<GameScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
+              await _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange,
@@ -987,11 +992,11 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _addCardsToMeld(
+  Future<void> _addCardsToMeld(
     int meldIndex,
     List<PlayingCard> cardsToAdd,
     List<PlayingCard> invalidCards,
-  ) {
+  ) async {
     int addedCount = 0;
     for (final card in cardsToAdd) {
       if (_gameController.addCardToMeld(meldIndex, card)) {
@@ -1003,6 +1008,9 @@ class _GameScreenState extends State<GameScreen> {
       _sortHand('rank');
       _selectedCardIndices.clear();
       setState(() {});
+
+      // Check if adding cards to meld caused the round to end
+      await _checkAndHandleRoundEnd();
 
       if (invalidCards.isNotEmpty) {
         final invalidNames = invalidCards.map((c) => c.displayName).join(', ');
