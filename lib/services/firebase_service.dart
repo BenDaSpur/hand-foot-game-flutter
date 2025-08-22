@@ -8,6 +8,7 @@ import '../models/player.dart';
 import '../models/deck.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
+import 'firebase_constants.dart';
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -16,8 +17,17 @@ class FirebaseService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
 
-  static const String gamesCollection = 'games';
-  static const String playersCollection = 'players';
+  // Use constants from FirebaseConstants
+  static const String gamesCollection = FirebaseConstants.gamesCollection;
+  static const String playersCollection = FirebaseConstants.playersCollection;
+  static const String userLimitsCollection =
+      FirebaseConstants.userLimitsCollection;
+
+  // Rate limiting constants
+  static const int maxGamesPerUserPerHour =
+      FirebaseConstants.maxGamesPerUserPerHour;
+  static const int maxGamesPerUserPerDay =
+      FirebaseConstants.maxGamesPerUserPerDay;
 
   /// Initialize Firebase
   static Future<void> initialize() async {
@@ -261,7 +271,7 @@ class FirebaseService {
     }
   }
 
-  /// Create a new multiplayer game
+  /// Create a new multiplayer game with validation and rate limiting
   static Future<String?> createGame({
     required String hostPlayerName,
     required int maxPlayers,
@@ -270,6 +280,27 @@ class FirebaseService {
       final user = _auth.currentUser;
       if (user == null) {
         _logger.warning('Cannot create game: user not signed in');
+        return null;
+      }
+
+      // Validate inputs
+      if (!_isValidPlayerName(hostPlayerName)) {
+        _logger.warning('Invalid player name: $hostPlayerName');
+        return null;
+      }
+
+      if (!_isValidPlayerCount(maxPlayers)) {
+        _logger.warning('Invalid max players: $maxPlayers');
+        return null;
+      }
+
+      // Check rate limiting
+      if (await _hasExceededGameCreationLimit(user.uid)) {
+        _logger.warning('User ${user.uid} exceeded game creation limit');
+        await logGameEvent(
+          'game_creation_rate_limited',
+          parameters: {'user_id': user.uid},
+        );
         return null;
       }
 
@@ -283,22 +314,29 @@ class FirebaseService {
       final gameDoc = await _firestore.collection(gamesCollection).add({
         'hostId': user.uid,
         'maxPlayers': maxPlayers,
-        'status': 'waiting', // waiting, playing, finished
+        'status': FirebaseConstants.gameStatusWaiting,
         'createdAt': FieldValue.serverTimestamp(),
         'players': [_playerToMap(hostPlayer)],
         'gameState': null, // Will be set when game starts
       });
+
+      // Update rate limiting counters
+      await _updateGameCreationLimits(user.uid);
 
       _logger.info('Created game: ${gameDoc.id}');
       await logGameCreated(maxPlayers: maxPlayers);
       return gameDoc.id;
     } catch (e) {
       _logger.severe('Failed to create game: $e');
+      await logGameEvent(
+        'game_creation_failed',
+        parameters: {'error': e.toString()},
+      );
       return null;
     }
   }
 
-  /// Join an existing game
+  /// Join an existing game with validation
   static Future<bool> joinGame({
     required String gameId,
     required String playerName,
@@ -307,6 +345,17 @@ class FirebaseService {
       final user = _auth.currentUser;
       if (user == null) {
         _logger.warning('Cannot join game: user not signed in');
+        return false;
+      }
+
+      // Validate inputs
+      if (!_isValidGameId(gameId)) {
+        _logger.warning('Invalid game ID: $gameId');
+        return false;
+      }
+
+      if (!_isValidPlayerName(playerName)) {
+        _logger.warning('Invalid player name: $playerName');
         return false;
       }
 
@@ -330,7 +379,7 @@ class FirebaseService {
         return false;
       }
 
-      if (gameData['status'] != 'waiting') {
+      if (gameData['status'] != FirebaseConstants.gameStatusWaiting) {
         _logger.warning('Game is not accepting players: $gameId');
         return false;
       }
@@ -389,7 +438,7 @@ class FirebaseService {
       gameState.startRound();
 
       await _firestore.collection(gamesCollection).doc(gameId).update({
-        'status': 'playing',
+        'status': FirebaseConstants.gameStatusPlaying,
         'gameState': _gameStateToMap(gameState),
       });
 
@@ -632,5 +681,135 @@ class FirebaseService {
       playerName: data['playerName'] ?? 'Unknown',
       timestamp: (data['timestamp'] as Timestamp).toDate(),
     );
+  }
+
+  // === VALIDATION HELPERS ===
+
+  /// Validate player name using constants
+  static bool _isValidPlayerName(String name) {
+    if (name.trim().isEmpty) return false;
+    if (name.length > FirebaseConstants.maxPlayerNameLength) return false;
+    if (name.length < FirebaseConstants.minPlayerNameLength) return false;
+
+    // Check for inappropriate content (basic filter)
+    final lowercaseName = name.toLowerCase();
+    if (FirebaseConstants.reservedPlayerNames.any(
+      (word) => lowercaseName.contains(word),
+    )) {
+      return false;
+    }
+
+    // Only allow alphanumeric and basic punctuation
+    final validChars = RegExp(r'^[a-zA-Z0-9\s\-_\.]+$');
+    return validChars.hasMatch(name);
+  }
+
+  /// Validate player count using constants
+  static bool _isValidPlayerCount(int count) {
+    return count >= FirebaseConstants.minPlayersPerGame &&
+        count <= FirebaseConstants.maxPlayersPerGame;
+  }
+
+  /// Validate game ID format
+  static bool _isValidGameId(String gameId) {
+    if (gameId.trim().isEmpty) return false;
+    if (gameId.length < FirebaseConstants.minGameIdLength) return false;
+
+    // Basic alphanumeric check
+    final validChars = RegExp(r'^[a-zA-Z0-9]+$');
+    return validChars.hasMatch(gameId);
+  }
+
+  // === RATE LIMITING ===
+
+  /// Check if user has exceeded game creation limits
+  static Future<bool> _hasExceededGameCreationLimit(String userId) async {
+    try {
+      final now = DateTime.now();
+      final hourAgo = now.subtract(const Duration(hours: 1));
+      final dayAgo = now.subtract(const Duration(days: 1));
+
+      final userLimitDoc = await _firestore
+          .collection(userLimitsCollection)
+          .doc(userId)
+          .get();
+
+      if (!userLimitDoc.exists) {
+        return false; // First time creating, allow
+      }
+
+      final data = userLimitDoc.data()!;
+      final recentCreations = List<Timestamp>.from(data['gameCreations'] ?? []);
+
+      // Count games created in last hour and day
+      int gamesLastHour = 0;
+      int gamesLastDay = 0;
+
+      for (final timestamp in recentCreations) {
+        final creationTime = timestamp.toDate();
+        if (creationTime.isAfter(hourAgo)) {
+          gamesLastHour++;
+        }
+        if (creationTime.isAfter(dayAgo)) {
+          gamesLastDay++;
+        }
+      }
+
+      return gamesLastHour >= maxGamesPerUserPerHour ||
+          gamesLastDay >= maxGamesPerUserPerDay;
+    } catch (e) {
+      _logger.warning('Failed to check rate limiting: $e');
+      return false; // Allow on error to prevent blocking users
+    }
+  }
+
+  /// Update game creation limits tracking
+  static Future<void> _updateGameCreationLimits(String userId) async {
+    try {
+      final now = Timestamp.now();
+      final dayAgo = now.toDate().subtract(const Duration(days: 1));
+
+      await _firestore.collection(userLimitsCollection).doc(userId).set({
+        'gameCreations': FieldValue.arrayUnion([now]),
+        'lastUpdated': now,
+      }, SetOptions(merge: true));
+
+      // Clean up old entries (older than 1 day) in a separate operation
+      // This prevents the document from growing indefinitely
+      _cleanupOldLimitEntries(userId, dayAgo);
+    } catch (e) {
+      _logger.warning('Failed to update rate limiting: $e');
+      // Non-critical, don't throw
+    }
+  }
+
+  /// Clean up old rate limiting entries (fire and forget)
+  static void _cleanupOldLimitEntries(String userId, DateTime cutoffDate) {
+    _firestore
+        .collection(userLimitsCollection)
+        .doc(userId)
+        .get()
+        .then((doc) {
+          if (!doc.exists) return;
+
+          final data = doc.data()!;
+          final allCreations = List<Timestamp>.from(
+            data['gameCreations'] ?? [],
+          );
+          final recentCreations = allCreations
+              .where((timestamp) => timestamp.toDate().isAfter(cutoffDate))
+              .toList();
+
+          if (recentCreations.length < allCreations.length) {
+            // Only update if we're actually removing entries
+            doc.reference.update({
+              'gameCreations': recentCreations,
+              'lastCleaned': Timestamp.now(),
+            });
+          }
+        })
+        .catchError((error) {
+          _logger.warning('Failed to cleanup old limit entries: $error');
+        });
   }
 }

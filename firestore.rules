@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Games collection rules
+    match /games/{gameId} {
+      // Anyone can read games to browse/join
+      allow read: if request.auth != null;
+      
+      // Only authenticated users can create games
+      allow create: if request.auth != null 
+        && request.auth.uid == resource.data.hostId
+        && isValidGameCreation(resource.data);
+      
+      // Only host or players in the game can update
+      allow update: if request.auth != null 
+        && (request.auth.uid == resource.data.hostId 
+            || request.auth.uid in getPlayerIds(resource.data))
+        && isValidGameUpdate(resource.data, request.resource.data);
+      
+      // Only host can delete games
+      allow delete: if request.auth != null 
+        && request.auth.uid == resource.data.hostId;
+    }
+    
+    // User rate limiting collection
+    match /userLimits/{userId} {
+      allow read, write: if request.auth != null 
+        && request.auth.uid == userId;
+    }
+  }
+  
+  // Helper functions
+  function isValidGameCreation(data) {
+    return data.keys().hasAll(['hostId', 'maxPlayers', 'status', 'createdAt', 'players'])
+      && data.maxPlayers >= 2 
+      && data.maxPlayers <= 6
+      && data.status == 'waiting'
+      && data.players.size() == 1
+      && data.players[0].id == data.hostId;
+  }
+  
+  function isValidGameUpdate(oldData, newData) {
+    let allowedStatusTransitions = [
+      ['waiting', 'playing'],
+      ['playing', 'finished']
+    ];
+    
+    // Check if status transition is allowed
+    let statusValid = oldData.status == newData.status 
+      || [oldData.status, newData.status] in allowedStatusTransitions;
+    
+    // Don't allow changing host
+    let hostUnchanged = oldData.hostId == newData.hostId;
+    
+    // Don't allow exceeding max players
+    let playerCountValid = newData.players.size() <= newData.maxPlayers;
+    
+    return statusValid && hostUnchanged && playerCountValid;
+  }
+  
+  function getPlayerIds(gameData) {
+    return gameData.players.map(player, player.id);
+  }
+}
