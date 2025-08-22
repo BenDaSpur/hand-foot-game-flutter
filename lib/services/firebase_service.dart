@@ -9,6 +9,7 @@ import '../models/deck.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
+import '../firebase_options.dart';
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -31,7 +32,9 @@ class FirebaseService {
 
   /// Initialize Firebase
   static Future<void> initialize() async {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     _logger.info('Firebase initialized');
   }
 
