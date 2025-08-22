@@ -11,21 +11,8 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
 
-// Conditional Firebase options import
-// This will be available in production builds but not in development/test
-FirebaseOptions? _getFirebaseOptions() {
-  if (kDebugMode) {
-    return null; // Skip Firebase options in debug mode to avoid missing file issues
-  }
-
-  try {
-    // In production, this import should be available from the build workflow
-    // For now, we'll return null and let Firebase use default configuration
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
+// TODO: Implement proper Firebase options loading when needed for production
+// For now, we rely on Firebase.initializeApp() default behavior
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -60,22 +47,11 @@ class FirebaseService {
     }
 
     try {
-      // Initialize Firebase with options if available, otherwise use default
-      final options = _getFirebaseOptions();
-      _logger.info(
-        '🔥 Initializing Firebase with options: ${options != null ? 'YES' : 'NO'}',
-      );
-
-      // For local development without firebase_options.dart, just initialize without options
-      if (options == null && (kDebugMode || kIsWeb)) {
-        await Firebase.initializeApp();
-        _logger.info(
-          '🚀 Firebase core initialized without options (development mode)',
-        );
-      } else {
-        await Firebase.initializeApp(options: options);
-        _logger.info('🚀 Firebase core initialized successfully with options');
-      }
+      // Initialize Firebase using default configuration
+      // TODO: Add proper Firebase options when implementing production configuration
+      _logger.info('🔥 Initializing Firebase...');
+      await Firebase.initializeApp();
+      _logger.info('🚀 Firebase core initialized successfully');
 
       // Explicitly initialize analytics for web
       if (kIsWeb) {
@@ -105,16 +81,22 @@ class FirebaseService {
     Map<String, dynamic>? parameters,
   }) async {
     try {
-      // Enhanced logging for all environments to verify analytics
-      _logger.info('🔥 Attempting to log Firebase event: $eventName');
-      _logger.info('📊 Event parameters: $parameters');
+      // Log analytics events with sanitized parameter info
+      _logger.info('🔥 Logging Firebase event: $eventName');
+      if (kDebugMode) {
+        // Only log full parameters in debug mode
+        _logger.info('📊 Event parameters: $parameters');
+      } else {
+        // In production, only log parameter count for security
+        _logger.info('📊 Event parameters count: ${parameters?.length ?? 0}');
+      }
 
       await _analytics.logEvent(
         name: eventName,
         parameters: parameters?.cast<String, Object>(),
       );
 
-      // Success logging
+      // Success logging for debugging
       _logger.info(
         '✅ Firebase Analytics event logged successfully: $eventName',
       );

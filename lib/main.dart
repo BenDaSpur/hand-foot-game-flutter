@@ -22,7 +22,10 @@ void main() async {
     );
   } catch (e) {
     // Continue without Firebase - this is normal for local development
-    // Detailed error logging is handled in FirebaseService
+    // Only log in debug mode to avoid production noise
+    if (kDebugMode) {
+      print('Firebase initialization failed, continuing without analytics');
+    }
   }
 
   runApp(const HandAndFootApp());
