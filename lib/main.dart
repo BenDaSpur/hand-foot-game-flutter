@@ -7,13 +7,24 @@ import 'theme/balatro_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Only initialize Firebase in non-test environments
-  if (!kDebugMode || kIsWeb) {
-    try {
-      await FirebaseService.initialize();
-    } catch (e) {
-      print('Firebase initialization failed: $e');
-      // Continue without Firebase in test environments
+  // Try to initialize Firebase, but continue gracefully if it fails
+  try {
+    await FirebaseService.initialize();
+
+    // Log app startup event for analytics
+    await FirebaseService.logGameEvent(
+      'app_startup',
+      parameters: {
+        'platform': kIsWeb ? 'web' : 'mobile',
+        'debug_mode': kDebugMode,
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+  } catch (e) {
+    // Continue without Firebase - this is normal for local development
+    // Only log in debug mode to avoid production noise
+    if (kDebugMode) {
+      print('Firebase initialization failed, continuing without analytics');
     }
   }
 

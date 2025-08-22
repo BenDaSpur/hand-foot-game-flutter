@@ -11,21 +11,8 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
 
-// Conditional Firebase options import
-// This will be available in production builds but not in development/test
-FirebaseOptions? _getFirebaseOptions() {
-  if (kDebugMode) {
-    return null; // Skip Firebase options in debug mode to avoid missing file issues
-  }
-
-  try {
-    // In production, this import should be available from the build workflow
-    // For now, we'll return null and let Firebase use default configuration
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
+// TODO: Implement proper Firebase options loading when needed for production
+// For now, we rely on Firebase.initializeApp() default behavior
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -60,25 +47,28 @@ class FirebaseService {
     }
 
     try {
-      // Initialize Firebase with options if available, otherwise use default
-      final options = _getFirebaseOptions();
-      await Firebase.initializeApp(options: options);
+      // Initialize Firebase using default configuration
+      // TODO: Add proper Firebase options when implementing production configuration
+      _logger.info('🔥 Initializing Firebase...');
+      await Firebase.initializeApp();
+      _logger.info('🚀 Firebase core initialized successfully');
 
       // Explicitly initialize analytics for web
       if (kIsWeb) {
         try {
           await _analytics.setAnalyticsCollectionEnabled(true);
-          _logger.info('Firebase Analytics enabled for web');
+          _logger.info('✅ Firebase Analytics enabled for web');
         } catch (e) {
-          _logger.warning('Failed to enable web analytics: $e');
+          _logger.warning('❌ Failed to enable web analytics: $e');
         }
       }
 
-      _logger.info('Firebase initialized successfully');
+      _logger.info('🎉 Firebase initialized successfully');
     } catch (e) {
-      _logger.warning('Firebase initialization failed: $e');
+      _logger.warning('❌ Firebase initialization failed: $e');
       // Don't throw - allow app to continue without Firebase
       // This handles cases where Firebase isn't properly configured
+      rethrow; // Let main.dart handle the error gracefully
     }
   }
 
@@ -91,19 +81,29 @@ class FirebaseService {
     Map<String, dynamic>? parameters,
   }) async {
     try {
+      // Log analytics events with sanitized parameter info
+      _logger.info('🔥 Logging Firebase event: $eventName');
+      if (kDebugMode) {
+        // Only log full parameters in debug mode
+        _logger.info('📊 Event parameters: $parameters');
+      } else {
+        // In production, only log parameter count for security
+        _logger.info('📊 Event parameters count: ${parameters?.length ?? 0}');
+      }
+
       await _analytics.logEvent(
         name: eventName,
         parameters: parameters?.cast<String, Object>(),
       );
 
-      // Debug logging for web to verify analytics is working
-      if (kIsWeb && kDebugMode) {
-        _logger.info(
-          'Analytics event logged: $eventName with params: $parameters',
-        );
-      }
+      // Success logging for debugging
+      _logger.info(
+        '✅ Firebase Analytics event logged successfully: $eventName',
+      );
     } catch (e) {
-      _logger.warning('Failed to log analytics event $eventName: $e');
+      _logger.warning(
+        '❌ Failed to log Firebase Analytics event $eventName: $e',
+      );
     }
   }
 
