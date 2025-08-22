@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/game_screen.dart';
+import 'services/firebase_service.dart';
 import 'theme/balatro_theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await FirebaseService.initialize();
   runApp(const HandAndFootApp());
 }
 

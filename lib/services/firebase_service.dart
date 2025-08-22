@@ -1,0 +1,636 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:logging/logging.dart';
+import '../models/game_state.dart';
+import '../models/player.dart';
+import '../models/deck.dart';
+import '../models/card.dart';
+import '../models/meld.dart';
+
+/// Firebase service for handling multiplayer game state synchronization
+class FirebaseService {
+  static final Logger _logger = Logger('FirebaseService');
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
+  static final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
+
+  static const String gamesCollection = 'games';
+  static const String playersCollection = 'players';
+
+  /// Initialize Firebase
+  static Future<void> initialize() async {
+    await Firebase.initializeApp();
+    _logger.info('Firebase initialized');
+  }
+
+  /// Get Firebase Analytics instance
+  static FirebaseAnalytics get analytics => _analytics;
+
+  /// Log game events for analytics
+  static Future<void> logGameEvent(
+    String eventName, {
+    Map<String, dynamic>? parameters,
+  }) async {
+    try {
+      await _analytics.logEvent(
+        name: eventName,
+        parameters: parameters?.cast<String, Object>(),
+      );
+    } catch (e) {
+      _logger.warning('Failed to log analytics event: $e');
+    }
+  }
+
+  /// Log when user creates a multiplayer game
+  static Future<void> logGameCreated({required int maxPlayers}) async {
+    await logGameEvent(
+      'game_created',
+      parameters: {'max_players': maxPlayers, 'game_type': 'multiplayer'},
+    );
+  }
+
+  /// Log when user joins a multiplayer game
+  static Future<void> logGameJoined() async {
+    await logGameEvent('game_joined', parameters: {'game_type': 'multiplayer'});
+  }
+
+  /// Log when a multiplayer game starts
+  static Future<void> logGameStarted({required int playerCount}) async {
+    await logGameEvent(
+      'game_started',
+      parameters: {'player_count': playerCount, 'game_type': 'multiplayer'},
+    );
+  }
+
+  /// Log when a multiplayer game ends
+  static Future<void> logGameCompleted({
+    required int playerCount,
+    required int roundCount,
+    required int gameDurationSeconds,
+  }) async {
+    await logGameEvent(
+      'game_completed',
+      parameters: {
+        'player_count': playerCount,
+        'rounds_played': roundCount,
+        'duration_seconds': gameDurationSeconds,
+        'game_type': 'multiplayer',
+      },
+    );
+  }
+
+  // === GAME DEBUGGING EVENTS ===
+
+  /// Log round transitions
+  static Future<void> logRoundEvent(
+    String action, {
+    required int round,
+    required int playerCount,
+    String? winnerId,
+    List<int>? playerScores,
+  }) async {
+    await logGameEvent(
+      'round_$action',
+      parameters: {
+        'round': round,
+        'player_count': playerCount,
+        if (winnerId != null) 'winner_id': winnerId,
+        if (playerScores != null) 'player_scores': playerScores,
+      },
+    );
+  }
+
+  /// Log player actions
+  static Future<void> logPlayerAction(
+    String action, {
+    required String playerId,
+    required bool success,
+    String? errorMessage,
+    Map<String, dynamic>? additionalData,
+  }) async {
+    await logGameEvent(
+      'player_$action',
+      parameters: {
+        'player_id': playerId,
+        'success': success,
+        if (errorMessage != null) 'error': errorMessage,
+        ...?additionalData,
+      },
+    );
+  }
+
+  /// Log meld creation attempts
+  static Future<void> logMeldAttempt({
+    required String playerId,
+    required int cardCount,
+    required bool success,
+    required bool isFirstMeld,
+    String? failureReason,
+    int? pointValue,
+  }) async {
+    await logPlayerAction(
+      'meld_attempt',
+      playerId: playerId,
+      success: success,
+      errorMessage: failureReason,
+      additionalData: {
+        'card_count': cardCount,
+        'is_first_meld': isFirstMeld,
+        if (pointValue != null) 'point_value': pointValue,
+      },
+    );
+  }
+
+  /// Log unlock discard pile attempts
+  static Future<void> logUnlockAttempt({
+    required String playerId,
+    required bool success,
+    String? failureReason,
+    int? discardPileSize,
+  }) async {
+    await logPlayerAction(
+      'unlock_attempt',
+      playerId: playerId,
+      success: success,
+      errorMessage: failureReason,
+      additionalData: {
+        if (discardPileSize != null) 'discard_pile_size': discardPileSize,
+      },
+    );
+  }
+
+  /// Log going out attempts
+  static Future<void> logGoOutAttempt({
+    required String playerId,
+    required bool success,
+    required bool hasCleanBook,
+    required bool hasDirtyBook,
+    required bool footEmpty,
+    String? failureReason,
+  }) async {
+    await logPlayerAction(
+      'go_out_attempt',
+      playerId: playerId,
+      success: success,
+      errorMessage: failureReason,
+      additionalData: {
+        'has_clean_book': hasCleanBook,
+        'has_dirty_book': hasDirtyBook,
+        'foot_empty': footEmpty,
+      },
+    );
+  }
+
+  /// Log bot AI decisions (for debugging bot behavior)
+  static Future<void> logBotDecision({
+    required String botId,
+    required String action,
+    required String reasoning,
+    Map<String, dynamic>? context,
+  }) async {
+    await logGameEvent(
+      'bot_decision',
+      parameters: {
+        'bot_id': botId,
+        'action': action,
+        'reasoning': reasoning,
+        ...?context,
+      },
+    );
+  }
+
+  /// Log game state validation errors
+  static Future<void> logGameStateError({
+    required String errorType,
+    required String errorMessage,
+    Map<String, dynamic>? gameContext,
+  }) async {
+    await logGameEvent(
+      'game_state_error',
+      parameters: {
+        'error_type': errorType,
+        'error_message': errorMessage,
+        ...?gameContext,
+      },
+    );
+  }
+
+  /// Log performance issues
+  static Future<void> logPerformanceIssue({
+    required String operation,
+    required int durationMs,
+    Map<String, dynamic>? context,
+  }) async {
+    await logGameEvent(
+      'performance_issue',
+      parameters: {
+        'operation': operation,
+        'duration_ms': durationMs,
+        ...?context,
+      },
+    );
+  }
+
+  /// Log network/sync issues
+  static Future<void> logSyncIssue({
+    required String issueType,
+    required String errorMessage,
+    String? gameId,
+  }) async {
+    await logGameEvent(
+      'sync_issue',
+      parameters: {
+        'issue_type': issueType,
+        'error_message': errorMessage,
+        if (gameId != null) 'game_id': gameId,
+      },
+    );
+  }
+
+  /// Sign in anonymously for multiplayer games
+  static Future<User?> signInAnonymously() async {
+    try {
+      final userCredential = await _auth.signInAnonymously();
+      _logger.info('Signed in anonymously: ${userCredential.user?.uid}');
+      return userCredential.user;
+    } catch (e) {
+      _logger.severe('Anonymous sign in failed: $e');
+      return null;
+    }
+  }
+
+  /// Create a new multiplayer game
+  static Future<String?> createGame({
+    required String hostPlayerName,
+    required int maxPlayers,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        _logger.warning('Cannot create game: user not signed in');
+        return null;
+      }
+
+      // Create initial game state with host player
+      final hostPlayer = Player(
+        id: user.uid,
+        name: hostPlayerName,
+        type: PlayerType.human,
+      );
+
+      final gameDoc = await _firestore.collection(gamesCollection).add({
+        'hostId': user.uid,
+        'maxPlayers': maxPlayers,
+        'status': 'waiting', // waiting, playing, finished
+        'createdAt': FieldValue.serverTimestamp(),
+        'players': [_playerToMap(hostPlayer)],
+        'gameState': null, // Will be set when game starts
+      });
+
+      _logger.info('Created game: ${gameDoc.id}');
+      await logGameCreated(maxPlayers: maxPlayers);
+      return gameDoc.id;
+    } catch (e) {
+      _logger.severe('Failed to create game: $e');
+      return null;
+    }
+  }
+
+  /// Join an existing game
+  static Future<bool> joinGame({
+    required String gameId,
+    required String playerName,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) {
+        _logger.warning('Cannot join game: user not signed in');
+        return false;
+      }
+
+      final gameDoc = await _firestore
+          .collection(gamesCollection)
+          .doc(gameId)
+          .get();
+      if (!gameDoc.exists) {
+        _logger.warning('Game not found: $gameId');
+        return false;
+      }
+
+      final gameData = gameDoc.data()!;
+      final players = List<Map<String, dynamic>>.from(
+        gameData['players'] ?? [],
+      );
+      final maxPlayers = gameData['maxPlayers'] as int;
+
+      if (players.length >= maxPlayers) {
+        _logger.warning('Game is full: $gameId');
+        return false;
+      }
+
+      if (gameData['status'] != 'waiting') {
+        _logger.warning('Game is not accepting players: $gameId');
+        return false;
+      }
+
+      // Add new player
+      final newPlayer = Player(
+        id: user.uid,
+        name: playerName,
+        type: PlayerType.human,
+      );
+
+      players.add(_playerToMap(newPlayer));
+
+      await _firestore.collection(gamesCollection).doc(gameId).update({
+        'players': players,
+      });
+
+      _logger.info('Joined game: $gameId as $playerName');
+      await logGameJoined();
+      return true;
+    } catch (e) {
+      _logger.severe('Failed to join game: $e');
+      return false;
+    }
+  }
+
+  /// Start a game (host only)
+  static Future<bool> startGame(String gameId) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return false;
+
+      final gameDoc = await _firestore
+          .collection(gamesCollection)
+          .doc(gameId)
+          .get();
+      if (!gameDoc.exists) return false;
+
+      final gameData = gameDoc.data()!;
+      if (gameData['hostId'] != user.uid) {
+        _logger.warning('Only host can start game');
+        return false;
+      }
+
+      final playersData = List<Map<String, dynamic>>.from(
+        gameData['players'] ?? [],
+      );
+      final players = playersData.map(_playerFromMap).toList();
+
+      // Create initial game state
+      final deck = Deck.createHandAndFootDeck(players.length);
+      final gameState = GameState(players: players, deck: deck);
+
+      // Deal initial cards
+      gameState.dealCards();
+      gameState.startRound();
+
+      await _firestore.collection(gamesCollection).doc(gameId).update({
+        'status': 'playing',
+        'gameState': _gameStateToMap(gameState),
+      });
+
+      _logger.info('Started game: $gameId');
+      await logGameStarted(playerCount: players.length);
+      return true;
+    } catch (e) {
+      _logger.severe('Failed to start game: $e');
+      return false;
+    }
+  }
+
+  /// Update game state in Firestore
+  static Future<bool> updateGameState(
+    String gameId,
+    GameState gameState,
+  ) async {
+    try {
+      await _firestore.collection(gamesCollection).doc(gameId).update({
+        'gameState': _gameStateToMap(gameState),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      _logger.severe('Failed to update game state: $e');
+      return false;
+    }
+  }
+
+  /// Listen to game state changes
+  static Stream<GameState?> listenToGameState(String gameId) {
+    return _firestore.collection(gamesCollection).doc(gameId).snapshots().map((
+      snapshot,
+    ) {
+      if (!snapshot.exists || snapshot.data() == null) {
+        return null;
+      }
+
+      final gameData = snapshot.data()!;
+      final gameStateData = gameData['gameState'] as Map<String, dynamic>?;
+
+      if (gameStateData == null) return null;
+
+      try {
+        return _gameStateFromMap(gameStateData);
+      } catch (e) {
+        _logger.severe('Failed to parse game state: $e');
+        return null;
+      }
+    });
+  }
+
+  /// Listen to game lobby changes (for waiting room)
+  static Stream<Map<String, dynamic>?> listenToGameLobby(String gameId) {
+    return _firestore.collection(gamesCollection).doc(gameId).snapshots().map((
+      snapshot,
+    ) {
+      if (!snapshot.exists) return null;
+      return snapshot.data();
+    });
+  }
+
+  /// Convert GameState to Firestore map
+  static Map<String, dynamic> _gameStateToMap(GameState gameState) {
+    return {
+      'players': gameState.players.map(_playerToMap).toList(),
+      'deck': _deckToMap(gameState.deck),
+      'discardPile': gameState.discardPile.map(_cardToMap).toList(),
+      'recentActions': gameState.recentActions.map(_gameActionToMap).toList(),
+      'currentPlayerIndex': gameState.currentPlayerIndex,
+      'phase': gameState.phase.name,
+      'turnPhase': gameState.turnPhase.name,
+      'round': gameState.round,
+      'winner': gameState.winner?.name,
+      'discardPileFrozen': gameState.discardPileFrozen,
+      'hasDrawnFromDeck': gameState.hasDrawnFromDeck,
+      'hasMelded': gameState.hasMelded,
+    };
+  }
+
+  /// Convert Firestore map to GameState
+  static GameState _gameStateFromMap(Map<String, dynamic> data) {
+    final playersData = List<Map<String, dynamic>>.from(data['players'] ?? []);
+    final players = playersData.map(_playerFromMap).toList();
+
+    final deckData = data['deck'] as Map<String, dynamic>;
+    final deck = _deckFromMap(deckData);
+
+    final discardPileData = List<Map<String, dynamic>>.from(
+      data['discardPile'] ?? [],
+    );
+    final discardPile = discardPileData.map(_cardFromMap).toList();
+
+    final recentActionsData = List<Map<String, dynamic>>.from(
+      data['recentActions'] ?? [],
+    );
+    final recentActions = recentActionsData.map(_gameActionFromMap).toList();
+
+    // Find winner by name if specified
+    Player? winner;
+    if (data['winner'] != null) {
+      final winnerName = data['winner'] as String;
+      try {
+        winner = players.firstWhere((p) => p.name == winnerName);
+      } catch (e) {
+        // Winner not found in players list
+        winner = null;
+      }
+    }
+
+    return GameState(
+      players: players,
+      deck: deck,
+      discardPile: discardPile,
+      recentActions: recentActions,
+      currentPlayerIndex: data['currentPlayerIndex'] ?? 0,
+      phase: GamePhase.values.firstWhere(
+        (phase) => phase.name == (data['phase'] ?? 'setup'),
+        orElse: () => GamePhase.setup,
+      ),
+      turnPhase: TurnPhase.values.firstWhere(
+        (phase) => phase.name == (data['turnPhase'] ?? 'draw'),
+        orElse: () => TurnPhase.draw,
+      ),
+      round: data['round'] ?? 1,
+      winner: winner,
+      discardPileFrozen: data['discardPileFrozen'] ?? false,
+      hasDrawnFromDeck: data['hasDrawnFromDeck'] ?? false,
+      hasMelded: data['hasMelded'] ?? false,
+    );
+  }
+
+  /// Convert Player to Firestore map
+  static Map<String, dynamic> _playerToMap(Player player) {
+    return {
+      'id': player.id,
+      'name': player.name,
+      'type': player.type.name,
+      'hand': player.hand.map(_cardToMap).toList(),
+      'foot': player.foot.map(_cardToMap).toList(),
+      'melds': player.melds.map(_meldToMap).toList(),
+      'score': player.score,
+      'hasPickedUpFoot': player.hasPickedUpFoot,
+      'hasPlayedDown': player.hasPlayedDown,
+      'newlyDrawnCardIndices': player.newlyDrawnCardIndices.toList(),
+    };
+  }
+
+  /// Convert Firestore map to Player
+  static Player _playerFromMap(Map<String, dynamic> data) {
+    final handData = List<Map<String, dynamic>>.from(data['hand'] ?? []);
+    final hand = handData.map(_cardFromMap).toList();
+
+    final footData = List<Map<String, dynamic>>.from(data['foot'] ?? []);
+    final foot = footData.map(_cardFromMap).toList();
+
+    final meldsData = List<Map<String, dynamic>>.from(data['melds'] ?? []);
+    final melds = meldsData
+        .map(_meldFromMap)
+        .where((m) => m != null)
+        .cast<Meld>()
+        .toList();
+
+    final newlyDrawnIndices = List<int>.from(
+      data['newlyDrawnCardIndices'] ?? [],
+    );
+
+    return Player(
+        id: data['id'] ?? 'unknown',
+        name: data['name'] ?? 'Unknown',
+        type: PlayerType.values.firstWhere(
+          (type) => type.name == (data['type'] ?? 'human'),
+          orElse: () => PlayerType.human,
+        ),
+        hand: hand,
+        foot: foot,
+        melds: melds,
+        newlyDrawnCardIndices: Set<int>.from(newlyDrawnIndices),
+      )
+      ..score = data['score'] ?? 0
+      ..hasPickedUpFoot = data['hasPickedUpFoot'] ?? false
+      ..hasPlayedDown = data['hasPlayedDown'] ?? false;
+  }
+
+  /// Convert Deck to Firestore map
+  static Map<String, dynamic> _deckToMap(Deck deck) {
+    return {'cards': deck.cards.map(_cardToMap).toList()};
+  }
+
+  /// Convert Firestore map to Deck
+  static Deck _deckFromMap(Map<String, dynamic> data) {
+    final cardsData = List<Map<String, dynamic>>.from(data['cards'] ?? []);
+    final cards = cardsData.map(_cardFromMap).toList();
+    return Deck.fromCards(cards);
+  }
+
+  /// Convert PlayingCard to Firestore map
+  static Map<String, dynamic> _cardToMap(PlayingCard card) {
+    return {'rank': card.rank.name, 'suit': card.suit?.name};
+  }
+
+  /// Convert Firestore map to PlayingCard
+  static PlayingCard _cardFromMap(Map<String, dynamic> data) {
+    final rank = CardRank.values.firstWhere((r) => r.name == data['rank']);
+
+    // Handle jokers which don't have suits
+    if (rank == CardRank.joker) {
+      return PlayingCard(rank: rank);
+    }
+
+    final suit = Suit.values.firstWhere((s) => s.name == data['suit']);
+    return PlayingCard(rank: rank, suit: suit);
+  }
+
+  /// Convert Meld to Firestore map
+  static Map<String, dynamic> _meldToMap(Meld meld) {
+    return {'cards': meld.cards.map(_cardToMap).toList()};
+  }
+
+  /// Convert Firestore map to Meld
+  static Meld? _meldFromMap(Map<String, dynamic> data) {
+    final cardsData = List<Map<String, dynamic>>.from(data['cards'] ?? []);
+    final cards = cardsData.map(_cardFromMap).toList();
+    return Meld.createMeld(cards);
+  }
+
+  /// Convert GameAction to Firestore map
+  static Map<String, dynamic> _gameActionToMap(GameAction action) {
+    return {
+      'message': action.message,
+      'playerName': action.playerName,
+      'timestamp': Timestamp.fromDate(action.timestamp),
+    };
+  }
+
+  /// Convert Firestore map to GameAction
+  static GameAction _gameActionFromMap(Map<String, dynamic> data) {
+    return GameAction.withTimestamp(
+      message: data['message'] ?? '',
+      playerName: data['playerName'] ?? 'Unknown',
+      timestamp: (data['timestamp'] as Timestamp).toDate(),
+    );
+  }
+}

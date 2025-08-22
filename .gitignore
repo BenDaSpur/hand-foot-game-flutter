@@ -46,3 +46,14 @@ app.*.map.json
 
 
 .env
+
+# Firebase Configuration Files
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Firebase local settings
+.firebase/
+firebase-debug.log
+firebase-export-*.json
