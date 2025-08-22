@@ -731,48 +731,13 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _performMultiMeldCreation(List<List<int>> meldIndices) async {
-    bool success = true;
-    int meldsCreated = 0;
+    // Use the new atomic multi-meld creation method
+    final success = _gameController.createMultipleMeldsFromIndices(
+      meldIndices,
+      skipPlayDownCheck: true,
+    );
 
-    // Sort melds by highest index first to avoid index shifting issues
-    final sortedMeldIndices = List<List<int>>.from(meldIndices);
-    sortedMeldIndices.sort((a, b) {
-      // Compare by the highest index in each meld
-      final maxA = a.isNotEmpty
-          ? a.reduce((max, current) => current > max ? current : max)
-          : 0;
-      final maxB = b.isNotEmpty
-          ? b.reduce((max, current) => current > max ? current : max)
-          : 0;
-      return maxB.compareTo(maxA); // Descending order
-    });
-
-    for (final indices in sortedMeldIndices) {
-      if (_gameController.createMeldByIndices(
-        indices,
-        skipPlayDownCheck: true,
-      )) {
-        meldsCreated++;
-      } else {
-        success = false;
-        final humanPlayer = _gameController.gameState.players.firstWhere(
-          (p) => p.type == PlayerType.human,
-        );
-
-        if (indices.any((i) => i >= humanPlayer.currentHand.length)) {
-          _showErrorDialog(
-            'Card selection changed during meld creation. Please try again.',
-          );
-        } else {
-          final cards = indices.map((i) => humanPlayer.currentHand[i]).toList();
-          final cardNames = cards.map((c) => c.displayName).join(', ');
-          _showErrorDialog('Failed to create meld: $cardNames');
-        }
-        break;
-      }
-    }
-
-    if (success && meldsCreated > 0) {
+    if (success) {
       _sortHand('rank');
       setState(() {});
 
@@ -780,15 +745,19 @@ class _GameScreenState extends State<GameScreen> {
       await _checkAndHandleRoundEnd();
 
       // Show success message
-      final message = meldsCreated == 1
+      final message = meldIndices.length == 1
           ? 'Successfully created meld!'
-          : 'Successfully created $meldsCreated melds for play-down!';
+          : 'Successfully created ${meldIndices.length} melds!';
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message), backgroundColor: Colors.green),
         );
       }
+    } else {
+      _showErrorDialog(
+        'Failed to create melds. Please check your selections and try again.',
+      );
     }
   }
 

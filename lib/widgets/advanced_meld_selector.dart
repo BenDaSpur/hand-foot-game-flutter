@@ -683,13 +683,45 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       return;
     }
 
+    final handIndex = availableCardIndices[availableIndex];
+    final card = widget.player.currentHand[handIndex];
+
     setState(() {
       if (selectedAvailableIndices.contains(availableIndex)) {
         selectedAvailableIndices.remove(availableIndex);
       } else {
-        selectedAvailableIndices.add(availableIndex);
+        // Check if this card can be added to current selection
+        if (_canAddCardToSelection(card)) {
+          selectedAvailableIndices.add(availableIndex);
+        } else {
+          _showError(
+            'Cannot mix different ranks in a meld (except wild cards)',
+          );
+        }
       }
     });
+  }
+
+  bool _canAddCardToSelection(PlayingCard newCard) {
+    if (selectedAvailableIndices.isEmpty) return true;
+    if (newCard.isWild) return true; // Wild cards can always be added
+
+    // Get currently selected cards
+    final selectedCards = selectedAvailableIndices
+        .map((availableIndex) => availableCardIndices[availableIndex])
+        .map((handIndex) => widget.player.currentHand[handIndex])
+        .toList();
+
+    // Find the rank of natural cards in selection
+    final naturalCards = selectedCards.where((card) => !card.isWild).toList();
+
+    if (naturalCards.isEmpty) {
+      return true; // Only wilds selected so far, any natural card can be added
+    }
+
+    // All natural cards must have the same rank
+    final existingRank = naturalCards.first.rank;
+    return newCard.rank == existingRank;
   }
 
   void _removeMeld(int meldIndex) {

@@ -526,7 +526,11 @@ class BotAI {
         playDownRequirement,
       );
     } else {
-      return _handleLateGamePlayDown(possibleMelds, playDownRequirement);
+      return _handleLateGamePlayDown(
+        possibleMelds,
+        playDownRequirement,
+        controller,
+      );
     }
   }
 
@@ -581,13 +585,26 @@ class BotAI {
   BotDecision _handleLateGamePlayDown(
     List<List<PlayingCard>> possibleMelds,
     int playDownRequirement,
+    GameController controller,
   ) {
     // Turn 5+: Play down with minimal points to unlock discard pile ability
+
+    // Try single meld first
     final minimalResult = _tryMinimalPlayDown(
       possibleMelds,
       playDownRequirement,
     );
     if (minimalResult != null) return minimalResult;
+
+    // BUGFIX: If no single meld works, try multi-meld combinations
+    final multiMeldResult = _findBestMeldCombination(
+      possibleMelds,
+      playDownRequirement,
+      controller,
+    );
+    if (multiMeldResult.isNotEmpty) {
+      return _executePlayDown(multiMeldResult);
+    }
 
     // Emergency fallback - must discard to complete turn
     // This should rarely happen since turn 5+ usually forces play-down
