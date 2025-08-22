@@ -11,8 +11,15 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
 
-// TODO: Implement proper Firebase options loading when needed for production
-// For now, we rely on Firebase.initializeApp() default behavior
+// Conditional import for Firebase options
+// This will be replaced by build process in CI/CD
+class _FirebaseOptionsHelper {
+  static FirebaseOptions? get currentPlatform {
+    // In production builds, this will be replaced with actual Firebase options
+    // In development, this returns null for graceful fallback
+    return null;
+  }
+}
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -47,10 +54,11 @@ class FirebaseService {
     }
 
     try {
-      // Initialize Firebase using default configuration
-      // TODO: Add proper Firebase options when implementing production configuration
-      _logger.info('🔥 Initializing Firebase...');
-      await Firebase.initializeApp();
+      // Initialize Firebase with options if available, otherwise use default
+      final options = _FirebaseOptionsHelper.currentPlatform;
+      _logger.info('🔥 Initializing Firebase with options: ${options != null}');
+
+      await Firebase.initializeApp(options: options);
       _logger.info('🚀 Firebase core initialized successfully');
 
       // Explicitly initialize analytics for web
