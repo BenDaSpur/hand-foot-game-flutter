@@ -113,10 +113,20 @@ class DeviceService {
     }
 
     // Combine device identifier with a UUID for uniqueness
+    // Use crypto-quality UUID instead of hashCode to prevent collisions
     const uuid = Uuid();
     final uniquePart = uuid.v4().split('-').first; // Use first part of UUID
 
-    return 'device_${deviceIdentifier.hashCode.abs()}_$uniquePart';
+    // Create a more collision-resistant identifier by combining multiple elements
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final deviceHash = deviceIdentifier.length > 8
+        ? deviceIdentifier.substring(
+            0,
+            8,
+          ) // Use actual chars instead of hashCode
+        : deviceIdentifier.padRight(8, '0');
+
+    return 'device_${deviceHash}_${uniquePart}_${timestamp.substring(timestamp.length - 6)}';
   }
 
   /// Generate a human-readable device name

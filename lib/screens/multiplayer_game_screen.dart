@@ -38,7 +38,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   @override
   void dispose() {
-    _gameController.dispose();
+    // Safely dispose game controller to prevent memory leaks
+    try {
+      _gameController.dispose();
+    } catch (e) {
+      // Log but don't crash on disposal errors in complex navigation scenarios
+      debugPrint('Warning: Error disposing game controller: $e');
+    }
     super.dispose();
   }
 
@@ -62,6 +68,36 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          // Connection status indicator
+          StreamBuilder<bool>(
+            stream: _gameController.connectionStream,
+            initialData: _gameController.isOnline,
+            builder: (context, snapshot) {
+              final isOnline = snapshot.data ?? true;
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isOnline ? Icons.wifi : Icons.wifi_off,
+                      color: isOnline ? Colors.green : Colors.red,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isOnline ? 'ONLINE' : 'OFFLINE',
+                      style: TextStyle(
+                        color: isOnline ? Colors.green : Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           PopupMenuButton<String>(
             onSelected: (String value) {
               switch (value) {
