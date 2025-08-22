@@ -72,6 +72,142 @@ class GameController {
     return result;
   }
 
+  /// Creates multiple melds at once from card indices to avoid index shifting issues
+  bool createMultipleMeldsFromIndices(
+    List<List<int>> allMeldIndices, {
+    bool skipPlayDownCheck = false,
+  }) {
+    final humanPlayer = _gameState.players.firstWhere(
+      (p) => p.type == PlayerType.human,
+    );
+
+    // First validate all indices are within bounds
+    for (final meldIndices in allMeldIndices) {
+      for (final index in meldIndices) {
+        if (index < 0 || index >= humanPlayer.currentHand.length) {
+          return false; // Invalid index
+        }
+      }
+    }
+
+    // Convert all indices to actual cards before any removal
+    final allMeldCards = <List<PlayingCard>>[];
+    final allIndicesSorted = <List<int>>[];
+
+    for (final meldIndices in allMeldIndices) {
+      final cards = meldIndices
+          .map((index) => humanPlayer.currentHand[index])
+          .toList();
+      allMeldCards.add(cards);
+
+      // Sort indices in descending order for safe removal
+      final sortedIndices = List<int>.from(meldIndices)
+        ..sort((a, b) => b.compareTo(a));
+      allIndicesSorted.add(sortedIndices);
+    }
+
+    // Validate all melds can be created
+    for (final cards in allMeldCards) {
+      if (Meld.createMeld(cards) == null) {
+        return false; // Invalid meld
+      }
+    }
+
+    // Check total play down requirement if needed
+    if (!skipPlayDownCheck && !humanPlayer.hasPlayedDown) {
+      final totalPoints = allMeldCards
+          .expand((cards) => cards)
+          .fold<int>(0, (sum, card) => sum + card.pointValue);
+
+      if (totalPoints < _gameState.playDownRequirement) {
+        return false; // Doesn't meet play down requirement
+      }
+    }
+
+    // Now remove all cards from hand (sorted indices prevent shifting issues)
+    // We need to collect all indices first and sort them in descending order
+    final allIndicesToRemove = <int>[];
+    for (final meldIndices in allMeldIndices) {
+      allIndicesToRemove.addAll(meldIndices);
+    }
+    allIndicesToRemove.sort((a, b) => b.compareTo(a)); // Sort descending
+
+    // Remove duplicates while preserving order
+    final uniqueIndices = <int>[];
+    for (final index in allIndicesToRemove) {
+      if (!uniqueIndices.contains(index)) {
+        uniqueIndices.add(index);
+      }
+    }
+
+    // Remove cards from hand
+    humanPlayer.removeCardsByIndices(uniqueIndices);
+
+    // Create all melds and add to existing melds where appropriate
+    int meldsCreated = 0;
+    final cardNamesCreated = <String>[];
+
+    for (int i = 0; i < allMeldCards.length; i++) {
+      final cards = allMeldCards[i];
+      final naturalCards = cards.where((card) => !card.isWild).toList();
+
+      // Check if we should add to existing meld
+      if (naturalCards.isNotEmpty) {
+        final rank = naturalCards.first.rank;
+        final existingMeldIndex = humanPlayer.findMeldByRank(rank);
+
+        if (existingMeldIndex != -1) {
+          // Add to existing meld
+          final existingMeld = humanPlayer.melds[existingMeldIndex];
+          for (final card in cards) {
+            existingMeld.addCard(card);
+          }
+          cardNamesCreated.add(
+            'added to ${rank.name}: ${cards.map((c) => c.displayName).join(', ')}',
+          );
+        } else {
+          // Create new meld
+          final meld = Meld.createMeld(cards)!; // We already validated this
+          humanPlayer.melds.add(meld);
+          cardNamesCreated.add(
+            'new ${rank.name}: ${cards.map((c) => c.displayName).join(', ')}',
+          );
+          meldsCreated++;
+        }
+      }
+    }
+
+    if (meldsCreated > 0 || cardNamesCreated.isNotEmpty) {
+      // Log actions
+      final wasFirstPlayDown = !humanPlayer.hasPlayedDown;
+
+      // Update game state
+      _gameState.hasMelded = true;
+      humanPlayer.hasPlayedDown = true;
+
+      if (wasFirstPlayDown) {
+        final totalPoints = allMeldCards
+            .expand((cards) => cards)
+            .fold<int>(0, (sum, card) => sum + card.pointValue);
+        _gameState.logAction(
+          'played down with $totalPoints points: ${cardNamesCreated.join('; ')}',
+        );
+      } else {
+        _gameState.logAction('created melds: ${cardNamesCreated.join('; ')}');
+      }
+
+      // Check for foot pickup
+      if (humanPlayer.isHandEmpty && !humanPlayer.hasPickedUpFoot) {
+        humanPlayer.pickUpFoot();
+        _gameState.logAction('picked up foot pile');
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
   bool createMeldByIndices(
     List<int> cardIndices, {
     bool skipPlayDownCheck = false,
