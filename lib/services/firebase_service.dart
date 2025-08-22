@@ -11,6 +11,22 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
 
+// Conditional Firebase options import
+// This will be available in production builds but not in development/test
+FirebaseOptions? _getFirebaseOptions() {
+  if (kDebugMode) {
+    return null; // Skip Firebase options in debug mode to avoid missing file issues
+  }
+
+  try {
+    // In production, this import should be available from the build workflow
+    // For now, we'll return null and let Firebase use default configuration
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
   static final Logger _logger = Logger('FirebaseService');
@@ -44,8 +60,9 @@ class FirebaseService {
     }
 
     try {
-      // Initialize Firebase - this will work with or without firebase_options.dart
-      await Firebase.initializeApp();
+      // Initialize Firebase with options if available, otherwise use default
+      final options = _getFirebaseOptions();
+      await Firebase.initializeApp(options: options);
 
       // Explicitly initialize analytics for web
       if (kIsWeb) {
