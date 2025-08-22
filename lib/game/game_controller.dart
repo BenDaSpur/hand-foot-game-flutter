@@ -72,7 +72,38 @@ class GameController {
     return result;
   }
 
-  /// Creates multiple melds at once from card indices to avoid index shifting issues
+  /// Creates multiple melds atomically from card indices to prevent index shifting issues.
+  ///
+  /// This method handles multiple meld creation in a single transaction, ensuring that
+  /// index references remain valid throughout the operation. It's particularly important
+  /// for advanced meld creation where users create multiple melds simultaneously.
+  ///
+  /// Example usage:
+  /// ```dart
+  /// // Create three melds: Kings (0,1,2), Queens (3,4,5), Jacks with wild (6,7,8,9)
+  /// final meldIndices = [
+  ///   [0, 1, 2],       // Kings meld
+  ///   [3, 4, 5],       // Queens meld
+  ///   [6, 7, 8, 9],    // Jacks + wild meld
+  /// ];
+  /// final success = controller.createMultipleMeldsFromIndices(meldIndices);
+  /// ```
+  ///
+  /// Parameters:
+  /// - [allMeldIndices]: List of meld specifications, each containing card indices from player's hand
+  /// - [skipPlayDownCheck]: If true, bypasses play-down point requirement validation
+  ///
+  /// Returns: true if all melds were successfully created, false otherwise
+  ///
+  /// The method performs these operations atomically:
+  /// 1. Validates all indices are within bounds
+  /// 2. Converts indices to actual cards before any removal
+  /// 3. Validates all proposed melds are legal
+  /// 4. Checks play-down requirements if applicable
+  /// 5. Removes all cards from hand in one operation
+  /// 6. Creates/adds to melds and handles game state updates
+  ///
+  /// Throws: No exceptions - returns false for all error conditions
   bool createMultipleMeldsFromIndices(
     List<List<int>> allMeldIndices, {
     bool skipPlayDownCheck = false,
@@ -107,8 +138,13 @@ class GameController {
     }
 
     // Validate all melds can be created
-    for (final cards in allMeldCards) {
-      if (Meld.createMeld(cards) == null) {
+    for (int i = 0; i < allMeldCards.length; i++) {
+      final cards = allMeldCards[i];
+      final meld = Meld.createMeld(cards);
+      if (meld == null) {
+        // Debug logging for development
+        final cardNames = cards.map((c) => c.displayName).join(', ');
+        _debugLog('Failed to create meld ${i + 1}: $cardNames');
         return false; // Invalid meld
       }
     }
@@ -120,6 +156,9 @@ class GameController {
           .fold<int>(0, (sum, card) => sum + card.pointValue);
 
       if (totalPoints < _gameState.playDownRequirement) {
+        _debugLog(
+          'Play-down requirement not met: $totalPoints < ${_gameState.playDownRequirement}',
+        );
         return false; // Doesn't meet play down requirement
       }
     }
@@ -140,8 +179,8 @@ class GameController {
       }
     }
 
-    // Remove cards from hand
-    humanPlayer.removeCardsByIndices(uniqueIndices);
+    // Remove cards from hand and handle side effects
+    _removeCardsAndHandleSideEffects(humanPlayer, uniqueIndices);
 
     // Create all melds and add to existing melds where appropriate
     int meldsCreated = 0;
@@ -196,12 +235,7 @@ class GameController {
         _gameState.logAction('created melds: ${cardNamesCreated.join('; ')}');
       }
 
-      // Check for foot pickup
-      if (humanPlayer.isHandEmpty && !humanPlayer.hasPickedUpFoot) {
-        humanPlayer.pickUpFoot();
-        _gameState.logAction('picked up foot pile');
-      }
-
+      _debugLog('Successfully created ${allMeldCards.length} melds atomically');
       return true;
     }
 
@@ -257,26 +291,20 @@ class GameController {
           }
         }
 
-        // Remove cards from hand first
-        humanPlayer.removeCardsByIndices(cardIndices);
+        // Remove cards from hand and handle side effects
+        _removeCardsAndHandleSideEffects(humanPlayer, cardIndices);
 
         // Add all cards to existing meld
         for (final card in cards) {
           existingMeld.addCard(card);
         }
 
-        // Use the game state method to handle all side effects properly
+        // Update game state
         _gameState.hasMelded = true;
 
         // Log the action
         final cardNames = cards.map((c) => c.displayName).join(', ');
         _gameState.logAction('added to existing meld: $cardNames');
-
-        // Check for foot pickup
-        if (humanPlayer.isHandEmpty && !humanPlayer.hasPickedUpFoot) {
-          humanPlayer.pickUpFoot();
-          _gameState.logAction('picked up foot pile');
-        }
 
         humanPlayer.hasPlayedDown = true;
         return true;
@@ -286,11 +314,13 @@ class GameController {
     // No existing meld, try to create new meld
     final meld = Meld.createMeld(cards);
     if (meld != null) {
+      // Remove cards from hand and handle side effects
+      _removeCardsAndHandleSideEffects(humanPlayer, cardIndices);
+
       // Create new meld
-      humanPlayer.removeCardsByIndices(cardIndices);
       humanPlayer.melds.add(meld);
 
-      // Use the game state method to handle all side effects properly
+      // Update game state
       _gameState.hasMelded = true;
 
       // Log the action
@@ -301,12 +331,6 @@ class GameController {
         _gameState.logAction('played down with $points points: $cardNames');
       } else {
         _gameState.logAction('created new meld: $cardNames');
-      }
-
-      // Check for foot pickup
-      if (humanPlayer.isHandEmpty && !humanPlayer.hasPickedUpFoot) {
-        humanPlayer.pickUpFoot();
-        _gameState.logAction('picked up foot pile');
       }
 
       humanPlayer.hasPlayedDown = true;
@@ -785,5 +809,28 @@ class GameController {
     for (final player in _gameState.players) {
       player.clearNewlyDrawnCards();
     }
+  }
+
+  /// Helper method to handle card removal and associated side effects
+  /// like foot pickup. Reduces code duplication between single and multi-meld creation.
+  void _removeCardsAndHandleSideEffects(Player player, List<int> cardIndices) {
+    // Remove cards from hand
+    player.removeCardsByIndices(cardIndices);
+
+    // Check for foot pickup after card removal
+    if (player.isHandEmpty && !player.hasPickedUpFoot) {
+      player.pickUpFoot();
+      _gameState.logAction('picked up foot pile');
+    }
+  }
+
+  /// Debug logging helper for development and testing
+  /// Only logs in debug mode to avoid performance impact in production
+  void _debugLog(String message) {
+    // Only log in debug mode
+    assert(() {
+      print('[GameController] $message');
+      return true;
+    }());
   }
 }
