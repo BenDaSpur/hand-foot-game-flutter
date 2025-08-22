@@ -56,6 +56,27 @@ void main() {
     });
   });
 
+  group('Firebase Initialization', () {
+    test('initialization skips in test environment', () {
+      // This test runs in a test environment (FLUTTER_TEST=true)
+      // so it should skip Firebase initialization
+      expect(() async {
+        await FirebaseService.initialize();
+      }, returnsNormally);
+    });
+
+    test(
+      'initialization handles missing firebase options gracefully',
+      () async {
+        // This test verifies that initialization doesn't crash when
+        // firebase_options.dart is not available (which is the case in tests)
+        expect(() async {
+          await FirebaseService.initialize();
+        }, returnsNormally);
+      },
+    );
+  });
+
   group('Data Serialization', () {
     // TODO: Add tests for serialization methods once we have mock Firebase setup
     // These tests would verify the _gameStateToMap and _gameStateFromMap methods

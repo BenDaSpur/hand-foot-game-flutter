@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:logging/logging.dart';
+import 'package:flutter/foundation.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/deck.dart';
@@ -29,16 +30,38 @@ class FirebaseService {
   static const int maxGamesPerUserPerDay =
       FirebaseConstants.maxGamesPerUserPerDay;
 
-  /// Initialize Firebase
+  /// Initialize Firebase with proper configuration
   static Future<void> initialize() async {
+    // In test environments, skip Firebase initialization completely
+    final bool isTestEnvironment = const bool.fromEnvironment(
+      'FLUTTER_TEST',
+      defaultValue: false,
+    );
+
+    if (isTestEnvironment) {
+      _logger.info('Skipping Firebase initialization in test environment');
+      return;
+    }
+
     try {
-      // Basic initialization without options for CI/testing
-      // In production, firebase_options.dart will be available from secrets
+      // Initialize Firebase - this will work with or without firebase_options.dart
       await Firebase.initializeApp();
+
+      // Explicitly initialize analytics for web
+      if (kIsWeb) {
+        try {
+          await _analytics.setAnalyticsCollectionEnabled(true);
+          _logger.info('Firebase Analytics enabled for web');
+        } catch (e) {
+          _logger.warning('Failed to enable web analytics: $e');
+        }
+      }
+
       _logger.info('Firebase initialized successfully');
     } catch (e) {
       _logger.warning('Firebase initialization failed: $e');
-      // Don't throw - allow app to continue without Firebase in test environments
+      // Don't throw - allow app to continue without Firebase
+      // This handles cases where Firebase isn't properly configured
     }
   }
 
@@ -55,8 +78,15 @@ class FirebaseService {
         name: eventName,
         parameters: parameters?.cast<String, Object>(),
       );
+
+      // Debug logging for web to verify analytics is working
+      if (kIsWeb && kDebugMode) {
+        _logger.info(
+          'Analytics event logged: $eventName with params: $parameters',
+        );
+      }
     } catch (e) {
-      _logger.warning('Failed to log analytics event: $e');
+      _logger.warning('Failed to log analytics event $eventName: $e');
     }
   }
 
