@@ -49,8 +49,12 @@ class FirebaseService {
 
       // Explicitly initialize analytics for web
       if (kIsWeb) {
-        await _analytics.setAnalyticsCollectionEnabled(true);
-        _logger.info('Firebase Analytics enabled for web');
+        try {
+          await _analytics.setAnalyticsCollectionEnabled(true);
+          _logger.info('Firebase Analytics enabled for web');
+        } catch (e) {
+          _logger.warning('Failed to enable web analytics: $e');
+        }
       }
 
       _logger.info('Firebase initialized successfully');
