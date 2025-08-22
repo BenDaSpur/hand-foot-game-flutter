@@ -22,6 +22,10 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
+      - name: Create Firebase config (for analysis)
+        run: |
+          echo "${{ secrets.FIREBASE_CONFIG_ANDROID }}" | base64 -d > android/app/google-services.json || echo "{}" > android/app/google-services.json
+
       - name: Install dependencies
         run: flutter pub get
 
