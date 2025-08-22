@@ -66,14 +66,8 @@ jobs:
           # Create firebase_options.dart from secrets
           echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
           
-          # Replace the helper class with proper import
-          sed -i 's/class _FirebaseOptionsHelper {/\/\/ Replaced by CI\/CD - import firebase options/' lib/services/firebase_service.dart
-          sed -i 's/static FirebaseOptions? get currentPlatform {/\/\/ Import DefaultFirebaseOptions from firebase_options.dart/' lib/services/firebase_service.dart
-          sed -i 's/return null;/\/\/ Using DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          sed -i 's/_FirebaseOptionsHelper.currentPlatform/DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          
-          # Add the proper import
-          sed -i '12a import '\''../firebase_options.dart'\'';' lib/services/firebase_service.dart
+          # Replace the simple function with proper Firebase options import
+          sed -i 's|return null; // Development fallback|import '\''../firebase_options.dart'\''; return DefaultFirebaseOptions.currentPlatform;|' lib/services/firebase_service.dart
 
       - name: Install dependencies
         run: flutter pub get
@@ -112,14 +106,8 @@ jobs:
           # Create firebase_options.dart from secrets
           echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
           
-          # Replace the helper class with proper import
-          sed -i 's/class _FirebaseOptionsHelper {/\/\/ Replaced by CI\/CD - import firebase options/' lib/services/firebase_service.dart
-          sed -i 's/static FirebaseOptions? get currentPlatform {/\/\/ Import DefaultFirebaseOptions from firebase_options.dart/' lib/services/firebase_service.dart
-          sed -i 's/return null;/\/\/ Using DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          sed -i 's/_FirebaseOptionsHelper.currentPlatform/DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          
-          # Add the proper import
-          sed -i '12a import '\''../firebase_options.dart'\'';' lib/services/firebase_service.dart
+          # Replace the simple function with proper Firebase options import
+          sed -i 's|return null; // Development fallback|import '\''../firebase_options.dart'\''; return DefaultFirebaseOptions.currentPlatform;|' lib/services/firebase_service.dart
 
       - name: Install dependencies
         run: flutter pub get

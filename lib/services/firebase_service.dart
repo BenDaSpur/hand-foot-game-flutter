@@ -11,14 +11,11 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
 
-// Conditional import for Firebase options
-// This will be replaced by build process in CI/CD
-class _FirebaseOptionsHelper {
-  static FirebaseOptions? get currentPlatform {
-    // In production builds, this will be replaced with actual Firebase options
-    // In development, this returns null for graceful fallback
-    return null;
-  }
+// Simple approach: Try to import firebase_options, gracefully fail if not available
+FirebaseOptions? _getFirebaseOptions() {
+  // This will work when firebase_options.dart exists (production)
+  // In development without the file, we'll just return null
+  return null; // Development fallback
 }
 
 /// Firebase service for handling multiplayer game state synchronization
@@ -55,7 +52,7 @@ class FirebaseService {
 
     try {
       // Initialize Firebase with options if available, otherwise use default
-      final options = _FirebaseOptionsHelper.currentPlatform;
+      final options = _getFirebaseOptions();
       _logger.info('🔥 Initializing Firebase with options: ${options != null}');
 
       await Firebase.initializeApp(options: options);
