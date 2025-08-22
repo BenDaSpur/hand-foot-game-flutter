@@ -62,23 +62,37 @@ class FirebaseService {
     try {
       // Initialize Firebase with options if available, otherwise use default
       final options = _getFirebaseOptions();
-      await Firebase.initializeApp(options: options);
+      _logger.info(
+        '🔥 Initializing Firebase with options: ${options != null ? 'YES' : 'NO'}',
+      );
+
+      // For local development without firebase_options.dart, just initialize without options
+      if (options == null && (kDebugMode || kIsWeb)) {
+        await Firebase.initializeApp();
+        _logger.info(
+          '🚀 Firebase core initialized without options (development mode)',
+        );
+      } else {
+        await Firebase.initializeApp(options: options);
+        _logger.info('🚀 Firebase core initialized successfully with options');
+      }
 
       // Explicitly initialize analytics for web
       if (kIsWeb) {
         try {
           await _analytics.setAnalyticsCollectionEnabled(true);
-          _logger.info('Firebase Analytics enabled for web');
+          _logger.info('✅ Firebase Analytics enabled for web');
         } catch (e) {
-          _logger.warning('Failed to enable web analytics: $e');
+          _logger.warning('❌ Failed to enable web analytics: $e');
         }
       }
 
-      _logger.info('Firebase initialized successfully');
+      _logger.info('🎉 Firebase initialized successfully');
     } catch (e) {
-      _logger.warning('Firebase initialization failed: $e');
+      _logger.warning('❌ Firebase initialization failed: $e');
       // Don't throw - allow app to continue without Firebase
       // This handles cases where Firebase isn't properly configured
+      rethrow; // Let main.dart handle the error gracefully
     }
   }
 
@@ -91,19 +105,23 @@ class FirebaseService {
     Map<String, dynamic>? parameters,
   }) async {
     try {
+      // Enhanced logging for all environments to verify analytics
+      _logger.info('🔥 Attempting to log Firebase event: $eventName');
+      _logger.info('📊 Event parameters: $parameters');
+
       await _analytics.logEvent(
         name: eventName,
         parameters: parameters?.cast<String, Object>(),
       );
 
-      // Debug logging for web to verify analytics is working
-      if (kIsWeb && kDebugMode) {
-        _logger.info(
-          'Analytics event logged: $eventName with params: $parameters',
-        );
-      }
+      // Success logging
+      _logger.info(
+        '✅ Firebase Analytics event logged successfully: $eventName',
+      );
     } catch (e) {
-      _logger.warning('Failed to log analytics event $eventName: $e');
+      _logger.warning(
+        '❌ Failed to log Firebase Analytics event $eventName: $e',
+      );
     }
   }
 
