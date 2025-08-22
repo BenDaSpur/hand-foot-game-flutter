@@ -66,6 +66,18 @@ jobs:
           # Create firebase_options.dart from secrets
           echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
           
+          # Validate the decoded config
+          if [[ ! -s lib/firebase_options.dart ]]; then
+            echo "Error: Firebase config is empty or invalid"
+            exit 1
+          fi
+          
+          # Verify it contains expected Firebase content
+          if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
+            echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
+            exit 1
+          fi
+          
           # Replace the simple function with proper Firebase options import
           sed -i 's|return null; // Development fallback|import '\''../firebase_options.dart'\''; return DefaultFirebaseOptions.currentPlatform;|' lib/services/firebase_service.dart
 
@@ -105,6 +117,18 @@ jobs:
         run: |
           # Create firebase_options.dart from secrets
           echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          
+          # Validate the decoded config
+          if [[ ! -s lib/firebase_options.dart ]]; then
+            echo "Error: Firebase config is empty or invalid"
+            exit 1
+          fi
+          
+          # Verify it contains expected Firebase content
+          if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
+            echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
+            exit 1
+          fi
           
           # Replace the simple function with proper Firebase options import
           sed -i 's|return null; // Development fallback|import '\''../firebase_options.dart'\''; return DefaultFirebaseOptions.currentPlatform;|' lib/services/firebase_service.dart
