@@ -32,22 +32,19 @@ class FirebaseService {
 
   /// Initialize Firebase with proper configuration
   static Future<void> initialize() async {
+    // In test environments, skip Firebase initialization completely
+    final bool isTestEnvironment = const bool.fromEnvironment(
+      'FLUTTER_TEST',
+      defaultValue: false,
+    );
+
+    if (isTestEnvironment) {
+      _logger.info('Skipping Firebase initialization in test environment');
+      return;
+    }
+
     try {
-      // In test environments, skip Firebase initialization completely
-      if (kDebugMode && !kIsWeb) {
-        // Check if we're running tests by looking for test environment
-        final bool isTestEnvironment = const bool.fromEnvironment(
-          'FLUTTER_TEST',
-          defaultValue: false,
-        );
-
-        if (isTestEnvironment) {
-          _logger.info('Skipping Firebase initialization in test environment');
-          return;
-        }
-      }
-
-      // Initialize Firebase without options for now to fix test compilation
+      // Initialize Firebase - this will work with or without firebase_options.dart
       await Firebase.initializeApp();
 
       // Explicitly initialize analytics for web
@@ -58,16 +55,9 @@ class FirebaseService {
 
       _logger.info('Firebase initialized successfully');
     } catch (e) {
-      try {
-        // Fallback initialization without options
-        await Firebase.initializeApp();
-        _logger.warning('Firebase initialized without options: $e');
-      } catch (fallbackError) {
-        _logger.warning(
-          'Firebase initialization completely failed: $fallbackError',
-        );
-        // Don't throw - allow app to continue without Firebase in test environments
-      }
+      _logger.warning('Firebase initialization failed: $e');
+      // Don't throw - allow app to continue without Firebase
+      // This handles cases where Firebase isn't properly configured
     }
   }
 
