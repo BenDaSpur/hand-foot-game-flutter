@@ -61,25 +61,21 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
+      - name: Verify Firebase config
         run: |
-          # Create firebase_options.dart from secrets
-          echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
-          
-          # Validate the decoded config
+          # Firebase configuration is now committed to the repo
+          # Just verify it's valid
           if [[ ! -s lib/firebase_options.dart ]]; then
-            echo "Error: Firebase config is empty or invalid"
+            echo "Error: Firebase config file is missing"
             exit 1
           fi
           
-          # Verify it contains expected Firebase content
           if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
             echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
             exit 1
           fi
           
-          # Replace the simple function with proper Firebase options import
-          sed -i 's|return null; // Development fallback|import '\''../firebase_options.dart'\''; return DefaultFirebaseOptions.currentPlatform;|' lib/services/firebase_service.dart
+          echo "Firebase configuration verified successfully"
 
       - name: Install dependencies
         run: flutter pub get
@@ -113,25 +109,21 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
+      - name: Verify Firebase config
         run: |
-          # Create firebase_options.dart from secrets
-          echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
-          
-          # Validate the decoded config
+          # Firebase configuration is now committed to the repo
+          # Just verify it's valid
           if [[ ! -s lib/firebase_options.dart ]]; then
-            echo "Error: Firebase config is empty or invalid"
+            echo "Error: Firebase config file is missing"
             exit 1
           fi
           
-          # Verify it contains expected Firebase content
           if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
             echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
             exit 1
           fi
           
-          # Replace the simple function with proper Firebase options import
-          sed -i 's|return null; // Development fallback|import '\''../firebase_options.dart'\''; return DefaultFirebaseOptions.currentPlatform;|' lib/services/firebase_service.dart
+          echo "Firebase configuration verified successfully"
 
       - name: Install dependencies
         run: flutter pub get

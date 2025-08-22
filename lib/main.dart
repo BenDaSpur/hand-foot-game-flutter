@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'screens/game_screen.dart';
+import 'screens/main_menu_screen.dart';
 import 'services/firebase_service.dart';
 import 'theme/balatro_theme.dart';
 
@@ -20,6 +20,9 @@ void main() async {
         'timestamp': DateTime.now().toIso8601String(),
       },
     );
+
+    // Clean up expired games on app startup
+    FirebaseService.cleanupExpiredGames();
   } catch (e) {
     // Continue without Firebase - this is normal for local development
     // Only log in debug mode to avoid production noise
@@ -39,7 +42,7 @@ class HandAndFootApp extends StatelessWidget {
     return MaterialApp(
       title: 'Hand & Foot Card Game',
       theme: BalatroTheme.darkTheme,
-      home: const GameScreen(),
+      home: const MainMenuScreen(),
     );
   }
 }

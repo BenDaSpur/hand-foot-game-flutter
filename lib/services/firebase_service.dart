@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:logging/logging.dart';
@@ -10,19 +9,15 @@ import '../models/deck.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import 'firebase_constants.dart';
+import 'device_service.dart';
 
-// Simple approach: Try to import firebase_options, gracefully fail if not available
-FirebaseOptions? _getFirebaseOptions() {
-  // This will work when firebase_options.dart exists (production)
-  // In development without the file, we'll just return null
-  return null; // Development fallback
-}
+// Always import firebase_options - stub for development, real config in production
+import '../firebase_options.dart';
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
   static final Logger _logger = Logger('FirebaseService');
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
 
   // Use constants from FirebaseConstants
@@ -51,9 +46,11 @@ class FirebaseService {
     }
 
     try {
-      // Initialize Firebase with options if available, otherwise use default
-      final options = _getFirebaseOptions();
-      _logger.info('🔥 Initializing Firebase with options: ${options != null}');
+      // Initialize Firebase with options from firebase_options.dart
+      final options = DefaultFirebaseOptions.currentPlatform;
+      _logger.info(
+        '🔥 Initializing Firebase with configuration for ${options.projectId}',
+      );
 
       await Firebase.initializeApp(options: options);
       _logger.info('🚀 Firebase core initialized successfully');
@@ -318,15 +315,131 @@ class FirebaseService {
     );
   }
 
-  /// Sign in anonymously for multiplayer games
-  static Future<User?> signInAnonymously() async {
+  /// Delete a game (host only)
+  static Future<bool> deleteGame(String gameId) async {
     try {
-      final userCredential = await _auth.signInAnonymously();
-      _logger.info('Signed in anonymously: ${userCredential.user?.uid}');
-      return userCredential.user;
+      final userId = await getDeviceUserId();
+      if (userId == null) return false;
+
+      final gameDoc = await _firestore
+          .collection(gamesCollection)
+          .doc(gameId)
+          .get();
+
+      if (!gameDoc.exists) return false;
+
+      final gameData = gameDoc.data()!;
+
+      // Only host can delete
+      if (gameData['hostId'] != userId) {
+        _logger.warning('Only host can delete game');
+        return false;
+      }
+
+      await _firestore.collection(gamesCollection).doc(gameId).delete();
+
+      _logger.info('Deleted game: $gameId');
+      await logGameEvent('game_deleted', parameters: {'game_id': gameId});
+      return true;
     } catch (e) {
-      _logger.severe('Anonymous sign in failed: $e');
+      _logger.severe('Failed to delete game: $e');
+      return false;
+    }
+  }
+
+  /// Remove player from game lobby
+  static Future<bool> leaveGame(String gameId) async {
+    try {
+      final userId = await getDeviceUserId();
+      if (userId == null) return false;
+
+      final gameDoc = await _firestore
+          .collection(gamesCollection)
+          .doc(gameId)
+          .get();
+
+      if (!gameDoc.exists) return false;
+
+      final gameData = gameDoc.data()!;
+      final players = List<Map<String, dynamic>>.from(
+        gameData['players'] ?? [],
+      );
+
+      // If host is leaving, delete the entire game
+      if (gameData['hostId'] == userId) {
+        return await deleteGame(gameId);
+      }
+
+      // Remove player from list
+      players.removeWhere((player) => player['id'] == userId);
+
+      await _firestore.collection(gamesCollection).doc(gameId).update({
+        'players': players,
+      });
+
+      _logger.info('Left game: $gameId');
+      await logGameEvent('game_left', parameters: {'game_id': gameId});
+      return true;
+    } catch (e) {
+      _logger.severe('Failed to leave game: $e');
+      return false;
+    }
+  }
+
+  /// Clean up expired games (games in waiting status older than 30 minutes)
+  static Future<void> cleanupExpiredGames() async {
+    try {
+      final thirtyMinutesAgo = DateTime.now().subtract(
+        const Duration(minutes: 30),
+      );
+
+      final expiredGames = await _firestore
+          .collection(gamesCollection)
+          .where('status', isEqualTo: FirebaseConstants.gameStatusWaiting)
+          .where('createdAt', isLessThan: Timestamp.fromDate(thirtyMinutesAgo))
+          .limit(50) // Process in batches
+          .get();
+
+      final batch = _firestore.batch();
+
+      for (final doc in expiredGames.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+
+      if (expiredGames.docs.isNotEmpty) {
+        _logger.info('Cleaned up ${expiredGames.docs.length} expired games');
+        await logGameEvent(
+          'expired_games_cleaned',
+          parameters: {'count': expiredGames.docs.length},
+        );
+      }
+    } catch (e) {
+      _logger.warning('Failed to cleanup expired games: $e');
+    }
+  }
+
+  /// Get device-based user identification for multiplayer games
+  /// This replaces anonymous authentication with a more secure device-based approach
+  static Future<String?> getDeviceUserId() async {
+    try {
+      final deviceId = await DeviceService.getDeviceId();
+      _logger.info('Using device ID: ${deviceId.substring(0, 8)}...');
+      return deviceId;
+    } catch (e) {
+      _logger.severe('Failed to get device user ID: $e');
       return null;
+    }
+  }
+
+  /// Get device name for display purposes
+  static Future<String> getDeviceUserName() async {
+    try {
+      return await DeviceService.getDeviceName();
+    } catch (e) {
+      _logger.warning('Failed to get device name: $e');
+      return 'Unknown Device';
     }
   }
 
@@ -336,9 +449,9 @@ class FirebaseService {
     required int maxPlayers,
   }) async {
     try {
-      final user = _auth.currentUser;
-      if (user == null) {
-        _logger.warning('Cannot create game: user not signed in');
+      final userId = await getDeviceUserId();
+      if (userId == null) {
+        _logger.warning('Cannot create game: failed to get device ID');
         return null;
       }
 
@@ -354,24 +467,31 @@ class FirebaseService {
       }
 
       // Check rate limiting
-      if (await _hasExceededGameCreationLimit(user.uid)) {
-        _logger.warning('User ${user.uid} exceeded game creation limit');
+      if (await _hasExceededGameCreationLimit(userId)) {
+        _logger.warning('User $userId exceeded game creation limit');
         await logGameEvent(
           'game_creation_rate_limited',
-          parameters: {'user_id': user.uid},
+          parameters: {'user_id': userId},
         );
+        return null;
+      }
+
+      // Generate short, user-friendly game ID
+      final gameId = await _generateShortGameId();
+      if (gameId == null) {
+        _logger.warning('Failed to generate unique game ID');
         return null;
       }
 
       // Create initial game state with host player
       final hostPlayer = Player(
-        id: user.uid,
+        id: userId,
         name: hostPlayerName,
         type: PlayerType.human,
       );
 
-      final gameDoc = await _firestore.collection(gamesCollection).add({
-        'hostId': user.uid,
+      await _firestore.collection(gamesCollection).doc(gameId).set({
+        'hostId': userId,
         'maxPlayers': maxPlayers,
         'status': FirebaseConstants.gameStatusWaiting,
         'createdAt': FieldValue.serverTimestamp(),
@@ -380,11 +500,11 @@ class FirebaseService {
       });
 
       // Update rate limiting counters
-      await _updateGameCreationLimits(user.uid);
+      await _updateGameCreationLimits(userId);
 
-      _logger.info('Created game: ${gameDoc.id}');
+      _logger.info('Created game: $gameId');
       await logGameCreated(maxPlayers: maxPlayers);
-      return gameDoc.id;
+      return gameId;
     } catch (e) {
       _logger.severe('Failed to create game: $e');
       await logGameEvent(
@@ -401,14 +521,19 @@ class FirebaseService {
     required String playerName,
   }) async {
     try {
-      final user = _auth.currentUser;
-      if (user == null) {
-        _logger.warning('Cannot join game: user not signed in');
+      final userId = await getDeviceUserId();
+      if (userId == null) {
+        _logger.warning('Cannot join game: failed to get device ID');
         return false;
       }
 
+      // Normalize game ID (convert short codes to uppercase)
+      final normalizedGameId = gameId.length == 4
+          ? gameId.toUpperCase()
+          : gameId;
+
       // Validate inputs
-      if (!_isValidGameId(gameId)) {
+      if (!_isValidGameId(normalizedGameId)) {
         _logger.warning('Invalid game ID: $gameId');
         return false;
       }
@@ -420,7 +545,7 @@ class FirebaseService {
 
       final gameDoc = await _firestore
           .collection(gamesCollection)
-          .doc(gameId)
+          .doc(normalizedGameId)
           .get();
       if (!gameDoc.exists) {
         _logger.warning('Game not found: $gameId');
@@ -445,18 +570,18 @@ class FirebaseService {
 
       // Add new player
       final newPlayer = Player(
-        id: user.uid,
+        id: userId,
         name: playerName,
         type: PlayerType.human,
       );
 
       players.add(_playerToMap(newPlayer));
 
-      await _firestore.collection(gamesCollection).doc(gameId).update({
-        'players': players,
-      });
+      await _firestore.collection(gamesCollection).doc(normalizedGameId).update(
+        {'players': players},
+      );
 
-      _logger.info('Joined game: $gameId as $playerName');
+      _logger.info('Joined game: $normalizedGameId as $playerName');
       await logGameJoined();
       return true;
     } catch (e) {
@@ -468,8 +593,8 @@ class FirebaseService {
   /// Start a game (host only)
   static Future<bool> startGame(String gameId) async {
     try {
-      final user = _auth.currentUser;
-      if (user == null) return false;
+      final userId = await getDeviceUserId();
+      if (userId == null) return false;
 
       final gameDoc = await _firestore
           .collection(gamesCollection)
@@ -478,7 +603,7 @@ class FirebaseService {
       if (!gameDoc.exists) return false;
 
       final gameData = gameDoc.data()!;
-      if (gameData['hostId'] != user.uid) {
+      if (gameData['hostId'] != userId) {
         _logger.warning('Only host can start game');
         return false;
       }
@@ -772,11 +897,57 @@ class FirebaseService {
   /// Validate game ID format
   static bool _isValidGameId(String gameId) {
     if (gameId.trim().isEmpty) return false;
-    if (gameId.length < FirebaseConstants.minGameIdLength) return false;
 
-    // Basic alphanumeric check
+    // Accept either short format (4 chars) or long Firebase format
+    if (gameId.length == 4) {
+      // Short game ID format: AB12
+      final validChars = RegExp(r'^[A-Z0-9]{4}$');
+      return validChars.hasMatch(gameId.toUpperCase());
+    }
+
+    // Original validation for longer IDs
+    if (gameId.length < FirebaseConstants.minGameIdLength) return false;
     final validChars = RegExp(r'^[a-zA-Z0-9]+$');
     return validChars.hasMatch(gameId);
+  }
+
+  /// Generate a short, user-friendly game ID (e.g., AB12)
+  static Future<String?> _generateShortGameId() async {
+    const maxAttempts =
+        20; // More attempts since shorter IDs have higher collision chance
+
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      // Generate 4-character code: 2 letters + 2 numbers
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      final numbers = '0123456789';
+
+      String gameId = '';
+      gameId += letters[(timestamp + attempt) % letters.length];
+      gameId += letters[(timestamp + attempt * 7) % letters.length];
+      gameId += numbers[(timestamp + attempt * 13) % numbers.length];
+      gameId += numbers[(timestamp + attempt * 17) % numbers.length];
+
+      // Check if this ID already exists
+      try {
+        final existingDoc = await _firestore
+            .collection(gamesCollection)
+            .doc(gameId)
+            .get();
+
+        if (!existingDoc.exists) {
+          return gameId;
+        }
+      } catch (e) {
+        _logger.warning('Error checking game ID uniqueness: $e');
+        // Continue trying with next attempt
+      }
+    }
+
+    _logger.severe(
+      'Failed to generate unique game ID after $maxAttempts attempts',
+    );
+    return null;
   }
 
   // === RATE LIMITING ===
