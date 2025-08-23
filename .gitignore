@@ -51,7 +51,7 @@ app.*.map.json
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
-lib/firebase_options.dart
+# Note: lib/firebase_options.dart is now tracked in repo as stub config
 
 # Firebase local settings
 .firebase/
