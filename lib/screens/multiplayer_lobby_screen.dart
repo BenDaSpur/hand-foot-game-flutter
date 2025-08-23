@@ -138,6 +138,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               label: 'Game ID',
               hint: 'Enter game ID to join',
               icon: Icons.games,
+              inputFormatters: [
+                // Auto-convert 4-character codes to uppercase
+                _GameIdFormatter(),
+              ],
             ),
             const SizedBox(height: 40),
           ],
@@ -154,6 +158,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     required String label,
     required String hint,
     required IconData icon,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,6 +174,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
+          inputFormatters: inputFormatters,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: hint,
@@ -490,8 +496,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Future<void> _joinGame() async {
+    final gameId = _gameIdController.text.trim();
+    // Normalize short game IDs to uppercase for consistency
+    final normalizedGameId = gameId.length == 4 ? gameId.toUpperCase() : gameId;
+
     final controller = await MultiplayerGameController.joinGame(
-      gameId: _gameIdController.text.trim(),
+      gameId: normalizedGameId,
       playerName: _playerNameController.text.trim(),
       userId: _currentUserId!,
     );
@@ -613,5 +623,27 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         ],
       ),
     );
+  }
+}
+
+/// Custom TextInputFormatter for Game ID fields
+/// Automatically converts 4-character game codes to uppercase for consistency
+class _GameIdFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Only apply uppercase conversion for 4-character codes
+    if (newValue.text.length <= 4) {
+      final upperCaseText = newValue.text.toUpperCase();
+      return newValue.copyWith(
+        text: upperCaseText,
+        selection: TextSelection.collapsed(offset: upperCaseText.length),
+      );
+    }
+
+    // For longer IDs, leave as-is (might be full Firebase document IDs)
+    return newValue;
   }
 }

@@ -35,6 +35,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   void initState() {
     super.initState();
     _gameController = widget.gameController;
+
+    // Note: Do NOT call initializeGame() here for multiplayer games
+    // The game state is already initialized by the host and synced via Firebase
+    // Calling initializeGame() would overwrite the synced state
   }
 
   @override
