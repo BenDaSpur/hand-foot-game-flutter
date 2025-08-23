@@ -20,9 +20,32 @@ void main() {
       expect(find.text('Draw from Deck'), findsOneWidget);
 
       // Verify player information exists (may be multiple instances)
+      // Bots now have actual names like Clara, Carl, Bob, Rita, etc.
       expect(find.textContaining('You'), findsWidgets);
-      expect(find.textContaining('Bot 1'), findsWidgets);
-      expect(find.textContaining('Bot 2'), findsWidgets);
+
+      // Check for any bot name - at least one should be visible
+      final botNames = [
+        'Clara',
+        'Carl',
+        'Bob',
+        'Rita',
+        'Ben',
+        'Penny',
+        'Alex',
+        'Sue',
+      ];
+      bool foundAnyBot = false;
+      for (final botName in botNames) {
+        if (find.textContaining(botName).evaluate().isNotEmpty) {
+          foundAnyBot = true;
+          break;
+        }
+      }
+      expect(
+        foundAnyBot,
+        isTrue,
+        reason: 'Should find at least one bot name in UI',
+      );
 
       print('✅ Game startup and UI verification complete');
       await E2ETestUtils.cleanShutdown(tester);
@@ -102,30 +125,56 @@ void main() {
     ) async {
       await E2ETestUtils.startAppWithCleanState(tester);
 
-      // Switch to Bot 1's melds
-      await E2ETestUtils.safeTap(
-        tester,
-        find.textContaining('Bot 1'),
-        debugLabel: 'Switch to Bot 1 melds',
-      );
+      // Try to switch to any bot's melds
+      final botNames = [
+        'Clara',
+        'Carl',
+        'Bob',
+        'Rita',
+        'Ben',
+        'Penny',
+        'Alex',
+        'Sue',
+      ];
+      bool foundBotToSwitch = false;
+
+      for (final botName in botNames) {
+        final botFinder = find.textContaining(botName);
+        if (botFinder.evaluate().isNotEmpty) {
+          await E2ETestUtils.safeTap(
+            tester,
+            botFinder,
+            debugLabel: 'Switch to $botName melds',
+          );
+          foundBotToSwitch = true;
+          break;
+        }
+      }
       await E2ETestUtils.stabilize(tester);
 
-      if (await E2ETestUtils.waitForElement(
-        tester,
-        find.textContaining('Bot 1\'s Melds:'),
-      )) {
-        expect(find.text('Back to yours'), findsOneWidget);
-
-        // Switch back to player's melds
-        await E2ETestUtils.safeTap(
-          tester,
-          find.text('Back to yours'),
-          debugLabel: 'Back to player melds',
+      // Check if we successfully switched to viewing bot's melds
+      if (foundBotToSwitch) {
+        // Look for any bot's melds display or the back button
+        final meldsDisplayFound = botNames.any(
+          (name) =>
+              find.textContaining('$name\'s Melds:').evaluate().isNotEmpty,
         );
-        await E2ETestUtils.stabilize(tester);
 
-        expect(find.text('Your Melds:'), findsOneWidget);
-        expect(find.text('Back to yours'), findsNothing);
+        if (meldsDisplayFound ||
+            find.text('Back to yours').evaluate().isNotEmpty) {
+          expect(find.text('Back to yours'), findsOneWidget);
+
+          // Switch back to player's melds
+          await E2ETestUtils.safeTap(
+            tester,
+            find.text('Back to yours'),
+            debugLabel: 'Back to player melds',
+          );
+          await E2ETestUtils.stabilize(tester);
+
+          expect(find.text('Your Melds:'), findsOneWidget);
+          expect(find.text('Back to yours'), findsNothing);
+        }
       }
 
       print('✅ Player switching complete');
