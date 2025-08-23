@@ -18,8 +18,9 @@ import 'main_menu_screen.dart';
 
 class GameScreen extends StatefulWidget {
   final int? testSeed; // For deterministic testing
+  final GameController? gameController; // For continuing saved games
 
-  const GameScreen({super.key, this.testSeed});
+  const GameScreen({super.key, this.testSeed, this.gameController});
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -50,6 +51,20 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _initializeGame() async {
+    // If a gameController was provided (continuing saved game), use it
+    if (widget.gameController != null) {
+      _gameController = widget.gameController!;
+      _botAI = BotAI();
+
+      setState(() {
+        _isInitialized = true;
+      });
+
+      // Start bot turns if needed
+      _processBotTurns();
+      return;
+    }
+
     // Check if there's a saved game
     final hasSaved = await GameController.hasSavedGame();
 
