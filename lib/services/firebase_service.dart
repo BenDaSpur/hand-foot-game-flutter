@@ -12,8 +12,9 @@ import '../models/meld.dart';
 import 'firebase_constants.dart';
 import 'device_service.dart';
 
-// Import firebase_options with conditional compilation support
-import '../firebase_options.dart';
+// Conditional import for firebase_options - stub for CI/test environments
+import '../firebase_options_stub.dart'
+    if (dart.library.io) '../firebase_options.dart';
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {

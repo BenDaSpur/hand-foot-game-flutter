@@ -296,18 +296,7 @@ class MultiplayerGameController {
     try {
       final localGameState = _localController.gameState;
 
-      // Atomic update of collections - create new lists to avoid concurrent modification
-      final newPlayers = List<Player>.from(newGameState.players);
-      final newDiscardPile = List<PlayingCard>.from(newGameState.discardPile);
-      final newRecentActions = List<GameAction>.from(
-        newGameState.recentActions,
-      );
-
-      // Clear and update players atomically
-      localGameState.players.clear();
-      localGameState.players.addAll(newPlayers);
-
-      // Update primitive properties (these are atomic by nature)
+      // Update primitive properties first (these are naturally atomic)
       localGameState.currentPlayerIndex = newGameState.currentPlayerIndex;
       localGameState.phase = newGameState.phase;
       localGameState.turnPhase = newGameState.turnPhase;
@@ -317,14 +306,36 @@ class MultiplayerGameController {
       localGameState.hasDrawnFromDeck = newGameState.hasDrawnFromDeck;
       localGameState.hasMelded = newGameState.hasMelded;
 
-      // Update collections atomically
-      localGameState.discardPile.clear();
-      localGameState.discardPile.addAll(newDiscardPile);
+      // Atomic collection updates using replaceRange for better atomicity
+      // This minimizes the window where collections are in inconsistent state
+      _replaceCollectionAtomically(
+        localGameState.players,
+        newGameState.players,
+      );
 
-      localGameState.recentActions.clear();
-      localGameState.recentActions.addAll(newRecentActions);
+      _replaceCollectionAtomically(
+        localGameState.discardPile,
+        newGameState.discardPile,
+      );
+
+      _replaceCollectionAtomically(
+        localGameState.recentActions,
+        newGameState.recentActions,
+      );
     } finally {
       _isStateLocked = false;
+    }
+  }
+
+  /// Atomically replace the contents of a list with new data
+  /// This minimizes the race condition window compared to clear() + addAll()
+  void _replaceCollectionAtomically<T>(List<T> targetList, List<T> newData) {
+    // Use replaceRange which is more atomic than clear + addAll
+    // It updates the entire range in one operation
+    if (targetList.isEmpty) {
+      targetList.addAll(newData);
+    } else {
+      targetList.replaceRange(0, targetList.length, newData);
     }
   }
 
