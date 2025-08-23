@@ -7,6 +7,7 @@ import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../widgets/advanced_meld_selector.dart';
+import '../widgets/emergency_round_end_dialog.dart';
 import '../widgets/game_app_bar.dart';
 import '../widgets/player_hand_widget.dart';
 import '../widgets/game_action_buttons.dart';
@@ -186,10 +187,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   void _onDrawFromDeck() {
     try {
-      _gameController.drawFromDeck();
-      setState(() {
-        _selectedCardIndices.clear();
-      });
+      final success = _gameController.drawFromDeck();
+      if (success) {
+        setState(() {
+          _selectedCardIndices.clear();
+        });
+      } else {
+        // Check if the round ended automatically due to insufficient cards
+        if (_gameController.gameState.phase == GamePhase.roundEnd) {
+          _showEmergencyRoundEndDialog();
+        } else {
+          _showErrorDialog(
+            'Draw Error',
+            'Unable to draw from deck. Deck may be empty or insufficient.',
+          );
+        }
+      }
     } catch (e) {
       _showErrorDialog('Draw Error', e.toString());
     }
@@ -466,6 +479,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showEmergencyRoundEndDialog() {
+    EmergencyRoundEndDialog.show(
+      context,
+      autoAdvance: true, // Multiplayer auto-advances
+      onContinue: () {
+        setState(() {}); // Refresh UI to show round transition
+      },
     );
   }
 

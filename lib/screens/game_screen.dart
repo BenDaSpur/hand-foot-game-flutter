@@ -14,6 +14,7 @@ import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
+import '../widgets/emergency_round_end_dialog.dart';
 import 'main_menu_screen.dart';
 
 class GameScreen extends StatefulWidget {
@@ -483,17 +484,22 @@ class _GameScreenState extends State<GameScreen> {
     if (_gameController.drawFromDeck()) {
       _sortHand('rank');
     } else {
-      // Check if deck is empty or insufficient
-      if (_gameController.gameState.deck.isEmpty) {
-        _showErrorDialog(
-          'Cannot draw from deck: The deck is empty!\n\n'
-          'The round will continue until a player goes out or all players pass.',
-        );
-      } else if (_gameController.gameState.deck.size < 2) {
-        _showErrorDialog(
-          'Cannot draw from deck: Only ${_gameController.gameState.deck.size} card(s) remaining.\n\n'
-          'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
-        );
+      // Check if the round ended automatically due to insufficient cards
+      if (_gameController.gameState.phase == GamePhase.roundEnd) {
+        _showEmergencyRoundEndDialog();
+      } else {
+        // Check if deck is empty or insufficient
+        if (_gameController.gameState.deck.isEmpty) {
+          _showErrorDialog(
+            'Cannot draw from deck: The deck is empty!\n\n'
+            'The round will continue until a player goes out or all players pass.',
+          );
+        } else if (_gameController.gameState.deck.size < 2) {
+          _showErrorDialog(
+            'Cannot draw from deck: Only ${_gameController.gameState.deck.size} card(s) remaining.\n\n'
+            'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
+          );
+        }
       }
     }
   }
@@ -893,6 +899,16 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showEmergencyRoundEndDialog() {
+    EmergencyRoundEndDialog.show(
+      context,
+      onContinue: () {
+        _gameController.nextRound();
+        setState(() {});
+      },
     );
   }
 
