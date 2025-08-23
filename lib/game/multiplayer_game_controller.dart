@@ -49,14 +49,15 @@ class MultiplayerGameController {
 
       if (gameId == null) return null;
 
-      // Create initial host player
+      // Create initial host player for local state (will be replaced when game starts)
       final hostPlayer = Player(
         id: deviceUserId,
         name: hostPlayerName,
         type: PlayerType.human,
       );
 
-      // Create local game controller
+      // Create local game controller with host player
+      // Complete player list will sync from Firebase when game starts
       final localController = GameController(players: [hostPlayer]);
 
       final controller = MultiplayerGameController._(
@@ -97,15 +98,14 @@ class MultiplayerGameController {
 
       if (!success) return null;
 
-      // Create temporary controller to listen for game state
-      final player = Player(
+      // Create local game controller with temporary player for joining
+      // Complete player list will sync from Firebase when game state arrives
+      final tempPlayer = Player(
         id: deviceUserId,
         name: playerName,
         type: PlayerType.human,
       );
-
-      // Create local game controller
-      final localController = GameController(players: [player]);
+      final localController = GameController(players: [tempPlayer]);
 
       final controller = MultiplayerGameController._(
         gameId: gameId,
