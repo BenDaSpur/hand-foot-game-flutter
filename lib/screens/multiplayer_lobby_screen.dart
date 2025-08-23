@@ -544,7 +544,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     }
   }
 
-  void _navigateToGame() {
+  void _navigateToGame({int retryCount = 0}) {
+    const maxRetries = 10; // Prevent infinite loops
+
     if (_gameController != null) {
       // Ensure game state has proper player count before navigating
       final gameState = _gameController!.gameState;
@@ -555,14 +557,19 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 MultiplayerGameScreen(gameController: _gameController!),
           ),
         );
-      } else {
+      } else if (retryCount < maxRetries) {
         // Game state not ready yet, wait for next update
         // This can happen if the game status changes before game state is fully synced
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted && _gameController != null) {
-            _navigateToGame(); // Try again
+            _navigateToGame(retryCount: retryCount + 1);
           }
         });
+      } else {
+        // Exceeded max retries - show error and stay in lobby
+        _showErrorDialog(
+          'Game Sync Error: Failed to sync game state. Please try refreshing or rejoining the game.',
+        );
       }
     }
   }

@@ -84,6 +84,29 @@ class BotAI {
   static const int smallMeldPointThreshold = 50;
   static const int meldBreakSafetyBuffer = 20;
 
+  // NEW: Foot transition constants for improved strategy
+  static const int aggressiveFootTransitionThreshold = 3; // Cards or fewer
+  static const int handSizePressureThreshold =
+      8; // Too many cards after playdown
+  static const int lateRoundTransitionRound = 3; // Round 3+ be more aggressive
+  static const int lateRoundHandSizeThreshold =
+      6; // Cards to trigger late round transition
+  static const int postPlaydownTransitionThreshold =
+      5; // Cards to consider transition
+  static const int handQualityNegativeThreshold = -40; // Poor hand value
+  static const int handQualityThreeCountThreshold = 3; // Too many 3s
+  static const int handQualityAvgValueThreshold = 5; // Low average card value
+  static const int improvedEmergencyThreshold =
+      -60; // Less conservative than -100
+  static const int handSizeQualityThreshold =
+      6; // Hand size for quality assessment
+  static const int handSizePressureNegativeThreshold = -30; // For large hands
+  static const int lateRoundModerateNegativeThreshold =
+      -20; // For late round transitions
+  static const double mostCardsPlayableThreshold = 0.6; // Reduced from 0.7
+  static const double someCardsPlayableThreshold =
+      0.5; // New threshold for aggressive play
+
   // Game rule constants
   static const int minCardsToUnlockDiscard = 2;
   static const int minCardsForFootTransition = 2;
@@ -818,29 +841,75 @@ class BotAI {
     return null;
   }
 
-  /// Handle foot transition decision - NEW STRATEGY: Wait until can play all cards at once
+  /// Handle foot transition decision - IMPROVED STRATEGY: Multiple transition triggers
   BotDecision _handleFootTransitionDecision(
     Player bot,
     GameController controller,
   ) {
-    // STRATEGIC CHANGE: Try to play ALL remaining hand cards in one turn to go to foot
-
-    // Check if we can meld/add all or most of our remaining cards
+    final gameState = controller.gameState;
     final remainingCards = bot.currentHand.length;
+    final handValue = _calculateHandValue(bot.currentHand);
+    final currentRound = gameState.round;
 
-    // If we have very few cards left (1-2), try to use them up
-    if (remainingCards <= 2) {
-      // Add to existing melds first
-      final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
-      if (cardsToAddToMelds.isNotEmpty) {
-        final cardToAdd = cardsToAddToMelds.first;
-        return BotDecision(action: 'addToMeld', data: cardToAdd);
-      }
+    // PRE-CHECK: Be more conservative when still on hand pile (not picked up foot yet)
+    // This preserves strategic options and wild card management
+    final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
+    final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
+    final hasExcessiveWilds =
+        wildCardCount >= 5; // 5+ wilds should be more conservative
+
+    // IMPROVEMENT 1: More aggressive transition with fewer cards
+    // BUT: Only if not preserving strategic resources
+    if (remainingCards <= aggressiveFootTransitionThreshold &&
+        !(stillOnHandPile && hasExcessiveWilds)) {
+      return _tryAggressiveFootTransition(bot, controller);
     }
 
-    // Check if we can create melds that use up most/all remaining cards
-    final canPlayAllCards = _canPlayMostCards(bot, controller);
-    if (canPlayAllCards) {
+    // IMPROVEMENT 2: Hand size pressure - transition when hand gets too large
+    // BUT: Be more conservative if hand has many wilds (preserve them strategically)
+    // AND: Be more conservative if still on hand pile
+    if (remainingCards >= handSizePressureThreshold &&
+        bot.hasPlayedDown &&
+        !hasExcessiveWilds &&
+        !stillOnHandPile) {
+      return _tryHandSizePressureTransition(bot, controller, handValue);
+    }
+
+    // IMPROVEMENT 3: Round-based strategy - be more aggressive in later rounds
+    if (currentRound >= lateRoundTransitionRound &&
+        remainingCards >= lateRoundHandSizeThreshold) {
+      return _tryLateRoundTransition(bot, controller, handValue);
+    }
+
+    // IMPROVEMENT 4: Post-playdown optimization - more willing after playing down
+    // BUT: Be conservative with weak hands to preserve strategic options
+    // AND: Be more conservative when still on hand pile
+    final hasWeakMeldOpportunity = _hasOnlyWeakMeldOpportunities(
+      bot,
+      controller,
+    );
+
+    if (bot.hasPlayedDown &&
+        remainingCards >= postPlaydownTransitionThreshold &&
+        !hasWeakMeldOpportunity &&
+        !stillOnHandPile) {
+      return _tryPostPlaydownTransition(bot, controller);
+    }
+
+    // IMPROVEMENT 5: Improved hand quality assessment
+    // BUT: Don't override conservative behavior for strategic wild card management
+    if (_shouldTransitionBasedOnHandQuality(bot, handValue, remainingCards) &&
+        !hasExcessiveWilds) {
+      return _tryQualityBasedTransition(bot, controller);
+    }
+
+    // Original logic: Check if we can create melds that use up most/all remaining cards
+    // BUT: Be more conservative with hands that have strategic value or when on hand pile
+    final canPlayMostCards = _canPlayMostCards(bot, controller);
+    final shouldBeConservative =
+        hasExcessiveWilds || hasWeakMeldOpportunity || stillOnHandPile;
+
+    if (canPlayMostCards && !shouldBeConservative) {
       // Find the best meld opportunity to use maximum cards
       final possibleMelds = _getPossibleMelds(bot, controller);
       if (possibleMelds.isNotEmpty) {
@@ -850,10 +919,8 @@ class BotAI {
       }
     }
 
-    // Emergency risk management - only if very negative hand
-    final handValue = _calculateHandValue(bot.currentHand);
-    if (handValue <= -100) {
-      // Much more conservative threshold
+    // Emergency risk management - improved threshold
+    if (handValue <= improvedEmergencyThreshold) {
       final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
       if (cardsToAddToMelds.isNotEmpty) {
         final cardToAdd = cardsToAddToMelds.first;
@@ -861,9 +928,239 @@ class BotAI {
       }
     }
 
-    // Otherwise, HOLD cards and discard strategically
+    // Otherwise, hold cards and discard strategically
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Try aggressive foot transition with 3 or fewer cards
+  BotDecision _tryAggressiveFootTransition(
+    Player bot,
+    GameController controller,
+  ) {
+    // Add to existing melds first - prioritize getting rid of cards
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+    if (cardsToAddToMelds.isNotEmpty) {
+      final cardToAdd = cardsToAddToMelds.first;
+      return BotDecision(action: 'addToMeld', data: cardToAdd);
+    }
+
+    // Try to create any meld possible
+    final possibleMelds = _getPossibleMelds(bot, controller);
+    if (possibleMelds.isNotEmpty) {
+      final bestMeld = _chooseLargestMeld(possibleMelds);
+      return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    // Discard strategically to get closer to foot
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Try transition due to hand size pressure (8+ cards after playdown)
+  BotDecision _tryHandSizePressureTransition(
+    Player bot,
+    GameController controller,
+    int handValue,
+  ) {
+    // With 8+ cards, prioritize reducing hand size
+
+    // Strategy 1: Add multiple cards to existing melds if possible
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+    if (cardsToAddToMelds.length >= 2) {
+      // Prioritize highest value cards to clear hand space
+      cardsToAddToMelds.sort((a, b) => b['priority'].compareTo(a['priority']));
+      final cardToAdd = cardsToAddToMelds.first;
+      return BotDecision(action: 'addToMeld', data: cardToAdd);
+    }
+
+    // Strategy 2: Create melds more aggressively (lower threshold)
+    final possibleMelds = _getPossibleMelds(bot, controller);
+    if (possibleMelds.isNotEmpty) {
+      // Choose meld that clears the most cards
+      final bestMeld = _chooseLargestMeld(possibleMelds);
+      return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    // Strategy 3: If hand is getting unwieldy, consider discarding problematic cards
+    if (handValue <= handSizePressureNegativeThreshold) {
+      final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+      if (cardsToAddToMelds.isNotEmpty) {
+        final cardToAdd = cardsToAddToMelds.first;
+        return BotDecision(action: 'addToMeld', data: cardToAdd);
+      }
+    }
+
+    // Default: strategic discard
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Try transition in later rounds (round 3+) where foot access is more valuable
+  BotDecision _tryLateRoundTransition(
+    Player bot,
+    GameController controller,
+    int handValue,
+  ) {
+    // In later rounds, foot contains better cards and requirements are higher
+
+    // Strategy 1: Be more willing to transition with moderate hands
+    if (handValue <= lateRoundModerateNegativeThreshold ||
+        bot.currentHand.length >= (lateRoundHandSizeThreshold + 1)) {
+      final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+      if (cardsToAddToMelds.isNotEmpty) {
+        final cardToAdd = cardsToAddToMelds.first;
+        return BotDecision(action: 'addToMeld', data: cardToAdd);
+      }
+    }
+
+    // Strategy 2: Create melds with a lower efficiency threshold
+    final canPlaySomeCards = _canPlaySomeCards(
+      bot,
+      controller,
+    ); // New method: 50% threshold
+    if (canPlaySomeCards) {
+      final possibleMelds = _getPossibleMelds(bot, controller);
+      if (possibleMelds.isNotEmpty) {
+        final bestMeld = _chooseLargestMeld(possibleMelds);
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
+    }
+
+    // Default: strategic discard
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Try transition after playing down (more opportunities available)
+  BotDecision _tryPostPlaydownTransition(
+    Player bot,
+    GameController controller,
+  ) {
+    // After playing down, we can unlock discard pile, so be more aggressive
+
+    // Strategy 1: Add to existing melds more liberally
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+    if (cardsToAddToMelds.isNotEmpty) {
+      // Even low priority additions are worth it to access foot
+      final cardToAdd = cardsToAddToMelds.first;
+      return BotDecision(action: 'addToMeld', data: cardToAdd);
+    }
+
+    // Strategy 2: Create smaller melds to clear hand
+    final possibleMelds = _getPossibleMelds(bot, controller);
+    final smallMelds = possibleMelds.where((meld) => meld.length >= 3).toList();
+    if (smallMelds.isNotEmpty) {
+      // Prefer melds that clear more cards
+      final bestMeld = _chooseLargestMeld(smallMelds);
+      return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    // Default: strategic discard
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Try transition based on hand quality assessment
+  BotDecision _tryQualityBasedTransition(
+    Player bot,
+    GameController controller,
+  ) {
+    // Poor quality hands should be cleared to access foot
+
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+    if (cardsToAddToMelds.isNotEmpty) {
+      final cardToAdd = cardsToAddToMelds.first;
+      return BotDecision(action: 'addToMeld', data: cardToAdd);
+    }
+
+    // Even small melds are worthwhile to clear bad hands
+    final possibleMelds = _getPossibleMelds(bot, controller);
+    if (possibleMelds.isNotEmpty) {
+      final bestMeld = possibleMelds.first; // Any meld is good
+      return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    // Strategic discard of worst cards
+    final cardToDiscard = _chooseCardToDiscard(bot);
+    return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Determine if bot should transition based on hand quality
+  bool _shouldTransitionBasedOnHandQuality(
+    Player bot,
+    int handValue,
+    int handSize,
+  ) {
+    // Factors that indicate poor hand quality:
+    // 1. Negative point value
+    // 2. Many 3s (penalty cards)
+    // 3. Large hand with little meld potential
+    // 4. Mostly low-value cards
+
+    if (handValue <= handQualityNegativeThreshold) {
+      return true; // Negative hands should transition
+    }
+
+    // Count penalty cards (3s)
+    final threeCount = bot.currentHand
+        .where((c) => c.rank == CardRank.three)
+        .length;
+    if (threeCount >= handQualityThreeCountThreshold) {
+      return true; // Too many 3s
+    }
+
+    // Large hands with low average value
+    if (handSize >= handSizeQualityThreshold) {
+      final avgValue = handValue / handSize;
+      if (avgValue <= handQualityAvgValueThreshold) {
+        return true; // Low-value cards on average
+      }
+    }
+
+    return false;
+  }
+
+  /// Check if bot has only weak meld opportunities (conservative check)
+  bool _hasOnlyWeakMeldOpportunities(Player bot, GameController controller) {
+    final possibleMelds = _getPossibleMelds(bot, controller);
+    if (possibleMelds.isEmpty) return true;
+
+    // Check if all possible melds are weak (low point value)
+    for (final meld in possibleMelds) {
+      final meldPoints = meld.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      // If any meld has decent points (50+), it's not weak
+      if (meldPoints >= 50) {
+        return false;
+      }
+    }
+
+    return true; // All melds are weak
+  }
+
+  /// Check if bot can play some of their cards (50% threshold vs 70% in original)
+  bool _canPlaySomeCards(Player bot, GameController controller) {
+    final remainingCards = bot.currentHand.length;
+    if (remainingCards <= 3) return true; // Few cards, try to use them
+
+    // Count how many cards can be added to existing melds
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+    final addableCards = cardsToAddToMelds.length;
+
+    // Count cards in possible new melds
+    final possibleMelds = controller.findPossibleMelds(bot);
+    int meldableCards = 0;
+    if (possibleMelds.isNotEmpty) {
+      final bestMeld = _chooseLargestMeld(possibleMelds);
+      meldableCards = bestMeld.length;
+    }
+
+    // Can we use 50%+ of remaining cards? (Less conservative than 70%)
+    final usableCards = addableCards + meldableCards;
+    return usableCards >= (remainingCards * someCardsPlayableThreshold).floor();
   }
 
   /// Handle go-out decision - Focus on book completion and strategic timing
@@ -965,7 +1262,7 @@ class BotAI {
     return naturalMelds;
   }
 
-  /// Check if bot can play most of their remaining cards
+  /// Check if bot can play most of their remaining cards (reduced from 70% to 60%)
   bool _canPlayMostCards(Player bot, GameController controller) {
     final remainingCards = bot.currentHand.length;
     if (remainingCards <= 3) return true; // Few cards, try to use them
@@ -982,9 +1279,9 @@ class BotAI {
       meldableCards = bestMeld.length;
     }
 
-    // Can we use 70%+ of remaining cards?
+    // Can we use 60%+ of remaining cards? (Less conservative than 70%)
     final usableCards = addableCards + meldableCards;
-    return usableCards >= (remainingCards * 0.7).floor();
+    return usableCards >= (remainingCards * mostCardsPlayableThreshold).floor();
   }
 
   /// Choose the meld that uses the most cards

@@ -26,6 +26,16 @@ class MeldsSection extends StatelessWidget {
     required this.getCompatibleCardsInfo,
   });
 
+  /// Get the appropriate header text for the melds section
+  String _getMeldsHeaderText(Player player) {
+    final playerName = player.name;
+    if (playerName == 'You') {
+      return 'Your Melds:';
+    } else {
+      return '$playerName\'s Melds:';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentPlayer = gameState.currentPlayer;
@@ -42,14 +52,7 @@ class MeldsSection extends StatelessWidget {
               child: Row(
                 children: [
                   Text(
-                    () {
-                      final playerName = player.name;
-                      if (playerName == 'You') {
-                        return 'Your Melds:';
-                      } else {
-                        return '$playerName\'s Melds:';
-                      }
-                    }(),
+                    _getMeldsHeaderText(player),
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

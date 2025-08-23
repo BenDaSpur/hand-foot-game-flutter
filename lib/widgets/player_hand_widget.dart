@@ -5,6 +5,11 @@ import '../models/card.dart';
 import '../widgets/playing_card_widget.dart';
 
 class PlayerHandWidget extends StatelessWidget {
+  // Layout constants
+  static const double _handContainerHeight = 120.0;
+  static const double _cardWidth = 70.0;
+  static const double _cardHeight = 98.0;
+  static const double _cardOffset = 50.0;
   final Player player;
   final List<int> selectedCardIndices;
   final Function(int) onCardTap;
@@ -23,7 +28,7 @@ class PlayerHandWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 120,
+      height: _handContainerHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,22 +50,23 @@ class PlayerHandWidget extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: SizedBox(
                   width: player.currentHand.isNotEmpty
-                      ? (player.currentHand.length - 1) * 50.0 + 70.0
-                      : 70.0,
+                      ? (player.currentHand.length - 1) * _cardOffset +
+                            _cardWidth
+                      : _cardWidth,
                   child: Stack(
                     children: player.currentHand.asMap().entries.map((entry) {
                       final index = entry.key;
                       final card = entry.value;
 
                       return Positioned(
-                        left: index * 50.0,
+                        left: index * _cardOffset,
                         child: GestureDetector(
                           onTap: () => onCardTap(index),
                           onDoubleTap: () => onCardDoubleTap(index),
                           child: PlayingCardWidget(
                             card: card,
-                            width: 70,
-                            height: 98,
+                            width: _cardWidth,
+                            height: _cardHeight,
                             isSelected: selectedCardIndices.contains(index),
                             isPlayable: isCardPlayable(card),
                             isNewlyDrawn: player.isCardIndexNewlyDrawn(index),

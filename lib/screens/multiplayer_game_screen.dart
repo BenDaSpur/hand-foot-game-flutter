@@ -471,12 +471,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     List<PlayingCard> invalidCards,
   ) async {
     int addedCount = 0;
+    final List<String> failureReasons = [];
+
     for (final card in cardsToAdd) {
       try {
         _gameController.addCardToMeld(meldIndex, card);
         addedCount++;
       } catch (e) {
-        // Failed to add this card
+        // Log specific error for debugging
+        debugPrint(
+          'Failed to add card ${card.displayName} to meld $meldIndex: $e',
+        );
+        failureReasons.add('${card.displayName}: ${e.toString()}');
       }
     }
 
@@ -484,27 +490,57 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       _selectedCardIndices.clear();
       setState(() {});
 
+      // Show feedback for any cards that couldn't be added
+      final allFailures = <String>[];
+
       if (invalidCards.isNotEmpty) {
-        final invalidNames = invalidCards.map((c) => c.displayName).join(', ');
+        final invalidNames = invalidCards.map((c) => c.displayName).toList();
+        allFailures.addAll(
+          invalidNames.map((name) => '$name: Invalid for this meld'),
+        );
+      }
+
+      if (failureReasons.isNotEmpty) {
+        allFailures.addAll(failureReasons);
+      }
+
+      if (allFailures.isNotEmpty) {
         _showErrorDialog(
           'Partial Success',
-          'Added $addedCount cards to meld. Could not add: $invalidNames',
+          'Added $addedCount cards to meld.\n\nCould not add:\n${allFailures.join('\n')}',
         );
       }
     } else {
+      // Provide specific feedback about why no cards could be added
+      final allFailures = <String>[];
+
+      if (invalidCards.isNotEmpty) {
+        final invalidNames = invalidCards.map((c) => c.displayName).toList();
+        allFailures.addAll(
+          invalidNames.map((name) => '$name: Invalid for this meld'),
+        );
+      }
+
+      if (failureReasons.isNotEmpty) {
+        allFailures.addAll(failureReasons);
+      }
+
+      final errorDetail = allFailures.isNotEmpty
+          ? '\n\nReasons:\n${allFailures.join('\n')}'
+          : '';
+
       _showErrorDialog(
         'Add Card Error',
-        'Failed to add any cards to the meld.',
+        'Failed to add any cards to the meld.$errorDetail',
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<GameState?>(
-      stream: Stream.periodic(
-        const Duration(milliseconds: 500),
-      ).map((_) => _gameController.gameState),
+    return StreamBuilder<GameState>(
+      stream: _gameController.gameStateStream,
+      initialData: _gameController.gameState,
       builder: (context, snapshot) {
         final gameState = snapshot.data ?? _gameController.gameState;
         final currentPlayer = gameState.currentPlayer;
