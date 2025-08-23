@@ -20,6 +20,10 @@ class MultiplayerGameController {
   bool _isOnline = true; // Track connection state
   Timer? _reconnectionTimer; // For automatic reconnection attempts
 
+  // Reactive state management
+  final StreamController<GameState> _stateStreamController =
+      StreamController<GameState>.broadcast();
+
   MultiplayerGameController._({
     required this.gameId,
     required this.currentUserId,
@@ -267,6 +271,9 @@ class MultiplayerGameController {
       // Update local game state with the new state from Firebase
       await _updateLocalGameState(newGameState);
 
+      // Emit the updated state to UI listeners
+      _stateStreamController.add(gameState);
+
       // If it's our turn and we're not the current player, update
       final currentPlayer = newGameState.currentPlayer;
       if (currentPlayer.id == currentUserId) {
@@ -345,6 +352,9 @@ class MultiplayerGameController {
 
     final success = _localController.drawFromDeck();
     if (success) {
+      // Emit state change for immediate UI update
+      _stateStreamController.add(gameState);
+
       if (_isOnline) {
         _syncGameState();
       } else {
@@ -573,6 +583,9 @@ class MultiplayerGameController {
   /// Get connection state stream for UI updates
   Stream<bool> get connectionStream => ConnectionService.connectionStream;
 
+  /// Get reactive game state stream for UI updates
+  Stream<GameState> get gameStateStream => _stateStreamController.stream;
+
   /// Dispose of resources and prevent memory leaks
   void dispose() {
     // Cancel all subscriptions to prevent memory leaks
@@ -585,6 +598,9 @@ class MultiplayerGameController {
     // Cancel any pending reconnection attempts
     _reconnectionTimer?.cancel();
     _reconnectionTimer = null;
+
+    // Close the state stream controller
+    _stateStreamController.close();
 
     // Reset flags to prevent potential issues in complex navigation scenarios
     _isUpdating = false;

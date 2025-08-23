@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import '../theme/balatro_theme.dart';
 import '../services/firebase_service.dart';
+import '../services/firebase_constants.dart';
 import '../services/device_service.dart';
 import '../game/multiplayer_game_controller.dart';
+import '../models/game_state.dart';
 import 'multiplayer_game_screen.dart';
 
 enum LobbyMode { create, join }
@@ -515,10 +517,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
                 _currentPlayers = List<Map<String, dynamic>>.from(
                   gameData['players'] ?? [],
                 );
+                // Sync maxPlayers from Firestore data
+                _maxPlayers = gameData['maxPlayers'] ?? _maxPlayers;
               });
 
               // Check if game has started
-              if (gameData['status'] == 'playing') {
+              if (gameData['status'] == FirebaseConstants.gameStatusPlaying) {
                 _navigateToGame();
               }
             }
@@ -540,14 +544,33 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     }
   }
 
-  void _navigateToGame() {
+  void _navigateToGame({int retryCount = 0}) {
+    const maxRetries = 10; // Prevent infinite loops
+
     if (_gameController != null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) =>
-              MultiplayerGameScreen(gameController: _gameController!),
-        ),
-      );
+      // Ensure game state has proper player count before navigating
+      final gameState = _gameController!.gameState;
+      if (gameState.players.isNotEmpty && gameState.phase != GamePhase.setup) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) =>
+                MultiplayerGameScreen(gameController: _gameController!),
+          ),
+        );
+      } else if (retryCount < maxRetries) {
+        // Game state not ready yet, wait for next update
+        // This can happen if the game status changes before game state is fully synced
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted && _gameController != null) {
+            _navigateToGame(retryCount: retryCount + 1);
+          }
+        });
+      } else {
+        // Exceeded max retries - show error and stay in lobby
+        _showErrorDialog(
+          'Game Sync Error: Failed to sync game state. Please try refreshing or rejoining the game.',
+        );
+      }
     }
   }
 
