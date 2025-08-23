@@ -33,8 +33,15 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
-        run: echo "${{ secrets.FIREBASE_CONFIG_ANDROID }}" | base64 -d > android/app/google-services.json
+      - name: Create Firebase config (Android)
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_CONFIG_ANDROID }}" ]]; then
+            echo "Using production Firebase Android configuration"
+            echo "${{ secrets.FIREBASE_CONFIG_ANDROID }}" | base64 -d > android/app/google-services.json
+          else
+            echo "Creating stub Android Firebase config"
+            echo '{"project_info":{"project_number":"000000000000","project_id":"stub-project"}}' > android/app/google-services.json
+          fi
 
       - name: Install dependencies
         run: flutter pub get
@@ -78,8 +85,15 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
-        run: echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+      - name: Setup Firebase config (Web)
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
+            echo "Using production Firebase web configuration"
+            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          else
+            echo "FIREBASE_WEB_CONFIG not found, using stub configuration"
+            # App will use firebase_options_stub.dart automatically
+          fi
 
       - name: Install dependencies
         run: flutter pub get
@@ -116,10 +130,16 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
+      - name: Setup Firebase config (Windows)
         run: |
           $config = "${{ secrets.FIREBASE_WEB_CONFIG }}"
-          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($config)) | Out-File -FilePath "lib/firebase_options.dart" -Encoding UTF8
+          if ($config) {
+            Write-Output "Using production Firebase web configuration"
+            [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($config)) | Out-File -FilePath "lib/firebase_options.dart" -Encoding UTF8
+          } else {
+            Write-Output "FIREBASE_WEB_CONFIG not found, using stub configuration"
+            # App will use firebase_options_stub.dart automatically
+          }
 
       - name: Install dependencies
         run: flutter pub get
@@ -155,10 +175,25 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase configs
+      - name: Setup Firebase configs (macOS/iOS)
         run: |
-          echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
-          echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          # iOS Firebase config
+          if [[ -n "${{ secrets.FIREBASE_CONFIG_IOS }}" ]]; then
+            echo "Using production Firebase iOS configuration"
+            echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
+          else
+            echo "Creating stub iOS Firebase config"
+            echo '<?xml version="1.0" encoding="UTF-8"?><plist><dict><key>PROJECT_ID</key><string>stub-project</string></dict></plist>' > ios/Runner/GoogleService-Info.plist
+          fi
+          
+          # Web Firebase config  
+          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
+            echo "Using production Firebase web configuration"
+            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          else
+            echo "FIREBASE_WEB_CONFIG not found, using stub configuration"
+            # App will use firebase_options_stub.dart automatically
+          fi
 
       - name: Install dependencies
         run: flutter pub get
@@ -197,8 +232,15 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y ninja-build libgtk-3-dev
 
-      - name: Create Firebase config
-        run: echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+      - name: Setup Firebase config (Linux)
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
+            echo "Using production Firebase web configuration"
+            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          else
+            echo "FIREBASE_WEB_CONFIG not found, using stub configuration"
+            # App will use firebase_options_stub.dart automatically
+          fi
 
       - name: Install dependencies
         run: flutter pub get
@@ -240,8 +282,15 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
-        run: echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+      - name: Setup Firebase config (Pages Deploy)
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
+            echo "Using production Firebase web configuration"
+            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          else
+            echo "FIREBASE_WEB_CONFIG not found, using stub configuration"
+            # App will use firebase_options_stub.dart automatically
+          fi
 
       - name: Install dependencies
         run: flutter pub get

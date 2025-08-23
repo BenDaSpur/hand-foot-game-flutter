@@ -61,19 +61,26 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
+      - name: Setup Firebase config (production or stub)
         run: |
-          # Create firebase_options.dart from secrets
-          echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
-          
-          # Replace the helper class with proper import
-          sed -i 's/class _FirebaseOptionsHelper {/\/\/ Replaced by CI\/CD - import firebase options/' lib/services/firebase_service.dart
-          sed -i 's/static FirebaseOptions? get currentPlatform {/\/\/ Import DefaultFirebaseOptions from firebase_options.dart/' lib/services/firebase_service.dart
-          sed -i 's/return null;/\/\/ Using DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          sed -i 's/_FirebaseOptionsHelper.currentPlatform/DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          
-          # Add the proper import
-          sed -i '12a import '\''../firebase_options.dart'\'';' lib/services/firebase_service.dart
+          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
+            echo "Using production Firebase configuration from secrets"
+            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+            if [[ ! -s lib/firebase_options.dart ]]; then
+              echo "Error: Failed to write lib/firebase_options.dart from secret"
+              exit 1
+            fi
+            if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
+              echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
+              exit 1
+            fi
+            echo "Production Firebase configuration written and verified successfully"
+          else
+            echo "FIREBASE_WEB_CONFIG secret not found, using stub configuration"
+            echo "This is acceptable for testing and development builds"
+            # The app will automatically use the stub configuration from firebase_options_stub.dart
+            # No action needed since our Firebase service already handles this case
+          fi
 
       - name: Install dependencies
         run: flutter pub get
@@ -107,19 +114,28 @@ jobs:
       - name: Disable Flutter analytics
         run: flutter config --no-analytics
 
-      - name: Create Firebase config
+      - name: Verify Firebase config
         run: |
-          # Create firebase_options.dart from secrets
-          echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
-          
-          # Replace the helper class with proper import
-          sed -i 's/class _FirebaseOptionsHelper {/\/\/ Replaced by CI\/CD - import firebase options/' lib/services/firebase_service.dart
-          sed -i 's/static FirebaseOptions? get currentPlatform {/\/\/ Import DefaultFirebaseOptions from firebase_options.dart/' lib/services/firebase_service.dart
-          sed -i 's/return null;/\/\/ Using DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          sed -i 's/_FirebaseOptionsHelper.currentPlatform/DefaultFirebaseOptions.currentPlatform/' lib/services/firebase_service.dart
-          
-          # Add the proper import
-          sed -i '12a import '\''../firebase_options.dart'\'';' lib/services/firebase_service.dart
+          # Check if we have a production config or using stub
+          if [[ -s lib/firebase_options.dart ]]; then
+            echo "Verifying production Firebase configuration"
+            if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
+              echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
+              exit 1
+            fi
+            echo "Production Firebase configuration verified successfully"
+          else
+            echo "Using stub Firebase configuration from firebase_options_stub.dart"
+            if [[ ! -s lib/firebase_options_stub.dart ]]; then
+              echo "Error: Stub Firebase config is missing"
+              exit 1
+            fi
+            if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options_stub.dart; then
+              echo "Error: Stub Firebase config does not contain expected DefaultFirebaseOptions class"
+              exit 1
+            fi
+            echo "Stub Firebase configuration verified successfully"
+          fi
 
       - name: Install dependencies
         run: flutter pub get

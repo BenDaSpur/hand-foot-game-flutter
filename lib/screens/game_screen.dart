@@ -14,11 +14,13 @@ import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
+import 'main_menu_screen.dart';
 
 class GameScreen extends StatefulWidget {
   final int? testSeed; // For deterministic testing
+  final GameController? gameController; // For continuing saved games
 
-  const GameScreen({super.key, this.testSeed});
+  const GameScreen({super.key, this.testSeed, this.gameController});
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -49,6 +51,20 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _initializeGame() async {
+    // If a gameController was provided (continuing saved game), use it
+    if (widget.gameController != null) {
+      _gameController = widget.gameController!;
+      _botAI = BotAI();
+
+      setState(() {
+        _isInitialized = true;
+      });
+
+      // Start bot turns if needed
+      _processBotTurns();
+      return;
+    }
+
     // Check if there's a saved game
     final hasSaved = await GameController.hasSavedGame();
 
@@ -1059,6 +1075,9 @@ class _GameScreenState extends State<GameScreen> {
                   case 'how_to_play':
                     _showHowToPlayDialog();
                     break;
+                  case 'main_menu':
+                    _returnToMainMenu();
+                    break;
                 }
               },
               itemBuilder: (BuildContext context) => [
@@ -1111,6 +1130,17 @@ class _GameScreenState extends State<GameScreen> {
                       Icon(Icons.help_outline, color: Colors.purple),
                       SizedBox(width: 8),
                       Text('How to Play'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'main_menu',
+                  child: Row(
+                    children: [
+                      Icon(Icons.home, color: BalatroTheme.neonBlue),
+                      SizedBox(width: 8),
+                      Text('Main Menu'),
                     ],
                   ),
                 ),
@@ -1797,5 +1827,49 @@ class _GameScreenState extends State<GameScreen> {
     } catch (e) {
       _showErrorDialog('Error loading game: ${e.toString()}');
     }
+  }
+
+  void _returnToMainMenu() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: BalatroTheme.neonPink, width: 1),
+        ),
+        title: const Text(
+          'Return to Main Menu',
+          style: TextStyle(
+            color: BalatroTheme.neonPink,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Are you sure you want to return to the main menu? Your current game progress will be lost.',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const MainMenuScreen()),
+                (route) => false,
+              );
+            },
+            child: const Text(
+              'Return to Menu',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
