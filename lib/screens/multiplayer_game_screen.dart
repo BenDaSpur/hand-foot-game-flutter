@@ -186,10 +186,22 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   void _onDrawFromDeck() {
     try {
-      _gameController.drawFromDeck();
-      setState(() {
-        _selectedCardIndices.clear();
-      });
+      final success = _gameController.drawFromDeck();
+      if (success) {
+        setState(() {
+          _selectedCardIndices.clear();
+        });
+      } else {
+        // Check if the round ended automatically due to insufficient cards
+        if (_gameController.gameState.phase == GamePhase.roundEnd) {
+          _showEmergencyRoundEndDialog();
+        } else {
+          _showErrorDialog(
+            'Draw Error',
+            'Unable to draw from deck. Deck may be empty or insufficient.',
+          );
+        }
+      }
     } catch (e) {
       _showErrorDialog('Draw Error', e.toString());
     }
@@ -463,6 +475,32 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEmergencyRoundEndDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Round Ended',
+          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'The round has ended early due to insufficient cards in the deck.\n\n'
+          'All player scores have been calculated and the next round will begin automatically.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {}); // Refresh UI to show round transition
+            },
+            child: const Text('Continue'),
           ),
         ],
       ),

@@ -228,8 +228,11 @@ class GameState {
           deck.returnCard(drawnCard);
         }
         _logAction(
-          'cannot draw - insufficient cards available even after exhaustive reshuffle attempt',
+          'insufficient cards in deck after reshuffle - ending round immediately',
         );
+
+        // Emergency round end due to insufficient cards
+        _emergencyEndRoundInsufficientCards();
         return false;
       }
     }
@@ -709,6 +712,21 @@ class GameState {
     } else {
       round++;
     }
+  }
+
+  /// Emergency round end when insufficient cards prevent normal gameplay
+  void _emergencyEndRoundInsufficientCards() {
+    _logAction(
+      'emergency round end: insufficient cards to continue gameplay - calculating scores and advancing to next round',
+    );
+
+    // End the current round immediately
+    endRound();
+
+    // Add a clear action log so players understand what happened
+    _logAction(
+      'round ${round - 1} ended early due to insufficient cards - scores calculated and round $round starting',
+    );
   }
 
   void resetForNewRound() {

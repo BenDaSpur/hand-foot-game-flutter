@@ -483,17 +483,22 @@ class _GameScreenState extends State<GameScreen> {
     if (_gameController.drawFromDeck()) {
       _sortHand('rank');
     } else {
-      // Check if deck is empty or insufficient
-      if (_gameController.gameState.deck.isEmpty) {
-        _showErrorDialog(
-          'Cannot draw from deck: The deck is empty!\n\n'
-          'The round will continue until a player goes out or all players pass.',
-        );
-      } else if (_gameController.gameState.deck.size < 2) {
-        _showErrorDialog(
-          'Cannot draw from deck: Only ${_gameController.gameState.deck.size} card(s) remaining.\n\n'
-          'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
-        );
+      // Check if the round ended automatically due to insufficient cards
+      if (_gameController.gameState.phase == GamePhase.roundEnd) {
+        _showEmergencyRoundEndDialog();
+      } else {
+        // Check if deck is empty or insufficient
+        if (_gameController.gameState.deck.isEmpty) {
+          _showErrorDialog(
+            'Cannot draw from deck: The deck is empty!\n\n'
+            'The round will continue until a player goes out or all players pass.',
+          );
+        } else if (_gameController.gameState.deck.size < 2) {
+          _showErrorDialog(
+            'Cannot draw from deck: Only ${_gameController.gameState.deck.size} card(s) remaining.\n\n'
+            'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
+          );
+        }
       }
     }
   }
@@ -890,6 +895,34 @@ class _GameScreenState extends State<GameScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEmergencyRoundEndDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Round Ended',
+          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'The round has ended early due to insufficient cards in the deck.\n\n'
+          'All player scores have been calculated and the next round will begin shortly.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Automatically advance to next round
+              _gameController.nextRound();
+              setState(() {});
+            },
+            child: const Text('Continue to Next Round'),
           ),
         ],
       ),
