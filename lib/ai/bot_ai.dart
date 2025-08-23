@@ -165,6 +165,33 @@ class PersonalityConstants {
   }
 }
 
+/// Strategic constants for bot decision making
+class BotStrategicConstants {
+  // Risk tolerance bounds
+  static const double minRiskTolerance = 0.1;
+  static const double maxRiskTolerance = 3.0;
+  static const double emergencyRiskMultiplier =
+      4.0; // Higher ceiling for emergency situations
+
+  // Turn timing constants
+  static const int minAdjustedTurns = 2;
+  static const int maxAdjustedTurns = 8;
+
+  // Hand quality assessment
+  static const double minHandQuality = 0.0;
+  static const double maxHandQuality = 1.0;
+
+  // Opponent analysis
+  static const int minEstimatedTurns = 1;
+  static const int maxEstimatedTurns = 6;
+  static const int handSizeInflationThreshold = 10;
+  static const int handSizeInflationPenalty = 2;
+
+  // Emergency thresholds
+  static const int emergencyHandSize = 20;
+  static const int endGameHandSize = 5;
+}
+
 class BotAI {
   final Random _random;
 
@@ -189,6 +216,33 @@ class BotAI {
 
   // Initialize with optional seed for test reproducibility
   BotAI({int? seed}) : _random = seed != null ? Random(seed) : Random();
+
+  /// Clear all cached data and analysis - call this when games end or players disconnect
+  void clearGameData() {
+    _playerPersonalities.clear();
+    _playerConstants.clear();
+    _playerTurnCounts.clear();
+    _opponentAnalysis.clear();
+    _cachedPossibleMelds = null;
+    _cachedPlayerId = null;
+    _plannedMelds = null;
+    _currentMeldIndex = 0;
+    _inMultiMeldSequence = false;
+  }
+
+  /// Clear data for a specific player - call when player disconnects
+  void clearPlayerData(String playerId) {
+    _playerPersonalities.remove(playerId);
+    _playerConstants.remove(playerId);
+    _playerTurnCounts.remove(playerId);
+    _opponentAnalysis.remove(playerId);
+
+    // Clear cache if it was for this player
+    if (_cachedPlayerId == playerId) {
+      _cachedPossibleMelds = null;
+      _cachedPlayerId = null;
+    }
+  }
 
   /// Assign a personality to a specific bot player
   void assignPersonality(String playerId, BotPersonality personality) {
@@ -252,6 +306,15 @@ class BotAI {
   int get maxTurnsBeforeForcePlayDown => _constants.maxTurnsBeforeForcePlayDown;
   static const int minimalPlayDownBuffer =
       5; // Just meet requirement + small buffer
+
+  /// Helper method to safely divide by risk tolerance, preventing division by zero
+  double _safeRiskDivision(double numerator, double riskTolerance) {
+    // Ensure risk tolerance is never zero or negative
+    final safeDivisor = riskTolerance <= 0.0
+        ? BotStrategicConstants.minRiskTolerance
+        : riskTolerance;
+    return numerator / safeDivisor;
+  }
 
   /// Dynamic risk tolerance based on game state and opponent analysis
   double calculateRiskTolerance(GameState gameState, Player botPlayer) {
@@ -326,7 +389,18 @@ class BotAI {
       riskModifier *= 1.5; // End game approaching, more aggressive
     }
 
-    return (baseRisk * riskModifier).clamp(0.1, 3.0);
+    // Allow higher risk tolerance in emergency situations
+    final maxRisk =
+        (botPlayer.currentHand.length >=
+            BotStrategicConstants.emergencyHandSize)
+        ? BotStrategicConstants.maxRiskTolerance *
+              BotStrategicConstants.emergencyRiskMultiplier
+        : BotStrategicConstants.maxRiskTolerance;
+
+    return (baseRisk * riskModifier).clamp(
+      BotStrategicConstants.minRiskTolerance,
+      maxRisk,
+    );
   }
 
   /// Assess overall hand quality for risk calculations
@@ -361,7 +435,10 @@ class BotAI {
       }
     }
 
-    return (qualityScore / hand.length).clamp(0.0, 1.0);
+    return (qualityScore / hand.length).clamp(
+      BotStrategicConstants.minHandQuality,
+      BotStrategicConstants.maxHandQuality,
+    );
   }
 
   // Risk management thresholds
@@ -432,8 +509,12 @@ class BotAI {
     // Update opponent analysis for strategic awareness
     _updateOpponentAnalysis(gameState, bot);
 
-    // Clear cached melds if this is a different player or meld phase
-    if (_cachedPlayerId != bot.id || gameState.turnPhase == TurnPhase.meld) {
+    // Clear cached melds if this is a different player or if hand might have changed
+    // Cache should be invalidated after draws (when hand changes) and during meld phase
+    if (_cachedPlayerId != bot.id ||
+        gameState.turnPhase == TurnPhase.meld ||
+        (gameState.turnPhase == TurnPhase.discard &&
+            gameState.hasDrawnFromDeck)) {
       _cachedPossibleMelds = null;
       _cachedPlayerId = bot.id;
     }
@@ -509,10 +590,17 @@ class BotAI {
     if (!hasDirtyBook) turnsNeeded += 2;
 
     // Factor in hand size
-    if (player.currentHand.length > 5) turnsNeeded += 1;
-    if (player.currentHand.length > 10) turnsNeeded += 2;
+    if (player.currentHand.length > BotStrategicConstants.endGameHandSize)
+      turnsNeeded += 1;
+    if (player.currentHand.length >
+        BotStrategicConstants.handSizeInflationThreshold) {
+      turnsNeeded += BotStrategicConstants.handSizeInflationPenalty;
+    }
 
-    return turnsNeeded.clamp(1, 6); // Between 1-6 turns
+    return turnsNeeded.clamp(
+      BotStrategicConstants.minEstimatedTurns,
+      BotStrategicConstants.maxEstimatedTurns,
+    );
   }
 
   /// Analyze which card ranks opponent likely needs
@@ -981,9 +1069,14 @@ class BotAI {
 
     // STRATEGIC CHANGE: Hold cards until turn threshold, adjusted by risk tolerance
     // High risk tolerance = play down sooner, low risk tolerance = wait longer
-    final adjustedMaxTurns = (maxTurnsBeforeForcePlayDown / riskTolerance)
-        .round()
-        .clamp(2, 8);
+    final adjustedMaxTurns =
+        _safeRiskDivision(
+          maxTurnsBeforeForcePlayDown.toDouble(),
+          riskTolerance,
+        ).round().clamp(
+          BotStrategicConstants.minAdjustedTurns,
+          BotStrategicConstants.maxAdjustedTurns,
+        );
 
     if (turnCount < adjustedMaxTurns) {
       return _handleEarlyGamePlayDown(
