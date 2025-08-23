@@ -14,6 +14,7 @@ import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
+import '../widgets/emergency_round_end_dialog.dart';
 import 'main_menu_screen.dart';
 
 class GameScreen extends StatefulWidget {
@@ -902,30 +903,12 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _showEmergencyRoundEndDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Round Ended',
-          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'The round has ended early due to insufficient cards in the deck.\n\n'
-          'All player scores have been calculated and the next round will begin shortly.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Automatically advance to next round
-              _gameController.nextRound();
-              setState(() {});
-            },
-            child: const Text('Continue to Next Round'),
-          ),
-        ],
-      ),
+    EmergencyRoundEndDialog.show(
+      context,
+      onContinue: () {
+        _gameController.nextRound();
+        setState(() {});
+      },
     );
   }
 

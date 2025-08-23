@@ -95,6 +95,7 @@ The game follows official Hand & Foot rules (documented in `docs/family_hand_and
 ### Error Recovery
 
 **Going Out Prevention**: Validates book requirements before allowing final discard
+**Emergency Round End**: Automatically ends rounds when deck becomes insufficient for gameplay, preventing game freezing
 **Stuck Game Recovery**: Emergency skip turn function for edge cases
 **Comprehensive Validation**: Multi-step validation for complex moves like multiple meld creation
 
@@ -125,6 +126,7 @@ The game follows official Hand & Foot rules (documented in `docs/family_hand_and
 
 **Code Quality**: 
 - Modular component design with extracted sub-methods
+- Shared UI components to eliminate duplication (e.g., `EmergencyRoundEndDialog`)
 - Comprehensive test coverage: 175+ unit tests plus integration tests
 - Static analysis compliance with zero issues
 
@@ -150,6 +152,11 @@ Key constants defined in `GameConfig`:
 2. Verify minimum natural cards of same rank
 3. Ensure wild card count ≤ natural card count
 4. Confirm no 3s are included in meld selection
+
+**Insufficient Cards Handling**: When deck becomes empty:
+- System automatically triggers emergency round end via `_emergencyEndRoundInsufficientCards()`
+- Shows user-friendly dialog explaining early round termination
+- Calculates scores and advances to next round seamlessly
 
 **Git Workflow**: 
 - Branch naming: `bs/feature-description` (developer-initials/description)

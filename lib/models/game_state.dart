@@ -717,16 +717,11 @@ class GameState {
   /// Emergency round end when insufficient cards prevent normal gameplay
   void _emergencyEndRoundInsufficientCards() {
     _logAction(
-      'emergency round end: insufficient cards to continue gameplay - calculating scores and advancing to next round',
+      'emergency round end: insufficient cards - scores calculated and advancing to next round',
     );
 
     // End the current round immediately
     endRound();
-
-    // Add a clear action log so players understand what happened
-    _logAction(
-      'round ${round - 1} ended early due to insufficient cards - scores calculated and round $round starting',
-    );
   }
 
   void resetForNewRound() {

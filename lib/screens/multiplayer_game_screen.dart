@@ -7,6 +7,7 @@ import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../widgets/advanced_meld_selector.dart';
+import '../widgets/emergency_round_end_dialog.dart';
 import '../widgets/game_app_bar.dart';
 import '../widgets/player_hand_widget.dart';
 import '../widgets/game_action_buttons.dart';
@@ -482,28 +483,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _showEmergencyRoundEndDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Round Ended',
-          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'The round has ended early due to insufficient cards in the deck.\n\n'
-          'All player scores have been calculated and the next round will begin automatically.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {}); // Refresh UI to show round transition
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
+    EmergencyRoundEndDialog.show(
+      context,
+      autoAdvance: true, // Multiplayer auto-advances
+      onContinue: () {
+        setState(() {}); // Refresh UI to show round transition
+      },
     );
   }
 
