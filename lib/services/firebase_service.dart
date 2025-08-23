@@ -12,8 +12,8 @@ import '../models/meld.dart';
 import 'firebase_constants.dart';
 import 'device_service.dart';
 
-// Always use stub Firebase options for testing and CI environments
-import '../firebase_options_stub.dart' as stub;
+// Import Firebase options - GitHub Pages will overwrite this file with production config
+import '../firebase_options.dart';
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -47,14 +47,16 @@ class FirebaseService {
     }
 
     try {
-      // Use stub Firebase options for CI/test environments
-      final options = stub.DefaultFirebaseOptions.currentPlatform;
-      _logger.info(
-        '🔥 Using Firebase stub configuration for testing environment',
-      );
+      // Use Firebase options (stub by default, overwritten with production on GitHub Pages)
+      final options = DefaultFirebaseOptions.currentPlatform;
+
+      final configType = options.projectId.contains('stub')
+          ? 'stub'
+          : 'production';
+      _logger.info('🔥 Using $configType Firebase configuration');
 
       _logger.info(
-        '🔥 Initializing Firebase with configuration for ${options.projectId}',
+        '🔥 Initializing Firebase with $configType configuration for ${options.projectId}',
       );
 
       await Firebase.initializeApp(options: options);
