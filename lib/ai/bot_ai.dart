@@ -467,9 +467,10 @@ class BotAI {
   static const int meldBreakSafetyBuffer = 20;
 
   // NEW: Foot transition constants for improved strategy
-  static const int aggressiveFootTransitionThreshold = 3; // Cards or fewer
+  static const int aggressiveFootTransitionThreshold =
+      6; // Cards or fewer (increased from 3)
   static const int handSizePressureThreshold =
-      8; // Too many cards after playdown
+      7; // Too many cards after playdown (reduced from 8)
   static const int lateRoundTransitionRound = 3; // Round 3+ be more aggressive
   static const int lateRoundHandSizeThreshold =
       6; // Cards to trigger late round transition
@@ -715,6 +716,15 @@ class BotAI {
   }
 
   BotDecision _makeMeldDecision(Player bot, GameController controller) {
+    final handSize = bot.currentHand.length;
+
+    // EMERGENCY OVERRIDE: If hand is critically large (>15), skip ALL meld logic and discard
+    // This prevents the 18-card problem while preserving normal bot behavior
+    if (handSize > 15 && bot.hasPlayedDown) {
+      final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
+      return BotDecision(action: 'discard', data: cardToDiscard);
+    }
+
     // Check if we're in the middle of a multi-meld play-down sequence
     if (_plannedMelds != null && _currentMeldIndex < _plannedMelds!.length) {
       final nextMeld = _plannedMelds![_currentMeldIndex];
@@ -1421,22 +1431,27 @@ class BotAI {
     final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
     final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
     final hasExcessiveWilds =
-        wildCardCount >= 5; // 5+ wilds should be more conservative
+        wildCardCount >= 6; // Relaxed from 5 to 6 wilds threshold
 
-    // IMPROVEMENT 1: More aggressive transition with fewer cards
-    // BUT: Only if not preserving strategic resources
-    if (remainingCards <= aggressiveFootTransitionThreshold &&
+    // NEW: Competitive pressure - if opponent is on foot, be more aggressive
+    final opponentOnFoot = gameState.players.any(
+      (p) => p.id != bot.id && p.hasPickedUpFoot,
+    );
+    final competitivePressure = opponentOnFoot && bot.hasPlayedDown;
+
+    // IMPROVEMENT 1: More aggressive transition with fewer cards OR competitive pressure (only for large hands)
+    if ((remainingCards <= aggressiveFootTransitionThreshold ||
+            (competitivePressure && remainingCards > 12)) &&
         !(stillOnHandPile && hasExcessiveWilds)) {
       return _tryAggressiveFootTransition(bot, controller);
     }
 
     // IMPROVEMENT 2: Hand size pressure - transition when hand gets too large
-    // BUT: Be more conservative if hand has many wilds (preserve them strategically)
-    // AND: Be more conservative if still on hand pile
-    if (remainingCards >= handSizePressureThreshold &&
+    // OR when competitive pressure exists for very large hands only (>12 cards)
+    if ((remainingCards >= handSizePressureThreshold ||
+            (competitivePressure && remainingCards > 12)) &&
         bot.hasPlayedDown &&
-        !hasExcessiveWilds &&
-        !stillOnHandPile) {
+        !hasExcessiveWilds) {
       return _tryHandSizePressureTransition(bot, controller, handValue);
     }
 
@@ -1444,6 +1459,16 @@ class BotAI {
     if (currentRound >= lateRoundTransitionRound &&
         remainingCards >= lateRoundHandSizeThreshold) {
       return _tryLateRoundTransition(bot, controller, handValue);
+    }
+
+    // NEW: Meld completion trigger - if bot has books/good melds, transition
+    final hasBooks = bot.melds.any((meld) => meld.cards.length >= 7);
+    final hasMultipleMelds = bot.melds.length >= 3;
+    if (hasBooks &&
+        hasMultipleMelds &&
+        bot.hasPlayedDown &&
+        remainingCards >= 5) {
+      return _tryAggressiveFootTransition(bot, controller);
     }
 
     // IMPROVEMENT 4: Post-playdown optimization - more willing after playing down
@@ -1498,14 +1523,23 @@ class BotAI {
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
-  /// Try aggressive foot transition with 3 or fewer cards
+  /// Try aggressive foot transition - prioritize hand reduction over melding
   BotDecision _tryAggressiveFootTransition(
     Player bot,
     GameController controller,
   ) {
-    // Add to existing melds first - prioritize getting rid of cards
+    final handSize = bot.currentHand.length;
+
+    // EMERGENCY: If hand is extremely large (>15 cards), DISCARD immediately, don't meld
+    // This targets the 18-card problem specifically
+    if (handSize > 15) {
+      final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
+      return BotDecision(action: 'discard', data: cardToDiscard);
+    }
+
+    // Only consider melding if hand is small enough
     final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
-    if (cardsToAddToMelds.isNotEmpty) {
+    if (cardsToAddToMelds.isNotEmpty && handSize <= 6) {
       final cardToAdd = cardsToAddToMelds.first;
       return BotDecision(action: 'addToMeld', data: cardToAdd);
     }
@@ -1528,7 +1562,16 @@ class BotAI {
     GameController controller,
     int handValue,
   ) {
-    // With 8+ cards, prioritize reducing hand size
+    final handSize = bot.currentHand.length;
+
+    // EMERGENCY DISCARD: With extremely large hands (>15), discard immediately, don't meld
+    // This targets the 18-card problem specifically
+    if (handSize > 15) {
+      final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
+      return BotDecision(action: 'discard', data: cardToDiscard);
+    }
+
+    // With 8+ cards, prioritize reducing hand size but balance with strategy
 
     // Strategy 1: Add multiple cards to existing melds if possible
     final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
