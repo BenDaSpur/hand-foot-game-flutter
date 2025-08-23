@@ -12,9 +12,8 @@ import '../models/meld.dart';
 import 'firebase_constants.dart';
 import 'device_service.dart';
 
-// Conditional import for firebase_options - stub for CI/test environments
-import '../firebase_options_stub.dart'
-    if (dart.library.io) '../firebase_options.dart';
+// Always use stub Firebase options for testing and CI environments
+import '../firebase_options_stub.dart' as stub;
 
 /// Firebase service for handling multiplayer game state synchronization
 class FirebaseService {
@@ -48,18 +47,11 @@ class FirebaseService {
     }
 
     try {
-      // Initialize Firebase with options from firebase_options.dart
-      // Handle missing firebase_options.dart gracefully in CI environments
-      late final FirebaseOptions options;
-      try {
-        options = DefaultFirebaseOptions.currentPlatform;
-      } catch (e) {
-        _logger.warning(
-          'Firebase options not available: $e. Using minimal configuration.',
-        );
-        // Provide minimal options for environments where firebase_options.dart is not available
-        rethrow; // Re-throw for now, but this could be made more graceful
-      }
+      // Use stub Firebase options for CI/test environments
+      final options = stub.DefaultFirebaseOptions.currentPlatform;
+      _logger.info(
+        '🔥 Using Firebase stub configuration for testing environment',
+      );
 
       _logger.info(
         '🔥 Initializing Firebase with configuration for ${options.projectId}',
