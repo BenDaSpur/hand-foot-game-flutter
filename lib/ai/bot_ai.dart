@@ -171,7 +171,9 @@ class BotStrategicConstants {
   static const double minRiskTolerance = 0.1;
   static const double maxRiskTolerance = 3.0;
   static const double emergencyRiskMultiplier =
-      4.0; // Higher ceiling for emergency situations
+      2.0; // More conservative multiplier
+  static const double maxEmergencyRiskTolerance =
+      6.0; // Absolute maximum to prevent erratic behavior
 
   // Turn timing constants
   static const int minAdjustedTurns = 2;
@@ -389,12 +391,11 @@ class BotAI {
       riskModifier *= 1.5; // End game approaching, more aggressive
     }
 
-    // Allow higher risk tolerance in emergency situations
+    // Allow higher risk tolerance in emergency situations, but cap at reasonable maximum
     final maxRisk =
         (botPlayer.currentHand.length >=
             BotStrategicConstants.emergencyHandSize)
-        ? BotStrategicConstants.maxRiskTolerance *
-              BotStrategicConstants.emergencyRiskMultiplier
+        ? BotStrategicConstants.maxEmergencyRiskTolerance
         : BotStrategicConstants.maxRiskTolerance;
 
     return (baseRisk * riskModifier).clamp(
@@ -590,8 +591,9 @@ class BotAI {
     if (!hasDirtyBook) turnsNeeded += 2;
 
     // Factor in hand size
-    if (player.currentHand.length > BotStrategicConstants.endGameHandSize)
+    if (player.currentHand.length > BotStrategicConstants.endGameHandSize) {
       turnsNeeded += 1;
+    }
     if (player.currentHand.length >
         BotStrategicConstants.handSizeInflationThreshold) {
       turnsNeeded += BotStrategicConstants.handSizeInflationPenalty;
@@ -613,8 +615,6 @@ class BotAI {
         neededRanks.add(meld.rank);
       }
     }
-
-    // TODO: Could add more sophisticated analysis based on common patterns
 
     return neededRanks;
   }
@@ -654,10 +654,14 @@ class BotAI {
         final discardPileSize = gameState.discardPile.length;
 
         // Apply risk tolerance to thresholds
-        final adjustedValueThreshold = (valuablePileThreshold / riskTolerance)
-            .round();
-        final adjustedSizeThreshold = (largePileThreshold / riskTolerance)
-            .round();
+        final adjustedValueThreshold = _safeRiskDivision(
+          valuablePileThreshold.toDouble(),
+          riskTolerance,
+        ).round();
+        final adjustedSizeThreshold = _safeRiskDivision(
+          largePileThreshold.toDouble(),
+          riskTolerance,
+        ).round();
 
         // If we haven't played down, be VERY conservative - only take exceptional piles
         if (!bot.hasPlayedDown) {
@@ -666,17 +670,22 @@ class BotAI {
           if (discardPileValue >
                   adjustedValueThreshold * conservativeMultiplier ||
               discardPileSize >=
-                  adjustedSizeThreshold + (3 / riskTolerance).round()) {
+                  adjustedSizeThreshold +
+                      _safeRiskDivision(3.0, riskTolerance).round()) {
             return BotDecision(action: 'drawFromDiscard');
           }
         } else {
           // After playing down, more willing to take good piles for book building
           if (bot.hasPickedUpFoot) {
             // On foot - focus on book completion, adjusted by risk tolerance
-            final adjustedFootValueThreshold =
-                (footPileValueThreshold / riskTolerance).round();
-            final adjustedFootSizeThreshold =
-                (footPileSizeThreshold / riskTolerance).round();
+            final adjustedFootValueThreshold = _safeRiskDivision(
+              footPileValueThreshold.toDouble(),
+              riskTolerance,
+            ).round();
+            final adjustedFootSizeThreshold = _safeRiskDivision(
+              footPileSizeThreshold.toDouble(),
+              riskTolerance,
+            ).round();
 
             if (discardPileValue > adjustedFootValueThreshold ||
                 discardPileSize >= adjustedFootSizeThreshold) {
@@ -684,10 +693,14 @@ class BotAI {
             }
           } else {
             // Still on hand after playing down - moderate threshold, adjusted by risk
-            final adjustedHandValueThreshold =
-                (handPileValueThreshold / riskTolerance).round();
-            final adjustedHandSizeThreshold =
-                (handPileSizeThreshold / riskTolerance).round();
+            final adjustedHandValueThreshold = _safeRiskDivision(
+              handPileValueThreshold.toDouble(),
+              riskTolerance,
+            ).round();
+            final adjustedHandSizeThreshold = _safeRiskDivision(
+              handPileSizeThreshold.toDouble(),
+              riskTolerance,
+            ).round();
 
             if (discardPileValue > adjustedHandValueThreshold ||
                 discardPileSize >= adjustedHandSizeThreshold) {
@@ -972,8 +985,10 @@ class BotAI {
     double riskTolerance,
   ) {
     // Risk tolerance affects emergency threshold - higher risk = trigger emergency sooner
-    final adjustedThreshold = (emergencyHandSizeThreshold / riskTolerance)
-        .round();
+    final adjustedThreshold = _safeRiskDivision(
+      emergencyHandSizeThreshold.toDouble(),
+      riskTolerance,
+    ).round();
     if (handSize >= adjustedThreshold && singletons.isNotEmpty) {
       singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return singletons.first;
@@ -996,10 +1011,14 @@ class BotAI {
     final isOnFoot = bot.hasPickedUpFoot;
 
     // Adjust thresholds based on risk tolerance
-    final adjustedWildThreshold = (wildCardDiscardThreshold / riskTolerance)
-        .round();
-    final adjustedFootThreshold = (emergencyFootSizeThreshold / riskTolerance)
-        .round();
+    final adjustedWildThreshold = _safeRiskDivision(
+      wildCardDiscardThreshold.toDouble(),
+      riskTolerance,
+    ).round();
+    final adjustedFootThreshold = _safeRiskDivision(
+      emergencyFootSizeThreshold.toDouble(),
+      riskTolerance,
+    ).round();
 
     // Emergency case 1: Excessive wild hoarding (lowered threshold with high risk)
     if (wildCards.length >= adjustedWildThreshold) {
@@ -1133,8 +1152,10 @@ class BotAI {
     }
 
     // Priority 4: Exceptional opportunity (way over requirement), adjusted by risk
-    final adjustedExceptionalThreshold =
-        (playDownRequirement + strategicBufferPoints * 2) / riskTolerance;
+    final adjustedExceptionalThreshold = _safeRiskDivision(
+      (playDownRequirement + strategicBufferPoints * 2).toDouble(),
+      riskTolerance,
+    );
     final exceptionalResult = _tryExceptionalPlayDown(
       possibleMelds,
       adjustedExceptionalThreshold.round(),
