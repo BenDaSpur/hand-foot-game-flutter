@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,14 @@ import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/emergency_round_end_dialog.dart';
 import 'main_menu_screen.dart';
+
+/// Bot configuration for randomized personality assignment
+class BotConfig {
+  final String name;
+  final BotPersonality personality;
+
+  BotConfig(this.name, this.personality);
+}
 
 class GameScreen extends StatefulWidget {
   final int? testSeed; // For deterministic testing
@@ -77,15 +86,44 @@ class _GameScreenState extends State<GameScreen> {
     _startFreshGame();
   }
 
+  /// Generate random bot configurations with varied personalities and names
+  List<BotConfig> _generateRandomBotConfigurations() {
+    final Random random = Random();
+
+    // Available bot personalities and their associated names
+    final botOptions = [
+      BotConfig('Clara', BotPersonality.conservative),
+      BotConfig('Carl', BotPersonality.conservative),
+      BotConfig('Bob', BotPersonality.aggressive),
+      BotConfig('Rita', BotPersonality.aggressive),
+      BotConfig('Ben', BotPersonality.bookBuilder),
+      BotConfig('Penny', BotPersonality.bookBuilder),
+      BotConfig('Alex', BotPersonality.adaptive),
+      BotConfig('Sue', BotPersonality.adaptive),
+    ];
+
+    // Shuffle and take first two to ensure no duplicates
+    botOptions.shuffle(random);
+    return botOptions.take(2).toList();
+  }
+
   void _startFreshGame() {
+    // Randomize bot personalities and names each game for variety
+    final botConfigs = _generateRandomBotConfigurations();
+
     final players = [
       Player(id: '1', name: 'You', type: PlayerType.human),
-      Player(id: '2', name: 'Bot 1', type: PlayerType.bot),
-      Player(id: '3', name: 'Bot 2', type: PlayerType.bot),
+      Player(id: '2', name: botConfigs[0].name, type: PlayerType.bot),
+      Player(id: '3', name: botConfigs[1].name, type: PlayerType.bot),
     ];
 
     _gameController = GameController(players: players, seed: widget.testSeed);
+
+    // Create bot AI and assign the randomized personalities
     _botAI = BotAI();
+    _botAI.assignPersonality('2', botConfigs[0].personality);
+    _botAI.assignPersonality('3', botConfigs[1].personality);
+
     _gameController.initializeGame();
 
     // Sort the human player's initial hand
@@ -1494,12 +1532,12 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _exportGameState() {
-    final gameStateJson = _gameController.exportGameState();
-    Clipboard.setData(ClipboardData(text: gameStateJson));
+    final gameStateBase64 = _gameController.exportGameState();
+    Clipboard.setData(ClipboardData(text: gameStateBase64));
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Game state exported to clipboard'),
+        content: const Text('Compact game save copied to clipboard'),
         backgroundColor: BalatroTheme.neonBlue,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1507,7 +1545,7 @@ class _GameScreenState extends State<GameScreen> {
           label: 'VIEW',
           textColor: Colors.white,
           onPressed: () {
-            _showExportedGameDialog(gameStateJson);
+            _showExportedGameDialog(gameStateBase64);
           },
         ),
         duration: const Duration(seconds: 4),
@@ -1515,28 +1553,39 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _showExportedGameDialog(String gameStateJson) {
+  void _showExportedGameDialog(String gameStateBase64) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: BalatroTheme.darkPurple,
         title: const Text(
-          'Exported Game State',
+          'Compact Game Save',
           style: TextStyle(color: BalatroTheme.neonPink),
         ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              gameStateJson,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: Colors.white70,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This compact save uses an optimized format for easy sharing. Mobile/desktop versions use gzip compression for maximum size reduction.',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.maxFinite,
+              height: 300,
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  gameStateBase64,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
         actions: [
           TextButton(
@@ -1548,7 +1597,7 @@ class _GameScreenState extends State<GameScreen> {
           ),
           TextButton(
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: gameStateJson));
+              Clipboard.setData(ClipboardData(text: gameStateBase64));
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -1577,7 +1626,7 @@ class _GameScreenState extends State<GameScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: BalatroTheme.darkPurple,
         title: const Text(
-          'Load Game State',
+          'Load Game Save',
           style: TextStyle(color: BalatroTheme.neonPink),
         ),
         content: SizedBox(
@@ -1587,7 +1636,7 @@ class _GameScreenState extends State<GameScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Paste the exported game state JSON below:',
+                'Paste your game save (supports all formats: ultra-compact, base64, or JSON):',
                 style: TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 12),
@@ -1803,17 +1852,17 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _loadGameFromJson(String jsonText) {
-    if (jsonText.trim().isEmpty) {
-      _showErrorDialog('Please paste a valid game state JSON.');
+  void _loadGameFromJson(String inputText) {
+    if (inputText.trim().isEmpty) {
+      _showErrorDialog('Please paste a valid game save (Base64 or JSON).');
       return;
     }
 
     try {
-      final newController = GameController.fromExportJson(jsonText);
+      final newController = GameController.fromExportJson(inputText);
       if (newController == null) {
         _showErrorDialog(
-          'Failed to load game state. The JSON format may be invalid or corrupted.',
+          'Failed to load game save. The format may be invalid or corrupted.',
         );
         return;
       }
