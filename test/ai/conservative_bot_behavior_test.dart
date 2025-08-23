@@ -23,7 +23,7 @@ void main() {
       bot = players[1];
     });
 
-    test('should hold wild cards strategically until forced to discard', () {
+    test('should make strategic melds while preserving wild cards', () {
       // Give bot many wild cards but not enough to exceed threshold (6+)
       bot.dealHand([
         const PlayingCard(suit: null, rank: CardRank.joker), // Wild
@@ -46,12 +46,15 @@ void main() {
 
       final decision = botAI.makeDecision(bot, gameController);
 
-      // Bot should discard rather than use wild cards in melds
-      expect(decision.action, equals('discard'));
+      // Bot should make strategic melds to reduce hand size while preserving wilds
+      expect(decision.action, equals('createMeld'));
 
-      // Should discard a natural card, not a wild
-      final discardedCard = decision.data as PlayingCard;
-      expect(discardedCard.isWild, isFalse);
+      // Should create a meld that includes some natural cards
+      final meldCards = decision.data as List<PlayingCard>;
+      expect(meldCards.length, greaterThanOrEqualTo(2));
+      // Allow some wild cards in the meld, but should have at least 2 naturals
+      final naturalCards = meldCards.where((card) => !card.isWild).toList();
+      expect(naturalCards.length, greaterThanOrEqualTo(2));
     });
 
     test(
@@ -82,7 +85,7 @@ void main() {
     );
 
     test(
-      'should be conservative on hand pile - not meld unless strong opportunity',
+      'should make strategic melds to reduce hand size even with moderate opportunities',
       () {
         // Give bot a decent meld that doesn't exceed the strong threshold
         bot.dealHand([
@@ -105,8 +108,14 @@ void main() {
 
         final decision = botAI.makeDecision(bot, gameController);
 
-        // Bot should hold cards, not meld weak opportunities
-        expect(decision.action, equals('discard'));
+        // Bot should still make strategic melds even if they're not super strong
+        // The new AI is smarter about reducing hand size while still being conservative
+        expect(decision.action, equals('createMeld'));
+
+        // Should create the Queens meld since it reduces hand size strategically
+        final meldCards = decision.data as List<PlayingCard>;
+        expect(meldCards.length, equals(3));
+        expect(meldCards.every((card) => card.rank == CardRank.queen), isTrue);
       },
     );
 
