@@ -203,9 +203,8 @@ void main() {
 
       final exportedState = gameController.exportGameState();
       expect(exportedState, isNotNull);
-      expect(exportedState, contains('seed'));
-      expect(exportedState, contains('players'));
-      expect(exportedState, contains('discardPile'));
+      expect(exportedState, isNotEmpty);
+      // The exported state is base64 encoded, so we can't check for raw JSON strings
 
       // Create new controller from exported state
       final newController = GameController.fromExportJson(exportedState);
@@ -216,6 +215,14 @@ void main() {
       expect(
         newController.gameState.hasDrawnFromDeck,
         equals(gameController.gameState.hasDrawnFromDeck),
+      );
+      expect(
+        newController.gameState.players.length,
+        equals(gameController.gameState.players.length),
+      );
+      expect(
+        newController.gameState.round,
+        equals(gameController.gameState.round),
       );
     });
 

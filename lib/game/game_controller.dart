@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import '../models/card.dart';
 import '../models/deck.dart';
 import '../models/player.dart';
@@ -459,149 +461,157 @@ class GameController {
   }
 
   String exportGameState() {
+    // Create compact data structure with minimal redundancy
     final export = {
-      'gameSeed': gameSeed ?? -1, // -1 indicates legacy game without seed
-      'gameState': {
-        'phase': _gameState.phase.name,
-        'turnPhase': _gameState.turnPhase.name,
-        'round': _gameState.round,
-        'currentPlayerIndex': _gameState.currentPlayerIndex,
-        'discardPileFrozen': _gameState.discardPileFrozen,
-        'hasDrawnFromDeck': _gameState.hasDrawnFromDeck,
-        'hasMelded': _gameState.hasMelded,
-        'playDownRequirement': _gameState.playDownRequirement,
+      'v': 2, // Version 2 = gzip + optimized format
+      's': gameSeed ?? -1, // seed
+      'g': {
+        // gameState
+        'p': _gameState.phase.index, // Use indices instead of names
+        't': _gameState.turnPhase.index,
+        'r': _gameState.round,
+        'c': _gameState.currentPlayerIndex,
+        'f': _gameState.discardPileFrozen,
+        'd': _gameState.hasDrawnFromDeck,
+        'm': _gameState.hasMelded,
+        'q': _gameState.playDownRequirement,
       },
       'players': _gameState.players
           .map(
             (player) => {
               'id': player.id,
-              'name': player.name,
-              'type': player.type.name,
-              'score': player.score,
-              'hasPlayedDown': player.hasPlayedDown,
-              'roundScore': player.calculateTotalScore(),
-              'handSize': player.hand.length,
-              'footSize': player.foot.length,
-              'currentHandSize': player.currentHand.length,
-              'usingFoot': player.hasPickedUpFoot,
-              'canGoOut': player.canGoOut,
+              'n': player.name, // Shorter key names
+              't': player.type.index, // Use index instead of name
+              'sc': player.score,
+              'pd': player.hasPlayedDown,
+              'ft': player.hasPickedUpFoot,
               'melds': player.melds
                   .map(
                     (meld) => {
-                      'type': meld.type.name,
-                      'cards': meld.cards
-                          .map(
-                            (card) => {
-                              'suit': card.suit?.name,
-                              'rank': card.rank.name,
-                            },
-                          )
-                          .toList(),
+                      't': meld.type.index,
+                      'c': meld.cards.map(_compactCard).toList(),
                     },
                   )
                   .toList(),
-              'hand': player.hand
-                  .map(
-                    (card) => {'suit': card.suit?.name, 'rank': card.rank.name},
-                  )
-                  .toList(),
-              'foot': player.foot
-                  .map(
-                    (card) => {'suit': card.suit?.name, 'rank': card.rank.name},
-                  )
-                  .toList(),
+              'h': player.hand.map(_compactCard).toList(), // hand
+              'f': player.foot.map(_compactCard).toList(), // foot
             },
           )
           .toList(),
       'deck': {
-        'size': _gameState.deck.size,
-        'seed': _gameState.deck.seed,
-        'topCard': _gameState.deck.topCard != null
-            ? {
-                'suit': _gameState.deck.topCard!.suit?.name,
-                'rank': _gameState.deck.topCard!.rank.name,
-              }
+        'sz': _gameState.deck.size,
+        's': _gameState.deck.seed,
+        'top': _gameState.deck.topCard != null
+            ? _compactCard(_gameState.deck.topCard!)
             : null,
       },
-      'discardPile': _gameState.discardPile
-          .map((card) => {'suit': card.suit?.name, 'rank': card.rank.name})
-          .toList(),
-      'recentActions': _gameState.recentActions
-          .map(
-            (action) => {
-              'message': action.message,
-              'playerName': action.playerName,
-              'timestamp': action.timestamp.toIso8601String(),
-            },
-          )
-          .toList(),
-      'exportedAt': DateTime.now().toIso8601String(),
-      'debugInfo': _generateDebugInfo(),
+      'dp': _gameState.discardPile.map(_compactCard).toList(), // discardPile
+      // Skip recent actions and debug info for maximum compression
     };
 
-    return const JsonEncoder.withIndent('  ').convert(export);
-  }
+    // Convert to compact JSON
+    final jsonString = jsonEncode(export);
+    final jsonBytes = utf8.encode(jsonString);
 
-  Map<String, dynamic> _generateDebugInfo() {
-    final currentPlayer = _gameState.currentPlayer;
-    final debugInfo = <String, dynamic>{
-      'currentPlayerDebug': {
-        'name': currentPlayer.name,
-        'type': currentPlayer.type.name,
-        'turnPhase': _gameState.turnPhase.name,
-      },
-    };
-
-    // Add bot-specific debugging for current player
-    if (currentPlayer.type == PlayerType.bot) {
-      final possibleMelds = findPossibleMelds(currentPlayer);
-      debugInfo['botDebug'] = {
-        'possibleMeldsCount': possibleMelds.length,
-        'possibleMelds': possibleMelds.map((meld) {
-          final points = meld.fold<int>(
-            0,
-            (sum, card) => sum + card.pointValue,
-          );
-          return {
-            'cards': meld
-                .map((c) => '${c.rank.name} of ${c.suit?.name ?? 'joker'}')
-                .toList(),
-            'points': points,
-            'meetsPlayDown': points >= _gameState.playDownRequirement,
-          };
-        }).toList(),
-        'canUnlockDiscardPile': _gameState.canDrawFromDiscard,
-        'hasPlayedDown': currentPlayer.hasPlayedDown,
-        'playDownRequirement': _gameState.playDownRequirement,
-      };
-
-      // Add discard pile analysis if relevant
-      if (_gameState.discardPile.isNotEmpty) {
-        final topDiscard = _gameState.topDiscard!;
-        final matchingNaturals = currentPlayer.currentHand
-            .where((card) => card.rank == topDiscard.rank && !card.isWild)
-            .length;
-        debugInfo['botDebug']['discardPileAnalysis'] = {
-          'topCard':
-              '${topDiscard.rank.name} of ${topDiscard.suit?.name ?? 'joker'}',
-          'matchingNaturals': matchingNaturals,
-          'canUnlock': matchingNaturals >= 2,
-          'pileSize': _gameState.discardPile.length,
-          'pileValue': _gameState.discardPile.fold<int>(
-            0,
-            (sum, card) => sum + card.pointValue,
-          ),
-        };
+    // Use different compression strategies based on platform
+    List<int> finalBytes;
+    try {
+      if (kIsWeb) {
+        // Web: Use optimized format without gzip (gzip not supported in browsers)
+        export['v'] = 3; // Version 3 = web-optimized format (no gzip)
+        final webJsonString = jsonEncode(export);
+        finalBytes = utf8.encode(webJsonString);
+      } else {
+        // Mobile/Desktop: Use gzip compression for maximum savings
+        finalBytes = gzip.encode(jsonBytes);
       }
+    } catch (e) {
+      // Fallback to uncompressed if gzip fails
+      export['v'] = 3; // Use web format as fallback
+      final fallbackJsonString = jsonEncode(export);
+      finalBytes = utf8.encode(fallbackJsonString);
     }
 
-    return debugInfo;
+    // Encode as base64 for text sharing
+    return base64Encode(finalBytes);
   }
 
-  static GameController? fromExportJson(String jsonString) {
+  /// Create ultra-compact card representation using indices
+  String _compactCard(PlayingCard card) {
+    // Format: "R,S" where R=rank index, S=suit index (or empty for joker)
+    // Example: "12,3" = King of Spades, "1," = Joker (no suit)
+    final rankIndex = card.rank.index;
+    final suitIndex = card.suit?.index;
+    return suitIndex != null ? '$rankIndex,$suitIndex' : '$rankIndex,';
+  }
+
+  /// Parse compact card representation back to PlayingCard
+  static PlayingCard _parseCompactCard(String compactCard) {
+    final parts = compactCard.split(',');
+    final rankIndex = int.parse(parts[0]);
+    final suitIndex = parts[1].isNotEmpty ? int.parse(parts[1]) : null;
+
+    return PlayingCard(
+      rank: CardRank.values[rankIndex],
+      suit: suitIndex != null ? Suit.values[suitIndex] : null,
+    );
+  }
+
+  static GameController? fromExportJson(String input) {
     try {
+      String jsonString = input.trim();
+
+      // Check if the input is base64 encoded (compressed or uncompressed)
+      if (!jsonString.startsWith('{') && !jsonString.startsWith('[')) {
+        try {
+          // Attempt to decode from base64
+          final decodedBytes = base64Decode(jsonString);
+
+          try {
+            // Try to decompress with gzip first (version 2 format)
+            if (!kIsWeb) {
+              try {
+                final decompressedBytes = gzip.decode(decodedBytes);
+                jsonString = utf8.decode(decompressedBytes);
+              } catch (gzipError) {
+                // If gzip fails, try direct UTF-8 decode
+                jsonString = utf8.decode(decodedBytes);
+              }
+            } else {
+              // Web platform: try direct UTF-8 decode (version 3 format)
+              jsonString = utf8.decode(decodedBytes);
+            }
+          } catch (e) {
+            // If all decoding attempts fail, treat as legacy JSON format
+            // This maintains backward compatibility
+            rethrow;
+          }
+        } catch (e) {
+          // If base64 decoding fails, treat as legacy JSON format
+          // This maintains backward compatibility
+        }
+      }
+
       final Map<String, dynamic> data = jsonDecode(jsonString);
 
+      // Check format version
+      final version = data['v'] ?? 1; // Default to version 1 for legacy formats
+
+      if (version >= 2) {
+        // New optimized format (versions 2 and 3)
+        return _fromOptimizedFormat(data);
+      } else {
+        // Legacy format
+        return _fromLegacyFormat(data);
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Parse legacy export format (version 1)
+  static GameController? _fromLegacyFormat(Map<String, dynamic> data) {
+    try {
       // Extract basic info
       final gameSeed = data['gameSeed'] as int?;
       final gameStateData = data['gameState'] as Map<String, dynamic>;
@@ -699,6 +709,100 @@ class GameController {
       return controller;
     } catch (e) {
       // Return null to indicate failure - error handling done in UI
+      return null;
+    }
+  }
+
+  /// Parse optimized export format (version 2+)
+  static GameController? _fromOptimizedFormat(Map<String, dynamic> data) {
+    try {
+      // Extract basic info using compact keys
+      final gameSeed = data['s'] as int?;
+      final gameStateData = data['g'] as Map<String, dynamic>;
+      final playersData = data['players'] as List<dynamic>;
+
+      // Recreate players from optimized format
+      final players = <Player>[];
+      for (final playerData in playersData) {
+        final player = Player(
+          id: playerData['id'] as String,
+          name: playerData['n'] as String, // 'n' = name
+          type: PlayerType.values[playerData['t'] as int], // 't' = type index
+          score: playerData['sc'] as int, // 'sc' = score
+        );
+
+        player.hasPlayedDown = playerData['pd'] as bool; // 'pd' = playedDown
+        player.hasPickedUpFoot = playerData['ft'] as bool; // 'ft' = foot
+
+        // Restore hand from compact format
+        final handData = playerData['h'] as List<dynamic>; // 'h' = hand
+        for (final compactCard in handData) {
+          player.hand.add(_parseCompactCard(compactCard as String));
+        }
+
+        // Restore foot from compact format
+        final footData = playerData['f'] as List<dynamic>; // 'f' = foot
+        for (final compactCard in footData) {
+          player.foot.add(_parseCompactCard(compactCard as String));
+        }
+
+        // Restore melds from compact format
+        final meldsData = playerData['melds'] as List<dynamic>;
+        for (final meldData in meldsData) {
+          final meldCards = <PlayingCard>[];
+          final cardsData = meldData['c'] as List<dynamic>; // 'c' = cards
+          for (final compactCard in cardsData) {
+            meldCards.add(_parseCompactCard(compactCard as String));
+          }
+
+          if (meldCards.isNotEmpty) {
+            final meldType =
+                MeldType.values[meldData['t'] as int]; // 't' = type
+            final meld = Meld(
+              rank: meldCards.first.rank,
+              cards: meldCards,
+              type: meldType,
+            );
+            player.melds.add(meld);
+          }
+        }
+
+        players.add(player);
+      }
+
+      // Create game controller
+      final controller = GameController(players: players, seed: gameSeed);
+      final gameState = controller._gameState;
+
+      // Restore game state from compact format
+      gameState.phase =
+          GamePhase.values[gameStateData['p'] as int]; // 'p' = phase
+      gameState.turnPhase =
+          TurnPhase.values[gameStateData['t'] as int]; // 't' = turnPhase
+      gameState.round = gameStateData['r'] as int; // 'r' = round
+      gameState.currentPlayerIndex =
+          gameStateData['c'] as int; // 'c' = currentPlayerIndex
+      gameState.discardPileFrozen = gameStateData['f'] as bool; // 'f' = frozen
+      gameState.hasDrawnFromDeck =
+          gameStateData['d'] as bool; // 'd' = drawnFromDeck
+      gameState.hasMelded = gameStateData['m'] as bool; // 'm' = melded
+
+      // Restore discard pile from compact format
+      final discardData = data['dp'] as List<dynamic>; // 'dp' = discardPile
+      gameState.discardPile.clear();
+      for (final compactCard in discardData) {
+        gameState.discardPile.add(_parseCompactCard(compactCard as String));
+      }
+
+      // Restore deck from compact format
+      final deckData = data['deck'] as Map<String, dynamic>;
+      final deckSeed = deckData['s'] as int?; // 's' = seed
+      if (deckSeed != null) {
+        _restoreDeckFromSeed(gameState, deckSeed, players.length);
+      }
+
+      return controller;
+    } catch (e) {
       return null;
     }
   }

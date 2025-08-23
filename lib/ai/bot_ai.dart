@@ -16,8 +16,190 @@ class BotDecision {
   });
 }
 
+/// Bot personality types that influence strategic decision-making
+enum BotPersonality {
+  conservative, // Cautious play, holds cards longer, minimal risks
+  aggressive, // Quick play-downs, frequent discard pile unlocks, high risks
+  bookBuilder, // Focuses on completing books for maximum points
+  adaptive, // Switches strategy based on game state and opponents
+}
+
+/// Opponent analysis data for strategic decisions
+class OpponentAnalysis {
+  final int handSize;
+  final int footSize;
+  final int meldCount;
+  final List<int> meldSizes;
+  final bool hasPlayedDown;
+  final bool hasPickedUpFoot;
+  final int score;
+  final int estimatedTurnsToWin;
+  final List<CardRank> likelyNeededRanks; // Cards they probably need
+
+  OpponentAnalysis({
+    required this.handSize,
+    required this.footSize,
+    required this.meldCount,
+    required this.meldSizes,
+    required this.hasPlayedDown,
+    required this.hasPickedUpFoot,
+    required this.score,
+    required this.estimatedTurnsToWin,
+    required this.likelyNeededRanks,
+  });
+
+  /// Check if opponent is close to completing a book
+  bool get hasNearCompleteBook => meldSizes.any((size) => size >= 6);
+
+  /// Check if opponent is in dangerous position (close to going out)
+  bool get isDangerous => estimatedTurnsToWin <= 2;
+
+  /// Check if opponent is in winning position
+  bool get isWinning => hasPlayedDown && hasPickedUpFoot && handSize <= 3;
+}
+
+/// Personality-based strategic modifiers
+class PersonalityConstants {
+  final int strategicBufferPoints;
+  final int minCardsForAggressiveUnlock;
+  final int valuablePileThreshold;
+  final int largePileThreshold;
+  final int footPileValueThreshold;
+  final int footPileSizeThreshold;
+  final int handPileValueThreshold;
+  final int handPileSizeThreshold;
+  final double highValuePairBreakChance;
+  final int maxTurnsBeforeForcePlayDown;
+  final int playDownRiskThreshold;
+  final int bookCompletionPriority; // New for book builder personality
+  final double aggressivenessMultiplier; // Overall aggression modifier
+
+  const PersonalityConstants({
+    required this.strategicBufferPoints,
+    required this.minCardsForAggressiveUnlock,
+    required this.valuablePileThreshold,
+    required this.largePileThreshold,
+    required this.footPileValueThreshold,
+    required this.footPileSizeThreshold,
+    required this.handPileValueThreshold,
+    required this.handPileSizeThreshold,
+    required this.highValuePairBreakChance,
+    required this.maxTurnsBeforeForcePlayDown,
+    required this.playDownRiskThreshold,
+    required this.bookCompletionPriority,
+    required this.aggressivenessMultiplier,
+  });
+
+  /// Get personality-based constants
+  static PersonalityConstants forPersonality(BotPersonality personality) {
+    switch (personality) {
+      case BotPersonality.conservative:
+        return const PersonalityConstants(
+          strategicBufferPoints: 30, // +50% buffer
+          minCardsForAggressiveUnlock: 4, // Need more cards
+          valuablePileThreshold: 140, // +40% threshold
+          largePileThreshold: 8, // +33% threshold
+          footPileValueThreshold: 70, // +40% threshold
+          footPileSizeThreshold: 4, // +33% threshold
+          handPileValueThreshold: 160, // +33% threshold
+          handPileSizeThreshold: 9, // +29% threshold
+          highValuePairBreakChance: 0.1, // 50% less likely
+          maxTurnsBeforeForcePlayDown: 7, // +40% more patient
+          playDownRiskThreshold: -200, // More risk averse
+          bookCompletionPriority: 50, // Moderate book focus
+          aggressivenessMultiplier: 0.7, // 30% less aggressive
+        );
+
+      case BotPersonality.aggressive:
+        return const PersonalityConstants(
+          strategicBufferPoints: 10, // 50% less buffer
+          minCardsForAggressiveUnlock: 2, // Need fewer cards
+          valuablePileThreshold: 70, // 30% lower threshold
+          largePileThreshold: 4, // 33% lower threshold
+          footPileValueThreshold: 35, // 30% lower threshold
+          footPileSizeThreshold: 2, // 33% lower threshold
+          handPileValueThreshold: 85, // 29% lower threshold
+          handPileSizeThreshold: 5, // 29% lower threshold
+          highValuePairBreakChance: 0.35, // 75% more likely
+          maxTurnsBeforeForcePlayDown: 3, // 40% less patient
+          playDownRiskThreshold: -400, // More risk tolerant
+          bookCompletionPriority: 30, // Lower book focus
+          aggressivenessMultiplier: 1.4, // 40% more aggressive
+        );
+
+      case BotPersonality.bookBuilder:
+        return const PersonalityConstants(
+          strategicBufferPoints: 25, // Moderate buffer
+          minCardsForAggressiveUnlock: 3, // Standard
+          valuablePileThreshold: 100, // Standard
+          largePileThreshold: 6, // Standard
+          footPileValueThreshold: 50, // Standard
+          footPileSizeThreshold: 3, // Standard
+          handPileValueThreshold: 120, // Standard
+          handPileSizeThreshold: 7, // Standard
+          highValuePairBreakChance: 0.15, // Less likely to break pairs
+          maxTurnsBeforeForcePlayDown: 6, // More patient for book building
+          playDownRiskThreshold: -250, // Moderate risk
+          bookCompletionPriority: 100, // High book completion focus
+          aggressivenessMultiplier: 1.0, // Standard aggression
+        );
+
+      case BotPersonality.adaptive:
+        return const PersonalityConstants(
+          strategicBufferPoints: 20, // Standard (will be modified dynamically)
+          minCardsForAggressiveUnlock: 3, // Standard
+          valuablePileThreshold: 100, // Standard
+          largePileThreshold: 6, // Standard
+          footPileValueThreshold: 50, // Standard
+          footPileSizeThreshold: 3, // Standard
+          handPileValueThreshold: 120, // Standard
+          handPileSizeThreshold: 7, // Standard
+          highValuePairBreakChance: 0.2, // Standard
+          maxTurnsBeforeForcePlayDown: 5, // Standard
+          playDownRiskThreshold:
+              -300, // Standard (will be modified dynamically)
+          bookCompletionPriority: 60, // Moderate (will be modified)
+          aggressivenessMultiplier: 1.0, // Will be modified dynamically
+        );
+    }
+  }
+}
+
+/// Strategic constants for bot decision making
+class BotStrategicConstants {
+  // Risk tolerance bounds
+  static const double minRiskTolerance = 0.1;
+  static const double maxRiskTolerance = 3.0;
+  static const double emergencyRiskMultiplier =
+      2.0; // More conservative multiplier
+  static const double maxEmergencyRiskTolerance =
+      6.0; // Absolute maximum to prevent erratic behavior
+
+  // Turn timing constants
+  static const int minAdjustedTurns = 2;
+  static const int maxAdjustedTurns = 8;
+
+  // Hand quality assessment
+  static const double minHandQuality = 0.0;
+  static const double maxHandQuality = 1.0;
+
+  // Opponent analysis
+  static const int minEstimatedTurns = 1;
+  static const int maxEstimatedTurns = 6;
+  static const int handSizeInflationThreshold = 10;
+  static const int handSizeInflationPenalty = 2;
+
+  // Emergency thresholds
+  static const int emergencyHandSize = 20;
+  static const int endGameHandSize = 5;
+}
+
 class BotAI {
   final Random _random;
+
+  // Per-player personality assignments
+  final Map<String, BotPersonality> _playerPersonalities = {};
+  final Map<String, PersonalityConstants> _playerConstants = {};
 
   // Multi-meld play-down state tracking
   List<List<PlayingCard>>? _plannedMelds;
@@ -31,37 +213,237 @@ class BotAI {
   List<List<PlayingCard>>? _cachedPossibleMelds;
   String? _cachedPlayerId;
 
+  // Opponent analysis for enhanced decision making
+  final Map<String, OpponentAnalysis> _opponentAnalysis = {};
+
   // Initialize with optional seed for test reproducibility
   BotAI({int? seed}) : _random = seed != null ? Random(seed) : Random();
+
+  /// Clear all cached data and analysis - call this when games end or players disconnect
+  void clearGameData() {
+    _playerPersonalities.clear();
+    _playerConstants.clear();
+    _playerTurnCounts.clear();
+    _opponentAnalysis.clear();
+    _cachedPossibleMelds = null;
+    _cachedPlayerId = null;
+    _plannedMelds = null;
+    _currentMeldIndex = 0;
+    _inMultiMeldSequence = false;
+  }
+
+  /// Clear data for a specific player - call when player disconnects
+  void clearPlayerData(String playerId) {
+    _playerPersonalities.remove(playerId);
+    _playerConstants.remove(playerId);
+    _playerTurnCounts.remove(playerId);
+    _opponentAnalysis.remove(playerId);
+
+    // Clear cache if it was for this player
+    if (_cachedPlayerId == playerId) {
+      _cachedPossibleMelds = null;
+      _cachedPlayerId = null;
+    }
+  }
+
+  /// Assign a personality to a specific bot player
+  void assignPersonality(String playerId, BotPersonality personality) {
+    _playerPersonalities[playerId] = personality;
+    _playerConstants[playerId] = PersonalityConstants.forPersonality(
+      personality,
+    );
+  }
+
+  /// Get constants for a specific player (falls back to adaptive if not assigned)
+  PersonalityConstants _getConstants(String playerId) {
+    return _playerConstants[playerId] ??
+        PersonalityConstants.forPersonality(BotPersonality.adaptive);
+  }
+
+  /// Get personality for a specific player
+  BotPersonality _getPersonality(String playerId) {
+    return _playerPersonalities[playerId] ?? BotPersonality.adaptive;
+  }
+
+  /// Current player constants cache for method scope usage
+  PersonalityConstants? _currentConstants;
+
+  /// Set current player context for this decision cycle
+  void _setCurrentPlayerContext(String playerId) {
+    _currentConstants = _getConstants(playerId);
+  }
+
+  /// Get current constants (for use within decision methods)
+  PersonalityConstants get _constants =>
+      _currentConstants ??
+      PersonalityConstants.forPersonality(BotPersonality.adaptive);
 
   // Public getters for debugging (test use only)
   List<List<PlayingCard>>? get plannedMelds => _plannedMelds;
   int get currentMeldIndex => _currentMeldIndex;
   bool get inMultiMeldSequence => _inMultiMeldSequence;
+  Map<String, OpponentAnalysis> get opponentAnalysis => _opponentAnalysis;
 
-  // Strategic constants for better maintainability
-  static const int strategicBufferPoints = 20;
-  static const int minCardsForAggressiveUnlock = 3;
-  static const int valuablePileThreshold =
-      100; // More conservative - wait for better piles
-  static const int largePileThreshold = 6; // Increased threshold
-  static const int footPileValueThreshold = 50; // Increased from 30
-  static const int footPileSizeThreshold = 3; // Increased from 2
-  static const int handPileValueThreshold = 120; // Increased from 80
-  static const int handPileSizeThreshold = 7; // Increased from 5
+  // Public test methods
+  void setCurrentPlayerContextForTest(String playerId) =>
+      _setCurrentPlayerContext(playerId);
+  PersonalityConstants get constantsForTest => _constants;
+
+  // Personality-based strategic constants (now use _constants directly)
+  int get strategicBufferPoints => _constants.strategicBufferPoints;
+  int get minCardsForAggressiveUnlock => _constants.minCardsForAggressiveUnlock;
+  int get valuablePileThreshold => _constants.valuablePileThreshold;
+  int get largePileThreshold => _constants.largePileThreshold;
+  int get footPileValueThreshold => _constants.footPileValueThreshold;
+  int get footPileSizeThreshold => _constants.footPileSizeThreshold;
+  int get handPileValueThreshold => _constants.handPileValueThreshold;
+  int get handPileSizeThreshold => _constants.handPileSizeThreshold;
   static const int lowHandCardThreshold = 3;
   static const int meldRetentionThreshold = 5;
   static const int postPlaydownMeldValue = 50;
   static const int postPlaydownHandSize = 8;
-  static const double highValuePairBreakChance = 0.2; // More conservative
+  double get highValuePairBreakChance => _constants.highValuePairBreakChance;
 
   // New strategic constants
-  static const int maxTurnsBeforeForcePlayDown = 5;
+  int get maxTurnsBeforeForcePlayDown => _constants.maxTurnsBeforeForcePlayDown;
   static const int minimalPlayDownBuffer =
       5; // Just meet requirement + small buffer
 
+  /// Helper method to safely divide by risk tolerance, preventing division by zero
+  double _safeRiskDivision(double numerator, double riskTolerance) {
+    // Ensure risk tolerance is never zero or negative
+    final safeDivisor = riskTolerance <= 0.0
+        ? BotStrategicConstants.minRiskTolerance
+        : riskTolerance;
+    return numerator / safeDivisor;
+  }
+
+  /// Dynamic risk tolerance based on game state and opponent analysis
+  double calculateRiskTolerance(GameState gameState, Player botPlayer) {
+    final personality = _getPersonality(botPlayer.id);
+    final constants = _getConstants(botPlayer.id);
+
+    // Base risk tolerance from personality
+    double baseRisk = constants.aggressivenessMultiplier;
+
+    // Situational adjustments
+    double riskModifier = 1.0;
+
+    // 1. Score position pressure
+    final scores = gameState.players.map((p) => p.score).toList()..sort();
+    final botScore = botPlayer.score;
+    final isLeading = botScore >= scores.last;
+    final isFarBehind = botScore < scores[scores.length ~/ 2];
+
+    if (isLeading && personality == BotPersonality.conservative) {
+      riskModifier *= 0.7; // Play even more conservatively when leading
+    } else if (isFarBehind) {
+      riskModifier *= 1.5; // Take more risks when behind
+    }
+
+    // 2. Opponent threat assessment
+    bool hasHighThreat = false;
+    bool hasImmediateThreat = false;
+
+    for (final analysis in _opponentAnalysis.values) {
+      if (analysis.isDangerous) {
+        hasImmediateThreat = true;
+      } else if (analysis.estimatedTurnsToWin <= 3) {
+        hasHighThreat = true;
+      }
+    }
+
+    if (hasImmediateThreat) {
+      // Emergency mode - must take risks to prevent opponent win
+      riskModifier *= 2.0;
+    } else if (hasHighThreat) {
+      riskModifier *= 1.3;
+    }
+
+    // 3. Round progression pressure
+    final turnCount = _getTurnCount(botPlayer.id);
+    if (turnCount >= maxTurnsBeforeForcePlayDown - 1) {
+      riskModifier *= 1.8; // Must play down soon
+    } else if (turnCount >= maxTurnsBeforeForcePlayDown / 2) {
+      riskModifier *= 1.2; // Getting pressure to play down
+    }
+
+    // 4. Hand quality assessment
+    final handQuality = _assessHandQuality(botPlayer);
+    if (handQuality > 0.7) {
+      riskModifier *= 0.6; // Good hand, can afford to be very patient
+    } else if (handQuality < 0.4) {
+      riskModifier *= 1.6; // Poor hand, need to take more chances
+    }
+
+    // 5. Book completion opportunity
+    if (personality == BotPersonality.bookBuilder) {
+      final nearBooks = botPlayer.melds
+          .where((m) => m.cards.length >= 6)
+          .length;
+      if (nearBooks > 0) {
+        riskModifier *= 0.6; // Very conservative when close to books
+      }
+    }
+
+    // 6. Foot transition considerations
+    if (botPlayer.hasPickedUpFoot && botPlayer.currentHand.length <= 5) {
+      riskModifier *= 1.5; // End game approaching, more aggressive
+    }
+
+    // Allow higher risk tolerance in emergency situations, but cap at reasonable maximum
+    final maxRisk =
+        (botPlayer.currentHand.length >=
+            BotStrategicConstants.emergencyHandSize)
+        ? BotStrategicConstants.maxEmergencyRiskTolerance
+        : BotStrategicConstants.maxRiskTolerance;
+
+    return (baseRisk * riskModifier).clamp(
+      BotStrategicConstants.minRiskTolerance,
+      maxRisk,
+    );
+  }
+
+  /// Assess overall hand quality for risk calculations
+  double _assessHandQuality(Player player) {
+    if (player.currentHand.isEmpty) return 0.0;
+
+    final hand = player.currentHand;
+
+    // Count valuable cards (high ranks, wilds, matching cards)
+    double qualityScore = 0.0;
+    final rankCounts = <CardRank, int>{};
+
+    for (final card in hand) {
+      rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+
+      // High value cards
+      if (card.isWild) {
+        qualityScore += 0.15; // Wilds are very valuable
+      } else if (card.rank.index >= CardRank.jack.index) {
+        qualityScore += 0.1; // High ranks valuable
+      } else if (card.rank == CardRank.ace) {
+        qualityScore += 0.08; // Aces versatile
+      }
+    }
+
+    // Bonus for pairs and trips (meld potential) - increased impact
+    for (final count in rankCounts.values) {
+      if (count >= 3) {
+        qualityScore += 0.3; // Trip = meld ready (increased)
+      } else if (count == 2) {
+        qualityScore += 0.15; // Pair = meld potential (increased)
+      }
+    }
+
+    return (qualityScore / hand.length).clamp(
+      BotStrategicConstants.minHandQuality,
+      BotStrategicConstants.maxHandQuality,
+    );
+  }
+
   // Risk management thresholds
-  static const int playDownRiskThreshold = -300;
+  int get playDownRiskThreshold => _constants.playDownRiskThreshold;
   static const int footTransitionRiskThreshold = -200;
   static const int wildCardDiscardThreshold =
       10; // Much higher - wilds are valuable
@@ -119,11 +501,21 @@ class BotAI {
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
+    // Set current player context for personality-based decisions
+    _setCurrentPlayerContext(bot.id);
+
     // Track turn counts for strategic play-down timing
     _trackPlayerTurn(bot.id, gameState);
 
-    // Clear cached melds if this is a different player or meld phase
-    if (_cachedPlayerId != bot.id || gameState.turnPhase == TurnPhase.meld) {
+    // Update opponent analysis for strategic awareness
+    _updateOpponentAnalysis(gameState, bot);
+
+    // Clear cached melds if this is a different player or if hand might have changed
+    // Cache should be invalidated after draws (when hand changes) and during meld phase
+    if (_cachedPlayerId != bot.id ||
+        gameState.turnPhase == TurnPhase.meld ||
+        (gameState.turnPhase == TurnPhase.discard &&
+            gameState.hasDrawnFromDeck)) {
       _cachedPossibleMelds = null;
       _cachedPlayerId = bot.id;
     }
@@ -152,6 +544,81 @@ class BotAI {
     return _playerTurnCounts[playerId] ?? 0;
   }
 
+  /// Analyze all opponents and update strategic awareness
+  void _updateOpponentAnalysis(GameState gameState, Player botPlayer) {
+    for (final player in gameState.players) {
+      if (player.id == botPlayer.id) continue; // Skip self
+
+      // Analyze opponent's current state
+      final meldSizes = player.melds.map((meld) => meld.cards.length).toList();
+
+      // Estimate turns to win based on hand size, melds, and requirements
+      int estimatedTurns = _estimateTurnsToWin(player);
+
+      // Analyze likely needed ranks based on existing melds
+      final likelyNeeds = _analyzeLikelyNeededRanks(player);
+
+      _opponentAnalysis[player.id] = OpponentAnalysis(
+        handSize: player.currentHand.length,
+        footSize: player.foot.length,
+        meldCount: player.melds.length,
+        meldSizes: meldSizes,
+        hasPlayedDown: player.hasPlayedDown,
+        hasPickedUpFoot: player.hasPickedUpFoot,
+        score: player.score,
+        estimatedTurnsToWin: estimatedTurns,
+        likelyNeededRanks: likelyNeeds,
+      );
+    }
+  }
+
+  /// Estimate how many turns until opponent can go out
+  int _estimateTurnsToWin(Player player) {
+    // If not played down, need at least 2-3 turns minimum
+    if (!player.hasPlayedDown) return 4;
+
+    // If haven't picked up foot, need at least 1-2 turns
+    if (!player.hasPickedUpFoot) return 2;
+
+    // Check book requirements
+    bool hasCleanBook = player.hasCleanBook;
+    bool hasDirtyBook = player.hasDirtyBook;
+
+    int turnsNeeded = 0;
+
+    // Add turns for missing books
+    if (!hasCleanBook) turnsNeeded += 2;
+    if (!hasDirtyBook) turnsNeeded += 2;
+
+    // Factor in hand size
+    if (player.currentHand.length > BotStrategicConstants.endGameHandSize) {
+      turnsNeeded += 1;
+    }
+    if (player.currentHand.length >
+        BotStrategicConstants.handSizeInflationThreshold) {
+      turnsNeeded += BotStrategicConstants.handSizeInflationPenalty;
+    }
+
+    return turnsNeeded.clamp(
+      BotStrategicConstants.minEstimatedTurns,
+      BotStrategicConstants.maxEstimatedTurns,
+    );
+  }
+
+  /// Analyze which card ranks opponent likely needs
+  List<CardRank> _analyzeLikelyNeededRanks(Player player) {
+    final neededRanks = <CardRank>[];
+
+    // Look for melds that are close to becoming books (6+ cards)
+    for (final meld in player.melds) {
+      if (meld.cards.length >= 6) {
+        neededRanks.add(meld.rank);
+      }
+    }
+
+    return neededRanks;
+  }
+
   /// Get possible melds with caching for performance optimization
   List<List<PlayingCard>> _getPossibleMelds(
     Player bot,
@@ -166,6 +633,9 @@ class BotAI {
 
   BotDecision _makeDrawDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
+
+    // Calculate current risk tolerance for dynamic decision making
+    final riskTolerance = calculateRiskTolerance(gameState, bot);
 
     // STRATEGIC CHANGE: Only unlock discard pile if we haven't played down yet
     // AND we can unlock, OR if already played down and it's very valuable
@@ -183,25 +653,57 @@ class BotAI {
         );
         final discardPileSize = gameState.discardPile.length;
 
+        // Apply risk tolerance to thresholds
+        final adjustedValueThreshold = _safeRiskDivision(
+          valuablePileThreshold.toDouble(),
+          riskTolerance,
+        ).round();
+        final adjustedSizeThreshold = _safeRiskDivision(
+          largePileThreshold.toDouble(),
+          riskTolerance,
+        ).round();
+
         // If we haven't played down, be VERY conservative - only take exceptional piles
         if (!bot.hasPlayedDown) {
-          // Only unlock if pile is exceptionally valuable
-          if (discardPileValue > valuablePileThreshold * 1.5 ||
-              discardPileSize >= largePileThreshold + 3) {
+          // Risk tolerance affects willingness to unlock pile before play-down
+          final conservativeMultiplier = riskTolerance > 1.0 ? 1.2 : 1.5;
+          if (discardPileValue >
+                  adjustedValueThreshold * conservativeMultiplier ||
+              discardPileSize >=
+                  adjustedSizeThreshold +
+                      _safeRiskDivision(3.0, riskTolerance).round()) {
             return BotDecision(action: 'drawFromDiscard');
           }
         } else {
           // After playing down, more willing to take good piles for book building
           if (bot.hasPickedUpFoot) {
-            // On foot - focus on book completion
-            if (discardPileValue > footPileValueThreshold ||
-                discardPileSize >= footPileSizeThreshold) {
+            // On foot - focus on book completion, adjusted by risk tolerance
+            final adjustedFootValueThreshold = _safeRiskDivision(
+              footPileValueThreshold.toDouble(),
+              riskTolerance,
+            ).round();
+            final adjustedFootSizeThreshold = _safeRiskDivision(
+              footPileSizeThreshold.toDouble(),
+              riskTolerance,
+            ).round();
+
+            if (discardPileValue > adjustedFootValueThreshold ||
+                discardPileSize >= adjustedFootSizeThreshold) {
               return BotDecision(action: 'drawFromDiscard');
             }
           } else {
-            // Still on hand after playing down - moderate threshold
-            if (discardPileValue > handPileValueThreshold ||
-                discardPileSize >= handPileSizeThreshold) {
+            // Still on hand after playing down - moderate threshold, adjusted by risk
+            final adjustedHandValueThreshold = _safeRiskDivision(
+              handPileValueThreshold.toDouble(),
+              riskTolerance,
+            ).round();
+            final adjustedHandSizeThreshold = _safeRiskDivision(
+              handPileSizeThreshold.toDouble(),
+              riskTolerance,
+            ).round();
+
+            if (discardPileValue > adjustedHandValueThreshold ||
+                discardPileSize >= adjustedHandSizeThreshold) {
               return BotDecision(action: 'drawFromDiscard');
             }
           }
@@ -272,7 +774,7 @@ class BotAI {
       return BotDecision(action: 'error');
     }
 
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
@@ -304,7 +806,10 @@ class BotAI {
     return cardsToAdd;
   }
 
-  PlayingCard _chooseCardToDiscard(Player bot) {
+  PlayingCard _chooseCardToDiscard(Player bot, [GameState? gameState]) {
+    final riskTolerance = gameState != null
+        ? calculateRiskTolerance(gameState, bot)
+        : 1.0;
     final hand = List<PlayingCard>.from(bot.currentHand);
     final wildCards = hand.where((c) => c.isWild).toList();
     final naturalCards = hand.where((c) => !c.isWild).toList();
@@ -322,12 +827,12 @@ class BotAI {
     result = _tryDiscardThrees(bot, naturalCards);
     if (result != null) return result;
 
-    // Priority 2-5: Handle natural cards by frequency
-    result = _tryDiscardNaturalCards(bot, cardsByRank);
+    // Priority 2-5: Handle natural cards by frequency, adjusted by risk tolerance
+    result = _tryDiscardNaturalCards(bot, cardsByRank, riskTolerance);
     if (result != null) return result;
 
-    // Last resort: discard wild cards (very rarely)
-    result = _tryDiscardWildCards(bot, wildCards);
+    // Last resort: discard wild cards (adjusted by risk - higher risk = more willing)
+    result = _tryDiscardWildCards(bot, wildCards, riskTolerance);
     if (result != null) return result;
 
     // Fallback (should never happen) - but check for empty hand
@@ -350,10 +855,11 @@ class BotAI {
     return threeCards.first;
   }
 
-  /// Try to discard natural cards - Adaptive based on game situation
+  /// Try to discard natural cards - Adaptive based on game situation and risk tolerance
   PlayingCard? _tryDiscardNaturalCards(
     Player bot,
     Map<CardRank, List<PlayingCard>> cardsByRank,
+    double riskTolerance,
   ) {
     final cardCategories = _categorizeCardsByFrequency(cardsByRank);
     final singletons = cardCategories['singletons']!;
@@ -362,15 +868,23 @@ class BotAI {
     final isHighRound = _isHighRoundSituation(bot, handSize);
 
     // Priority 2: Try to discard low-value singletons first
-    final singletonResult = _tryDiscardSingletons(singletons, isHighRound);
+    final singletonResult = _tryDiscardSingletons(
+      singletons,
+      isHighRound,
+      riskTolerance,
+    );
     if (singletonResult != null) return singletonResult;
 
-    // Priority 3: Try to break up pairs based on situation
-    final pairResult = _tryDiscardPairs(bot, pairs, isHighRound);
+    // Priority 3: Try to break up pairs based on situation and risk tolerance
+    final pairResult = _tryDiscardPairs(bot, pairs, isHighRound, riskTolerance);
     if (pairResult != null) return pairResult;
 
-    // Priority 4: Emergency discard if too many cards
-    final emergencyResult = _tryEmergencyDiscard(singletons, handSize);
+    // Priority 4: Emergency discard if too many cards (risk affects threshold)
+    final emergencyResult = _tryEmergencyDiscard(
+      singletons,
+      handSize,
+      riskTolerance,
+    );
     if (emergencyResult != null) return emergencyResult;
 
     return null; // Usually hold onto valuable cards
@@ -385,12 +899,17 @@ class BotAI {
   PlayingCard? _tryDiscardSingletons(
     List<PlayingCard> singletons,
     bool isHighRound,
+    double riskTolerance,
   ) {
-    final lowValueThreshold = isHighRound
+    final baseThreshold = isHighRound
         ? mediumValueCardThreshold
         : lowValueCardThreshold;
+
+    // Risk tolerance affects willingness to discard higher value cards
+    final adjustedThreshold = (baseThreshold * riskTolerance).round();
+
     final lowValueSingletons = singletons
-        .where((card) => card.pointValue <= lowValueThreshold)
+        .where((card) => card.pointValue <= adjustedThreshold)
         .toList();
     if (lowValueSingletons.isNotEmpty) {
       lowValueSingletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
@@ -404,11 +923,12 @@ class BotAI {
     Player bot,
     List<PlayingCard> pairs,
     bool isHighRound,
+    double riskTolerance,
   ) {
     if (!bot.hasPlayedDown) {
-      return _tryDiscardPairsBeforePlayDown(pairs, isHighRound);
+      return _tryDiscardPairsBeforePlayDown(pairs, isHighRound, riskTolerance);
     } else {
-      return _tryDiscardPairsAfterPlayDown(pairs);
+      return _tryDiscardPairsAfterPlayDown(pairs, riskTolerance);
     }
   }
 
@@ -416,6 +936,7 @@ class BotAI {
   PlayingCard? _tryDiscardPairsBeforePlayDown(
     List<PlayingCard> pairs,
     bool isHighRound,
+    double riskTolerance,
   ) {
     if (isHighRound) {
       // Higher rounds: be more willing to break up medium-value pairs
@@ -427,11 +948,13 @@ class BotAI {
         return mediumPairs.first;
       }
     } else {
-      // Early rounds: only very low value pairs
+      // Early rounds: only very low value pairs, adjusted by risk tolerance
+      final threshold = (lowValueCardThreshold * riskTolerance).round();
       final veryLowPairs = pairs
-          .where((card) => card.pointValue <= lowValueCardThreshold)
+          .where((card) => card.pointValue <= threshold)
           .toList();
-      if (veryLowPairs.isNotEmpty && _shouldBreakUpHighValuePair()) {
+      final shouldBreak = _shouldBreakUpHighValuePair() || riskTolerance > 1.5;
+      if (veryLowPairs.isNotEmpty && shouldBreak) {
         veryLowPairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
         return veryLowPairs.first;
       }
@@ -440,9 +963,13 @@ class BotAI {
   }
 
   /// Try to discard from pairs after playing down (more liberal)
-  PlayingCard? _tryDiscardPairsAfterPlayDown(List<PlayingCard> pairs) {
+  PlayingCard? _tryDiscardPairsAfterPlayDown(
+    List<PlayingCard> pairs,
+    double riskTolerance,
+  ) {
+    final threshold = (mediumValueCardThreshold * riskTolerance).round();
     final lowPairs = pairs
-        .where((card) => card.pointValue <= mediumValueCardThreshold)
+        .where((card) => card.pointValue <= threshold)
         .toList();
     if (lowPairs.isNotEmpty) {
       lowPairs.sort((a, b) => a.pointValue.compareTo(b.pointValue));
@@ -455,8 +982,14 @@ class BotAI {
   PlayingCard? _tryEmergencyDiscard(
     List<PlayingCard> singletons,
     int handSize,
+    double riskTolerance,
   ) {
-    if (handSize >= emergencyHandSizeThreshold && singletons.isNotEmpty) {
+    // Risk tolerance affects emergency threshold - higher risk = trigger emergency sooner
+    final adjustedThreshold = _safeRiskDivision(
+      emergencyHandSizeThreshold.toDouble(),
+      riskTolerance,
+    ).round();
+    if (handSize >= adjustedThreshold && singletons.isNotEmpty) {
       singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return singletons.first;
     }
@@ -464,19 +997,31 @@ class BotAI {
   }
 
   /// Try to discard wild cards (EXTREMELY conservative - absolute last resort)
-  PlayingCard? _tryDiscardWildCards(Player bot, List<PlayingCard> wildCards) {
+  PlayingCard? _tryDiscardWildCards(
+    Player bot,
+    List<PlayingCard> wildCards,
+    double riskTolerance,
+  ) {
     if (wildCards.isEmpty) return null;
 
-    // ONLY discard wilds in these emergency situations:
-    // 1. We have 10+ wild cards (excessive hoarding)
-    // 2. We have exactly 1 card left and must discard (going out impossible)
-    // 3. We're on foot with 15+ cards and can't make any melds
+    // Risk tolerance affects willingness to discard wilds
+    // Higher risk = more willing to discard wilds in pressure situations
 
     final handSize = bot.currentHand.length;
     final isOnFoot = bot.hasPickedUpFoot;
 
-    // Emergency case 1: Excessive wild hoarding
-    if (wildCards.length >= wildCardDiscardThreshold) {
+    // Adjust thresholds based on risk tolerance
+    final adjustedWildThreshold = _safeRiskDivision(
+      wildCardDiscardThreshold.toDouble(),
+      riskTolerance,
+    ).round();
+    final adjustedFootThreshold = _safeRiskDivision(
+      emergencyFootSizeThreshold.toDouble(),
+      riskTolerance,
+    ).round();
+
+    // Emergency case 1: Excessive wild hoarding (lowered threshold with high risk)
+    if (wildCards.length >= adjustedWildThreshold) {
       wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return wildCards.first;
     }
@@ -487,7 +1032,7 @@ class BotAI {
     }
 
     // Emergency case 3: On foot with huge hand and no meld opportunities
-    if (isOnFoot && handSize >= emergencyFootSizeThreshold) {
+    if (isOnFoot && handSize >= adjustedFootThreshold) {
       // Only if we really can't use the wilds anywhere
       wildCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return wildCards.first;
@@ -539,30 +1084,44 @@ class BotAI {
     final gameState = controller.gameState;
     final playDownRequirement = gameState.playDownRequirement;
     final turnCount = _getTurnCount(bot.id);
+    final riskTolerance = calculateRiskTolerance(gameState, bot);
 
-    // STRATEGIC CHANGE: Hold cards until turn 5, then play minimal points
-    if (turnCount < maxTurnsBeforeForcePlayDown) {
+    // STRATEGIC CHANGE: Hold cards until turn threshold, adjusted by risk tolerance
+    // High risk tolerance = play down sooner, low risk tolerance = wait longer
+    final adjustedMaxTurns =
+        _safeRiskDivision(
+          maxTurnsBeforeForcePlayDown.toDouble(),
+          riskTolerance,
+        ).round().clamp(
+          BotStrategicConstants.minAdjustedTurns,
+          BotStrategicConstants.maxAdjustedTurns,
+        );
+
+    if (turnCount < adjustedMaxTurns) {
       return _handleEarlyGamePlayDown(
         bot,
         controller,
         possibleMelds,
         playDownRequirement,
+        riskTolerance,
       );
     } else {
       return _handleLateGamePlayDown(
         possibleMelds,
         playDownRequirement,
         controller,
+        riskTolerance,
       );
     }
   }
 
-  /// Handle early game play-down (before turn 5) - conservative strategy
+  /// Handle early game play-down (before turn threshold) - conservative strategy
   BotDecision _handleEarlyGamePlayDown(
     Player bot,
     GameController controller,
     List<List<PlayingCard>> possibleMelds,
     int playDownRequirement,
+    double riskTolerance,
   ) {
     // Priority 1: Forced play-down after unlocking discard pile
     final forcedResult = _tryForcedPlayDown(
@@ -592,10 +1151,14 @@ class BotAI {
       if (meldBreakResult != null) return meldBreakResult;
     }
 
-    // Priority 4: Exceptional opportunity (way over requirement)
+    // Priority 4: Exceptional opportunity (way over requirement), adjusted by risk
+    final adjustedExceptionalThreshold = _safeRiskDivision(
+      (playDownRequirement + strategicBufferPoints * 2).toDouble(),
+      riskTolerance,
+    );
     final exceptionalResult = _tryExceptionalPlayDown(
       possibleMelds,
-      playDownRequirement,
+      adjustedExceptionalThreshold.round(),
     );
     if (exceptionalResult != null) return exceptionalResult;
 
@@ -604,13 +1167,15 @@ class BotAI {
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
-  /// Handle late game play-down (turn 5+) - forced minimal play-down
+  /// Handle late game play-down (turn threshold+) - forced minimal play-down
   BotDecision _handleLateGamePlayDown(
     List<List<PlayingCard>> possibleMelds,
     int playDownRequirement,
     GameController controller,
+    double riskTolerance,
   ) {
-    // Turn 5+: Play down with minimal points to unlock discard pile ability
+    // Late game: Play down with minimal points to unlock discard pile ability
+    // Risk tolerance doesn't affect much here since this is forced play-down
 
     // Try single meld first
     final minimalResult = _tryMinimalPlayDown(
@@ -630,7 +1195,7 @@ class BotAI {
     }
 
     // Emergency fallback - must discard to complete turn
-    // This should rarely happen since turn 5+ usually forces play-down
+    // This should rarely happen since late game usually forces play-down
     return BotDecision(action: 'error'); // Will be caught by failsafe
   }
 
