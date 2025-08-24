@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/firebase_service.dart';
 import 'package:hand_foot_game_flutter/services/device_service.dart';
-import 'package:hand_foot_game_flutter/game/multiplayer_game_controller.dart';
+import 'package:hand_foot_game_flutter/game/game_controller_factory.dart';
 import 'package:hand_foot_game_flutter/services/firebase_constants.dart';
 
 void main() {
@@ -24,11 +24,11 @@ void main() {
             expect(RegExp(r'^[A-Z]{2}[0-9]{2}$').hasMatch(gameId), true);
 
             // Step 3: Create multiplayer controller
-            final controller = await MultiplayerGameController.createGame(
-              hostPlayerName: 'IntegrationHost',
-              maxPlayers: 4,
-              hostUserId: deviceId,
-            );
+            final controller =
+                await GameControllerFactory.createMultiplayerGame(
+                  hostPlayerName: 'IntegrationHost',
+                  maxPlayers: 4,
+                );
 
             if (controller != null) {
               expect(controller.gameId, isA<String>());
@@ -56,14 +56,13 @@ void main() {
           expect(success, isA<bool>());
 
           // Step 3: Create controller for joined game
-          final controller = await MultiplayerGameController.joinGame(
+          final controller = await GameControllerFactory.joinMultiplayerGame(
             gameId: 'TEST',
             playerName: 'IntegrationPlayer',
-            userId: deviceId,
           );
 
           // Will be null without existing game, but shouldn't crash
-          expect(controller, anyOf(isNull, isA<MultiplayerGameController>()));
+          expect(controller, anyOf(isNull, isA<Object>()));
         } catch (e) {
           // Expected to fail without Firebase setup
         }

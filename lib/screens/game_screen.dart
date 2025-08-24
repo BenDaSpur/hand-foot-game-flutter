@@ -7,6 +7,7 @@ import '../models/player.dart';
 import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
+import '../game/game_controller_factory.dart';
 import '../ai/bot_ai.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/meld_widget.dart';
@@ -119,7 +120,10 @@ class _GameScreenState extends State<GameScreen> {
       Player(id: '3', name: botConfigs[1].name, type: PlayerType.bot),
     ];
 
-    _gameController = GameController(players: players, seed: widget.testSeed);
+    _gameController = GameControllerFactory.createSingleplayerGame(
+      players: players,
+      seed: widget.testSeed,
+    );
 
     // Create bot AI and assign the randomized personalities
     _botAI = BotAI();
