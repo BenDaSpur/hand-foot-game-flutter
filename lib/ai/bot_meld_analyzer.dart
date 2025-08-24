@@ -2,6 +2,7 @@ import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
+import '../config/game_config.dart';
 
 /// Analyzes meld opportunities and calculations for bot players.
 ///
@@ -352,7 +353,9 @@ class BotMeldAnalyzer {
       'potentialMelds': potentialMelds.length,
       'wildCards': wildCount,
       'penaltyCards': threeCount,
-      'strongRanks': rankCounts.entries.where((e) => e.value >= 3).length,
+      'strongRanks': rankCounts.entries
+          .where((e) => e.value >= GameConfig.minTotalCardsForMeld)
+          .length,
       'rankDistribution': rankCounts,
     };
   }

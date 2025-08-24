@@ -1,6 +1,7 @@
 import '../models/player.dart';
 import '../models/card.dart';
 import '../game/game_controller.dart';
+import '../config/game_config.dart';
 import 'bot_decision.dart';
 
 /// Manages intelligent foot transition decisions for bot players.
@@ -197,8 +198,11 @@ class BotFootTransitionManager {
 
   /// Check if bot should transition due to meld completion
   bool _shouldMeldCompletionTransition(Player bot, int remainingCards) {
-    final hasBooks = bot.melds.any((meld) => meld.cards.length >= 7);
-    final hasMultipleMelds = bot.melds.length >= 3;
+    final hasBooks = bot.melds.any(
+      (meld) => meld.cards.length >= GameConfig.bookSize,
+    );
+    final hasMultipleMelds =
+        bot.melds.length >= GameConfig.minTotalCardsForMeld;
 
     return hasBooks &&
         hasMultipleMelds &&
@@ -339,7 +343,9 @@ class BotFootTransitionManager {
 
     // Create smaller melds to clear hand
     final possibleMelds = controller.findPossibleMelds(bot);
-    final smallMelds = possibleMelds.where((meld) => meld.length >= 3).toList();
+    final smallMelds = possibleMelds
+        .where((meld) => meld.length >= GameConfig.minTotalCardsForMeld)
+        .toList();
     if (smallMelds.isNotEmpty) {
       final bestMeld = _chooseLargestMeld(smallMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
@@ -575,7 +581,8 @@ class BotFootTransitionManager {
       final naturalCount = entry.value;
       final totalAvailable = naturalCount + wildCount;
 
-      if (totalAvailable >= 3 && naturalCount >= 2) {
+      if (totalAvailable >= GameConfig.minTotalCardsForMeld &&
+          naturalCount >= GameConfig.minNaturalCardsForMeld) {
         // Calculate potential points (simplified)
         final estimatedPoints =
             naturalCount * 10 + (totalAvailable - naturalCount) * 20;

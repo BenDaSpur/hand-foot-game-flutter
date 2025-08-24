@@ -24,8 +24,7 @@ class EnhancedBotAI {
   final BotFootTransitionManager _footTransitionManager;
   final BotEndGameManager _endGameManager;
 
-  // Random number generator for decision variability (future use)
-  // ignore: unused_field
+  // Random number generator for decision variability
   final Random _random;
 
   // Multi-meld play-down state tracking
@@ -341,7 +340,7 @@ class EnhancedBotAI {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
       // This should not happen due to check in _makeDiscardDecision, but be defensive
-      throw Exception(
+      throw BotDecisionException(
         'Cannot discard from empty hand - bot should go out or error',
       );
     }
@@ -351,7 +350,12 @@ class EnhancedBotAI {
     if (threes.isNotEmpty) {
       // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
       threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return threes.first;
+      // Add variability: if there are multiple 3s of the same point value, randomly pick one
+      final bestValue = threes.first.pointValue;
+      final bestThrees = threes
+          .where((card) => card.pointValue == bestValue)
+          .toList();
+      return _selectRandomly(bestThrees);
     }
 
     // Priority 2: Discard lowest value non-useful cards
@@ -369,13 +373,23 @@ class EnhancedBotAI {
 
     if (singletons.isNotEmpty) {
       singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return singletons.first;
+      // Add variability: if there are multiple singletons of the same low value, randomly pick one
+      final bestValue = singletons.first.pointValue;
+      final bestSingletons = singletons
+          .where((card) => card.pointValue == bestValue)
+          .toList();
+      return _selectRandomly(bestSingletons);
     }
 
     // Fallback: Discard lowest value card
     final sortedHand = List<PlayingCard>.from(hand);
     sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-    return sortedHand.first;
+    // Add variability: if there are multiple cards of the same low value, randomly pick one
+    final bestValue = sortedHand.first.pointValue;
+    final bestCards = sortedHand
+        .where((card) => card.pointValue == bestValue)
+        .toList();
+    return _selectRandomly(bestCards);
   }
 
   /// Assign personalities to bot players
@@ -398,6 +412,18 @@ class EnhancedBotAI {
     _inMultiMeldSequence = false;
   }
 
+  /// Helper method to randomly select from a list of equally good options
+  /// Adds decision variability to make bot behavior less predictable
+  T _selectRandomly<T>(List<T> options) {
+    if (options.isEmpty) {
+      throw BotDecisionException('Cannot select from empty options list');
+    }
+    if (options.length == 1) {
+      return options.first;
+    }
+    return options[_random.nextInt(options.length)];
+  }
+
   // Getters for testing and debugging
   Map<String, OpponentAnalysis> get opponentAnalysis =>
       _gameAnalyzer.opponentAnalysis;
@@ -406,4 +432,14 @@ class EnhancedBotAI {
   BotMeldAnalyzer get meldAnalyzer => _meldAnalyzer;
   bool get inMultiMeldSequence => _inMultiMeldSequence;
   List<List<PlayingCard>>? get plannedMelds => _plannedMelds;
+}
+
+/// Specific exception type for bot decision-making errors
+class BotDecisionException implements Exception {
+  final String message;
+
+  const BotDecisionException(this.message);
+
+  @override
+  String toString() => 'BotDecisionException: $message';
 }

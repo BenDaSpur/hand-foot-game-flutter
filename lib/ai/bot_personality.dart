@@ -1,5 +1,6 @@
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../config/game_config.dart';
 
 /// Bot personality types that influence strategic decision-making
 enum BotPersonality {
@@ -239,7 +240,7 @@ class BotPersonalityManager {
     double modifier = 1.0;
 
     // Adapt based on round
-    if (gameState.round >= 3) {
+    if (gameState.round >= GameConfig.lateGameRound) {
       modifier *= 1.2; // More aggressive in later rounds
     }
 
@@ -283,7 +284,7 @@ class BotPersonalityManager {
 
     // Bonus for potential melds
     for (final count in rankCounts.values) {
-      if (count >= 3) {
+      if (count >= GameConfig.minTotalCardsForMeld) {
         qualityScore += 0.1; // Strong meld potential
       } else if (count >= 2) {
         qualityScore += 0.05; // Some meld potential

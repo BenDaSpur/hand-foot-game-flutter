@@ -2,6 +2,7 @@ import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
+import '../config/game_config.dart';
 import 'bot_decision.dart';
 
 /// Manages end game decisions for bot players.
@@ -285,7 +286,7 @@ class BotEndGameManager {
       } else {
         // Dirty meld - limit wild accumulation
         final wildCount = meld.cards.where((c) => c.isWild).length;
-        if (card.isWild && wildCount >= 3) {
+        if (card.isWild && wildCount >= GameConfig.excessiveWildThreshold) {
           score -= excessiveWildPenalty; // Discourage excessive wilds
         }
       }

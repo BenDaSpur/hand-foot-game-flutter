@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
-import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
+import 'package:hand_foot_game_flutter/config/game_config.dart';
 
 void main() {
   group('Newly Drawn Cards Persistence During Gameplay', () {
@@ -32,7 +32,7 @@ void main() {
 
         // Verify newly drawn cards are highlighted
         final handSize = humanPlayer.currentHand.length;
-        final expectedNewCardCount = GameState.requiredDrawCount;
+        final expectedNewCardCount = GameConfig.requiredDrawCount;
 
         // Count the highlighted cards instead of checking specific indices
         // since auto-sorting can put newly drawn cards anywhere
@@ -130,9 +130,9 @@ void main() {
         }
         expect(
           highlightedCount,
-          GameState.requiredDrawCount,
+          GameConfig.requiredDrawCount,
           reason:
-              'Should have ${GameState.requiredDrawCount} cards highlighted',
+              'Should have ${GameConfig.requiredDrawCount} cards highlighted',
         );
 
         // Human discards, bot's turn starts
@@ -157,9 +157,9 @@ void main() {
         }
         expect(
           highlightedCount,
-          GameState.requiredDrawCount,
+          GameConfig.requiredDrawCount,
           reason:
-              'Human should still have ${GameState.requiredDrawCount} cards highlighted during bot\'s turn',
+              'Human should still have ${GameConfig.requiredDrawCount} cards highlighted during bot\'s turn',
         );
 
         // Bot draws and discards to return turn to human
@@ -217,9 +217,9 @@ void main() {
       }
       expect(
         highlightedCount,
-        GameState.requiredDrawCount,
+        GameConfig.requiredDrawCount,
         reason:
-            'Human should keep ${GameState.requiredDrawCount} cards highlighted during bot 1 turn',
+            'Human should keep ${GameConfig.requiredDrawCount} cards highlighted during bot 1 turn',
       );
 
       // Bot 1 draws and discards
@@ -237,9 +237,9 @@ void main() {
       }
       expect(
         highlightedCount,
-        GameState.requiredDrawCount,
+        GameConfig.requiredDrawCount,
         reason:
-            'Human should keep ${GameState.requiredDrawCount} cards highlighted during bot 2 turn',
+            'Human should keep ${GameConfig.requiredDrawCount} cards highlighted during bot 2 turn',
       );
 
       // Bot 2 draws and discards to return to human

@@ -1,6 +1,7 @@
 import '../models/player.dart';
 import '../models/card.dart';
 import '../models/game_state.dart';
+import '../config/game_config.dart';
 
 /// Represents analysis data for an opponent player.
 class OpponentAnalysis {
@@ -39,10 +40,11 @@ class OpponentAnalysis {
   bool get hasBookRequirements => hasCleanBook && hasDirtyBook;
 
   /// Estimate if opponent has clean book (simplified check)
-  bool get hasCleanBook => meldSizes.any((size) => size >= 7);
+  bool get hasCleanBook => meldSizes.any((size) => size >= GameConfig.bookSize);
 
   /// Estimate if opponent has dirty book (simplified check)
-  bool get hasDirtyBook => meldSizes.any((size) => size >= 7) && meldCount >= 2;
+  bool get hasDirtyBook =>
+      meldSizes.any((size) => size >= GameConfig.bookSize) && meldCount >= 2;
 }
 
 /// Analyzes game state and opponent behavior for bot strategic decisions.
@@ -172,7 +174,7 @@ class BotGameAnalyzer {
 
     // Bonus for potential melds (multiple cards of same rank)
     for (final count in rankCounts.values) {
-      if (count >= 3) {
+      if (count >= GameConfig.minTotalCardsForMeld) {
         qualityScore += 0.1; // Strong meld potential
       } else if (count >= 2) {
         qualityScore += 0.05; // Some meld potential
@@ -291,7 +293,7 @@ class BotGameAnalyzer {
 
     // Round-based adjustments
     final round = gameState.round;
-    if (round >= 3) {
+    if (round >= GameConfig.lateGameRound) {
       riskTolerance *= 1.3; // More aggressive in later rounds
     }
 

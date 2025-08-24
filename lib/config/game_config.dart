@@ -42,6 +42,12 @@ class GameConfig {
   /// Minimum cards that must remain in discard pile before forcing deck reshuffle
   static const int minDiscardForReshuffle = 2;
 
+  /// Maximum number of recent actions to store for game history
+  static const int maxRecentActions = 10;
+
+  /// Additional cards to pick up when taking discard pile
+  static const int additionalDiscardPickup = 5;
+
   // =============================================================================
   // SCORING SYSTEM
   // =============================================================================
@@ -143,6 +149,12 @@ class GameConfig {
 
   /// Maximum number of rounds before forcing game end (prevents infinite games)
   static const int maxRounds = 20;
+
+  /// Round number when late-game strategy starts (more aggressive play)
+  static const int lateGameRound = 3;
+
+  /// Maximum wild cards recommended in a single meld before penalty
+  static const int excessiveWildThreshold = 3;
 
   // =============================================================================
   // DIFFICULTY & VARIANTS
