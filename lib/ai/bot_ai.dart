@@ -2,6 +2,7 @@ import 'dart:math';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../models/meld.dart';
 import '../game/game_controller.dart';
 
 class BotDecision {
@@ -468,7 +469,7 @@ class BotAI {
 
   // NEW: Foot transition constants for improved strategy
   static const int aggressiveFootTransitionThreshold =
-      6; // Cards or fewer (increased from 3)
+      4; // Cards or fewer (reduced from 6 to be more competitive)
   static const int handSizePressureThreshold =
       7; // Too many cards after playdown (reduced from 8)
   static const int lateRoundTransitionRound = 3; // Round 3+ be more aggressive
@@ -803,17 +804,62 @@ class BotAI {
       final meld = bot.melds[i];
       for (final card in bot.currentHand) {
         if (meld.canAddCard(card)) {
+          // Calculate smart priority: Natural cards get MUCH higher priority than wilds
+          int smartPriority;
+          if (card.isWild) {
+            // Wild cards get very low priority (negative values)
+            // Only use wilds when no naturals available, prefer lower-value wilds
+            smartPriority = -1000 - card.pointValue;
+          } else {
+            // Natural cards get high priority based on strategic value
+            smartPriority = _calculateNaturalCardPriority(card, meld, bot);
+          }
+
           cardsToAdd.add({
             'meldIndex': i,
             'card': card,
-            'priority': card.pointValue,
+            'priority': smartPriority,
+            'isWild': card.isWild,
           });
         }
       }
     }
 
+    // Sort by priority (highest first) - naturals will always beat wilds
     cardsToAdd.sort((a, b) => b['priority'].compareTo(a['priority']));
     return cardsToAdd;
+  }
+
+  /// Calculate strategic priority for natural cards when adding to melds
+  int _calculateNaturalCardPriority(PlayingCard card, Meld meld, Player bot) {
+    int basePriority = 1000 + card.pointValue; // Base: always higher than wilds
+
+    // MASSIVE BONUS: If this helps complete a clean book (7+ cards), highest priority
+    if (meld.cards.length >= 6 && meld.isClean) {
+      basePriority +=
+          3000; // Completing clean books is absolute top priority (500 vs 300 pts)
+    }
+    // MAJOR BONUS: If meld is clean and can become clean book, protect it strongly
+    else if (_shouldProtectCleanMeld(meld)) {
+      basePriority += 1500; // Strong preference to keep building clean books
+    }
+    // MODERATE BONUS: If meld is getting close to book status
+    else if (meld.cards.length >= 5) {
+      basePriority += 500;
+    }
+
+    // PENALTY: If meld already has many wilds, prefer other melds
+    final wildCount = meld.cards.where((c) => c.isWild).length;
+    if (wildCount > 2) {
+      basePriority -= 200; // Don't pile more cards into wild-heavy melds
+    }
+
+    // BONUS: If this would complete any book (even dirty), good value
+    if (meld.cards.length == 6) {
+      basePriority += 300; // Any book completion is valuable
+    }
+
+    return basePriority;
   }
 
   PlayingCard _chooseCardToDiscard(Player bot, [GameState? gameState]) {
@@ -1426,6 +1472,14 @@ class BotAI {
     final handValue = _calculateHandValue(bot.currentHand);
     final currentRound = gameState.round;
 
+    // CRITICAL: Emergency foot transition for extremely low card counts
+    // With 1-3 cards, ALWAYS pick up foot immediately - no strategic value left in hand
+    if (remainingCards <= 3 && bot.hasPlayedDown && !bot.hasPickedUpFoot) {
+      // Force immediate transition - staying in hand with 1-3 cards is never optimal
+      final cardToDiscard = _chooseCardToDiscard(bot);
+      return BotDecision(action: 'discard', data: cardToDiscard);
+    }
+
     // PRE-CHECK: Be more conservative when still on hand pile (not picked up foot yet)
     // This preserves strategic options and wild card management
     final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
@@ -1773,14 +1827,41 @@ class BotAI {
 
   /// Handle go-out decision - Focus on book completion and strategic timing
   BotDecision _handleGoOutDecision(Player bot, GameController controller) {
-    // STRATEGIC CHANGE: On foot, focus on completing books before going out
-
-    // Check if we can go out immediately (with required books)
+    // PRIORITY 0: Check if we can go out immediately (with required books)
     if (bot.currentHand.isEmpty && bot.canGoOut) {
       return BotDecision(action: 'goOut');
     }
 
-    // NEW STRATEGY: Only meld aggressively if we can complete books or go out soon
+    // PRIORITY 1: If in winning position, focus ONLY on going out, not building more
+    if (_isInWinningPosition(bot)) {
+      // Already have required books and few cards - prioritize discarding to go out
+      if (bot.currentHand.length == 1) {
+        // Try to go out with last card if possible
+        final lastCard = bot.currentHand.first;
+        final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+        for (final addition in cardsToAddToMelds) {
+          if ((addition['card'] as PlayingCard) == lastCard) {
+            return BotDecision(action: 'addToMeld', data: addition);
+          }
+        }
+        // If can't add last card to meld, must discard
+        return BotDecision(action: 'discard', data: lastCard);
+      }
+
+      // With 2-4 cards: reduce hand strategically but don't build unnecessarily
+      final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot);
+      if (cardsToAddToMelds.isNotEmpty) {
+        // Only add to melds that help reduce hand size without waste
+        final addition = cardsToAddToMelds.first;
+        return BotDecision(action: 'addToMeld', data: addition);
+      }
+
+      // No useful additions - discard to reduce hand size
+      final cardToDiscard = _chooseCardToDiscard(bot);
+      return BotDecision(action: 'discard', data: cardToDiscard);
+    }
+
+    // PRIORITY 2: Focus on completing missing books to reach winning position
     final canCompleteBooks = _canCompleteRequiredBooks(bot, controller);
 
     if (canCompleteBooks) {
@@ -1919,28 +2000,95 @@ class BotAI {
     final needsDirtyBook = dirtyBooks == 0;
 
     if (!needsCleanBook && !needsDirtyBook) {
-      return true; // Already have required books
+      return true; // Already have required books - can focus on going out!
     }
 
-    // Simple heuristic: if we have 5+ cards in hand and some melds close to books
-    if (bot.currentHand.length >= 5) {
-      final meldsCloseToBooks = bot.melds
-          .where((m) => m.cards.length >= 5)
+    // ENHANCED: More accurate assessment of book completion potential
+    if (needsCleanBook) {
+      // Look for clean melds that can become clean books (5-6 cards, no wilds)
+      final potentialCleanBooks = bot.melds
+          .where((m) => m.cards.length >= 5 && m.cards.length <= 6 && m.isClean)
           .length;
-      return meldsCloseToBooks > 0 ||
-          _getPossibleMelds(bot, controller).isNotEmpty;
+
+      // Or check if we can create a new clean book
+      final possibleCleanMelds = _getPossibleMelds(
+        bot,
+        controller,
+      ).where((meld) => !meld.any((card) => card.isWild)).toList();
+
+      if (potentialCleanBooks == 0 && possibleCleanMelds.isEmpty) {
+        return false; // Can't get required clean book
+      }
     }
 
-    return false;
+    if (needsDirtyBook) {
+      // Look for any meld that can become a book (5-6 cards)
+      final potentialBooks = bot.melds
+          .where((m) => m.cards.length >= 5 && m.cards.length <= 6)
+          .length;
+
+      // Or check if we can create a new meld for dirty book
+      final possibleMelds = _getPossibleMelds(bot, controller);
+
+      if (potentialBooks == 0 && possibleMelds.isEmpty) {
+        return false; // Can't get required dirty book
+      }
+    }
+
+    return true; // Can potentially complete required books
   }
 
-  /// Try to complete books (7+ card melds)
+  /// Check if bot is in immediate win position and should prioritize going out
+  bool _isInWinningPosition(Player bot) {
+    // Must be on foot with few cards AND have required books
+    if (!bot.hasPickedUpFoot || bot.currentHand.length > 4 || !bot.canGoOut) {
+      return false;
+    }
+
+    // Count existing books
+    int cleanBooks = 0;
+    int dirtyBooks = 0;
+    for (final meld in bot.melds) {
+      if (meld.cards.length >= 7) {
+        if (meld.isClean) {
+          cleanBooks++;
+        } else {
+          dirtyBooks++;
+        }
+      }
+    }
+
+    // Has required books: at least 1 clean AND 1 dirty book
+    return cleanBooks >= 1 && dirtyBooks >= 1;
+  }
+
+  /// Try to complete books (7+ card melds) with clean book priority
   BotDecision? _tryCompleteBooks(Player bot, GameController controller) {
-    // Look for melds that are close to becoming books (6 cards)
+    // PRIORITY 1: Complete clean books (7 naturals) - worth 500 pts vs 300 for dirty
     for (int i = 0; i < bot.melds.length; i++) {
       final meld = bot.melds[i];
-      if (meld.cards.length == 6) {
-        // This meld is one card away from being a book - prioritize it
+      if (meld.cards.length == 6 && meld.isClean) {
+        // Clean meld one card from book - only add natural cards
+        for (final card in bot.currentHand) {
+          if (meld.canAddCard(card) && !card.isWild) {
+            return BotDecision(
+              action: 'addToMeld',
+              data: {
+                'meldIndex': i,
+                'card': card,
+                'priority': 2000, // Highest priority - clean book completion
+              },
+            );
+          }
+        }
+      }
+    }
+
+    // PRIORITY 2: Complete dirty books only if no clean books are possible
+    for (int i = 0; i < bot.melds.length; i++) {
+      final meld = bot.melds[i];
+      if (meld.cards.length == 6 && !meld.isClean) {
+        // Dirty meld one card from book - can add wilds if needed
         for (final card in bot.currentHand) {
           if (meld.canAddCard(card)) {
             return BotDecision(
@@ -1948,7 +2096,7 @@ class BotAI {
               data: {
                 'meldIndex': i,
                 'card': card,
-                'priority': 1000, // High priority
+                'priority': 1500, // High priority but lower than clean books
               },
             );
           }
@@ -1971,11 +2119,38 @@ class BotAI {
     for (final addition in cardsToAdd) {
       final meldIndex = addition['meldIndex'] as int;
       final meld = bot.melds[meldIndex];
+      final card = addition['card'] as PlayingCard;
 
-      // Score based on how close the meld is to becoming a book
+      // Base score on meld progress toward book status
       int score = meld.cards.length;
       if (meld.cards.length == 6) score += 100; // Almost a book!
       if (meld.cards.length >= 4) score += 50; // Good progress
+
+      // CLEAN BOOK PROTECTION: Heavily prioritize keeping clean melds clean
+      if (meld.isClean) {
+        if (!card.isWild) {
+          score += 1000; // Massive bonus for adding naturals to clean melds
+        } else {
+          // PENALTY for making clean meld dirty, unless meld has 7+ cards already
+          if (meld.cards.length >= 7) {
+            score += 25; // Small bonus - already a clean book, can add wild
+          } else {
+            score -=
+                500; // Big penalty - would make meld dirty before book status
+          }
+        }
+      } else {
+        // Dirty meld - normal rules apply, but limit wild accumulation
+        final wildCount = meld.cards.where((c) => c.isWild).length;
+        if (card.isWild && wildCount >= 3) {
+          score -= 200; // Discourage excessive wild accumulation
+        }
+      }
+
+      // BOOK SIZE LIMITS: Discourage oversized books (8+ cards are wasteful)
+      if (meld.cards.length >= 8) {
+        score -= 100; // Better to spread cards across multiple melds
+      }
 
       if (score > bestScore) {
         bestScore = score;
@@ -1995,14 +2170,42 @@ class BotAI {
       int scoreA = a.length;
       int scoreB = b.length;
 
-      // Bonus for natural melds (cleaner books worth more points)
-      if (!a.any((card) => card.isWild)) scoreA += 10;
-      if (!b.any((card) => card.isWild)) scoreB += 10;
+      // MAJOR BONUS for clean melds - they can become 500pt clean books
+      final aIsClean = !a.any((card) => card.isWild);
+      final bIsClean = !b.any((card) => card.isWild);
+
+      if (aIsClean && !bIsClean) scoreA += 50; // Clean beats dirty
+      if (bIsClean && !aIsClean) scoreB += 50;
+      if (aIsClean && bIsClean) {
+        // Both clean - prioritize longer clean melds
+        scoreA += 30;
+        scoreB += 30;
+      }
+
+      // Moderate bonus for natural melds over mixed ones
+      if (aIsClean) scoreA += 10;
+      if (bIsClean) scoreB += 10;
 
       return scoreB.compareTo(scoreA);
     });
 
     return possibleMelds.first;
+  }
+
+  /// Check if a meld should be protected from wild cards to preserve clean book potential
+  bool _shouldProtectCleanMeld(Meld meld) {
+    // Always protect clean melds under 7 cards - they can become 500pt clean books
+    if (meld.isClean && meld.cards.length < 7) {
+      return true;
+    }
+
+    // Don't protect if already a book (7+ cards) - adding wilds is okay
+    if (meld.cards.length >= 7) {
+      return false;
+    }
+
+    // Don't protect if already dirty - damage is done
+    return false;
   }
 
   /// Find the best natural meld combination that minimally meets the requirement

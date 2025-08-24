@@ -629,5 +629,86 @@ void main() {
         false,
       ); // No longer marked as newly drawn
     });
+
+    test('should count all unplayed cards as negative when round ends', () {
+      final player = Player(id: '1', name: 'Test', type: PlayerType.human);
+
+      // Give player cards that include meldable cards in hand pile
+      player.dealHand([
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.ten,
+        ), // 10 points - will be melded
+        const PlayingCard(
+          suit: Suit.spades,
+          rank: CardRank.ten,
+        ), // 10 points - will be melded
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.ten,
+        ), // 10 points - will be melded
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.king,
+        ), // 10 points - stays in hand
+        const PlayingCard(
+          suit: Suit.spades,
+          rank: CardRank.queen,
+        ), // 10 points - stays in hand
+      ]); // 50 points total in hand
+
+      // Give player some cards in foot pile
+      player.dealFoot([
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace), // 20 points
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.jack,
+        ), // 10 points
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.three,
+        ), // -300 points (red 3)
+      ]); // -270 points in foot (20 + 10 - 300)
+
+      // Create a meld with the three tens (will be removed from hand)
+      final meld = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+      ]; // 3 * 10 = 30 points
+      final meldSuccess = player.createMeld(
+        meld,
+        playDownRequirement: 30,
+      ); // 3 tens = 30 points, should pass
+      expect(meldSuccess, isTrue); // Verify meld was created
+
+      // Verify meld was created successfully
+      expect(player.melds.length, equals(1));
+      expect(player.currentHand.length, equals(2)); // King + Queen remain
+
+      // After meld creation: hand has King + Queen (20 penalty), foot has Ace + Jack + Red3 (20+10+300=330 penalty)
+      // Total penalty: 20 + 330 = 350 points
+
+      // Normal calculation (only active hand): 30 (meld) - 20 (current hand penalty) = 10
+      final normalScore = player.calculateTotalScore();
+      expect(normalScore, equals(10));
+
+      // Round-end calculation (all unplayed): 30 (meld) - 350 (all penalty) = -320
+      final roundEndScore = player.calculateTotalScore(
+        includeAllUnplayedCards: true,
+      );
+      expect(roundEndScore, equals(-320));
+
+      // Verify the individual components
+      expect(player.calculateMeldValue(), equals(30));
+      expect(
+        player.calculateHandValue(),
+        equals(20),
+      ); // Only active hand (King + Queen)
+      expect(
+        player.calculateAllUnplayedCardsValue(),
+        equals(350),
+      ); // Hand + foot penalty: 20 + (20+10+300) = 350
+    });
   });
 }

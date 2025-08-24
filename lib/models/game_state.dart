@@ -693,7 +693,10 @@ class GameState {
         : playersWhoCanGoOut.first;
 
     for (final player in players) {
-      var roundScore = player.calculateTotalScore();
+      // CRITICAL FIX: Include ALL unplayed cards (hand + foot) as negative when round ends
+      var roundScore = player.calculateTotalScore(
+        includeAllUnplayedCards: true,
+      );
 
       // Add going out bonus
       if (player == playerWhoWentOut) {
