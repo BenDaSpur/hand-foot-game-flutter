@@ -146,9 +146,13 @@ class _GameScreenState extends State<GameScreen> {
   void _processBotTurns() {
     if (!_isInitialized) return;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _processBotTurn();
-    });
+    // CRITICAL FIX: Only schedule bot processing if current player is actually a bot
+    // This prevents the game from auto-drawing/discarding on human turns
+    if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _processBotTurn();
+      });
+    }
   }
 
   /// Schedule bot turn continuation after draw/meld actions
