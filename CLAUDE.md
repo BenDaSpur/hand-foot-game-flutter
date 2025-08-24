@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run the app**: `flutter run`
 - **Build for release**: `flutter build apk` (Android) or `flutter build ios` (iOS)
 - **Static analysis**: `flutter analyze`
-- **Run tests**: `flutter test test/` for unit tests, `flutter test integration_test/ -d macos` for fast integration tests
+- **Run tests**: `flutter test test/` for unit tests, `flutter test e2e/ -d macos` for e2e integration tests
 - **Hot reload**: Available when running with `flutter run` - press `r` to reload
 - **Clean build**: `flutter clean && flutter pub get` to resolve dependency issues
 
@@ -127,7 +127,7 @@ The game follows official Hand & Foot rules (documented in `docs/family_hand_and
 **Code Quality**: 
 - Modular component design with extracted sub-methods
 - Shared UI components to eliminate duplication (e.g., `EmergencyRoundEndDialog`)
-- Comprehensive test coverage: 175+ unit tests plus integration tests
+- Comprehensive test coverage: 175+ unit tests plus e2e integration tests
 - Static analysis compliance with zero issues
 
 ## Game Configuration Constants

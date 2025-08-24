@@ -48,6 +48,7 @@ class _GameScreenState extends State<GameScreen> {
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
   bool _botTurnScheduled = false; // Prevent multiple bot turn callbacks
+  bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
   @override
   void initState() {
@@ -146,9 +147,11 @@ class _GameScreenState extends State<GameScreen> {
   void _processBotTurns() {
     if (!_isInitialized) return;
 
+    final currentPlayer = _gameController.gameState.currentPlayer;
+
     // CRITICAL FIX: Only schedule bot processing if current player is actually a bot
     // This prevents the game from auto-drawing/discarding on human turns
-    if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
+    if (currentPlayer.type == PlayerType.bot) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _processBotTurn();
       });
@@ -197,8 +200,20 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _processBotTurn() async {
+    final currentPlayer = _gameController.gameState.currentPlayer;
+
     // Check if widget has been disposed
     if (_disposed || !mounted) return;
+
+    // SAFETY CHECK: Don't process if it's actually the human player's turn
+    if (_gameController.gameState.currentPlayer.name == 'You') {
+      return;
+    }
+
+    // ADDITIONAL SAFETY: Check by player type too
+    if (currentPlayer.type == PlayerType.human) {
+      return;
+    }
 
     // Check if game has ended
     if (_gameController.gameState.phase == GamePhase.gameEnd) {
@@ -214,8 +229,6 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
-    final currentPlayer = _gameController.gameState.currentPlayer;
-
     if (currentPlayer.type == PlayerType.bot) {
       await Future.delayed(const Duration(seconds: 1));
 
@@ -223,12 +236,22 @@ class _GameScreenState extends State<GameScreen> {
 
       switch (decision.action) {
         case 'drawFromDeck':
+          // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
+          if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
+              _gameController.gameState.currentPlayer.type != PlayerType.bot) {
+            return;
+          }
           _gameController.drawFromDeck();
           // CRITICAL FIX: Continue bot turn immediately after drawing
           // Drawing advances phase to meld - bot needs to make meld decision
           _scheduleBotTurnContinuation();
           break;
         case 'drawFromDiscard':
+          // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
+          if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
+              _gameController.gameState.currentPlayer.type != PlayerType.bot) {
+            return;
+          }
           _gameController.drawFromDiscardPile();
           // CRITICAL FIX: Continue bot turn immediately after drawing
           // Drawing advances phase to meld - bot needs to make meld decision
@@ -254,6 +277,11 @@ class _GameScreenState extends State<GameScreen> {
           _scheduleBotTurnContinuation();
           break;
         case 'discard':
+          // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
+          if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
+              _gameController.gameState.currentPlayer.type != PlayerType.bot) {
+            return;
+          }
           final card = decision.data as PlayingCard;
           _gameController.discardCard(card);
           break;
@@ -298,6 +326,7 @@ class _GameScreenState extends State<GameScreen> {
     // Bounds checking
     if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
 
+    _hasPlayerInteractedSinceDraw = true; // Mark that player has interacted
     setState(() {
       if (_selectedCardIndices.contains(cardIndex)) {
         _selectedCardIndices.remove(cardIndex);
@@ -311,6 +340,8 @@ class _GameScreenState extends State<GameScreen> {
     if (_gameController.gameState.currentPlayer.type != PlayerType.human) {
       return;
     }
+
+    _hasPlayerInteractedSinceDraw = true; // Mark that player has interacted
 
     final humanPlayer = _gameController.gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
@@ -567,6 +598,8 @@ class _GameScreenState extends State<GameScreen> {
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
       // Cards are now automatically inserted in sorted position
+      _hasPlayerInteractedSinceDraw =
+          false; // Reset interaction flag after drawing
       setState(() {}); // Just refresh the UI
     } else {
       // Check if the round ended automatically due to insufficient cards
@@ -870,6 +903,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onDiscard() async {
+    // CRITICAL FIX: Prevent auto-discard after drawing cards
+    if (!_hasPlayerInteractedSinceDraw) {
+      return;
+    }
     if (_selectedCards.length == 1) {
       final humanPlayer = _gameController.gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
