@@ -89,6 +89,40 @@ class PlayingCard {
     }
   }
 
+  /// Display order for cards in hand: 3s → 4-K → Aces → 2s (wilds) → Jokers
+  int get displayOrder {
+    switch (rank) {
+      case CardRank.three:
+        return 1;
+      case CardRank.four:
+        return 2;
+      case CardRank.five:
+        return 3;
+      case CardRank.six:
+        return 4;
+      case CardRank.seven:
+        return 5;
+      case CardRank.eight:
+        return 6;
+      case CardRank.nine:
+        return 7;
+      case CardRank.ten:
+        return 8;
+      case CardRank.jack:
+        return 9;
+      case CardRank.queen:
+        return 10;
+      case CardRank.king:
+        return 11;
+      case CardRank.ace:
+        return 12;
+      case CardRank.two:
+        return 13; // Wild card
+      case CardRank.joker:
+        return 14; // Wild card
+    }
+  }
+
   String get displayName {
     if (isJoker) return 'Joker';
     final rankName = rank.name[0].toUpperCase() + rank.name.substring(1);

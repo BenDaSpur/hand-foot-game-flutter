@@ -367,22 +367,15 @@ class Player {
 
   void sortHandByRank() {
     _sortHandPreservingNewlyDrawnCards((a, b) {
-      if (a.isJoker && b.isJoker) return 0;
-      if (a.isJoker) return 1;
-      if (b.isJoker) return -1;
-      return a.meldValue.compareTo(b.meldValue);
+      return a.displayOrder.compareTo(b.displayOrder);
     });
   }
 
   void sortHandBySuit() {
     _sortHandPreservingNewlyDrawnCards((a, b) {
-      if (a.isJoker && b.isJoker) return 0;
-      if (a.isJoker) return 1;
-      if (b.isJoker) return -1;
-
       final suitComparison = (a.suit?.index ?? 4).compareTo(b.suit?.index ?? 4);
       if (suitComparison != 0) return suitComparison;
-      return a.meldValue.compareTo(b.meldValue);
+      return a.displayOrder.compareTo(b.displayOrder);
     });
   }
 

@@ -358,12 +358,12 @@ void main() {
 
       player.dealHand(List.from(cards));
 
-      // Sort by rank (meld value)
+      // Sort by rank (display order: 3s → 4-K → Aces → 2s → Jokers)
       player.sortHandByRank();
       expect(
         player.currentHand.first.rank,
-        equals(CardRank.two),
-      ); // Lowest meld value
+        equals(CardRank.four),
+      ); // Four comes first (lowest display order of available cards)
       expect(
         player.currentHand.last.rank,
         equals(CardRank.joker),

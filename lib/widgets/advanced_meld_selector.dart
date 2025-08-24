@@ -541,6 +541,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                   key: ValueKey('mobile_card_$handIndex'),
                   card: card,
                   isSelected: isSelected,
+                  isDisabled: card.isThree,
                   onTap: () => _toggleCardSelection(index),
                 );
               },
@@ -686,6 +687,12 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     final handIndex = availableCardIndices[availableIndex];
     final card = widget.player.currentHand[handIndex];
 
+    // Prevent selection of 3s
+    if (card.isThree) {
+      _showError('3s cannot be melded');
+      return;
+    }
+
     setState(() {
       if (selectedAvailableIndices.contains(availableIndex)) {
         selectedAvailableIndices.remove(availableIndex);
@@ -750,10 +757,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     availableCardIndices.sort((a, b) {
       final cardA = widget.player.currentHand[a];
       final cardB = widget.player.currentHand[b];
-
-      if (cardA.isWild && !cardB.isWild) return 1;
-      if (!cardA.isWild && cardB.isWild) return -1;
-      return cardA.rank.index.compareTo(cardB.rank.index);
+      return cardA.displayOrder.compareTo(cardB.displayOrder);
     });
   }
 
@@ -838,10 +842,12 @@ class _MobileCardWidget extends StatelessWidget {
     required this.card,
     required this.isSelected,
     required this.onTap,
+    this.isDisabled = false,
   });
 
   final PlayingCard card;
   final bool isSelected;
+  final bool isDisabled;
   final VoidCallback onTap;
 
   @override
@@ -849,7 +855,7 @@ class _MobileCardWidget extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: isDisabled ? null : onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: isSelected
@@ -867,11 +873,29 @@ class _MobileCardWidget extends StatelessWidget {
                   ],
                 )
               : null,
-          child: PlayingCardWidget(
-            card: card,
-            width: _ResponsiveHelper.getCardWidth(context),
-            height: _ResponsiveHelper.getCardHeight(context),
-            isSelected: isSelected,
+          child: Stack(
+            children: [
+              PlayingCardWidget(
+                card: card,
+                width: _ResponsiveHelper.getCardWidth(context),
+                height: _ResponsiveHelper.getCardHeight(context),
+                isSelected: isSelected,
+              ),
+              if (isDisabled)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.black.withValues(alpha: 0.6),
+                    ),
+                    child: Icon(
+                      Icons.block,
+                      color: Colors.red.withValues(alpha: 0.8),
+                      size: 32,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
