@@ -470,8 +470,9 @@ class EnhancedBotAI {
         possibleMelds.fold<int>(0, (sum, meld) => sum + meld.length) +
         cardsToAdd.length;
 
-    if (totalMeldableCards >= handSize - 1)
+    if (totalMeldableCards >= handSize - 1) {
       return true; // Can meld all but 1 card
+    }
 
     return false;
   }

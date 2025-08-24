@@ -566,6 +566,12 @@ class _GameScreenState extends State<GameScreen> {
         _gameController = savedController;
         _botAI = EnhancedBotAI();
 
+        // Assign consistent bot personalities based on player IDs
+        final botPlayers = _gameController.gameState.players
+            .where((p) => p.type == PlayerType.bot)
+            .toList();
+        _botAI.assignRandomPersonalities(botPlayers);
+
         // Sort the human player's hand
         final humanPlayer = _gameController.gameState.players.firstWhere(
           (p) => p.type == PlayerType.human,
@@ -1953,6 +1959,29 @@ class _GameScreenState extends State<GameScreen> {
                   'Going out gives +100 bonus points.',
                   style: TextStyle(color: Colors.white70),
                 ),
+                SizedBox(height: 16),
+
+                Text(
+                  '🤖 BOT PERSONALITIES',
+                  style: TextStyle(
+                    color: BalatroTheme.neonGreen,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '🛡️ Conservative Bot:\n'
+                  'The cautious strategist who holds up to 18 cards, rarely takes risks with the discard pile, and prefers to accumulate before making moves. Patient and methodical, this bot worries less about time pressure and focuses on safe, calculated plays.\n\n'
+                  '⚡ Aggressive Bot:\n'
+                  'The bold risk-taker who transitions to foot quickly (14 card limit), frequently unlocks discard piles, and makes rapid decisions. This bot feels time pressure more acutely and prefers immediate action over long-term planning.\n\n'
+                  '📚 Book Builder Bot:\n'
+                  'The point maximizer who specializes in completing 7+ card books for massive bonuses (500 clean, 300 dirty). Holds cards strategically in later rounds to complete books defensively when opponents might go out.\n\n'
+                  '🎯 Adaptive Bot:\n'
+                  'The balanced strategist who changes tactics based on game state and opponent behavior. Uses standard holding limits (16 cards) and adjusts aggression based on what others are doing.\n\n'
+                  'Each bot has distinct decision-making patterns that create unique gameplay experiences!',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ],
             ),
           ),
@@ -1988,6 +2017,13 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _gameController = newController;
         _botAI = EnhancedBotAI();
+
+        // Assign consistent bot personalities based on player IDs
+        final botPlayers = _gameController.gameState.players
+            .where((p) => p.type == PlayerType.bot)
+            .toList();
+        _botAI.assignRandomPersonalities(botPlayers);
+
         _selectedCardIndices.clear();
         _viewingPlayerMelds = null;
         _isInitialized = true;
