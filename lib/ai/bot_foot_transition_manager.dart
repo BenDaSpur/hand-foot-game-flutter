@@ -515,12 +515,14 @@ class BotFootTransitionManager {
   ) {
     final additions = <Map<String, dynamic>>[];
 
-    for (final meld in bot.melds) {
+    for (int i = 0; i < bot.melds.length; i++) {
+      final meld = bot.melds[i];
       for (final card in bot.currentHand) {
         if (_canAddCardToMeld(card, meld, controller)) {
           additions.add({
             'card': card,
             'meld': meld,
+            'meldIndex': i,
             'priority': card.pointValue,
           });
         }

@@ -276,7 +276,20 @@ class _GameScreenState extends State<GameScreen> {
           break;
         case 'addToMeld':
           final data = decision.data as Map<String, dynamic>;
-          _gameController.addCardToMeld(data['meldIndex'], data['card']);
+          final meldIndex = data['meldIndex'] as int?;
+          final card = data['card'] as PlayingCard?;
+
+          if (meldIndex != null && card != null) {
+            _gameController.addCardToMeld(meldIndex, card);
+          } else {
+            print(
+              'Error: Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
+            );
+            // Fallback: force bot to discard instead
+            if (card != null) {
+              _gameController.discardCard(card);
+            }
+          }
           // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
           // Some add-to-meld actions don't advance to discard phase automatically
           _scheduleBotTurnContinuation();

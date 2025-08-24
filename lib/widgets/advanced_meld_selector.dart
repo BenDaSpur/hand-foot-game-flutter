@@ -4,7 +4,7 @@ import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
 import '../widgets/playing_card_widget.dart';
-import '../game/game_config.dart';
+import '../config/game_config.dart';
 
 // Helper class for responsive UI calculations
 class _ResponsiveHelper {

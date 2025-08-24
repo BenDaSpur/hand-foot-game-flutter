@@ -1,4 +1,5 @@
 import 'card.dart';
+import '../config/game_config.dart';
 
 enum MeldType { natural, mixed }
 
@@ -21,7 +22,7 @@ class Meld {
   }
 
   static Meld? createMeld(List<PlayingCard> cards) {
-    if (cards.length < 3) return null;
+    if (cards.length < GameConfig.minTotalCardsForMeld) return null;
 
     // 3s cannot be melded at all
     if (cards.any((card) => card.isThree)) return null;
@@ -94,18 +95,18 @@ class Meld {
     }
 
     // Book bonuses (7+ cards) - use cached type for consistency
-    if (cards.length >= 7) {
+    if (cards.length >= GameConfig.bookSize) {
       if (meldType == MeldType.natural) {
-        total += 500; // Clean book bonus
+        total += GameConfig.cleanBookBonus; // Clean book bonus
       } else if (meldType == MeldType.mixed) {
-        total += 300; // Dirty book bonus
+        total += GameConfig.dirtyBookBonus; // Dirty book bonus
       }
     }
 
     return total;
   }
 
-  bool get isBook => cards.length >= 7;
+  bool get isBook => cards.length >= GameConfig.bookSize;
 
   // Dynamic clean/dirty detection based on current cards
   bool get isClean => isBook && !cards.any((card) => card.isWild);
