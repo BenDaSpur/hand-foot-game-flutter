@@ -3,7 +3,7 @@ import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
-import 'package:hand_foot_game_flutter/ai/bot_ai.dart';
+import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 
 void main() {
   group('Bot Stuck Meld Fix', () {
@@ -14,7 +14,7 @@ void main() {
         Player(id: '3', name: 'Bot2', type: PlayerType.bot),
       ];
       final gameController = GameController(players: players);
-      final botAI = BotAI();
+      final botAI = EnhancedBotAI();
 
       final bot1 = players[1];
 
@@ -73,28 +73,31 @@ void main() {
       expect(meldPoints, equals(70)); // 2 queens (10 each) + 1 joker (50)
       expect(meldPoints >= 60, true); // Meets play-down requirement
 
-      // Now test the bot decision - should discard strategically (not get stuck)
+      // Now test the bot decision - the new bot AI is smarter and will create viable melds
       final decision = botAI.makeDecision(bot1, gameController);
 
-      // The bot should decide to discard (new strategic behavior)
-      // Since the only available meld contains wilds (joker), bot waits for natural melds
-      expect(decision.action, equals('discard'));
-      expect(decision.data, isA<PlayingCard>());
+      // The new bot AI should decide to create the meld since it meets requirements
+      // The queens + joker meld is worth 70 points, exceeding the 60-point requirement
+      expect(decision.action, equals('createMeld'));
+      expect(decision.data, isA<List<PlayingCard>>());
 
-      final discardedCard = decision.data as PlayingCard;
-      expect(bot1.currentHand.contains(discardedCard), true);
+      final meldCards = decision.data as List<PlayingCard>;
+      expect(meldCards.length, equals(3));
 
-      // Verify the bot has NOT played down yet (waiting for natural meld opportunity)
-      expect(bot1.hasPlayedDown, false);
-      expect(bot1.melds.length, equals(0));
-      expect(gameController.gameState.hasMelded, false);
-
-      // Bot should discard strategically (low value or penalty cards first)
-      // The hand contains 3s are not present, so should discard lowest value natural card
-      final lowValueCards = bot1.currentHand
-          .where((card) => !card.isWild && card.pointValue <= 10)
+      // Should be the queen meld (2 queens + 1 wild)
+      final meldQueens = meldCards
+          .where((card) => card.rank == CardRank.queen)
           .toList();
-      expect(lowValueCards.contains(discardedCard), true);
+      final meldWilds = meldCards.where((card) => card.isWild).toList();
+      expect(meldQueens.length, equals(2));
+      expect(meldWilds.length, equals(1));
+
+      // Total points should meet requirement
+      final totalPoints = meldCards.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
+      );
+      expect(totalPoints, greaterThanOrEqualTo(60));
     });
 
     test(
@@ -106,7 +109,7 @@ void main() {
           Player(id: '3', name: 'Bot2', type: PlayerType.bot),
         ];
         final gameController = GameController(players: players);
-        final botAI = BotAI();
+        final botAI = EnhancedBotAI();
 
         final bot1 = players[1];
 

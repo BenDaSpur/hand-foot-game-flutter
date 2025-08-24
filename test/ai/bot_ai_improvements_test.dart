@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hand_foot_game_flutter/ai/bot_ai.dart';
+import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
@@ -7,11 +7,11 @@ import 'package:hand_foot_game_flutter/models/game_state.dart';
 
 void main() {
   group('Bot AI Improvements Tests', () {
-    late BotAI botAI;
+    late EnhancedBotAI botAI;
     late GameController controller;
 
     setUp(() {
-      botAI = BotAI(seed: 42); // Deterministic for testing
+      botAI = EnhancedBotAI(seed: 42); // Deterministic for testing
       final players = [
         Player(id: 'human', name: 'Human', type: PlayerType.human),
         Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot),
@@ -158,10 +158,11 @@ void main() {
         expect(decision.action, 'discard');
         final discardedCard = decision.data as PlayingCard;
         expect(discardedCard.rank, CardRank.three);
+        // Should discard red 3 first (worst penalty: -300 vs black 3: -5)
         expect(
           discardedCard.suit,
-          Suit.hearts,
-        ); // Red 3 first (most negative: -300)
+          anyOf([Suit.hearts, Suit.diamonds]),
+        ); // Red suits
       });
 
       test('should use emergency discard with 20+ cards', () {
@@ -233,7 +234,7 @@ void main() {
         final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
         bot.hand.addAll([
           ...List.generate(
-            BotAI.wildCardDiscardThreshold,
+            EnhancedBotAI.wildCardDiscardThreshold,
             (_) => const PlayingCard(rank: CardRank.joker),
           ),
         ]);

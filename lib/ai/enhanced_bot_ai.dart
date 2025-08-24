@@ -149,6 +149,17 @@ class EnhancedBotAI {
 
   /// Handle discard phase decisions
   BotDecision _makeDiscardDecision(Player bot, GameController controller) {
+    // Check if bot has no cards left - they should go out if they can
+    if (bot.currentHand.isEmpty) {
+      // Check if bot can go out (has required books)
+      if (bot.canGoOutWithBooks) {
+        return BotDecision(action: 'goOut');
+      } else {
+        // Bot is stuck - shouldn't happen, but handle gracefully
+        return BotDecision(action: 'error');
+      }
+    }
+
     final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -329,12 +340,17 @@ class EnhancedBotAI {
   PlayingCard _chooseCardToDiscard(Player bot, GameState gameState) {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
-      throw Exception('Cannot discard from empty hand');
+      // This should not happen due to check in _makeDiscardDecision, but be defensive
+      throw Exception(
+        'Cannot discard from empty hand - bot should go out or error',
+      );
     }
 
-    // Priority 1: Discard 3s (penalty cards)
+    // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
     final threes = hand.where((card) => card.rank == CardRank.three).toList();
     if (threes.isNotEmpty) {
+      // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return threes.first;
     }
 

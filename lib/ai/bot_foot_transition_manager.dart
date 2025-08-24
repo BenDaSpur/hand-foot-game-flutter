@@ -104,6 +104,15 @@ class BotFootTransitionManager {
     Player bot,
     GameController controller,
   ) {
+    // Check if bot has no cards left - they should go out if they can
+    if (bot.currentHand.isEmpty) {
+      if (bot.canGoOutWithBooks) {
+        return BotDecision(action: 'goOut');
+      } else {
+        return BotDecision(action: 'error');
+      }
+    }
+
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -479,12 +488,17 @@ class BotFootTransitionManager {
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
-      throw Exception('Cannot discard from empty hand');
+      // This should not happen due to check in _handleEmergencyTransition, but be defensive
+      throw Exception(
+        'Cannot discard from empty hand - bot should go out or error',
+      );
     }
 
-    // Priority: Discard 3s first (penalty cards)
+    // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
     final threes = hand.where((card) => card.rank == CardRank.three).toList();
     if (threes.isNotEmpty) {
+      // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return threes.first;
     }
 

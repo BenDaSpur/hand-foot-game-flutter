@@ -384,12 +384,17 @@ class BotEndGameManager {
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
-      throw Exception('Cannot discard from empty hand');
+      // This should not happen if properly checked in calling methods, but be defensive
+      throw Exception(
+        'Cannot discard from empty hand - bot should go out or error',
+      );
     }
 
-    // Priority: Discard 3s first (penalty cards)
+    // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
     final threes = hand.where((card) => card.rank == CardRank.three).toList();
     if (threes.isNotEmpty) {
+      // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return threes.first;
     }
 

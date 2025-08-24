@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hand_foot_game_flutter/ai/bot_ai.dart';
+import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 
 void main() {
   group('Bot Naming Tests', () {
