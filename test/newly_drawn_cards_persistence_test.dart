@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
@@ -32,27 +33,46 @@ void main() {
         // Verify newly drawn cards are highlighted
         final handSize = humanPlayer.currentHand.length;
         final expectedNewCardCount = GameState.requiredDrawCount;
-        for (int i = handSize - expectedNewCardCount; i < handSize; i++) {
-          expect(
-            humanPlayer.isCardIndexNewlyDrawn(i),
-            true,
-            reason: 'Card at index $i should be highlighted as newly drawn',
-          );
+
+        // Count the highlighted cards instead of checking specific indices
+        // since auto-sorting can put newly drawn cards anywhere
+        int highlightedCount = 0;
+        for (int i = 0; i < handSize; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
         }
+        expect(
+          highlightedCount,
+          expectedNewCardCount,
+          reason:
+              'Should have exactly $expectedNewCardCount newly drawn cards highlighted',
+        );
 
         // During meld phase, newly drawn cards should still be highlighted
         expect(controller.gameState.turnPhase.name, 'meld');
-        for (int i = handSize - expectedNewCardCount; i < handSize; i++) {
-          expect(
-            humanPlayer.isCardIndexNewlyDrawn(i),
-            true,
-            reason:
-                'Card at index $i should remain highlighted during meld phase',
-          );
+        highlightedCount = 0;
+        for (int i = 0; i < handSize; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
         }
+        expect(
+          highlightedCount,
+          expectedNewCardCount,
+          reason:
+              'Should still have $expectedNewCardCount cards highlighted during meld phase',
+        );
 
         // Player discards to end turn - this should advance to next player
-        final cardToDiscard = humanPlayer.currentHand.first;
+        // Choose a card that's NOT newly drawn to avoid removing highlighted cards
+        PlayingCard cardToDiscard = humanPlayer.currentHand.first;
+        for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+          if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
+            cardToDiscard = humanPlayer.currentHand[i];
+            break;
+          }
+        }
         expect(controller.discardCard(cardToDiscard), true);
 
         // Verify turn advanced to bot player
@@ -61,19 +81,18 @@ void main() {
 
         // IMPORTANT: Human player should still have their newly drawn cards highlighted
         // because clearing only happens at the START of the new current player's turn
-        for (
-          int i = handSize - expectedNewCardCount - 1;
-          i < handSize - 1;
-          i++
-        ) {
-          // -1 because we discarded
-          expect(
-            humanPlayer.isCardIndexNewlyDrawn(i),
-            true,
-            reason:
-                'Human card at index $i should still be highlighted after their turn ended',
-          );
+        highlightedCount = 0;
+        for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
         }
+        expect(
+          highlightedCount,
+          expectedNewCardCount,
+          reason:
+              'Human should still have $expectedNewCardCount cards highlighted after their turn ended',
+        );
 
         // But the bot (current player) should have no newly drawn cards highlighted yet
         expect(
@@ -103,32 +122,45 @@ void main() {
         final handSize = humanPlayer.currentHand.length;
 
         // Verify highlighting exists
-        for (
-          int i = handSize - GameState.requiredDrawCount;
-          i < handSize;
-          i++
-        ) {
-          expect(humanPlayer.isCardIndexNewlyDrawn(i), true);
+        int highlightedCount = 0;
+        for (int i = 0; i < handSize; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
         }
+        expect(
+          highlightedCount,
+          GameState.requiredDrawCount,
+          reason:
+              'Should have ${GameState.requiredDrawCount} cards highlighted',
+        );
 
         // Human discards, bot's turn starts
-        final humanCard = humanPlayer.currentHand.first;
+        // Choose a card that's NOT newly drawn to avoid removing highlighted cards
+        PlayingCard humanCard = humanPlayer.currentHand.first;
+        for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+          if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
+            humanCard = humanPlayer.currentHand[i];
+            break;
+          }
+        }
         expect(controller.discardCard(humanCard), true);
         expect(controller.gameState.currentPlayer.id, '2'); // Bot's turn
 
         // Human should still have highlighting
         final newHandSize = humanPlayer.currentHand.length; // -1 from discard
-        for (
-          int i = newHandSize - GameState.requiredDrawCount;
-          i < newHandSize;
-          i++
-        ) {
-          expect(
-            humanPlayer.isCardIndexNewlyDrawn(i),
-            true,
-            reason: 'Human should still have highlighting during bot\'s turn',
-          );
+        highlightedCount = 0;
+        for (int i = 0; i < newHandSize; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
         }
+        expect(
+          highlightedCount,
+          GameState.requiredDrawCount,
+          reason:
+              'Human should still have ${GameState.requiredDrawCount} cards highlighted during bot\'s turn',
+        );
 
         // Bot draws and discards to return turn to human
         expect(controller.drawFromDeck(), true);
@@ -165,23 +197,30 @@ void main() {
 
       // Human draws and discards
       expect(controller.drawFromDeck(), true);
-      final humanHandSize = humanPlayer.currentHand.length;
-      final humanCard = humanPlayer.currentHand.first;
+      // Choose a card that's NOT newly drawn to avoid removing highlighted cards
+      PlayingCard humanCard = humanPlayer.currentHand.first;
+      for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+        if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
+          humanCard = humanPlayer.currentHand[i];
+          break;
+        }
+      }
       expect(controller.discardCard(humanCard), true);
 
       // Bot 1's turn - human should still have highlighting
       expect(controller.gameState.currentPlayer.id, '2');
-      for (
-        int i = humanHandSize - GameState.requiredDrawCount - 1;
-        i < humanHandSize - 1;
-        i++
-      ) {
-        expect(
-          humanPlayer.isCardIndexNewlyDrawn(i),
-          true,
-          reason: 'Human should keep highlighting during bot 1 turn',
-        );
+      int highlightedCount = 0;
+      for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+        if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+          highlightedCount++;
+        }
       }
+      expect(
+        highlightedCount,
+        GameState.requiredDrawCount,
+        reason:
+            'Human should keep ${GameState.requiredDrawCount} cards highlighted during bot 1 turn',
+      );
 
       // Bot 1 draws and discards
       expect(controller.drawFromDeck(), true);
@@ -190,17 +229,18 @@ void main() {
 
       // Bot 2's turn - human should STILL have highlighting
       expect(controller.gameState.currentPlayer.id, '3');
-      for (
-        int i = humanHandSize - GameState.requiredDrawCount - 1;
-        i < humanHandSize - 1;
-        i++
-      ) {
-        expect(
-          humanPlayer.isCardIndexNewlyDrawn(i),
-          true,
-          reason: 'Human should keep highlighting during bot 2 turn',
-        );
+      highlightedCount = 0;
+      for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+        if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+          highlightedCount++;
+        }
       }
+      expect(
+        highlightedCount,
+        GameState.requiredDrawCount,
+        reason:
+            'Human should keep ${GameState.requiredDrawCount} cards highlighted during bot 2 turn',
+      );
 
       // Bot 2 draws and discards to return to human
       expect(controller.drawFromDeck(), true);

@@ -89,21 +89,22 @@ void main() {
       final newCard = const PlayingCard(suit: Suit.clubs, rank: CardRank.queen);
       humanPlayer.addNewlyDrawnCard(newCard);
 
-      // Verify it was marked as newly drawn
-      expect(humanPlayer.isCardIndexNewlyDrawn(2), true);
-      expect(humanPlayer.currentHand[2], newCard);
+      // After auto-sorting, the hand will be: Queen(10), King(11), Ace(12)
+      // So Queen is at index 0, not index 2
+      expect(humanPlayer.currentHand[0], newCard);
+      expect(humanPlayer.isCardIndexNewlyDrawn(0), true);
 
       // Create controller but don't clear (simulating normal gameplay)
       final controller = GameController(players: [humanPlayer, botPlayer]);
 
       // Verify the newly drawn card is still marked (until cleared by normal game flow)
-      expect(humanPlayer.isCardIndexNewlyDrawn(2), true);
+      expect(humanPlayer.isCardIndexNewlyDrawn(0), true);
 
       // Clear all as would happen in the initialization
       controller.clearAllNewlyDrawnCards();
 
       // Now it should be cleared
-      expect(humanPlayer.isCardIndexNewlyDrawn(2), false);
+      expect(humanPlayer.isCardIndexNewlyDrawn(0), false);
     });
 
     test('should handle export/import scenario with corrupted newly drawn indices', () {
@@ -237,9 +238,32 @@ void main() {
       humanPlayer.addNewlyDrawnCard(drawnCard1);
       humanPlayer.addNewlyDrawnCard(drawnCard2);
 
-      // Verify cards are marked as newly drawn
-      expect(humanPlayer.isCardIndexNewlyDrawn(2), true); // Four
-      expect(humanPlayer.isCardIndexNewlyDrawn(3), true); // King
+      // After auto-sorting, the hand will be: Four(2), King(11), King(11), Ace(12)
+      // Find which indices have the newly drawn cards
+      int fourIndex = -1;
+      int newKingIndex = -1;
+      for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+        if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+          final card = humanPlayer.currentHand[i];
+          if (card.rank == CardRank.four) {
+            fourIndex = i;
+          } else if (card.rank == CardRank.king && card.suit == Suit.hearts) {
+            newKingIndex = i;
+          }
+        }
+      }
+
+      // Verify cards are marked as newly drawn at their sorted positions
+      expect(
+        fourIndex != -1,
+        true,
+        reason: 'Four should be marked as newly drawn',
+      );
+      expect(
+        newKingIndex != -1,
+        true,
+        reason: 'New King should be marked as newly drawn',
+      );
 
       // Create game controller
       final controller = GameController(players: [humanPlayer, botPlayer]);
@@ -248,13 +272,13 @@ void main() {
       controller.clearAllNewlyDrawnCards();
 
       // All newly drawn highlighting should be cleared
-      expect(humanPlayer.isCardIndexNewlyDrawn(2), false);
-      expect(humanPlayer.isCardIndexNewlyDrawn(3), false);
+      expect(humanPlayer.isCardIndexNewlyDrawn(fourIndex), false);
+      expect(humanPlayer.isCardIndexNewlyDrawn(newKingIndex), false);
 
       // But the cards should still be in hand
       expect(humanPlayer.currentHand.length, 4);
-      expect(humanPlayer.currentHand[2], drawnCard1);
-      expect(humanPlayer.currentHand[3], drawnCard2);
+      expect(humanPlayer.currentHand.contains(drawnCard1), true);
+      expect(humanPlayer.currentHand.contains(drawnCard2), true);
     });
   });
 }

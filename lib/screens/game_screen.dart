@@ -562,7 +562,8 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
-      _sortHand('rank');
+      // Cards are now automatically inserted in sorted position
+      setState(() {}); // Just refresh the UI
     } else {
       // Check if the round ended automatically due to insufficient cards
       if (_gameController.gameState.phase == GamePhase.roundEnd) {
@@ -586,7 +587,8 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onUnlockDiscard() {
     if (_gameController.unlockDiscardPile()) {
-      _sortHand('rank');
+      // Cards are now automatically inserted in sorted position
+      setState(() {}); // Just refresh the UI
     }
   }
 

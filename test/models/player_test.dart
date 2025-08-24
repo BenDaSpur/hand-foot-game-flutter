@@ -587,47 +587,116 @@ void main() {
       );
       player.addNewlyDrawnCard(newQueenOfSpades);
 
-      // Verify hand state
+      // Verify hand state - after auto-sorting: Queen, Queen, King, Ace
       expect(player.currentHand.length, 4);
-      expect(player.currentHand[3], newQueenOfSpades);
 
-      // Check newly drawn status by index
+      // With auto-sorting, the two Queens will be grouped together
+      // Find the index of the newly drawn Queen
+      int newQueenIndex = -1;
+      for (int i = 0; i < player.currentHand.length; i++) {
+        if (identical(player.currentHand[i], newQueenOfSpades)) {
+          newQueenIndex = i;
+          break;
+        }
+      }
       expect(
-        player.isCardIndexNewlyDrawn(0),
-        false,
-      ); // Original Queen - not newly drawn
-      expect(player.isCardIndexNewlyDrawn(1), false); // King - not newly drawn
-      expect(player.isCardIndexNewlyDrawn(2), false); // Ace - not newly drawn
-      expect(player.isCardIndexNewlyDrawn(3), true); // New Queen - newly drawn
+        newQueenIndex != -1,
+        true,
+        reason: 'Should find the newly drawn Queen in hand',
+      );
+
+      // Check newly drawn status - exactly one Queen should be newly drawn
+      int queensFound = 0;
+      int newlyDrawnQueensFound = 0;
+      for (int i = 0; i < player.currentHand.length; i++) {
+        if (player.currentHand[i].rank == CardRank.queen) {
+          queensFound++;
+          if (player.isCardIndexNewlyDrawn(i)) {
+            newlyDrawnQueensFound++;
+          }
+        }
+      }
+      expect(queensFound, 2, reason: 'Should have 2 Queens total');
+      expect(
+        newlyDrawnQueensFound,
+        1,
+        reason: 'Should have exactly 1 newly drawn Queen',
+      );
 
       // Test object-based method works correctly with identical instances
       expect(
-        player.isCardNewlyDrawn(player.currentHand[0]),
-        false,
-      ); // Original Queen
-      expect(player.isCardNewlyDrawn(player.currentHand[3]), true); // New Queen
+        player.isCardNewlyDrawn(newQueenOfSpades),
+        true,
+        reason: 'New Queen should be marked as newly drawn',
+      );
 
-      // Remove the original Queen (index 0) - should shift indices
-      final removedCard = player.removeCardFromHand(player.currentHand[0]);
+      // The original Queen should not be newly drawn
+      bool foundOriginalQueen = false;
+      for (int i = 0; i < player.currentHand.length; i++) {
+        if (player.currentHand[i].rank == CardRank.queen &&
+            !identical(player.currentHand[i], newQueenOfSpades)) {
+          foundOriginalQueen = true;
+          expect(
+            player.isCardNewlyDrawn(player.currentHand[i]),
+            false,
+            reason: 'Original Queen should not be marked as newly drawn',
+          );
+          break;
+        }
+      }
+      expect(
+        foundOriginalQueen,
+        true,
+        reason: 'Should find the original Queen',
+      );
+
+      // Remove one of the Queens - find which one was removed
+      final cardToRemove =
+          player.currentHand.first; // Should be a Queen after sorting
+      expect(
+        cardToRemove.rank,
+        CardRank.queen,
+        reason: 'First card should be a Queen after sorting',
+      );
+
+      final removedCard = player.removeCardFromHand(cardToRemove);
       expect(removedCard, isNotNull);
 
-      // Verify indices shifted correctly after removal
+      // Verify removal worked correctly
       expect(player.currentHand.length, 3);
+
+      // Check that exactly one Queen remains and it should be the newly drawn one
+      int remainingQueens = 0;
+      bool newQueenStillNewlyDrawn = false;
+
+      for (int i = 0; i < player.currentHand.length; i++) {
+        if (player.currentHand[i].rank == CardRank.queen) {
+          remainingQueens++;
+          if (identical(player.currentHand[i], newQueenOfSpades) &&
+              player.isCardIndexNewlyDrawn(i)) {
+            newQueenStillNewlyDrawn = true;
+          }
+        }
+      }
+
+      expect(remainingQueens, 1, reason: 'Should have 1 Queen remaining');
       expect(
-        player.isCardIndexNewlyDrawn(2),
+        newQueenStillNewlyDrawn,
         true,
-      ); // New Queen shifted from index 3 to 2
-      expect(
-        player.isCardIndexNewlyDrawn(3),
-        false,
-      ); // Index 3 no longer exists
+        reason: 'Newly drawn Queen should still be marked as newly drawn',
+      );
 
       // Clear newly drawn cards
       player.clearNewlyDrawnCards();
-      expect(
-        player.isCardIndexNewlyDrawn(2),
-        false,
-      ); // No longer marked as newly drawn
+
+      // Verify all cards are no longer marked as newly drawn
+      for (int i = 0; i < player.currentHand.length; i++) {
+        expect(
+          player.isCardIndexNewlyDrawn(i),
+          false,
+          reason: 'No cards should be marked as newly drawn after clearing',
+        );
+      }
     });
 
     test('should count all unplayed cards as negative when round ends', () {

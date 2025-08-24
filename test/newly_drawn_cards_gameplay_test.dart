@@ -40,24 +40,21 @@ void main() {
         final expectedHandSize = 11 + GameState.requiredDrawCount;
         expect(humanPlayer.currentHand.length, expectedHandSize);
 
-        // The last drawn cards should be marked as newly drawn
-        for (int i = 11; i < expectedHandSize; i++) {
-          expect(
-            humanPlayer.isCardIndexNewlyDrawn(i),
-            true,
-            reason:
-                'Card at index $i should be highlighted as newly drawn after drawing from deck',
-          );
+        // With auto-sorting, newly drawn cards can be anywhere in the hand
+        // Count the total highlighted cards instead of checking specific indices
+        int highlightedCount = 0;
+        for (int i = 0; i < expectedHandSize; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
         }
 
-        // But the original cards should still not be highlighted
-        for (int i = 0; i < 11; i++) {
-          expect(
-            humanPlayer.isCardIndexNewlyDrawn(i),
-            false,
-            reason: 'Original card at index $i should not be highlighted',
-          );
-        }
+        expect(
+          highlightedCount,
+          GameState.requiredDrawCount,
+          reason:
+              'Should have exactly ${GameState.requiredDrawCount} cards highlighted as newly drawn',
+        );
       },
     );
 
@@ -90,31 +87,65 @@ void main() {
         humanPlayer.addNewlyDrawnCard(drawnCard1);
         humanPlayer.addNewlyDrawnCard(drawnCard2);
 
-        // Verify the cards are marked as newly drawn
-        expect(humanPlayer.isCardIndexNewlyDrawn(2), true); // Joker
-        expect(humanPlayer.isCardIndexNewlyDrawn(3), true); // Eight
-        expect(humanPlayer.isCardIndexNewlyDrawn(0), false); // Original ace
-        expect(humanPlayer.isCardIndexNewlyDrawn(1), false); // Original king
+        // With auto-sorting, the cards will be reordered: Eight(7), King(11), Ace(12), Joker(14)
+        // Find the highlighted cards instead of checking specific indices
+        int highlightedCount = 0;
+        final highlightedCards = <PlayingCard>[];
+        for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+            highlightedCards.add(humanPlayer.currentHand[i]);
+          }
+        }
+
+        expect(
+          highlightedCount,
+          2,
+          reason: 'Should have 2 newly drawn cards highlighted',
+        );
+        expect(
+          highlightedCards.any((c) => c.rank == CardRank.joker),
+          true,
+          reason: 'Joker should be highlighted',
+        );
+        expect(
+          highlightedCards.any((c) => c.rank == CardRank.eight),
+          true,
+          reason: 'Eight should be highlighted',
+        );
 
         // Creating a game controller should NOT clear these valid newly drawn cards
         // (This simulates the normal game flow, not a save/restore scenario)
         final controller = GameController(players: [humanPlayer, botPlayer]);
 
         // The newly drawn cards should still be marked
+        highlightedCount = 0;
+        for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
+        }
         expect(
-          humanPlayer.isCardIndexNewlyDrawn(2),
-          true,
-        ); // Joker still highlighted
-        expect(
-          humanPlayer.isCardIndexNewlyDrawn(3),
-          true,
-        ); // Eight still highlighted
+          highlightedCount,
+          2,
+          reason:
+              'Should still have 2 cards highlighted after controller creation',
+        );
 
         // Only when we explicitly clear (like in save/restore scenarios) should they be cleared
         controller.clearAllNewlyDrawnCards();
 
-        expect(humanPlayer.isCardIndexNewlyDrawn(2), false); // Now cleared
-        expect(humanPlayer.isCardIndexNewlyDrawn(3), false); // Now cleared
+        highlightedCount = 0;
+        for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+          if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+            highlightedCount++;
+          }
+        }
+        expect(
+          highlightedCount,
+          0,
+          reason: 'All highlighting should be cleared after explicit clear',
+        );
       },
     );
   });

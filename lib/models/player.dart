@@ -60,6 +60,8 @@ class Player {
     final newIndex = currentHand.length;
     currentHand.add(card);
     newlyDrawnCardIndices.add(newIndex);
+    // Auto-sort the hand after adding the card
+    sortHandByRank();
   }
 
   void addNewlyDrawnCards(List<PlayingCard> cards) {
@@ -68,6 +70,8 @@ class Player {
     for (int i = 0; i < cards.length; i++) {
       newlyDrawnCardIndices.add(startIndex + i);
     }
+    // Auto-sort the hand after adding all cards
+    sortHandByRank();
   }
 
   void clearNewlyDrawnCards() {
@@ -396,7 +400,7 @@ class Player {
     }
 
     // Step 1: Remember which cards are newly drawn (by object reference)
-    final newlyDrawnCards = <PlayingCard>{};
+    final newlyDrawnCards = <PlayingCard>[];
     for (final index in newlyDrawnCardIndices) {
       if (index < currentHand.length) {
         newlyDrawnCards.add(currentHand[index]);
@@ -409,10 +413,14 @@ class Player {
     // Step 3: Find the new indices of the newly drawn cards and update tracking
     newlyDrawnCardIndices.clear();
     for (int i = 0; i < currentHand.length; i++) {
-      if (newlyDrawnCards.contains(currentHand[i])) {
-        newlyDrawnCardIndices.add(i);
-        // Remove from set to handle duplicates correctly
-        newlyDrawnCards.remove(currentHand[i]);
+      // Use object identity to find the exact card instances
+      for (int j = 0; j < newlyDrawnCards.length; j++) {
+        if (identical(currentHand[i], newlyDrawnCards[j])) {
+          newlyDrawnCardIndices.add(i);
+          // Remove this card from the list to handle duplicates correctly
+          newlyDrawnCards.removeAt(j);
+          break;
+        }
       }
     }
   }

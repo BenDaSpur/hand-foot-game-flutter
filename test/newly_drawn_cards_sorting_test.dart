@@ -6,86 +6,87 @@ import 'package:hand_foot_game_flutter/game/game_controller.dart';
 
 void main() {
   group('Newly Drawn Cards with Sorting', () {
-    test('should preserve newly drawn card highlighting after sorting by rank', () {
-      // Create a player with specific cards in hand
-      final humanPlayer = Player(
-        id: '1',
-        name: 'Human',
-        type: PlayerType.human,
-      );
+    test(
+      'should preserve newly drawn card highlighting after sorting by rank',
+      () {
+        // Create a player with specific cards in hand
+        final humanPlayer = Player(
+          id: '1',
+          name: 'Human',
+          type: PlayerType.human,
+        );
 
-      // Add initial cards in a specific order
-      humanPlayer.hand.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king), // Index 0
-        const PlayingCard(suit: Suit.spades, rank: CardRank.ace), // Index 1
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.four), // Index 2
-      ]);
+        // Add initial cards and sort them (simulating game initialization)
+        humanPlayer.hand.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        ]);
+        humanPlayer.sortHandByRank(); // Sort initial hand
 
-      // Draw new cards that will move when sorted
-      final drawnCard1 = const PlayingCard(
-        suit: Suit.diamonds,
-        rank: CardRank.two,
-      ); // Will move to beginning
-      final drawnCard2 = const PlayingCard(
-        suit: Suit.hearts,
-        rank: CardRank.queen,
-      ); // Will move to middle
+        // Draw new cards that will automatically sort the hand
+        final drawnCard1 = const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.two,
+        ); // Wild card
+        final drawnCard2 = const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.queen,
+        ); // Regular card
 
-      humanPlayer.addNewlyDrawnCard(drawnCard1); // Should be index 3
-      humanPlayer.addNewlyDrawnCard(drawnCard2); // Should be index 4
+        // Verify initial state before drawing
+        expect(humanPlayer.isCardIndexNewlyDrawn(0), false);
+        expect(humanPlayer.isCardIndexNewlyDrawn(1), false);
+        expect(humanPlayer.isCardIndexNewlyDrawn(2), false);
 
-      // Verify initial state
-      expect(humanPlayer.isCardIndexNewlyDrawn(3), true); // Two
-      expect(humanPlayer.isCardIndexNewlyDrawn(4), true); // Queen
-      expect(
-        humanPlayer.isCardIndexNewlyDrawn(0),
-        false,
-      ); // King (not newly drawn)
+        humanPlayer.addNewlyDrawnCard(drawnCard1); // Adds and auto-sorts
+        humanPlayer.addNewlyDrawnCard(drawnCard2); // Adds and auto-sorts
 
-      // Sort by rank - this will rearrange cards using new display order
-      // Expected order after sort: Four(2), Queen(10), King(11), Ace(12), Two(13)
-      humanPlayer.sortHandByRank();
+        // After both cards are drawn, the hand should be automatically sorted:
+        // Four(2), Queen(10), King(11), Ace(12), Two(13)
 
-      // Verify the cards are in the expected positions after sorting
-      expect(humanPlayer.currentHand[0].rank, CardRank.four); // Four first
-      expect(humanPlayer.currentHand[1].rank, CardRank.queen); // Queen
-      expect(humanPlayer.currentHand[2].rank, CardRank.king); // King
-      expect(humanPlayer.currentHand[3].rank, CardRank.ace); // Ace
-      expect(
-        humanPlayer.currentHand[4].rank,
-        CardRank.two,
-      ); // Two moved to end (wild card)
+        // Verify the cards are in the expected positions after sorting
+        expect(humanPlayer.currentHand[0].rank, CardRank.four); // Four first
+        expect(humanPlayer.currentHand[1].rank, CardRank.queen); // Queen
+        expect(humanPlayer.currentHand[2].rank, CardRank.king); // King
+        expect(humanPlayer.currentHand[3].rank, CardRank.ace); // Ace
+        expect(
+          humanPlayer.currentHand[4].rank,
+          CardRank.two,
+        ); // Two moved to end (wild card)
 
-      // IMPORTANT: The newly drawn cards should still be highlighted at their new positions
-      expect(
-        humanPlayer.isCardIndexNewlyDrawn(4),
-        true,
-        reason: 'Two should still be highlighted at its new position (index 4)',
-      );
-      expect(
-        humanPlayer.isCardIndexNewlyDrawn(1),
-        true,
-        reason:
-            'Queen should still be highlighted at its new position (index 1)',
-      );
+        // IMPORTANT: The newly drawn cards should still be highlighted at their new positions
+        expect(
+          humanPlayer.isCardIndexNewlyDrawn(4),
+          true,
+          reason:
+              'Two should still be highlighted at its new position (index 4)',
+        );
+        expect(
+          humanPlayer.isCardIndexNewlyDrawn(1),
+          true,
+          reason:
+              'Queen should still be highlighted at its new position (index 1)',
+        );
 
-      // The original cards should not be highlighted
-      expect(
-        humanPlayer.isCardIndexNewlyDrawn(0),
-        false,
-        reason: 'Four should not be highlighted (was not newly drawn)',
-      );
-      expect(
-        humanPlayer.isCardIndexNewlyDrawn(2),
-        false,
-        reason: 'King should not be highlighted (was not newly drawn)',
-      );
-      expect(
-        humanPlayer.isCardIndexNewlyDrawn(3),
-        false,
-        reason: 'Ace should not be highlighted (was not newly drawn)',
-      );
-    });
+        // The original cards should not be highlighted
+        expect(
+          humanPlayer.isCardIndexNewlyDrawn(0),
+          false,
+          reason: 'Four should not be highlighted (was not newly drawn)',
+        );
+        expect(
+          humanPlayer.isCardIndexNewlyDrawn(2),
+          false,
+          reason: 'King should not be highlighted (was not newly drawn)',
+        );
+        expect(
+          humanPlayer.isCardIndexNewlyDrawn(3),
+          false,
+          reason: 'Ace should not be highlighted (was not newly drawn)',
+        );
+      },
+    );
 
     test('should handle duplicate cards correctly when sorting', () {
       final humanPlayer = Player(
