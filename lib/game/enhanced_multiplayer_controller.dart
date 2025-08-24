@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -21,6 +22,11 @@ class EnhancedMultiplayerController {
   final bool _isHost;
   bool _isOnline = true;
   Timer? _reconnectionTimer;
+
+  // Race condition protection for network operations
+  bool _isNetworkOperationInProgress = false;
+  final Queue<Future<void> Function()> _networkOperationQueue =
+      Queue<Future<void> Function()>();
 
   // Reactive state management
   final StreamController<GameState> _stateStreamController =
@@ -269,17 +275,58 @@ class EnhancedMultiplayerController {
     }
   }
 
+  /// Queues network operations to prevent race conditions
+  /// All network operations should go through this method for thread safety
+  Future<void> _queueNetworkOperation(Future<void> Function() operation) async {
+    final completer = Completer<void>();
+
+    _networkOperationQueue.add(() async {
+      try {
+        await operation();
+        completer.complete();
+      } catch (error) {
+        completer.completeError(error);
+      }
+    });
+
+    _processNetworkQueue();
+    return completer.future;
+  }
+
+  /// Processes the network operation queue serially to prevent race conditions
+  void _processNetworkQueue() async {
+    if (_isNetworkOperationInProgress || _networkOperationQueue.isEmpty) {
+      return;
+    }
+
+    _isNetworkOperationInProgress = true;
+
+    while (_networkOperationQueue.isNotEmpty) {
+      final operation = _networkOperationQueue.removeFirst();
+      try {
+        await operation();
+      } catch (e) {
+        // Log error but continue processing queue
+        // Individual operations handle their own error reporting
+      }
+    }
+
+    _isNetworkOperationInProgress = false;
+  }
+
   Future<void> _syncGameState() async {
     if (_isUpdating) return;
 
-    _isUpdating = true;
-    try {
-      await _networkAdapter.syncGameState(gameId, _gameController.gameState);
-    } catch (e) {
-      // Log sync error
-    } finally {
-      _isUpdating = false;
-    }
+    return _queueNetworkOperation(() async {
+      _isUpdating = true;
+      try {
+        await _networkAdapter.syncGameState(gameId, _gameController.gameState);
+      } catch (e) {
+        // Log sync error - individual network operations handle their own errors
+      } finally {
+        _isUpdating = false;
+      }
+    });
   }
 
   void _notifyStateChanged() {
