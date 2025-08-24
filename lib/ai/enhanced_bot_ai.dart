@@ -2,8 +2,10 @@ import 'dart:math';
 
 import '../models/player.dart';
 import '../models/card.dart';
+import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
+import '../config/game_config.dart';
 import 'bot_decision.dart';
 import 'bot_personality.dart';
 import 'bot_game_analyzer.dart';
@@ -27,9 +29,8 @@ class EnhancedBotAI {
   // Random number generator for decision variability
   final Random _random;
 
-  // Multi-meld play-down state tracking
+  // Multi-meld play-down state tracking (legacy - now disabled)
   List<List<PlayingCard>>? _plannedMelds;
-  int _currentMeldIndex = 0;
   bool _inMultiMeldSequence = false;
 
   // Strategic constants
@@ -78,9 +79,10 @@ class EnhancedBotAI {
   BotDecision _makeDrawDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
-    // If continuing multi-meld sequence, no draw needed
+    // If continuing multi-meld sequence, draw from deck to proceed to meld phase
+    // Multi-meld sequence should continue in meld phase, not skip drawing
     if (_inMultiMeldSequence) {
-      return BotDecision(action: 'skipDraw');
+      return BotDecision(action: 'drawFromDeck');
     }
 
     // Evaluate discard pile opportunity
@@ -101,9 +103,11 @@ class EnhancedBotAI {
 
   /// Handle meld phase decisions
   BotDecision _makeMeldDecision(Player bot, GameController controller) {
-    // Handle multi-meld sequence continuation
-    if (_inMultiMeldSequence && _plannedMelds != null) {
-      return _continueMultiMeldSequence();
+    // Multi-meld sequences should happen within a single turn, not across turns
+    // Clear any stale multi-meld state that violates Hand & Foot rules
+    if (_inMultiMeldSequence) {
+      _plannedMelds = null;
+      _inMultiMeldSequence = false;
     }
 
     // Check for end game decisions first (highest priority)
@@ -126,7 +130,18 @@ class EnhancedBotAI {
       return _handlePlayDownDecision(bot, controller);
     }
 
-    // Look for meld opportunities
+    // Post-play-down strategy: Use accumulate-and-dump approach
+    // Hold cards strategically for better discard pile unlocking opportunities
+    if (_shouldHoldCardsStrategically(bot, controller)) {
+      return BotDecision(action: 'noMeld');
+    }
+
+    // If ready to dump everything, execute all possible melds
+    if (_shouldExecuteDumpStrategy(bot, controller)) {
+      return _executeDumpStrategy(bot, controller);
+    }
+
+    // Look for meld opportunities (fallback for conservative play)
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -228,10 +243,8 @@ class EnhancedBotAI {
   /// Execute a play-down sequence (single or multi-meld)
   BotDecision _executePlayDown(List<List<PlayingCard>> melds) {
     if (melds.length > 1) {
-      // Set up multi-meld sequence
-      _plannedMelds = List.from(melds);
-      _currentMeldIndex = 1;
-      _inMultiMeldSequence = true;
+      // Multi-meld initial play-down: return first meld with skip flag
+      // This is legitimate for initial play-down within a single turn
       return BotDecision(
         action: 'createMeld',
         data: melds.first,
@@ -241,31 +254,6 @@ class EnhancedBotAI {
       // Single meld play-down
       return BotDecision(action: 'createMeld', data: melds.first);
     }
-  }
-
-  /// Continue multi-meld sequence
-  BotDecision _continueMultiMeldSequence() {
-    if (_plannedMelds == null || _currentMeldIndex >= _plannedMelds!.length) {
-      _inMultiMeldSequence = false;
-      _plannedMelds = null;
-      _currentMeldIndex = 0;
-      return BotDecision(action: 'noMeld');
-    }
-
-    final nextMeld = _plannedMelds![_currentMeldIndex];
-    _currentMeldIndex++;
-
-    if (_currentMeldIndex >= _plannedMelds!.length) {
-      _inMultiMeldSequence = false;
-      _plannedMelds = null;
-      _currentMeldIndex = 0;
-    }
-
-    return BotDecision(
-      action: 'createMeld',
-      data: nextMeld,
-      skipPlayDownCheck: true,
-    );
   }
 
   /// Check if bot should take the discard pile
@@ -392,6 +380,245 @@ class EnhancedBotAI {
     return _selectRandomly(bestCards);
   }
 
+  /// Strategic holding decision: Should bot hold cards instead of melding immediately?
+  /// This implements the superior "accumulate-and-dump" strategy for better discard pile unlocking
+  /// Enhanced with personality-based holding tolerance and time-based pressure
+  bool _shouldHoldCardsStrategically(Player bot, GameController controller) {
+    final gameState = controller.gameState;
+    final handSize = bot.currentHand.length;
+    final turnCount = _gameAnalyzer.getTurnCount(bot.id);
+    final personality = _personalityManager.getPersonality(bot.id);
+
+    // Calculate time-based pressure: worry more the longer we've been in hand without reaching foot
+    final timePressure = _calculateTimePressure(bot, turnCount, personality);
+    final personalityHoldingLimit = _getPersonalityHoldingLimit(
+      personality,
+      timePressure,
+    );
+
+    // Don't hold if hand exceeds personality-based limit (adjusted for time pressure)
+    if (handSize >= personalityHoldingLimit) return false;
+
+    // Don't hold if opponents are close to going out (competitive pressure)
+    _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
+    final opponentAnalysis = _gameAnalyzer.opponentAnalysis;
+    for (final analysis in opponentAnalysis.values) {
+      if (analysis.handSize <= 3) return false; // Opponent close to going out
+    }
+
+    // Hold cards if we have good discard pile unlocking potential
+    final unlockPotential = _calculateDiscardPileUnlockPotential(
+      bot,
+      gameState,
+    );
+
+    // Hold if we have decent hand size for unlocking opportunities
+    // More cards = more potential matches for discard pile
+    if (handSize >= 8 && unlockPotential >= 2) return true;
+
+    // Hold based on round requirements - higher rounds need more accumulation
+    final playDownRequirement = gameState.playDownRequirement;
+    if (_shouldHoldForRoundRequirement(
+      bot,
+      controller,
+      playDownRequirement,
+      handSize,
+    )) {
+      return true;
+    }
+
+    // Strategic book completion: hold if we can complete books in later rounds
+    if (_shouldHoldForBookCompletion(bot, gameState, personality)) {
+      return true;
+    }
+
+    // Hold if we can potentially dump everything soon
+    final dumpPotential = _calculateDumpPotential(bot, controller);
+    if (dumpPotential >= 0.7) return true; // Can dump 70%+ of hand
+
+    return false;
+  }
+
+  /// Should execute dump strategy: meld everything and go to foot
+  bool _shouldExecuteDumpStrategy(Player bot, GameController controller) {
+    final gameState = controller.gameState;
+    final handSize = bot.currentHand.length;
+    final playDownRequirement = gameState.playDownRequirement;
+
+    // For initial play-down: check if we have enough meld potential for the round requirement
+    if (!bot.hasPlayedDown) {
+      final currentMeldPoints = _calculateCurrentMeldPotential(bot, controller);
+      // Only dump if we can meet the round requirement
+      if (currentMeldPoints >= playDownRequirement) return true;
+      return false; // Keep accumulating if we can't meet the requirement
+    }
+
+    // Post-play-down: Execute if we can dump most of our hand
+    final dumpPotential = _calculateDumpPotential(bot, controller);
+    if (dumpPotential >= 0.8 && handSize >= 5) return true; // Can dump 80%+
+
+    // Execute if hand is getting dangerously large
+    if (handSize >= 15) return true;
+
+    // Execute if we can go directly to foot
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+    final totalMeldableCards =
+        possibleMelds.fold<int>(0, (sum, meld) => sum + meld.length) +
+        cardsToAdd.length;
+
+    if (totalMeldableCards >= handSize - 1)
+      return true; // Can meld all but 1 card
+
+    return false;
+  }
+
+  /// Execute dump strategy: create all possible melds in this turn
+  BotDecision _executeDumpStrategy(Player bot, GameController controller) {
+    // Priority 1: Add to existing melds first (highest efficiency)
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    // Priority 2: Create the largest possible new meld
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    if (possibleMelds.isNotEmpty) {
+      // Sort by size descending to get maximum impact
+      possibleMelds.sort((a, b) => b.length.compareTo(a.length));
+      return BotDecision(action: 'createMeld', data: possibleMelds.first);
+    }
+
+    return BotDecision(action: 'noMeld');
+  }
+
+  /// Calculate potential for unlocking discard pile based on hand composition
+  int _calculateDiscardPileUnlockPotential(Player bot, GameState gameState) {
+    if (gameState.discardPile.isEmpty) return 0;
+
+    final topCard = gameState.discardPile.last;
+    final hand = bot.currentHand;
+
+    // Count potential matching cards for unlocking
+    int potential = 0;
+    final rankCounts = <CardRank, int>{};
+
+    for (final card in hand) {
+      if (!card.isWild && !card.isThree) {
+        rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+      }
+    }
+
+    // Check if we can unlock with the top card
+    if (!topCard.isWild && !topCard.isThree) {
+      final matchingCards = rankCounts[topCard.rank] ?? 0;
+      if (matchingCards >= 2) potential++; // Can unlock
+
+      // Bonus for each additional matching card (more flexible unlocking)
+      potential += (matchingCards - 2).clamp(0, 3);
+    }
+
+    // General unlock potential (pairs that could match future discards)
+    for (final count in rankCounts.values) {
+      if (count >= 2) potential++; // Each pair increases unlock potential
+    }
+
+    return potential;
+  }
+
+  /// Calculate what percentage of hand can be melded (0.0 to 1.0)
+  double _calculateDumpPotential(Player bot, GameController controller) {
+    final handSize = bot.currentHand.length;
+    if (handSize == 0) return 1.0;
+
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+
+    final meldableCards =
+        possibleMelds.fold<int>(0, (sum, meld) => sum + meld.length) +
+        cardsToAdd.length;
+
+    return (meldableCards / handSize).clamp(0.0, 1.0);
+  }
+
+  /// Determine if we should hold cards based on round play-down requirements
+  bool _shouldHoldForRoundRequirement(
+    Player bot,
+    GameController controller,
+    int requirement,
+    int handSize,
+  ) {
+    // Calculate current meld potential points
+    final currentMeldPoints = _calculateCurrentMeldPotential(bot, controller);
+
+    // Round-specific holding strategy
+    if (requirement <= 60) {
+      // Round 1: 60 points - can often be done with 1 good meld
+      // Hold if we're close but not quite there
+      return currentMeldPoints >= 40 && currentMeldPoints < 60 && handSize >= 7;
+    } else if (requirement <= 90) {
+      // Round 2: 90 points - usually needs 2 melds
+      // Hold more aggressively to get multiple meld opportunities
+      return currentMeldPoints >= 50 && currentMeldPoints < 90 && handSize >= 9;
+    } else if (requirement <= 120) {
+      // Round 3: 120 points - definitely needs multiple melds
+      // Hold even more cards for better combinations
+      return currentMeldPoints >= 70 &&
+          currentMeldPoints < 120 &&
+          handSize >= 11;
+    } else {
+      // Round 4+: 150+ points - requires significant accumulation
+      // Must hold many cards to have enough meld opportunities
+      return currentMeldPoints >= 90 &&
+          currentMeldPoints < requirement &&
+          handSize >= 13;
+    }
+  }
+
+  /// Calculate total points from all possible melds we could make right now
+  int _calculateCurrentMeldPotential(Player bot, GameController controller) {
+    int totalPoints = 0;
+
+    // Points from cards we could add to existing melds
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+    for (final addition in cardsToAdd) {
+      final card = addition['card'] as PlayingCard;
+      totalPoints += card.pointValue;
+    }
+
+    // Points from new melds we could create
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    for (final meld in possibleMelds) {
+      int meldValue = 0;
+      for (final card in meld) {
+        meldValue += card.pointValue;
+      }
+      // Add book bonus if meld is large enough
+      if (meld.length >= GameConfig.bookSize) {
+        // Estimate if it would be clean or dirty (simplified)
+        final hasWilds = meld.any((card) => card.isWild);
+        meldValue += hasWilds
+            ? GameConfig.dirtyBookBonus
+            : GameConfig.cleanBookBonus;
+      }
+      totalPoints += meldValue;
+    }
+
+    return totalPoints;
+  }
+
   /// Assign personalities to bot players
   void assignPersonality(String playerId, BotPersonality personality) {
     _personalityManager.assignPersonality(playerId, personality);
@@ -408,7 +635,6 @@ class EnhancedBotAI {
     _gameAnalyzer.clearAnalysisData();
     _meldAnalyzer.clearCache();
     _plannedMelds = null;
-    _currentMeldIndex = 0;
     _inMultiMeldSequence = false;
   }
 
@@ -422,6 +648,103 @@ class EnhancedBotAI {
       return options.first;
     }
     return options[_random.nextInt(options.length)];
+  }
+
+  /// Calculate time-based pressure: how worried should bot be about still being in hand
+  double _calculateTimePressure(
+    Player bot,
+    int turnCount,
+    BotPersonality personality,
+  ) {
+    // Base pressure increases linearly with turns
+    double basePressure = turnCount / 10.0; // Moderate pressure after 10 turns
+
+    // Personality modifiers
+    switch (personality) {
+      case BotPersonality.conservative:
+        return basePressure * 0.7; // Less worried, can hold longer
+      case BotPersonality.aggressive:
+        return basePressure * 1.3; // More worried, wants to transition sooner
+      case BotPersonality.bookBuilder:
+        return basePressure * 0.8; // Slightly less worried, focused on books
+      case BotPersonality.adaptive:
+        return basePressure * 1.0; // Standard pressure
+    }
+  }
+
+  /// Get personality-based hand size limit, adjusted for time pressure
+  int _getPersonalityHoldingLimit(
+    BotPersonality personality,
+    double timePressure,
+  ) {
+    int baseLimit;
+
+    switch (personality) {
+      case BotPersonality.conservative:
+        baseLimit = 18; // Can hold more cards
+        break;
+      case BotPersonality.aggressive:
+        baseLimit = 14; // Holds fewer cards
+        break;
+      case BotPersonality.bookBuilder:
+        baseLimit = 16; // Moderate holding for book building
+        break;
+      case BotPersonality.adaptive:
+        baseLimit = 16; // Standard holding
+        break;
+    }
+
+    // Reduce limit based on time pressure
+    final pressureReduction = (timePressure * 4)
+        .round(); // Up to 4 card reduction
+    return (baseLimit - pressureReduction).clamp(12, baseLimit);
+  }
+
+  /// Should hold cards to complete books in later rounds as defensive strategy
+  bool _shouldHoldForBookCompletion(
+    Player bot,
+    GameState gameState,
+    BotPersonality personality,
+  ) {
+    // Only relevant in later rounds (3+) when someone might go out soon
+    if (gameState.round < 3) return false;
+
+    // BookBuilder personality is most likely to use this strategy
+    if (personality != BotPersonality.bookBuilder &&
+        _random.nextDouble() > 0.3) {
+      return false; // 30% chance for other personalities
+    }
+
+    // Check if we have potential for completing books
+    final nearCompleteBooks = _findNearCompleteBooks(bot);
+    if (nearCompleteBooks.isEmpty) return false;
+
+    // Hold if we can complete books and opponents might be close to going out
+    _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
+    final opponentAnalysis = _gameAnalyzer.opponentAnalysis;
+
+    // If any opponent has small hand, prioritize completing books defensively
+    for (final analysis in opponentAnalysis.values) {
+      if (analysis.handSize <= 5) {
+        return nearCompleteBooks.isNotEmpty; // Complete at least one book
+      }
+    }
+
+    return false;
+  }
+
+  /// Find melds that are close to becoming books (6 cards, need 1 more)
+  List<Meld> _findNearCompleteBooks(Player bot) {
+    final nearCompleteBooks = <Meld>[];
+
+    for (final meld in bot.melds) {
+      if (meld.cards.length == 6) {
+        // One card away from book
+        nearCompleteBooks.add(meld);
+      }
+    }
+
+    return nearCompleteBooks;
   }
 
   // Getters for testing and debugging
