@@ -47,6 +47,7 @@ class _GameScreenState extends State<GameScreen> {
   bool _statusExpanded = false;
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
+  bool _botTurnScheduled = false; // Prevent multiple bot turn callbacks
 
   @override
   void initState() {
@@ -150,6 +151,35 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  /// Schedule bot turn continuation after draw/meld actions
+  ///
+  /// This addresses the critical issue where bot turns require multiple sequential
+  /// decisions (draw → meld → discard) but the original code only processed one
+  /// decision per turn, causing bots to freeze mid-turn.
+  ///
+  /// Features:
+  /// - Race condition protection via _botTurnScheduled flag
+  /// - Widget disposal safety checks (prevents crashes if widget is disposed)
+  /// - Uses addPostFrameCallback for proper Flutter lifecycle integration
+  /// - Only continues if bot is still current player in meld phase
+  void _scheduleBotTurnContinuation() {
+    // Prevent multiple callbacks and check widget state
+    if (_botTurnScheduled || _disposed || !mounted) return;
+
+    // Only continue if bot is still current player and in meld phase
+    if (_gameController.gameState.currentPlayer.type == PlayerType.bot &&
+        _gameController.gameState.turnPhase == TurnPhase.meld) {
+      _botTurnScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _botTurnScheduled = false;
+        // Double-check widget state before processing
+        if (!_disposed && mounted) {
+          _processBotTurn();
+        }
+      });
+    }
+  }
+
   Future<void> _checkAndHandleRoundEnd() async {
     if (_gameController.gameState.phase == GamePhase.roundEnd) {
       await Future.delayed(
@@ -190,9 +220,15 @@ class _GameScreenState extends State<GameScreen> {
       switch (decision.action) {
         case 'drawFromDeck':
           _gameController.drawFromDeck();
+          // CRITICAL FIX: Continue bot turn immediately after drawing
+          // Drawing advances phase to meld - bot needs to make meld decision
+          _scheduleBotTurnContinuation();
           break;
         case 'drawFromDiscard':
           _gameController.drawFromDiscardPile();
+          // CRITICAL FIX: Continue bot turn immediately after drawing
+          // Drawing advances phase to meld - bot needs to make meld decision
+          _scheduleBotTurnContinuation();
           break;
         case 'createMeld':
           final cards = decision.data as List<PlayingCard>;
@@ -202,10 +238,16 @@ class _GameScreenState extends State<GameScreen> {
           } else {
             _gameController.createMeld(cards);
           }
+          // POTENTIAL FIX: Continue bot turn if still in meld phase after melding
+          // Some meld actions don't advance to discard phase automatically
+          _scheduleBotTurnContinuation();
           break;
         case 'addToMeld':
           final data = decision.data as Map<String, dynamic>;
           _gameController.addCardToMeld(data['meldIndex'], data['card']);
+          // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
+          // Some add-to-meld actions don't advance to discard phase automatically
+          _scheduleBotTurnContinuation();
           break;
         case 'discard':
           final card = decision.data as PlayingCard;
