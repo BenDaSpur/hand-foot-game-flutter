@@ -131,12 +131,18 @@ class MeldWidget extends StatelessWidget {
             Wrap(
               spacing: 4,
               runSpacing: 4,
-              children: meld.cards
-                  .map(
-                    (card) =>
-                        PlayingCardWidget(card: card, width: 40, height: 56),
-                  )
-                  .toList(),
+              children: () {
+                final sortedCards = [...meld.cards];
+                sortedCards.sort(
+                  (a, b) => a.displayOrder.compareTo(b.displayOrder),
+                );
+                return sortedCards
+                    .map(
+                      (card) =>
+                          PlayingCardWidget(card: card, width: 40, height: 56),
+                    )
+                    .toList();
+              }(),
             ),
           ],
         ),

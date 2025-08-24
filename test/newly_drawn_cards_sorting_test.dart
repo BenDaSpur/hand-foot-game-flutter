@@ -42,49 +42,46 @@ void main() {
         false,
       ); // King (not newly drawn)
 
-      // Sort by rank - this will rearrange cards
-      // Expected order after sort: Two(2), Four(4), Queen(12), King(13), Ace(14)
+      // Sort by rank - this will rearrange cards using new display order
+      // Expected order after sort: Four(2), Queen(10), King(11), Ace(12), Two(13)
       humanPlayer.sortHandByRank();
 
       // Verify the cards are in the expected positions after sorting
+      expect(humanPlayer.currentHand[0].rank, CardRank.four); // Four first
+      expect(humanPlayer.currentHand[1].rank, CardRank.queen); // Queen
+      expect(humanPlayer.currentHand[2].rank, CardRank.king); // King
+      expect(humanPlayer.currentHand[3].rank, CardRank.ace); // Ace
       expect(
-        humanPlayer.currentHand[0].rank,
+        humanPlayer.currentHand[4].rank,
         CardRank.two,
-      ); // Two moved to beginning
-      expect(humanPlayer.currentHand[1].rank, CardRank.four); // Four
-      expect(
-        humanPlayer.currentHand[2].rank,
-        CardRank.queen,
-      ); // Queen moved to middle
-      expect(humanPlayer.currentHand[3].rank, CardRank.king); // King
-      expect(humanPlayer.currentHand[4].rank, CardRank.ace); // Ace moved to end
+      ); // Two moved to end (wild card)
 
       // IMPORTANT: The newly drawn cards should still be highlighted at their new positions
       expect(
-        humanPlayer.isCardIndexNewlyDrawn(0),
+        humanPlayer.isCardIndexNewlyDrawn(4),
         true,
-        reason: 'Two should still be highlighted at its new position (index 0)',
+        reason: 'Two should still be highlighted at its new position (index 4)',
       );
       expect(
-        humanPlayer.isCardIndexNewlyDrawn(2),
+        humanPlayer.isCardIndexNewlyDrawn(1),
         true,
         reason:
-            'Queen should still be highlighted at its new position (index 2)',
+            'Queen should still be highlighted at its new position (index 1)',
       );
 
       // The original cards should not be highlighted
       expect(
-        humanPlayer.isCardIndexNewlyDrawn(1),
+        humanPlayer.isCardIndexNewlyDrawn(0),
         false,
         reason: 'Four should not be highlighted (was not newly drawn)',
       );
       expect(
-        humanPlayer.isCardIndexNewlyDrawn(3),
+        humanPlayer.isCardIndexNewlyDrawn(2),
         false,
         reason: 'King should not be highlighted (was not newly drawn)',
       );
       expect(
-        humanPlayer.isCardIndexNewlyDrawn(4),
+        humanPlayer.isCardIndexNewlyDrawn(3),
         false,
         reason: 'Ace should not be highlighted (was not newly drawn)',
       );
