@@ -177,6 +177,24 @@ class BotEndGameManager {
       return true; // Already have required books
     }
 
+    // Priority: If we have a near-complete book (6 cards), always try to complete it
+    // This takes precedence over needing both book types
+    final nearCompleteBooks = bot.melds
+        .where((m) => m.cards.length == 6)
+        .toList();
+
+    if (nearCompleteBooks.isNotEmpty) {
+      // Check if we can complete any of these near-complete books
+      for (final meld in nearCompleteBooks) {
+        // Check if any card in hand can be added to this meld
+        for (final card in bot.currentHand) {
+          if (_canAddCardToMeld(card, meld)) {
+            return true; // Can complete a near-complete book
+          }
+        }
+      }
+    }
+
     // Check if we can potentially complete missing books
     if (needsCleanBook) {
       final potentialCleanBooks = bot.melds
