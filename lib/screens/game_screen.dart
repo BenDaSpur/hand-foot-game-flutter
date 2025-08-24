@@ -190,9 +190,27 @@ class _GameScreenState extends State<GameScreen> {
       switch (decision.action) {
         case 'drawFromDeck':
           _gameController.drawFromDeck();
+          // CRITICAL FIX: Continue bot turn immediately after drawing
+          // Drawing advances phase to meld - bot needs to make meld decision
+          if (_gameController.gameState.currentPlayer.type == PlayerType.bot &&
+              _gameController.gameState.turnPhase == TurnPhase.meld) {
+            // Schedule immediate continuation of the same bot's turn
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _processBotTurn();
+            });
+          }
           break;
         case 'drawFromDiscard':
           _gameController.drawFromDiscardPile();
+          // CRITICAL FIX: Continue bot turn immediately after drawing
+          // Drawing advances phase to meld - bot needs to make meld decision
+          if (_gameController.gameState.currentPlayer.type == PlayerType.bot &&
+              _gameController.gameState.turnPhase == TurnPhase.meld) {
+            // Schedule immediate continuation of the same bot's turn
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _processBotTurn();
+            });
+          }
           break;
         case 'createMeld':
           final cards = decision.data as List<PlayingCard>;
@@ -202,10 +220,26 @@ class _GameScreenState extends State<GameScreen> {
           } else {
             _gameController.createMeld(cards);
           }
+          // POTENTIAL FIX: Continue bot turn if still in meld phase after melding
+          // Some meld actions don't advance to discard phase automatically
+          if (_gameController.gameState.currentPlayer.type == PlayerType.bot &&
+              _gameController.gameState.turnPhase == TurnPhase.meld) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _processBotTurn();
+            });
+          }
           break;
         case 'addToMeld':
           final data = decision.data as Map<String, dynamic>;
           _gameController.addCardToMeld(data['meldIndex'], data['card']);
+          // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
+          // Some add-to-meld actions don't advance to discard phase automatically
+          if (_gameController.gameState.currentPlayer.type == PlayerType.bot &&
+              _gameController.gameState.turnPhase == TurnPhase.meld) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _processBotTurn();
+            });
+          }
           break;
         case 'discard':
           final card = decision.data as PlayingCard;
