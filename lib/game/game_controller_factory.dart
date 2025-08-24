@@ -140,7 +140,42 @@ class FirebaseNetworkAdapter extends NetworkAdapter {
   // Security and validation methods
   @override
   bool validateGameAction(Map<String, dynamic> action, String userId) {
-    return true; // Simplified - delegate to FirebaseService validation
+    // Validate required fields
+    if (!action.containsKey('type') || !action.containsKey('playerId')) {
+      return false;
+    }
+
+    // Ensure player authorization
+    if (action['playerId'] != userId) {
+      return false;
+    }
+
+    // Validate action type
+    final validActions = {
+      'drawFromDeck',
+      'drawFromDiscard',
+      'createMeld',
+      'addToMeld',
+      'discardCard',
+      'unlockDiscard',
+      'startGame',
+      'leaveGame',
+    };
+
+    if (!validActions.contains(action['type'])) {
+      return false;
+    }
+
+    // Additional validation based on action type
+    switch (action['type']) {
+      case 'createMeld':
+      case 'addToMeld':
+        return action.containsKey('cards') && action['cards'] is List;
+      case 'discardCard':
+        return action.containsKey('card') && action['card'] is Map;
+      default:
+        return true;
+    }
   }
 
   @override
@@ -149,12 +184,100 @@ class FirebaseNetworkAdapter extends NetworkAdapter {
     String userId,
     String action,
   ) {
-    return true; // Simplified - delegate to FirebaseService authorization
+    // Basic authorization - could be enhanced with role-based checks
+    if (gameId.isEmpty || userId.isEmpty || action.isEmpty) {
+      return false;
+    }
+
+    // Host-only actions
+    final hostOnlyActions = {'startGame', 'deleteGame'};
+    if (hostOnlyActions.contains(action)) {
+      // Would need to check if user is host - simplified for now
+      return true;
+    }
+
+    return true;
   }
 
   @override
   Map<String, dynamic> sanitizeInput(Map<String, dynamic> input) {
-    return input; // Simplified - delegate to FirebaseService sanitization
+    final sanitized = <String, dynamic>{};
+
+    for (final entry in input.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      // Remove potentially dangerous keys
+      if (key.startsWith('_') || key.toLowerCase().contains('admin')) {
+        continue;
+      }
+
+      // Sanitize string values
+      if (value is String) {
+        // Remove dangerous HTML elements and their content first
+        String cleanValue = value
+            .trim()
+            .replaceAll(
+              RegExp(r'<script[^>]*>.*?</script>', caseSensitive: false),
+              '',
+            ) // Remove script tags and content
+            .replaceAll(
+              RegExp(r'<style[^>]*>.*?</style>', caseSensitive: false),
+              '',
+            ) // Remove style tags and content
+            .replaceAll(RegExp(r'<[^>]*>'), '') // Remove remaining HTML tags
+            .replaceAll('<', '')
+            .replaceAll('>', '')
+            .replaceAll('"', '')
+            .replaceAll("'", '')
+            .replaceAll('&', '')
+            .replaceAll('(', '')
+            .replaceAll(')', '');
+        sanitized[key] = cleanValue;
+      } else if (value is Map<String, dynamic>) {
+        sanitized[key] = sanitizeInput(value);
+      } else if (value is List) {
+        sanitized[key] = value
+            .map(
+              (item) => item is Map<String, dynamic>
+                  ? sanitizeInput(item)
+                  : item is String
+                  ? item
+                        .trim()
+                        .replaceAll(
+                          RegExp(
+                            r'<script[^>]*>.*?</script>',
+                            caseSensitive: false,
+                          ),
+                          '',
+                        ) // Remove script tags and content
+                        .replaceAll(
+                          RegExp(
+                            r'<style[^>]*>.*?</style>',
+                            caseSensitive: false,
+                          ),
+                          '',
+                        ) // Remove style tags and content
+                        .replaceAll(
+                          RegExp(r'<[^>]*>'),
+                          '',
+                        ) // Remove remaining HTML tags
+                        .replaceAll('<', '')
+                        .replaceAll('>', '')
+                        .replaceAll('"', '')
+                        .replaceAll("'", '')
+                        .replaceAll('&', '')
+                        .replaceAll('(', '')
+                        .replaceAll(')', '')
+                  : item,
+            )
+            .toList();
+      } else {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
   }
 
   // Connection health and optimization

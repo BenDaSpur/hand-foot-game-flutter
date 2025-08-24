@@ -503,6 +503,11 @@ class EnhancedMultiplayerController {
     _connectionSubscription?.cancel();
     _reconnectionTimer?.cancel();
     _stateStreamController.close();
+
+    // Clear network operation queue to prevent memory leaks
+    _networkOperationQueue.clear();
+    _isNetworkOperationInProgress = false;
+
     _networkAdapter.dispose();
   }
 }

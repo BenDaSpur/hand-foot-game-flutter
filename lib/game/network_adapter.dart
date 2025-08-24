@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../models/game_state.dart';
+import '../services/firebase_service.dart';
 
 /// Abstract network adapter interface for different multiplayer backends
 /// This enables DRY architecture by separating networking concerns
@@ -79,12 +80,12 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
   @override
   Future<bool> syncGameState(String gameId, GameState gameState) {
     // Delegate to existing FirebaseService
-    return _firebaseService.updateGameState(gameId, gameState);
+    return FirebaseService.updateGameState(gameId, gameState);
   }
 
   @override
   Stream<GameState?> listenToGameState(String gameId) {
-    return _firebaseService.listenToGameState(gameId);
+    return FirebaseService.listenToGameState(gameId);
   }
 
   @override
@@ -92,7 +93,7 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
     required String hostPlayerName,
     required int maxPlayers,
   }) {
-    return _firebaseService.createGame(
+    return FirebaseService.createGame(
       hostPlayerName: hostPlayerName,
       maxPlayers: maxPlayers,
     );
@@ -100,32 +101,32 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
 
   @override
   Future<bool> joinGame({required String gameId, required String playerName}) {
-    return _firebaseService.joinGame(gameId: gameId, playerName: playerName);
+    return FirebaseService.joinGame(gameId: gameId, playerName: playerName);
   }
 
   @override
   Future<bool> startGame(String gameId) {
-    return _firebaseService.startGame(gameId);
+    return FirebaseService.startGame(gameId);
   }
 
   @override
   Future<bool> leaveGame(String gameId) {
-    return _firebaseService.leaveGame(gameId);
+    return FirebaseService.leaveGame(gameId);
   }
 
   @override
   Stream<Map<String, dynamic>?> listenToGameLobby(String gameId) {
-    return _firebaseService.listenToGameLobby(gameId);
+    return FirebaseService.listenToGameLobby(gameId);
   }
 
   @override
   Future<String?> getCurrentUserId() {
-    return _firebaseService.getDeviceUserId();
+    return FirebaseService.getDeviceUserId();
   }
 
   @override
   Future<String> getCurrentUserName() {
-    return _firebaseService.getDeviceUserName();
+    return FirebaseService.getDeviceUserName();
   }
 
   @override
@@ -321,14 +322,6 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
   @override
   void dispose() {
     _connectionController.close();
-  }
-
-  // Private reference to existing service
-  // This allows gradual migration without breaking existing code
-  dynamic get _firebaseService {
-    // Import here to avoid circular dependencies
-    // We'll need to import '../services/firebase_service.dart'
-    throw UnimplementedError('Firebase service reference needed');
   }
 }
 
