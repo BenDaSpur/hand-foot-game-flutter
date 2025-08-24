@@ -915,6 +915,10 @@ class GameController {
     }
   }
 
+  void dispose() {
+    // Cleanup resources if needed
+  }
+
   /// Helper method to handle card removal and associated side effects
   /// like foot pickup. Reduces code duplication between single and multi-meld creation.
   void _removeCardsAndHandleSideEffects(Player player, List<int> cardIndices) {

@@ -5,7 +5,8 @@ import '../theme/balatro_theme.dart';
 import '../services/firebase_service.dart';
 import '../services/firebase_constants.dart';
 import '../services/device_service.dart';
-import '../game/multiplayer_game_controller.dart';
+import '../game/enhanced_multiplayer_controller.dart';
+import '../game/game_controller_factory.dart';
 import '../models/game_state.dart';
 import 'multiplayer_game_screen.dart';
 
@@ -27,7 +28,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 
   bool _isLoading = false;
   int _maxPlayers = 4;
-  MultiplayerGameController? _gameController;
+  EnhancedMultiplayerController? _gameController;
   StreamSubscription<Map<String, dynamic>?>? _lobbySubscription;
 
   List<Map<String, dynamic>> _currentPlayers = [];
@@ -479,15 +480,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   Future<void> _createGame() async {
-    final controller = await MultiplayerGameController.createGame(
+    final controller = await GameControllerFactory.createMultiplayerGame(
       hostPlayerName: _playerNameController.text.trim(),
       maxPlayers: _maxPlayers,
-      hostUserId: _currentUserId!,
     );
 
     if (controller != null) {
       _gameController = controller;
-      _currentGameId = controller.gameId;
+      _currentGameId = _gameController!.gameId;
       _isHost = true;
       _startListeningToLobby();
     } else {
@@ -500,15 +500,14 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     // Normalize short game IDs to uppercase for consistency
     final normalizedGameId = gameId.length == 4 ? gameId.toUpperCase() : gameId;
 
-    final controller = await MultiplayerGameController.joinGame(
+    final controller = await GameControllerFactory.joinMultiplayerGame(
       gameId: normalizedGameId,
       playerName: _playerNameController.text.trim(),
-      userId: _currentUserId!,
     );
 
     if (controller != null) {
       _gameController = controller;
-      _currentGameId = controller.gameId;
+      _currentGameId = _gameController!.gameId;
       _isHost = false;
       _startListeningToLobby();
     } else {

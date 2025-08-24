@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
-import '../game/multiplayer_game_controller.dart';
+import '../game/enhanced_multiplayer_controller.dart';
 import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
@@ -12,11 +12,12 @@ import '../widgets/game_app_bar.dart';
 import '../widgets/player_hand_widget.dart';
 import '../widgets/game_action_buttons.dart';
 import '../widgets/melds_section.dart';
+import '../widgets/connection_status_widget.dart';
 import '../theme/balatro_theme.dart';
 import 'main_menu_screen.dart';
 
 class MultiplayerGameScreen extends StatefulWidget {
-  final MultiplayerGameController gameController;
+  final EnhancedMultiplayerController gameController;
 
   const MultiplayerGameScreen({super.key, required this.gameController});
 
@@ -25,7 +26,7 @@ class MultiplayerGameScreen extends StatefulWidget {
 }
 
 class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
-  late MultiplayerGameController _gameController;
+  late EnhancedMultiplayerController _gameController;
 
   final List<int> _selectedCardIndices = [];
   Player? _viewingPlayerMelds;
@@ -590,6 +591,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
             ),
             body: Column(
               children: [
+                // Connection status for multiplayer
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: ConnectionStatusWidget(
+                    controller: _gameController,
+                    compact: true,
+                  ),
+                ),
+
                 // Mobile-optimized status bar
                 MobileStatusBar(
                   gameState: gameState,

@@ -35,6 +35,14 @@ This is a Flutter implementation of the Hand & Foot card game with sophisticated
 - Validates moves according to Hand & Foot rules
 - Manages turn progression and round transitions
 
+**Multiplayer Architecture** (`lib/game/`):
+- **DRY Architecture**: Shared game logic between singleplayer and multiplayer
+- **GameInterface**: Common interface for all game controllers
+- **NetworkAdapter**: Abstraction for different multiplayer backends (Firebase, WebRTC, etc.)
+- **EnhancedMultiplayerController**: Multiplayer implementation that delegates to GameController
+- **GameControllerFactory**: Factory pattern for creating appropriate controllers
+- See `docs/multiplayer_architecture.md` for detailed architecture guide
+
 **Bot AI** (`lib/ai/bot_ai.dart`):
 - Implements sophisticated decision-making for AI players
 - Strategic considerations: unlock potential preservation, foot transition planning, 3s handling
