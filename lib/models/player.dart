@@ -301,6 +301,37 @@ class Player {
     return total;
   }
 
+  /// Calculate penalty points for ALL unplayed cards (both hand AND foot piles)
+  /// This is used when the round ends - all remaining cards count as penalty points
+  /// Returns the total penalty value that should be subtracted from meld points
+  int calculateAllUnplayedCardsValue() {
+    int totalPenalty = 0;
+
+    // Count penalty from cards in hand pile (whether active or inactive)
+    for (final card in hand) {
+      if (card.pointValue < 0) {
+        // Red 3s: their negative value (-300) becomes positive penalty (+300)
+        totalPenalty += card.pointValue.abs(); // Convert -300 to +300 penalty
+      } else {
+        // Normal cards: their positive value becomes penalty
+        totalPenalty += card.pointValue; // King (10) becomes +10 penalty
+      }
+    }
+
+    // Count penalty from cards in foot pile (whether active or inactive)
+    for (final card in foot) {
+      if (card.pointValue < 0) {
+        // Red 3s: their negative value (-300) becomes positive penalty (+300)
+        totalPenalty += card.pointValue.abs(); // Convert -300 to +300 penalty
+      } else {
+        // Normal cards: their positive value becomes penalty
+        totalPenalty += card.pointValue; // Jack (10) becomes +10 penalty
+      }
+    }
+
+    return totalPenalty; // Always positive value to subtract from meld score
+  }
+
   int calculateMeldValue() {
     int total = 0;
     for (final meld in melds) {
@@ -309,8 +340,13 @@ class Player {
     return total;
   }
 
-  int calculateTotalScore() {
-    return calculateMeldValue() - calculateHandValue();
+  int calculateTotalScore({bool includeAllUnplayedCards = false}) {
+    final unplayedCardValue = includeAllUnplayedCards
+        ? calculateAllUnplayedCardsValue()
+        : calculateHandValue();
+    // Subtract unplayed card values from meld value
+    // This works correctly: red 3s have negative point values, so subtracting negative = adding penalty
+    return calculateMeldValue() - unplayedCardValue;
   }
 
   void updateScore(int points) {
