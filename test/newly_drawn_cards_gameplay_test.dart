@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
-import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
+import 'package:hand_foot_game_flutter/config/game_config.dart';
 
 void main() {
   group('Newly Drawn Cards During Gameplay', () {
@@ -37,7 +37,7 @@ void main() {
         expect(success, true);
 
         // After drawing, the newly drawn cards should be highlighted
-        final expectedHandSize = 11 + GameState.requiredDrawCount;
+        final expectedHandSize = 11 + GameConfig.requiredDrawCount;
         expect(humanPlayer.currentHand.length, expectedHandSize);
 
         // With auto-sorting, newly drawn cards can be anywhere in the hand
@@ -51,9 +51,9 @@ void main() {
 
         expect(
           highlightedCount,
-          GameState.requiredDrawCount,
+          GameConfig.requiredDrawCount,
           reason:
-              'Should have exactly ${GameState.requiredDrawCount} cards highlighted as newly drawn',
+              'Should have exactly ${GameConfig.requiredDrawCount} cards highlighted as newly drawn',
         );
       },
     );

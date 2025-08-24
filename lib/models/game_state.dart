@@ -3,6 +3,7 @@ import 'card.dart';
 import 'deck.dart';
 import 'player.dart';
 import 'meld.dart';
+import '../config/game_config.dart';
 
 enum GamePhase { setup, playing, roundEnd, gameEnd }
 
@@ -35,19 +36,7 @@ class GameAction {
   String toString() => '$playerName: $message';
 }
 
-class GameConfig {
-  static const int maxRecentActions = 10;
-  static const int goingOutBonus = 100;
-  static const int requiredDrawCount = 2;
-  static const int minDiscardForReshuffle = 2;
-  static const int additionalDiscardPickup = 5;
-}
-
 class GameState {
-  static const int requiredDrawCount = GameConfig.requiredDrawCount;
-  static const int minDiscardForReshuffle = GameConfig.minDiscardForReshuffle;
-  static const int additionalDiscardPickup = GameConfig.additionalDiscardPickup;
-
   final List<Player> players;
   final Deck deck;
   final List<PlayingCard> discardPile;
@@ -191,7 +180,7 @@ class GameState {
     }
   }
 
-  /// Draws exactly [requiredDrawCount] cards from the deck.
+  /// Draws exactly [GameConfig.requiredDrawCount] cards from the deck.
   /// If deck becomes insufficient during draw, attempts to reshuffle discard pile.
   /// Returns true if successful, false if unable to draw required number of cards.
   bool drawFromDeck() {
@@ -199,14 +188,14 @@ class GameState {
 
     // Check if deck has insufficient cards BEFORE starting the draw
     // Reshuffle proactively when deck has fewer cards than required
-    if (deck.size < requiredDrawCount) {
+    if (deck.size < GameConfig.requiredDrawCount) {
       _attemptReshuffleForEmptyDeck();
     }
 
     final cardsDrawn = <PlayingCard>[];
 
     // Attempt to draw required number of cards
-    for (int i = 0; i < requiredDrawCount; i++) {
+    for (int i = 0; i < GameConfig.requiredDrawCount; i++) {
       PlayingCard? card;
 
       if (!deck.isEmpty) {
@@ -329,14 +318,15 @@ class GameState {
     final additionalDiscards = <PlayingCard>[];
     for (
       int i = 0;
-      i < additionalDiscardPickup && discardPile.isNotEmpty;
+      i < GameConfig.additionalDiscardPickup && discardPile.isNotEmpty;
       i++
     ) {
       additionalDiscards.add(discardPile.removeLast());
     }
 
     // Edge Case 1: If no additional cards in discard, take remaining from deck
-    final remainingNeeded = additionalDiscardPickup - additionalDiscards.length;
+    final remainingNeeded =
+        GameConfig.additionalDiscardPickup - additionalDiscards.length;
     if (remainingNeeded > 0) {
       // Edge Case 2: Reshuffle discard if deck doesn't have enough cards
       if (deck.size < remainingNeeded && discardPile.length > 1) {
@@ -879,7 +869,7 @@ class GameState {
   /// Requires at least [minDiscardForReshuffle] cards in discard pile to perform reshuffle.
   /// The remaining cards (excluding top card) are added to deck and shuffled.
   void _reshuffleDiscardIntoDeck() {
-    if (discardPile.length <= minDiscardForReshuffle) {
+    if (discardPile.length <= GameConfig.minDiscardForReshuffle) {
       // Need sufficient cards in discard pile to reshuffle (keep top card)
       return;
     }

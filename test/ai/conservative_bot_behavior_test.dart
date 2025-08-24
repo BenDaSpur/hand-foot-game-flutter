@@ -4,12 +4,12 @@ import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
-import 'package:hand_foot_game_flutter/ai/bot_ai.dart';
+import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 
 void main() {
   group('Conservative Bot Behavior', () {
     late GameController gameController;
-    late BotAI botAI;
+    late EnhancedBotAI botAI;
     late Player bot;
 
     setUp(() {
@@ -19,7 +19,7 @@ void main() {
         Player(id: '3', name: 'Bot2', type: PlayerType.bot),
       ];
       gameController = GameController(players: players);
-      botAI = BotAI(seed: 12345);
+      botAI = EnhancedBotAI(seed: 12345);
       bot = players[1];
     });
 

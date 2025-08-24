@@ -1,3 +1,5 @@
+import '../config/game_config.dart';
+
 enum Suit { hearts, diamonds, clubs, spades }
 
 enum CardRank {
@@ -34,25 +36,26 @@ class PlayingCard {
   int get pointValue {
     switch (rank) {
       case CardRank.joker:
-        return 50;
+        return GameConfig.jokerValue;
       case CardRank.two:
-        return 20;
+        return GameConfig.twoValue;
       case CardRank.ace:
-        return 20;
+        return GameConfig.aceValue;
       case CardRank.king:
       case CardRank.queen:
       case CardRank.jack:
+        return GameConfig.faceCardValue;
       case CardRank.ten:
       case CardRank.nine:
-        return 10;
+        return GameConfig.highNumberValue;
       case CardRank.three:
         if (isRed) {
-          return -300; // Red 3 penalty
+          return GameConfig.red3Penalty; // Red 3 penalty
         } else {
-          return -5; // Black 3 penalty
+          return GameConfig.black3Penalty; // Black 3 penalty
         }
       default: // 4, 5, 6, 7, 8
-        return 5;
+        return GameConfig.lowNumberValue;
     }
   }
 

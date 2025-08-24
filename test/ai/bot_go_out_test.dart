@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hand_foot_game_flutter/ai/bot_ai.dart';
+import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
@@ -8,12 +8,12 @@ import 'package:hand_foot_game_flutter/game/game_controller.dart';
 
 void main() {
   group('Bot Go Out Logic', () {
-    late BotAI botAI;
+    late EnhancedBotAI botAI;
     late GameController gameController;
     late Player botPlayer;
 
     setUp(() {
-      botAI = BotAI();
+      botAI = EnhancedBotAI();
       final players = [
         Player(id: '1', name: 'Human', type: PlayerType.human),
         Player(id: '2', name: 'Bot', type: PlayerType.bot),

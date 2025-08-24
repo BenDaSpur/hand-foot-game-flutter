@@ -8,7 +8,8 @@ import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../game/game_controller_factory.dart';
-import '../ai/bot_ai.dart';
+import '../ai/enhanced_bot_ai.dart';
+import '../ai/bot_personality.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/meld_widget.dart';
 import '../widgets/mobile_status_bar.dart';
@@ -39,7 +40,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameController _gameController;
-  late BotAI _botAI;
+  late EnhancedBotAI _botAI;
 
   final List<int> _selectedCardIndices =
       []; // Track card indices instead of card objects
@@ -67,7 +68,7 @@ class _GameScreenState extends State<GameScreen> {
     // If a gameController was provided (continuing saved game), use it
     if (widget.gameController != null) {
       _gameController = widget.gameController!;
-      _botAI = BotAI();
+      _botAI = EnhancedBotAI();
 
       setState(() {
         _isInitialized = true;
@@ -126,7 +127,7 @@ class _GameScreenState extends State<GameScreen> {
     );
 
     // Create bot AI and assign the randomized personalities
-    _botAI = BotAI();
+    _botAI = EnhancedBotAI();
     _botAI.assignPersonality('2', botConfigs[0].personality);
     _botAI.assignPersonality('3', botConfigs[1].personality);
 
@@ -275,10 +276,33 @@ class _GameScreenState extends State<GameScreen> {
           break;
         case 'addToMeld':
           final data = decision.data as Map<String, dynamic>;
-          _gameController.addCardToMeld(data['meldIndex'], data['card']);
+          final meldIndex = data['meldIndex'] as int?;
+          final card = data['card'] as PlayingCard?;
+
+          if (meldIndex != null && card != null) {
+            _gameController.addCardToMeld(meldIndex, card);
+          } else {
+            print(
+              'Error: Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
+            );
+            // Fallback: force bot to discard instead
+            if (card != null) {
+              _gameController.discardCard(card);
+            }
+          }
           // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
           // Some add-to-meld actions don't advance to discard phase automatically
           _scheduleBotTurnContinuation();
+          break;
+        case 'noMeld':
+          // Bot decided not to meld - advance to discard phase
+          // The game controller should transition to discard phase automatically
+          // if no meld was made, but let's ensure it by scheduling continuation
+          if (_gameController.gameState.turnPhase == TurnPhase.meld) {
+            // Force transition to discard phase
+            _gameController.gameState.turnPhase = TurnPhase.discard;
+            _scheduleBotTurnContinuation();
+          }
           break;
         case 'discard':
           // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
@@ -302,6 +326,11 @@ class _GameScreenState extends State<GameScreen> {
             'encountered error state - skipping turn',
             showCardDetails: false,
           );
+          _forceNextTurn();
+          break;
+        case 'endTurn':
+          // Bot decided to end turn without other action
+          // This should force next turn
           _forceNextTurn();
           break;
       }
@@ -535,7 +564,7 @@ class _GameScreenState extends State<GameScreen> {
 
       if (savedController != null) {
         _gameController = savedController;
-        _botAI = BotAI();
+        _botAI = EnhancedBotAI();
 
         // Sort the human player's hand
         final humanPlayer = _gameController.gameState.players.firstWhere(
@@ -1958,7 +1987,7 @@ class _GameScreenState extends State<GameScreen> {
 
       setState(() {
         _gameController = newController;
-        _botAI = BotAI();
+        _botAI = EnhancedBotAI();
         _selectedCardIndices.clear();
         _viewingPlayerMelds = null;
         _isInitialized = true;

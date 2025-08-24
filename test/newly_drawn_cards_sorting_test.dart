@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
-import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
+import 'package:hand_foot_game_flutter/config/game_config.dart';
 
 void main() {
   group('Newly Drawn Cards with Sorting', () {
@@ -175,9 +175,9 @@ void main() {
 
       expect(
         highlightedCount,
-        GameState.requiredDrawCount,
+        GameConfig.requiredDrawCount,
         reason:
-            'Should have exactly ${GameState.requiredDrawCount} highlighted cards after sorting',
+            'Should have exactly ${GameConfig.requiredDrawCount} highlighted cards after sorting',
       );
 
       // The highlighted cards should be different from the initial cards
