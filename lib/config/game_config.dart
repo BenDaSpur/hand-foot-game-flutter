@@ -246,6 +246,9 @@ class GameConfig {
   /// Bot turn processing threshold for detecting stuck loops
   static const int botStuckThreshold = 5;
 
+  /// Maximum bot processing recursion depth to prevent infinite loops
+  static const int maxBotProcessingDepth = 10;
+
   /// Bot processing delay for realistic gameplay pacing
   static const Duration botProcessingDelay = Duration(seconds: 1);
 
