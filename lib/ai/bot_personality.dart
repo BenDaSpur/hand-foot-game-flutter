@@ -153,13 +153,37 @@ class BotPersonalityManager {
 
   /// Get current player's constants (must call setCurrentPlayerContext first)
   PersonalityConstants get currentConstants {
-    return _currentConstants ??
-        PersonalityConstants.forPersonality(BotPersonality.adaptive);
+    if (_currentConstants == null) {
+      // In debug mode, assert that context was properly set
+      assert(
+        false,
+        'BotPersonalityManager: currentConstants accessed without setting player context. Call setCurrentPlayerContext() first.',
+      );
+
+      // Fallback for release mode with logging
+      print(
+        'WARNING: BotPersonalityManager - accessing currentConstants without context, falling back to Adaptive',
+      );
+      return PersonalityConstants.forPersonality(BotPersonality.adaptive);
+    }
+    return _currentConstants!;
   }
 
   /// Get current player's personality
   BotPersonality get currentPersonality {
-    if (_currentPlayerId == null) return BotPersonality.adaptive;
+    if (_currentPlayerId == null) {
+      // In debug mode, assert that context was properly set
+      assert(
+        false,
+        'BotPersonalityManager: currentPersonality accessed without setting player context. Call setCurrentPlayerContext() first.',
+      );
+
+      // Fallback for release mode with logging
+      print(
+        'WARNING: BotPersonalityManager - accessing currentPersonality without context, falling back to Adaptive',
+      );
+      return BotPersonality.adaptive;
+    }
     return getPersonality(_currentPlayerId!);
   }
 
@@ -336,9 +360,17 @@ class BotPersonalityManager {
 
     for (final player in botPlayers) {
       if (player.type == PlayerType.bot) {
+        // Use hash-based deterministic assignment for consistency across game sessions
+        // Player IDs are typically sequential ('1', '2', '3') so hash collisions are unlikely
+        // and this provides good distribution across personality types
         final randomPersonality =
             personalities[(player.id.hashCode % personalities.length)];
         assignPersonality(player.id, randomPersonality);
+
+        // Log assignment for debugging
+        print(
+          'BotPersonalityManager: Assigned ${randomPersonality.name} to bot ${player.name} (${player.id})',
+        );
       }
     }
   }

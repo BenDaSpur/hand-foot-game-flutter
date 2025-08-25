@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -62,6 +63,22 @@ class _GameScreenState extends State<GameScreen> {
   void dispose() {
     _disposed = true;
     super.dispose();
+  }
+
+  /// Helper method to assign bot personalities consistently
+  void _assignBotPersonalities() {
+    final botPlayers = _gameController.gameState.players
+        .where((p) => p.type == PlayerType.bot)
+        .toList();
+    _botAI.assignRandomPersonalities(botPlayers);
+
+    // Log personality assignments in debug mode
+    if (kDebugMode) {
+      for (final bot in botPlayers) {
+        final personality = _botAI.personalityManager.getPersonality(bot.id);
+        print('Bot ${bot.name} (${bot.id}) assigned personality: $personality');
+      }
+    }
   }
 
   void _initializeGame() async {
@@ -567,10 +584,7 @@ class _GameScreenState extends State<GameScreen> {
         _botAI = EnhancedBotAI();
 
         // Assign consistent bot personalities based on player IDs
-        final botPlayers = _gameController.gameState.players
-            .where((p) => p.type == PlayerType.bot)
-            .toList();
-        _botAI.assignRandomPersonalities(botPlayers);
+        _assignBotPersonalities();
 
         // Sort the human player's hand
         final humanPlayer = _gameController.gameState.players.firstWhere(
@@ -2019,10 +2033,7 @@ class _GameScreenState extends State<GameScreen> {
         _botAI = EnhancedBotAI();
 
         // Assign consistent bot personalities based on player IDs
-        final botPlayers = _gameController.gameState.players
-            .where((p) => p.type == PlayerType.bot)
-            .toList();
-        _botAI.assignRandomPersonalities(botPlayers);
+        _assignBotPersonalities();
 
         _selectedCardIndices.clear();
         _viewingPlayerMelds = null;
