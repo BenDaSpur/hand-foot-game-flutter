@@ -87,6 +87,8 @@ class _GameScreenState extends State<GameScreen> {
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
   bool _botTurnScheduled = false; // Prevent multiple bot turn callbacks
+  int _botProcessingDepth =
+      0; // Track recursion depth to prevent infinite loops
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
   // Loop detection for bot turns
@@ -261,10 +263,24 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _processBotTurn() async {
+    // RECURSION PROTECTION: Prevent infinite loops
+    _botProcessingDepth++;
+    if (_botProcessingDepth > 10) {
+      DebugLogger.error(
+        'Bot processing depth exceeded limit - breaking infinite loop',
+      );
+      _botProcessingDepth = 0; // Reset counter
+      _botLoopTracker.clear(); // Clear stuck tracker
+      return;
+    }
+
     final currentPlayer = _gameController.gameState.currentPlayer;
 
     // Check if widget has been disposed
-    if (_disposed || !mounted) return;
+    if (_disposed || !mounted) {
+      _botProcessingDepth--; // Decrement on early return
+      return;
+    }
 
     // ENHANCED SAFETY CHECK: Comprehensive game state validation
     if (_gameController.gameState.currentPlayer.name == 'You' ||
@@ -272,6 +288,7 @@ class _GameScreenState extends State<GameScreen> {
         _gameController.gameState.currentPlayer.id != currentPlayer.id ||
         _gameController.gameState.phase != GamePhase.playing) {
       DebugLogger.debug('Bot turn processing skipped - invalid game state');
+      _botProcessingDepth--; // Decrement on early return
       return;
     }
 
@@ -279,6 +296,7 @@ class _GameScreenState extends State<GameScreen> {
     if (_gameController.gameState.phase == GamePhase.gameEnd) {
       // Game is over, clear the saved game
       await GameController.clearSavedGame();
+      _botProcessingDepth--; // Decrement on early return
       return;
     }
 
@@ -286,6 +304,7 @@ class _GameScreenState extends State<GameScreen> {
     await _checkAndHandleRoundEnd();
     if (_gameController.gameState.phase == GamePhase.roundEnd ||
         _gameController.gameState.phase == GamePhase.gameEnd) {
+      _botProcessingDepth--; // Decrement on early return
       return;
     }
 
@@ -313,17 +332,22 @@ class _GameScreenState extends State<GameScreen> {
             );
             _forceCompleteBotTurn(currentPlayer);
             _botLoopTracker.clear();
+            _botProcessingDepth--; // Decrement on early return
             return;
           }
         }
 
         _processBotDecision(decision, currentPlayer);
 
-        if (_disposed || !mounted) return; // Check before setState
+        if (_disposed || !mounted) {
+          _botProcessingDepth--; // Decrement on early return
+          return; // Check before setState
+        }
         setState(() {});
 
         if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
-          _processBotTurn();
+          // FIXED: Use async scheduling instead of synchronous recursion
+          Future.microtask(() => _processBotTurn());
         } else {
           // It's now the human player's turn - save the game state
           _saveGameState();
@@ -351,6 +375,9 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
     }
+
+    // Decrement depth counter at method exit
+    _botProcessingDepth--;
   }
 
   /// Process a specific bot decision with comprehensive error handling
