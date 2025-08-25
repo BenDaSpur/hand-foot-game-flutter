@@ -48,6 +48,61 @@ void main() {
       expect(gameState.topDiscard, equals(card));
     });
 
+    test('should log bot actions to recent actions', () {
+      // Set bot player as current
+      gameState.currentPlayerIndex = 1; // Bot player
+      expect(gameState.currentPlayer.type, PlayerType.bot);
+      expect(gameState.currentPlayer.name, 'Player 2');
+
+      // Initially no actions
+      expect(gameState.recentActions, isEmpty);
+
+      // Simulate bot draw (this is how drawFromDeck() logs actions)
+      gameState.logAction('drew: King♥, Queen♠');
+
+      expect(gameState.recentActions, hasLength(1));
+      expect(gameState.recentActions.first.playerName, 'Player 2');
+      expect(
+        gameState.recentActions.first.message,
+        'drew',
+      ); // Sanitized for bot
+
+      // Simulate bot meld (public action, should show full details)
+      gameState.logAction('created new meld: King♥, Queen♠, Jack♣');
+
+      expect(gameState.recentActions, hasLength(2));
+      expect(gameState.recentActions.last.playerName, 'Player 2');
+      expect(
+        gameState.recentActions.last.message,
+        'created new meld: King♥, Queen♠, Jack♣',
+      );
+
+      // Switch to human player
+      gameState.currentPlayerIndex = 0;
+      expect(gameState.currentPlayer.type, PlayerType.human);
+      expect(gameState.currentPlayer.name, 'Player 1');
+
+      // Simulate human action
+      gameState.logAction('drew: Ace♣, Two♥');
+
+      expect(gameState.recentActions, hasLength(3));
+      expect(gameState.recentActions.last.playerName, 'Player 1');
+      expect(
+        gameState.recentActions.last.message,
+        'drew: Ace♣, Two♥',
+      ); // Full details for human
+
+      // Verify all actions are present and in correct order
+      final allActions = gameState.recentActions
+          .map((a) => '${a.playerName}: ${a.message}')
+          .toList();
+      expect(allActions, [
+        'Player 2: drew',
+        'Player 2: created new meld: King♥, Queen♠, Jack♣',
+        'Player 1: drew: Ace♣, Two♥',
+      ]);
+    });
+
     test('should calculate play down requirement correctly', () {
       expect(
         gameState.playDownRequirement,

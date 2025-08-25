@@ -66,13 +66,22 @@ void main() {
 
         // Player discards to end turn - this should advance to next player
         // Choose a card that's NOT newly drawn to avoid removing highlighted cards
+        // But if all cards are highlighted, just use the first non-highlighted or first card
         PlayingCard cardToDiscard = humanPlayer.currentHand.first;
+        bool foundNonHighlighted = false;
         for (int i = 0; i < humanPlayer.currentHand.length; i++) {
           if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
             cardToDiscard = humanPlayer.currentHand[i];
+            foundNonHighlighted = true;
             break;
           }
         }
+
+        // Store expected count based on whether we're discarding a highlighted card
+        final expectedRemainingHighlighted = foundNonHighlighted
+            ? expectedNewCardCount
+            : expectedNewCardCount - 1;
+
         expect(controller.discardCard(cardToDiscard), true);
 
         // Verify turn advanced to bot player
@@ -89,9 +98,9 @@ void main() {
         }
         expect(
           highlightedCount,
-          expectedNewCardCount,
+          expectedRemainingHighlighted,
           reason:
-              'Human should still have $expectedNewCardCount cards highlighted after their turn ended',
+              'Human should still have $expectedRemainingHighlighted cards highlighted after their turn ended',
         );
 
         // But the bot (current player) should have no newly drawn cards highlighted yet
@@ -137,13 +146,22 @@ void main() {
 
         // Human discards, bot's turn starts
         // Choose a card that's NOT newly drawn to avoid removing highlighted cards
+        // But if all cards are highlighted, just use the first non-highlighted or first card
         PlayingCard humanCard = humanPlayer.currentHand.first;
+        bool foundNonHighlighted = false;
         for (int i = 0; i < humanPlayer.currentHand.length; i++) {
           if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
             humanCard = humanPlayer.currentHand[i];
+            foundNonHighlighted = true;
             break;
           }
         }
+
+        // Store expected count based on whether we're discarding a highlighted card
+        final expectedRemainingHighlighted = foundNonHighlighted
+            ? GameConfig.requiredDrawCount
+            : GameConfig.requiredDrawCount - 1;
+
         expect(controller.discardCard(humanCard), true);
         expect(controller.gameState.currentPlayer.id, '2'); // Bot's turn
 
@@ -157,9 +175,9 @@ void main() {
         }
         expect(
           highlightedCount,
-          GameConfig.requiredDrawCount,
+          expectedRemainingHighlighted,
           reason:
-              'Human should still have ${GameConfig.requiredDrawCount} cards highlighted during bot\'s turn',
+              'Human should still have $expectedRemainingHighlighted cards highlighted during bot\'s turn',
         );
 
         // Bot draws and discards to return turn to human
@@ -198,13 +216,22 @@ void main() {
       // Human draws and discards
       expect(controller.drawFromDeck(), true);
       // Choose a card that's NOT newly drawn to avoid removing highlighted cards
+      // But if all cards are highlighted, just use the first non-highlighted or first card
       PlayingCard humanCard = humanPlayer.currentHand.first;
+      bool foundNonHighlighted = false;
       for (int i = 0; i < humanPlayer.currentHand.length; i++) {
         if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
           humanCard = humanPlayer.currentHand[i];
+          foundNonHighlighted = true;
           break;
         }
       }
+
+      // Store expected count based on whether we're discarding a highlighted card
+      final expectedRemainingHighlighted = foundNonHighlighted
+          ? GameConfig.requiredDrawCount
+          : GameConfig.requiredDrawCount - 1;
+
       expect(controller.discardCard(humanCard), true);
 
       // Bot 1's turn - human should still have highlighting
@@ -217,9 +244,9 @@ void main() {
       }
       expect(
         highlightedCount,
-        GameConfig.requiredDrawCount,
+        expectedRemainingHighlighted,
         reason:
-            'Human should keep ${GameConfig.requiredDrawCount} cards highlighted during bot 1 turn',
+            'Human should keep $expectedRemainingHighlighted cards highlighted during bot 1 turn',
       );
 
       // Bot 1 draws and discards
@@ -237,9 +264,9 @@ void main() {
       }
       expect(
         highlightedCount,
-        GameConfig.requiredDrawCount,
+        expectedRemainingHighlighted,
         reason:
-            'Human should keep ${GameConfig.requiredDrawCount} cards highlighted during bot 2 turn',
+            'Human should keep $expectedRemainingHighlighted cards highlighted during bot 2 turn',
       );
 
       // Bot 2 draws and discards to return to human
