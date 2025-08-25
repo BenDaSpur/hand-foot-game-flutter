@@ -52,26 +52,39 @@ class EnhancedBotAI {
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
-    // Set context for personality-based decisions
-    _personalityManager.setCurrentPlayerContext(bot.id);
+    try {
+      print(
+        'DEBUG: makeDecision for bot ${bot.id} (${bot.name}) in phase ${gameState.turnPhase}',
+      );
 
-    // Update game analysis
-    _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
-    _gameAnalyzer.incrementTurnCount(bot.id);
+      // Set context for personality-based decisions
+      _personalityManager.setCurrentPlayerContext(bot.id);
 
-    // Clear meld cache if needed
-    if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
-      _meldAnalyzer.clearCache();
-    }
+      // Update game analysis
+      _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
+      _gameAnalyzer.incrementTurnCount(bot.id);
 
-    // Route to appropriate decision handler based on turn phase
-    switch (gameState.turnPhase) {
-      case TurnPhase.draw:
-        return _makeDrawDecision(bot, controller);
-      case TurnPhase.meld:
-        return _makeMeldDecision(bot, controller);
-      case TurnPhase.discard:
-        return _makeDiscardDecision(bot, controller);
+      // Clear meld cache if needed
+      if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
+        _meldAnalyzer.clearCache();
+      }
+
+      // Route to appropriate decision handler based on turn phase
+      final decision = switch (gameState.turnPhase) {
+        TurnPhase.draw => _makeDrawDecision(bot, controller),
+        TurnPhase.meld => _makeMeldDecision(bot, controller),
+        TurnPhase.discard => _makeDiscardDecision(bot, controller),
+      };
+
+      print('DEBUG: makeDecision returning: ${decision.action}');
+      return decision;
+    } catch (e, stackTrace) {
+      print('ERROR: Bot decision failed for ${bot.id}: $e');
+      print('Stack trace: $stackTrace');
+      // Emergency fallback
+      return gameState.turnPhase == TurnPhase.draw
+          ? BotDecision(action: 'drawFromDeck')
+          : BotDecision(action: 'noMeld');
     }
   }
 
@@ -79,25 +92,41 @@ class EnhancedBotAI {
   BotDecision _makeDrawDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
+    // Debug logging to help identify stuck bot issues
+    print('DEBUG: _makeDrawDecision for bot ${bot.id} (${bot.name})');
+    print(
+      'DEBUG: hasPlayedDown=${bot.hasPlayedDown}, melds=${bot.melds.length}, inMultiMeld=$_inMultiMeldSequence',
+    );
+
     // If continuing multi-meld sequence, draw from deck to proceed to meld phase
     // Multi-meld sequence should continue in meld phase, not skip drawing
     if (_inMultiMeldSequence) {
+      print('DEBUG: Returning drawFromDeck (multi-meld sequence)');
       return BotDecision(action: 'drawFromDeck');
     }
 
     // Evaluate discard pile opportunity
     if (gameState.discardPile.isNotEmpty && bot.hasPlayedDown) {
-      final riskTolerance = _personalityManager.calculateRiskTolerance(
-        gameState,
-        bot,
-      );
+      try {
+        final riskTolerance = _personalityManager.calculateRiskTolerance(
+          gameState,
+          bot,
+        );
 
-      if (_shouldTakeDiscardPile(bot, controller, riskTolerance)) {
-        return BotDecision(action: 'drawFromDiscard');
+        if (_shouldTakeDiscardPile(bot, controller, riskTolerance)) {
+          print('DEBUG: Returning drawFromDiscard (discard pile opportunity)');
+          return BotDecision(action: 'drawFromDiscard');
+        }
+      } catch (e) {
+        print(
+          'WARNING: Risk tolerance calculation failed for bot ${bot.id}: $e',
+        );
+        // Skip discard pile evaluation and continue to default
       }
     }
 
     // Default to drawing from deck
+    print('DEBUG: Returning drawFromDeck (default)');
     return BotDecision(action: 'drawFromDeck');
   }
 

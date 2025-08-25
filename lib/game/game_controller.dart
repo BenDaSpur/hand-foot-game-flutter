@@ -506,7 +506,15 @@ class GameController {
             : null,
       },
       'dp': _gameState.discardPile.map(_compactCard).toList(), // discardPile
-      // Skip recent actions and debug info for maximum compression
+      'ra': _gameState.recentActions
+          .map(
+            (action) => {
+              'm': action.message,
+              'p': action.playerName,
+              't': action.timestamp.millisecondsSinceEpoch,
+            },
+          )
+          .toList(), // recentActions
     };
 
     // Convert to compact JSON
@@ -706,6 +714,27 @@ class GameController {
         _restoreDeckFromSeed(gameState, gameSeed, players.length);
       }
 
+      // Restore recent actions (if available in legacy format)
+      final recentActionsData = data['recentActions'] as List<dynamic>?;
+      if (recentActionsData != null) {
+        gameState.recentActions.clear();
+        for (final actionData in recentActionsData) {
+          final message = actionData['message'] as String;
+          final playerName = actionData['playerName'] as String;
+          final timestampMs = actionData['timestamp'] as int?;
+          final timestamp = timestampMs != null
+              ? DateTime.fromMillisecondsSinceEpoch(timestampMs)
+              : DateTime.now();
+          gameState.recentActions.add(
+            GameAction.withTimestamp(
+              message: message,
+              playerName: playerName,
+              timestamp: timestamp,
+            ),
+          );
+        }
+      }
+
       return controller;
     } catch (e) {
       // Return null to indicate failure - error handling done in UI
@@ -799,6 +828,27 @@ class GameController {
       final deckSeed = deckData['s'] as int?; // 's' = seed
       if (deckSeed != null) {
         _restoreDeckFromSeed(gameState, deckSeed, players.length);
+      }
+
+      // Restore recent actions from compact format
+      final recentActionsData =
+          data['ra'] as List<dynamic>?; // 'ra' = recentActions
+      if (recentActionsData != null) {
+        gameState.recentActions.clear();
+        for (final actionData in recentActionsData) {
+          final message = actionData['m'] as String; // 'm' = message
+          final playerName = actionData['p'] as String; // 'p' = playerName
+          final timestamp = DateTime.fromMillisecondsSinceEpoch(
+            actionData['t'] as int, // 't' = timestamp
+          );
+          gameState.recentActions.add(
+            GameAction.withTimestamp(
+              message: message,
+              playerName: playerName,
+              timestamp: timestamp,
+            ),
+          );
+        }
       }
 
       return controller;

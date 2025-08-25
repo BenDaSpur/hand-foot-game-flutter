@@ -10,6 +10,9 @@ import '../config/game_config.dart';
 class _ResponsiveHelper {
   static int getGridCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth > GameConfig.ultraWideBreakpoint) {
+      return GameConfig.gridCrossAxisCounts['ultra_wide']!;
+    }
     if (screenWidth > GameConfig.desktopBreakpoint) {
       return GameConfig.gridCrossAxisCounts['desktop']!;
     }
@@ -26,18 +29,26 @@ class _ResponsiveHelper {
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = getGridCrossAxisCount(context);
     final availableWidth = screenWidth * GameConfig.modalWidthRatio - 40;
-    final cardWidthFromGrid =
-        (availableWidth - (GameConfig.cardSpacing * (crossAxisCount - 1))) /
-        crossAxisCount;
+    final totalSpacing = GameConfig.cardSpacing * (crossAxisCount - 1);
+    final cardWidthFromGrid = (availableWidth - totalSpacing) / crossAxisCount;
 
+    // Use a smaller max width to fit more cards, and be more flexible with sizing
     return cardWidthFromGrid.clamp(
       GameConfig.minCardWidth,
-      GameConfig.maxCardWidth,
+      100.0, // Reduced from GameConfig.maxCardWidth (120) to 100
     );
   }
 
   static double getCardHeight(BuildContext context) {
     return getCardWidth(context) / GameConfig.cardAspectRatio;
+  }
+
+  static double getOptimizedAspectRatio(BuildContext context) {
+    // Calculate the actual aspect ratio based on our responsive card sizing
+    // This ensures GridView cells fit the cards tightly with minimal padding
+    final cardWidth = getCardWidth(context);
+    final cardHeight = getCardHeight(context);
+    return cardWidth / cardHeight;
   }
 }
 
@@ -516,7 +527,9 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 crossAxisCount: _ResponsiveHelper.getGridCrossAxisCount(
                   context,
                 ),
-                childAspectRatio: GameConfig.cardAspectRatio,
+                childAspectRatio: _ResponsiveHelper.getOptimizedAspectRatio(
+                  context,
+                ),
                 crossAxisSpacing: GameConfig.cardSpacing,
                 mainAxisSpacing: GameConfig.cardSpacing,
               ),
@@ -875,11 +888,13 @@ class _MobileCardWidget extends StatelessWidget {
               : null,
           child: Stack(
             children: [
-              PlayingCardWidget(
-                card: card,
-                width: _ResponsiveHelper.getCardWidth(context),
-                height: _ResponsiveHelper.getCardHeight(context),
-                isSelected: isSelected,
+              Center(
+                child: PlayingCardWidget(
+                  card: card,
+                  width: _ResponsiveHelper.getCardWidth(context),
+                  height: _ResponsiveHelper.getCardHeight(context),
+                  isSelected: isSelected,
+                ),
               ),
               if (isDisabled)
                 Positioned.fill(

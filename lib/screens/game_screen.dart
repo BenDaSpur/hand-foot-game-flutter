@@ -53,6 +53,11 @@ class _GameScreenState extends State<GameScreen> {
   bool _botTurnScheduled = false; // Prevent multiple bot turn callbacks
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
+  // Loop detection for bot turns
+  int _botDecisionCounter = 0;
+  String? _lastBotDecision;
+  String? _lastBotPlayerId;
+
   @override
   void initState() {
     super.initState();
@@ -256,6 +261,31 @@ class _GameScreenState extends State<GameScreen> {
 
       final decision = _botAI.makeDecision(currentPlayer, _gameController);
 
+      // ANTI-LOOP PROTECTION: Track repeated decisions
+      final currentDecisionKey =
+          '${currentPlayer.id}-${decision.action}-${_gameController.gameState.turnPhase}';
+      if (_lastBotDecision == currentDecisionKey &&
+          _lastBotPlayerId == currentPlayer.id) {
+        _botDecisionCounter++;
+        print(
+          'WARNING: Bot ${currentPlayer.name} making same decision ${decision.action} repeatedly (count: $_botDecisionCounter)',
+        );
+        if (_botDecisionCounter > 5) {
+          print(
+            'ERROR: Bot ${currentPlayer.name} stuck in loop with ${decision.action} - forcing turn skip',
+          );
+          _forceNextTurn();
+          _botDecisionCounter = 0;
+          _lastBotDecision = null;
+          _lastBotPlayerId = null;
+          return;
+        }
+      } else {
+        _botDecisionCounter = 0;
+        _lastBotDecision = currentDecisionKey;
+        _lastBotPlayerId = currentPlayer.id;
+      }
+
       switch (decision.action) {
         case 'drawFromDeck':
           // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
@@ -296,15 +326,46 @@ class _GameScreenState extends State<GameScreen> {
           final meldIndex = data['meldIndex'] as int?;
           final card = data['card'] as PlayingCard?;
 
+          // DEBUG: Log the addToMeld attempt
+          print(
+            'DEBUG: Bot ${currentPlayer.name} attempting addToMeld - meldIndex: $meldIndex, card: ${card?.displayName}, currentPhase: ${_gameController.gameState.turnPhase}',
+          );
+          print(
+            'DEBUG: Bot has ${currentPlayer.melds.length} melds, hand size: ${currentPlayer.currentHand.length}',
+          );
+          if (meldIndex != null && meldIndex < currentPlayer.melds.length) {
+            final targetMeld = currentPlayer.melds[meldIndex];
+            print(
+              'DEBUG: Target meld has ${targetMeld.cards.length} cards, type: ${targetMeld.type}',
+            );
+          }
+
           if (meldIndex != null && card != null) {
-            _gameController.addCardToMeld(meldIndex, card);
+            final success = _gameController.addCardToMeld(meldIndex, card);
+            print('DEBUG: addToMeld result: $success');
+            print(
+              'DEBUG: After addToMeld - currentPhase: ${_gameController.gameState.turnPhase}, hand size: ${currentPlayer.currentHand.length}',
+            );
+
+            if (!success) {
+              print(
+                'ERROR: addToMeld failed - forcing bot to end turn to prevent infinite loop',
+              );
+              _forceNextTurn();
+              return;
+            }
           } else {
             print(
-              'Error: Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
+              'ERROR: Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
             );
-            // Fallback: force bot to discard instead
+            // Fallback: force bot to discard instead or skip turn
             if (card != null) {
+              print('DEBUG: Attempting fallback discard');
               _gameController.discardCard(card);
+            } else {
+              print('ERROR: No card to discard - forcing next turn');
+              _forceNextTurn();
+              return;
             }
           }
           // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
