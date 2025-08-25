@@ -290,163 +290,323 @@ class _GameScreenState extends State<GameScreen> {
     if (currentPlayer.type == PlayerType.bot) {
       await Future.delayed(const Duration(seconds: 1));
 
-      final decision = _botAI.makeDecision(currentPlayer, _gameController);
+      try {
+        final decision = _botAI.makeDecision(currentPlayer, _gameController);
 
-      // ANTI-LOOP PROTECTION: Track repeated decisions
-      final decisionKey =
-          '${decision.action}-${_gameController.gameState.turnPhase}';
-      if (_botLoopTracker.isRepeated(currentPlayer.id, decisionKey)) {
-        DebugLogger.warning(
-          'Bot ${currentPlayer.name} making same decision ${decision.action} repeatedly (count: ${_botLoopTracker.count})',
-        );
-        if (_botLoopTracker.isStuck) {
-          print(
-            'ERROR: Bot ${currentPlayer.name} stuck in loop with ${decision.action} - forcing turn skip',
+        // ANTI-LOOP PROTECTION: Track repeated decisions
+        final decisionKey =
+            '${decision.action}-${_gameController.gameState.turnPhase}';
+        if (_botLoopTracker.isRepeated(currentPlayer.id, decisionKey)) {
+          DebugLogger.warning(
+            'Bot ${currentPlayer.name} making same decision ${decision.action} repeatedly (count: ${_botLoopTracker.count})',
           );
-          _forceNextTurn();
-          _botLoopTracker.clear();
-          return;
+          if (_botLoopTracker.isStuck) {
+            // FIXED: Instead of skipping turn, force bot to complete turn with fallback action
+            _gameController.gameState.logAction(
+              'attempted ${decision.action} but got stuck in loop - using fallback action',
+              showCardDetails: false,
+            );
+            print(
+              'ERROR: Bot ${currentPlayer.name} stuck in loop with ${decision.action} - forcing completion',
+            );
+            _forceCompleteBotTurn(currentPlayer);
+            _botLoopTracker.clear();
+            return;
+          }
+        }
+
+        switch (decision.action) {
+          case 'drawFromDeck':
+            // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
+            if (_gameController.gameState.currentPlayer.id !=
+                    currentPlayer.id ||
+                _gameController.gameState.currentPlayer.type !=
+                    PlayerType.bot) {
+              return;
+            }
+            _gameController.drawFromDeck();
+            // CRITICAL FIX: Continue bot turn immediately after drawing
+            // Drawing advances phase to meld - bot needs to make meld decision
+            _scheduleBotTurnContinuation();
+            break;
+          case 'drawFromDiscard':
+            // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
+            if (_gameController.gameState.currentPlayer.id !=
+                    currentPlayer.id ||
+                _gameController.gameState.currentPlayer.type !=
+                    PlayerType.bot) {
+              return;
+            }
+            _gameController.drawFromDiscardPile();
+            // CRITICAL FIX: Continue bot turn immediately after drawing
+            // Drawing advances phase to meld - bot needs to make meld decision
+            _scheduleBotTurnContinuation();
+            break;
+          case 'createMeld':
+            final cards = decision.data as List<PlayingCard>;
+            if (decision.skipPlayDownCheck) {
+              // For multi-meld sequences, use the bypass method
+              _gameController.createMeldBypass(cards);
+            } else {
+              _gameController.createMeld(cards);
+            }
+            // POTENTIAL FIX: Continue bot turn if still in meld phase after melding
+            // Some meld actions don't advance to discard phase automatically
+            _scheduleBotTurnContinuation();
+            break;
+          case 'addToMeld':
+            final data = decision.data as Map<String, dynamic>;
+            final meldIndex = data['meldIndex'] as int?;
+            final card = data['card'] as PlayingCard?;
+
+            // DEBUG: Log the addToMeld attempt (removed in release builds)
+            DebugLogger.botDebug(
+              currentPlayer.id,
+              currentPlayer.name,
+              'attempting addToMeld - meldIndex: $meldIndex, card: ${card?.displayName}, currentPhase: ${_gameController.gameState.turnPhase}',
+            );
+            DebugLogger.debug(
+              'Bot has ${currentPlayer.melds.length} melds, hand size: ${currentPlayer.currentHand.length}',
+            );
+            if (meldIndex != null && meldIndex < currentPlayer.melds.length) {
+              final targetMeld = currentPlayer.melds[meldIndex];
+              DebugLogger.debug(
+                'Target meld has ${targetMeld.cards.length} cards, type: ${targetMeld.type}',
+              );
+            }
+
+            if (meldIndex != null && card != null) {
+              final success = _gameController.addCardToMeld(meldIndex, card);
+              DebugLogger.debug('addToMeld result: $success');
+              DebugLogger.debug(
+                'After addToMeld - currentPhase: ${_gameController.gameState.turnPhase}, hand size: ${currentPlayer.currentHand.length}',
+              );
+
+              if (!success) {
+                // IMPROVED: Log failed addToMeld attempts instead of silently skipping
+                _gameController.gameState.logAction(
+                  'attempted to add card to meld but failed - continuing with turn',
+                  showCardDetails: false,
+                );
+                DebugLogger.error(
+                  'addToMeld failed - continuing turn instead of forcing skip',
+                );
+                // Don't force turn skip - let bot continue with other actions
+              }
+            } else {
+              // IMPROVED: Log invalid meld attempts
+              _gameController.gameState.logAction(
+                'attempted invalid meld operation - continuing with turn',
+                showCardDetails: false,
+              );
+              DebugLogger.error(
+                'Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
+              );
+              // Don't force turn skip - let bot continue with other actions
+            }
+            // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
+            // Some add-to-meld actions don't advance to discard phase automatically
+            _scheduleBotTurnContinuation();
+            break;
+          case 'noMeld':
+            // Bot decided not to meld - advance to discard phase
+            // The game controller should transition to discard phase automatically
+            // if no meld was made, but let's ensure it by scheduling continuation
+            if (_gameController.gameState.turnPhase == TurnPhase.meld) {
+              // Force transition to discard phase
+              _gameController.gameState.turnPhase = TurnPhase.discard;
+              _scheduleBotTurnContinuation();
+            }
+            break;
+          case 'discard':
+            // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
+            if (_gameController.gameState.currentPlayer.id !=
+                    currentPlayer.id ||
+                _gameController.gameState.currentPlayer.type !=
+                    PlayerType.bot) {
+              return;
+            }
+            final card = decision.data as PlayingCard;
+            _gameController.discardCard(card);
+            break;
+          case 'goOut':
+            // Bot is going out - they have no cards and meet the requirements
+            // The game should automatically end the round
+            _gameController.gameState.endRound();
+            break;
+          case 'error':
+            // Bot is stuck - should not happen, but handle gracefully
+            print('Bot ${currentPlayer.name} encountered an error state');
+            // FIXED: Force bot to complete turn instead of skipping
+            _gameController.gameState.logAction(
+              'encountered error state - forcing turn completion',
+              showCardDetails: false,
+            );
+            _forceCompleteBotTurn(currentPlayer);
+            break;
+          case 'endTurn':
+            // FIXED: Bot cannot just "end turn" - must complete required actions
+            _gameController.gameState.logAction(
+              'requested to end turn but must complete required actions',
+              showCardDetails: false,
+            );
+            _forceCompleteBotTurn(currentPlayer);
+            break;
+        }
+
+        if (_disposed || !mounted) return; // Check before setState
+        setState(() {});
+
+        if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
+          _processBotTurn();
+        } else {
+          // It's now the human player's turn - save the game state
+          _saveGameState();
+        }
+      } catch (e) {
+        // IMPROVED: Comprehensive exception handling with action logging
+        DebugLogger.error(
+          'Bot turn processing failed for ${currentPlayer.name}: $e',
+        );
+        _gameController.gameState.logAction(
+          'encountered error during turn processing - attempting recovery',
+          showCardDetails: false,
+        );
+
+        // FIXED: Force bot to complete turn instead of skipping
+        try {
+          _forceCompleteBotTurn(currentPlayer);
+        } catch (recoveryError) {
+          DebugLogger.error('Bot error recovery failed: $recoveryError');
+          _gameController.gameState.logAction(
+            'error recovery failed - using emergency completion',
+            showCardDetails: false,
+          );
+          _emergencyCompleteBotTurn(currentPlayer);
+        }
+      }
+    }
+  }
+
+  /// Force bot to complete their turn using fallback actions that follow game rules
+  void _forceCompleteBotTurn(Player botPlayer) {
+    final gameState = _gameController.gameState;
+
+    DebugLogger.debug(
+      'Force completing bot turn for ${botPlayer.name} in phase ${gameState.turnPhase}',
+    );
+
+    try {
+      switch (gameState.turnPhase) {
+        case TurnPhase.draw:
+          // Bot must draw to continue
+          if (!gameState.hasDrawnFromDeck && _gameController.drawFromDeck()) {
+            _scheduleBotTurnContinuation();
+            return;
+          }
+          // Move to meld phase if draw completed or failed
+          gameState.turnPhase = TurnPhase.meld;
+          _scheduleBotTurnContinuation();
+          break;
+
+        case TurnPhase.meld:
+          // Bot can skip melding - move to discard phase
+          gameState.turnPhase = TurnPhase.discard;
+          _scheduleBotTurnContinuation();
+          break;
+
+        case TurnPhase.discard:
+          // GUARANTEED turn completion: discard, pick up foot, or end round
+          _guaranteedTurnCompletion(botPlayer);
+          break;
+      }
+    } catch (e) {
+      DebugLogger.error('Error in _forceCompleteBotTurn: $e');
+      _guaranteedTurnCompletion(botPlayer);
+    }
+  }
+
+  /// Guaranteed ways to complete a bot turn (discard, foot pickup, or end round)
+  void _guaranteedTurnCompletion(Player botPlayer) {
+    // Option 1: Simple discard (most common)
+    if (botPlayer.currentHand.isNotEmpty) {
+      final cardToDiscard = botPlayer.currentHand.first;
+      if (_gameController.discardCard(cardToDiscard)) {
+        _gameController.gameState.logAction(
+          'completed turn with discard',
+          showCardDetails: false,
+        );
+        return;
+      }
+    }
+
+    // Option 2: Pick up foot if hand is empty and foot available
+    if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
+      botPlayer.pickUpFoot();
+      _gameController.gameState.logAction(
+        'picked up foot pile',
+        showCardDetails: false,
+      );
+      // Now try to discard from foot
+      if (botPlayer.currentHand.isNotEmpty) {
+        _gameController.discardCard(botPlayer.currentHand.first);
+        return;
+      }
+    }
+
+    // Option 3: Check if bot can go out (end round)
+    if (botPlayer.canGoOut) {
+      _gameController.gameState.logAction(
+        'went out and ended the round!',
+        showCardDetails: false,
+      );
+      _gameController.gameState.endRound();
+      return;
+    }
+
+    // This should never happen in a valid game state, but if it does,
+    // fall back to emergency completion
+    _emergencyCompleteBotTurn(botPlayer);
+  }
+
+  /// Emergency bot turn completion when all else fails
+  void _emergencyCompleteBotTurn(Player botPlayer) {
+    DebugLogger.warning('Emergency bot turn completion for ${botPlayer.name}');
+
+    try {
+      // Force to discard phase and try every possible card
+      _gameController.gameState.turnPhase = TurnPhase.discard;
+
+      if (botPlayer.currentHand.isNotEmpty) {
+        // Try each card in hand until one works
+        for (final card in [...botPlayer.currentHand]) {
+          if (_gameController.discardCard(card)) {
+            _gameController.gameState.logAction(
+              'emergency discard completed',
+              showCardDetails: false,
+            );
+            return;
+          }
         }
       }
 
-      switch (decision.action) {
-        case 'drawFromDeck':
-          // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
-          if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
-              _gameController.gameState.currentPlayer.type != PlayerType.bot) {
-            return;
-          }
-          _gameController.drawFromDeck();
-          // CRITICAL FIX: Continue bot turn immediately after drawing
-          // Drawing advances phase to meld - bot needs to make meld decision
-          _scheduleBotTurnContinuation();
-          break;
-        case 'drawFromDiscard':
-          // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
-          if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
-              _gameController.gameState.currentPlayer.type != PlayerType.bot) {
-            return;
-          }
-          _gameController.drawFromDiscardPile();
-          // CRITICAL FIX: Continue bot turn immediately after drawing
-          // Drawing advances phase to meld - bot needs to make meld decision
-          _scheduleBotTurnContinuation();
-          break;
-        case 'createMeld':
-          final cards = decision.data as List<PlayingCard>;
-          if (decision.skipPlayDownCheck) {
-            // For multi-meld sequences, use the bypass method
-            _gameController.createMeldBypass(cards);
-          } else {
-            _gameController.createMeld(cards);
-          }
-          // POTENTIAL FIX: Continue bot turn if still in meld phase after melding
-          // Some meld actions don't advance to discard phase automatically
-          _scheduleBotTurnContinuation();
-          break;
-        case 'addToMeld':
-          final data = decision.data as Map<String, dynamic>;
-          final meldIndex = data['meldIndex'] as int?;
-          final card = data['card'] as PlayingCard?;
+      // CRITICAL: If no discard worked, manually complete turn to prevent game freeze
+      // This is the absolute last resort to maintain game flow
+      DebugLogger.error(
+        'CRITICAL: All turn completion methods failed for ${botPlayer.name}',
+      );
+      _gameController.gameState.logAction(
+        'critical error: forcing turn advancement',
+        showCardDetails: false,
+      );
 
-          // DEBUG: Log the addToMeld attempt (removed in release builds)
-          DebugLogger.botDebug(
-            currentPlayer.id,
-            currentPlayer.name,
-            'attempting addToMeld - meldIndex: $meldIndex, card: ${card?.displayName}, currentPhase: ${_gameController.gameState.turnPhase}',
-          );
-          DebugLogger.debug(
-            'Bot has ${currentPlayer.melds.length} melds, hand size: ${currentPlayer.currentHand.length}',
-          );
-          if (meldIndex != null && meldIndex < currentPlayer.melds.length) {
-            final targetMeld = currentPlayer.melds[meldIndex];
-            DebugLogger.debug(
-              'Target meld has ${targetMeld.cards.length} cards, type: ${targetMeld.type}',
-            );
-          }
-
-          if (meldIndex != null && card != null) {
-            final success = _gameController.addCardToMeld(meldIndex, card);
-            DebugLogger.debug('addToMeld result: $success');
-            DebugLogger.debug(
-              'After addToMeld - currentPhase: ${_gameController.gameState.turnPhase}, hand size: ${currentPlayer.currentHand.length}',
-            );
-
-            if (!success) {
-              DebugLogger.error(
-                'addToMeld failed - forcing bot to end turn to prevent infinite loop',
-              );
-              _forceNextTurn();
-              return;
-            }
-          } else {
-            DebugLogger.error(
-              'Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
-            );
-            // Fallback: force bot to discard instead or skip turn
-            if (card != null) {
-              DebugLogger.debug('Attempting fallback discard');
-              _gameController.discardCard(card);
-            } else {
-              DebugLogger.error('No card to discard - forcing next turn');
-              _forceNextTurn();
-              return;
-            }
-          }
-          // POTENTIAL FIX: Continue bot turn if still in meld phase after adding
-          // Some add-to-meld actions don't advance to discard phase automatically
-          _scheduleBotTurnContinuation();
-          break;
-        case 'noMeld':
-          // Bot decided not to meld - advance to discard phase
-          // The game controller should transition to discard phase automatically
-          // if no meld was made, but let's ensure it by scheduling continuation
-          if (_gameController.gameState.turnPhase == TurnPhase.meld) {
-            // Force transition to discard phase
-            _gameController.gameState.turnPhase = TurnPhase.discard;
-            _scheduleBotTurnContinuation();
-          }
-          break;
-        case 'discard':
-          // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
-          if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
-              _gameController.gameState.currentPlayer.type != PlayerType.bot) {
-            return;
-          }
-          final card = decision.data as PlayingCard;
-          _gameController.discardCard(card);
-          break;
-        case 'goOut':
-          // Bot is going out - they have no cards and meet the requirements
-          // The game should automatically end the round
-          _gameController.gameState.endRound();
-          break;
-        case 'error':
-          // Bot is stuck - should not happen, but handle gracefully
-          print('Bot ${currentPlayer.name} encountered an error state');
-          // Use proper logging with privacy controls
-          _gameController.gameState.logAction(
-            'encountered error state - skipping turn',
-            showCardDetails: false,
-          );
-          _forceNextTurn();
-          break;
-        case 'endTurn':
-          // Bot decided to end turn without other action
-          // This should force next turn
-          _forceNextTurn();
-          break;
-      }
-
-      if (_disposed || !mounted) return; // Check before setState
+      // Manually advance turn as last resort (violates rules but prevents freeze)
+      _gameController.gameState.nextPlayer();
       setState(() {});
-
-      if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
-        _processBotTurn();
-      } else {
-        // It's now the human player's turn - save the game state
-        _saveGameState();
-      }
+      _processBotTurns();
+    } catch (e) {
+      DebugLogger.error('Emergency completion failed: $e');
+      setState(() {});
     }
   }
 
