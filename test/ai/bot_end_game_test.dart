@@ -55,9 +55,10 @@ void main() {
 
         // Give bot one card to discard
         botPlayer.hand.clear();
-        botPlayer.dealHand([
+        botPlayer.foot.clear();
+        botPlayer.foot.add(
           const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        ]);
+        );
 
         gameController.gameState.currentPlayerIndex = 1;
         gameController.gameState.turnPhase = TurnPhase.discard;
@@ -90,12 +91,10 @@ void main() {
 
         // Give bot a card that can be added to existing meld
         botPlayer.hand.clear();
-        botPlayer.dealHand([
-          const PlayingCard(
-            suit: Suit.diamonds,
-            rank: CardRank.king,
-          ), // Can add to king meld
-        ]);
+        botPlayer.foot.clear();
+        botPlayer.foot.add(
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        ); // Can add to king meld
 
         gameController.gameState.currentPlayerIndex = 1;
         gameController.gameState.turnPhase = TurnPhase.discard;
@@ -125,7 +124,8 @@ void main() {
 
         // Give bot a matching card and other cards
         botPlayer.hand.clear();
-        botPlayer.dealHand([
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
           const PlayingCard(
             suit: Suit.clubs,
             rank: CardRank.king,
@@ -149,7 +149,8 @@ void main() {
       test('should create strategic melds for book completion', () {
         // Give bot cards that can form a meld leading to a book
         botPlayer.hand.clear();
-        botPlayer.dealHand([
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
           const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
           const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
@@ -196,7 +197,8 @@ void main() {
         // Bot has too many cards, but one contains penalty cards
         // End game manager may still make decisions for hand optimization
         botPlayer.hand.clear();
-        botPlayer.dealHand([
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
           const PlayingCard(suit: Suit.spades, rank: CardRank.six),
           const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
