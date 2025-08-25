@@ -45,6 +45,7 @@ void main() {
           meldDecision.action,
           anyOf([
             'createMeld',
+            'createMultipleMelds',
             'addToMeld',
             'discard',
             'endTurn',

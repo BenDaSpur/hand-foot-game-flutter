@@ -413,6 +413,9 @@ class _GameScreenState extends State<GameScreen> {
       case 'createMeld':
         _handleBotCreateMeld(decision, currentPlayer);
         break;
+      case 'createMultipleMelds':
+        _handleBotCreateMultipleMelds(decision, currentPlayer);
+        break;
       case 'addToMeld':
         _handleBotAddToMeld(decision, currentPlayer);
         break;
@@ -486,6 +489,49 @@ class _GameScreenState extends State<GameScreen> {
     } else {
       _gameController.createMeld(cards);
     }
+    _scheduleBotTurnContinuation();
+  }
+
+  /// Handle bot create multiple melds action
+  void _handleBotCreateMultipleMelds(
+    BotDecision decision,
+    Player currentPlayer,
+  ) {
+    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
+    if (currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.name == 'You') {
+      DebugLogger.warning(
+        'Bot create-multiple-melds action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
+      );
+      return;
+    }
+
+    final allMelds = decision.data as List<List<PlayingCard>>;
+    // Convert to list of indices for the multi-meld creation system
+    final allMeldIndices = <List<int>>[];
+
+    for (final meld in allMelds) {
+      final meldIndices = <int>[];
+      for (final card in meld) {
+        final index = currentPlayer.currentHand.indexOf(card);
+        if (index >= 0) {
+          meldIndices.add(index);
+        }
+      }
+      if (meldIndices.isNotEmpty) {
+        allMeldIndices.add(meldIndices);
+      }
+    }
+
+    if (allMeldIndices.isNotEmpty) {
+      // Use the multi-meld system which validates the combined point requirement
+      _gameController.createMultipleMeldsFromIndices(
+        allMeldIndices,
+        skipPlayDownCheck: decision.skipPlayDownCheck,
+      );
+    }
+
     _scheduleBotTurnContinuation();
   }
 

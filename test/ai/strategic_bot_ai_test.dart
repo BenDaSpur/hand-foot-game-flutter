@@ -58,9 +58,17 @@ void main() {
         // Bot should create a multi-meld play-down (30+30=60 points)
         final decision = botAI.makeDecision(bot, gameController);
 
-        expect(decision.action, equals('createMeld'));
-        expect(decision.skipPlayDownCheck, isTrue);
-        expect(decision.data, isA<List<PlayingCard>>());
+        expect(decision.action, anyOf(['createMeld', 'createMultipleMelds']));
+        if (decision.action == 'createMultipleMelds') {
+          expect(
+            decision.skipPlayDownCheck,
+            isFalse,
+          ); // Multi-meld uses proper validation
+          expect(decision.data, isA<List<List<PlayingCard>>>());
+        } else {
+          expect(decision.skipPlayDownCheck, isTrue);
+          expect(decision.data, isA<List<PlayingCard>>());
+        }
       },
     );
 
@@ -400,7 +408,7 @@ void main() {
 
         // Should complete within reasonable time (< 100ms for this scenario)
         expect(stopwatch.elapsedMilliseconds, lessThan(100));
-        expect(decision.action, equals('createMeld'));
+        expect(decision.action, anyOf(['createMeld', 'createMultipleMelds']));
       });
     });
   });

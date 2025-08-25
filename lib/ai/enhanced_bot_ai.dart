@@ -290,12 +290,12 @@ class EnhancedBotAI {
   /// Execute a play-down sequence (single or multi-meld)
   BotDecision _executePlayDown(List<List<PlayingCard>> melds) {
     if (melds.length > 1) {
-      // Multi-meld initial play-down: return first meld with skip flag
-      // This is legitimate for initial play-down within a single turn
+      // Multi-meld initial play-down: use multi-meld creation to ensure all melds
+      // are validated together and meet the play-down requirement as a group
       return BotDecision(
-        action: 'createMeld',
-        data: melds.first,
-        skipPlayDownCheck: true,
+        action: 'createMultipleMelds',
+        data: melds,
+        skipPlayDownCheck: false, // Let the system validate the total points
       );
     } else {
       // Single meld play-down
