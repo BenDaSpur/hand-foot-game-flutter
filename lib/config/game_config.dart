@@ -201,20 +201,22 @@ class GameConfig {
   /// Card aspect ratio for consistent rendering
   static const double cardAspectRatio = 0.7;
 
-  /// Spacing between cards in UI layouts
-  static const double cardSpacing = 8.0;
+  /// Spacing between cards in UI layouts - reduced for better space usage
+  static const double cardSpacing = 4.0;
 
   /// Responsive breakpoints for different screen sizes
+  static const double ultraWideBreakpoint = 1600.0; // New ultra-wide breakpoint
   static const double desktopBreakpoint = 1200.0;
   static const double tabletLandscapeBreakpoint = 900.0;
   static const double tabletPortraitBreakpoint = 600.0;
 
-  /// Grid layout configurations for different screen sizes
+  /// Grid layout configurations for different screen sizes - optimized for more cards per row
   static const Map<String, int> gridCrossAxisCounts = {
-    'desktop': 6,
-    'tablet_landscape': 5,
-    'tablet_portrait': 4,
-    'mobile': 3,
+    'ultra_wide': 10, // New category for ultra-wide screens
+    'desktop': 8, // Increased from 6 to 8
+    'tablet_landscape': 7, // Increased from 5 to 7
+    'tablet_portrait': 5, // Increased from 4 to 5
+    'mobile': 4, // Increased from 3 to 4
   };
 
   /// Card sizing constraints

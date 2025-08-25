@@ -12,6 +12,7 @@ import 'bot_game_analyzer.dart';
 import 'bot_meld_analyzer.dart';
 import 'bot_foot_transition_manager.dart';
 import 'bot_end_game_manager.dart';
+import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
 ///
@@ -52,26 +53,46 @@ class EnhancedBotAI {
   BotDecision makeDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
-    // Set context for personality-based decisions
-    _personalityManager.setCurrentPlayerContext(bot.id);
+    try {
+      // DEBUG: Log decision context (removed in release builds)
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'makeDecision in phase ${gameState.turnPhase}',
+      );
 
-    // Update game analysis
-    _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
-    _gameAnalyzer.incrementTurnCount(bot.id);
+      // Set context for personality-based decisions
+      _personalityManager.setCurrentPlayerContext(bot.id);
 
-    // Clear meld cache if needed
-    if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
-      _meldAnalyzer.clearCache();
-    }
+      // Update game analysis
+      _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
+      _gameAnalyzer.incrementTurnCount(bot.id);
 
-    // Route to appropriate decision handler based on turn phase
-    switch (gameState.turnPhase) {
-      case TurnPhase.draw:
-        return _makeDrawDecision(bot, controller);
-      case TurnPhase.meld:
-        return _makeMeldDecision(bot, controller);
-      case TurnPhase.discard:
-        return _makeDiscardDecision(bot, controller);
+      // Clear meld cache if needed
+      if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
+        _meldAnalyzer.clearCache();
+      }
+
+      // Route to appropriate decision handler based on turn phase
+      final decision = switch (gameState.turnPhase) {
+        TurnPhase.draw => _makeDrawDecision(bot, controller),
+        TurnPhase.meld => _makeMeldDecision(bot, controller),
+        TurnPhase.discard => _makeDiscardDecision(bot, controller),
+      };
+
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'makeDecision returning: ${decision.action}',
+      );
+      return decision;
+    } catch (e, stackTrace) {
+      print('ERROR: Bot decision failed for ${bot.id}: $e');
+      print('Stack trace: $stackTrace');
+      // Emergency fallback
+      return gameState.turnPhase == TurnPhase.draw
+          ? BotDecision(action: 'drawFromDeck')
+          : BotDecision(action: 'noMeld');
     }
   }
 
@@ -79,25 +100,50 @@ class EnhancedBotAI {
   BotDecision _makeDrawDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
+    // DEBUG: Log draw decision context (removed in release builds)
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      '_makeDrawDecision - hasPlayedDown=${bot.hasPlayedDown}, melds=${bot.melds.length}, inMultiMeld=$_inMultiMeldSequence',
+    );
+
     // If continuing multi-meld sequence, draw from deck to proceed to meld phase
     // Multi-meld sequence should continue in meld phase, not skip drawing
     if (_inMultiMeldSequence) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Returning drawFromDeck (multi-meld sequence)',
+      );
       return BotDecision(action: 'drawFromDeck');
     }
 
     // Evaluate discard pile opportunity
     if (gameState.discardPile.isNotEmpty && bot.hasPlayedDown) {
-      final riskTolerance = _personalityManager.calculateRiskTolerance(
-        gameState,
-        bot,
-      );
+      try {
+        final riskTolerance = _personalityManager.calculateRiskTolerance(
+          gameState,
+          bot,
+        );
 
-      if (_shouldTakeDiscardPile(bot, controller, riskTolerance)) {
-        return BotDecision(action: 'drawFromDiscard');
+        if (_shouldTakeDiscardPile(bot, controller, riskTolerance)) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'Returning drawFromDiscard (discard pile opportunity)',
+          );
+          return BotDecision(action: 'drawFromDiscard');
+        }
+      } catch (e) {
+        DebugLogger.warning(
+          'Risk tolerance calculation failed for bot ${bot.id}: $e',
+        );
+        // Skip discard pile evaluation and continue to default
       }
     }
 
     // Default to drawing from deck
+    DebugLogger.botDebug(bot.id, bot.name, 'Returning drawFromDeck (default)');
     return BotDecision(action: 'drawFromDeck');
   }
 

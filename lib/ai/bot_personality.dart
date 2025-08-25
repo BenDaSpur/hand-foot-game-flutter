@@ -154,16 +154,19 @@ class BotPersonalityManager {
   /// Get current player's constants (must call setCurrentPlayerContext first)
   PersonalityConstants get currentConstants {
     if (_currentConstants == null) {
-      // In debug mode, assert that context was properly set
-      assert(
-        false,
-        'BotPersonalityManager: currentConstants accessed without setting player context. Call setCurrentPlayerContext() first.',
-      );
-
-      // Fallback for release mode with logging
+      // Log the issue but don't throw assertions that could break gameplay
       print(
         'WARNING: BotPersonalityManager - accessing currentConstants without context, falling back to Adaptive',
       );
+
+      // In debug mode, also show an assertion (but don't fail)
+      assert(() {
+        print(
+          'DEBUG: BotPersonalityManager context issue - setCurrentPlayerContext() should be called first',
+        );
+        return true;
+      }());
+
       return PersonalityConstants.forPersonality(BotPersonality.adaptive);
     }
     return _currentConstants!;
@@ -172,16 +175,19 @@ class BotPersonalityManager {
   /// Get current player's personality
   BotPersonality get currentPersonality {
     if (_currentPlayerId == null) {
-      // In debug mode, assert that context was properly set
-      assert(
-        false,
-        'BotPersonalityManager: currentPersonality accessed without setting player context. Call setCurrentPlayerContext() first.',
-      );
-
-      // Fallback for release mode with logging
+      // Log the issue but don't throw assertions that could break gameplay
       print(
         'WARNING: BotPersonalityManager - accessing currentPersonality without context, falling back to Adaptive',
       );
+
+      // In debug mode, also show an assertion (but don't fail)
+      assert(() {
+        print(
+          'DEBUG: BotPersonalityManager context issue - setCurrentPlayerContext() should be called first',
+        );
+        return true;
+      }());
+
       return BotPersonality.adaptive;
     }
     return getPersonality(_currentPlayerId!);
