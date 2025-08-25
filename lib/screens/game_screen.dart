@@ -266,12 +266,26 @@ class _GameScreenState extends State<GameScreen> {
     // Check if widget has been disposed
     if (_disposed || !mounted) return;
 
-    // ENHANCED SAFETY CHECK: Comprehensive game state validation
+    // ENHANCED SAFETY CHECK: Comprehensive game state validation with detailed logging
     if (_gameController.gameState.currentPlayer.name == 'You' ||
         currentPlayer.type == PlayerType.human ||
         _gameController.gameState.currentPlayer.id != currentPlayer.id ||
         _gameController.gameState.phase != GamePhase.playing) {
-      DebugLogger.debug('Bot turn processing skipped - invalid game state');
+      DebugLogger.debug(
+        'Bot turn processing skipped - Player: ${currentPlayer.name}, Type: ${currentPlayer.type}, ID: ${currentPlayer.id}, Phase: ${_gameController.gameState.phase}',
+      );
+      return;
+    }
+
+    // CRITICAL: Additional safety check with explicit logging for debugging
+    if (currentPlayer.name == 'You') {
+      DebugLogger.error(
+        'CRITICAL BUG: Human player "You" bypassed bot safety checks! Type: ${currentPlayer.type}, ID: ${currentPlayer.id}',
+      );
+      _gameController.gameState.logAction(
+        'EMERGENCY: Blocked human player from bot processing - this indicates a serious bug',
+        showCardDetails: false,
+      );
       return;
     }
 
@@ -422,6 +436,16 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Handle bot create meld action
   void _handleBotCreateMeld(BotDecision decision, Player currentPlayer) {
+    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
+    if (currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.name == 'You') {
+      DebugLogger.warning(
+        'Bot create-meld action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
+      );
+      return;
+    }
+
     final cards = decision.data as List<PlayingCard>;
     if (decision.skipPlayDownCheck) {
       _gameController.createMeldBypass(cards);
@@ -433,6 +457,17 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Handle bot add to existing meld action
   void _handleBotAddToMeld(BotDecision decision, Player currentPlayer) {
+    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
+    // Prevents race conditions where human players get bot actions applied
+    if (currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.name == 'You') {
+      DebugLogger.warning(
+        'Bot add-to-meld action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
+      );
+      return;
+    }
+
     final data = decision.data as Map<String, dynamic>;
     final meldIndex = data['meldIndex'] as int?;
     final card = data['card'] as PlayingCard?;
@@ -470,9 +505,15 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Handle bot discard action
   void _handleBotDiscard(BotDecision decision, Player currentPlayer) {
-    // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
-    if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
-        _gameController.gameState.currentPlayer.type != PlayerType.bot) {
+    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
+    // Prevents race conditions where human players get bot actions applied
+    if (currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.name == 'You' ||
+        _gameController.gameState.currentPlayer.id != currentPlayer.id) {
+      DebugLogger.warning(
+        'Bot discard action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
+      );
       return;
     }
     final card = decision.data as PlayingCard;
@@ -508,20 +549,19 @@ class _GameScreenState extends State<GameScreen> {
     try {
       switch (gameState.turnPhase) {
         case TurnPhase.draw:
-          // Bot must draw to continue
-          if (!gameState.hasDrawnFromDeck && _gameController.drawFromDeck()) {
-            _scheduleBotTurnContinuation();
-            return;
+          // Bot must draw to continue or move to discard phase
+          if (!gameState.hasDrawnFromDeck) {
+            _gameController.drawFromDeck();
           }
-          // Move to meld phase if draw completed or failed
-          gameState.turnPhase = TurnPhase.meld;
-          _scheduleBotTurnContinuation();
+          // Force to discard phase to complete turn - no continuation scheduling
+          gameState.turnPhase = TurnPhase.discard;
+          _guaranteedTurnCompletion(botPlayer);
           break;
 
         case TurnPhase.meld:
-          // Bot can skip melding - move to discard phase
+          // Bot can skip melding - force to discard phase to complete turn
           gameState.turnPhase = TurnPhase.discard;
-          _scheduleBotTurnContinuation();
+          _guaranteedTurnCompletion(botPlayer);
           break;
 
         case TurnPhase.discard:
