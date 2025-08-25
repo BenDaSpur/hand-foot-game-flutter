@@ -20,6 +20,7 @@ void main() {
 
         final controller = GameController(
           players: [humanPlayer, botPlayer1, botPlayer2],
+          seed: 54321, // Fixed seed for consistent test results
         );
         controller.initializeGame();
 
@@ -115,7 +116,7 @@ void main() {
     test(
       'should clear newly drawn cards when it becomes that player\'s turn again',
       () {
-        // Create a 2-player game to make turns cycle faster
+        // Create a 2-player game with deterministic seed to make turns cycle predictably
         final humanPlayer = Player(
           id: '1',
           name: 'Human',
@@ -123,7 +124,11 @@ void main() {
         );
         final botPlayer = Player(id: '2', name: 'Bot', type: PlayerType.bot);
 
-        final controller = GameController(players: [humanPlayer, botPlayer]);
+        // Use fixed seed for deterministic behavior
+        final controller = GameController(
+          players: [humanPlayer, botPlayer],
+          seed: 12345, // Fixed seed for consistent test results
+        );
         controller.initializeGame();
 
         // Human draws cards and gets highlighting
@@ -145,10 +150,11 @@ void main() {
         );
 
         // Human discards, bot's turn starts
-        // Choose a card that's NOT newly drawn to avoid removing highlighted cards
-        // But if all cards are highlighted, just use the first non-highlighted or first card
-        PlayingCard humanCard = humanPlayer.currentHand.first;
+        // With fixed seed, we can now predictably choose a non-highlighted card
+        late PlayingCard humanCard;
         bool foundNonHighlighted = false;
+
+        // Find the first non-highlighted card to discard
         for (int i = 0; i < humanPlayer.currentHand.length; i++) {
           if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
             humanCard = humanPlayer.currentHand[i];
@@ -157,15 +163,21 @@ void main() {
           }
         }
 
+        // If all cards are highlighted (shouldn't happen with this seed), use the last highlighted card
+        if (!foundNonHighlighted) {
+          humanCard = humanPlayer.currentHand.last;
+        }
+
         // Store expected count based on whether we're discarding a highlighted card
         final expectedRemainingHighlighted = foundNonHighlighted
-            ? GameConfig.requiredDrawCount
-            : GameConfig.requiredDrawCount - 1;
+            ? GameConfig
+                  .requiredDrawCount // Should remain the same
+            : GameConfig.requiredDrawCount - 1; // One highlighted card removed
 
         expect(controller.discardCard(humanCard), true);
         expect(controller.gameState.currentPlayer.id, '2'); // Bot's turn
 
-        // Human should still have highlighting
+        // Human should still have highlighting after discard
         final newHandSize = humanPlayer.currentHand.length; // -1 from discard
         highlightedCount = 0;
         for (int i = 0; i < newHandSize; i++) {
@@ -173,11 +185,13 @@ void main() {
             highlightedCount++;
           }
         }
+
         expect(
           highlightedCount,
           expectedRemainingHighlighted,
           reason:
-              'Human should still have $expectedRemainingHighlighted cards highlighted during bot\'s turn',
+              'Human should still have $expectedRemainingHighlighted cards highlighted during bot\'s turn. '
+              'Found non-highlighted card to discard: $foundNonHighlighted',
         );
 
         // Bot draws and discards to return turn to human

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hand_foot_game_flutter/game/game_controller_factory.dart';
+import 'package:hand_foot_game_flutter/game/network_adapter.dart';
 
 void main() {
   group('GameControllerFactory Security Tests', () {
