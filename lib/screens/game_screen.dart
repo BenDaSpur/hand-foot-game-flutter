@@ -20,6 +20,40 @@ import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/emergency_round_end_dialog.dart';
 import 'main_menu_screen.dart';
+import '../utils/debug_logger.dart';
+
+/// Bot loop detection and tracking
+class _BotLoopTracker {
+  int _counter = 0;
+  String? _lastDecision;
+  String? _lastPlayerId;
+
+  bool isRepeated(String playerId, String decision) {
+    final currentDecision = '$playerId-$decision';
+    if (_lastDecision == currentDecision && _lastPlayerId == playerId) {
+      _counter++;
+      return true;
+    } else {
+      reset(playerId, decision);
+      return false;
+    }
+  }
+
+  void reset(String playerId, String decision) {
+    _counter = 0;
+    _lastDecision = '$playerId-$decision';
+    _lastPlayerId = playerId;
+  }
+
+  void clear() {
+    _counter = 0;
+    _lastDecision = null;
+    _lastPlayerId = null;
+  }
+
+  int get count => _counter;
+  bool get isStuck => _counter > 5;
+}
 
 /// Bot configuration for randomized personality assignment
 class BotConfig {
@@ -54,9 +88,7 @@ class _GameScreenState extends State<GameScreen> {
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
   // Loop detection for bot turns
-  int _botDecisionCounter = 0;
-  String? _lastBotDecision;
-  String? _lastBotPlayerId;
+  final _BotLoopTracker _botLoopTracker = _BotLoopTracker();
 
   @override
   void initState() {
@@ -232,13 +264,12 @@ class _GameScreenState extends State<GameScreen> {
     // Check if widget has been disposed
     if (_disposed || !mounted) return;
 
-    // SAFETY CHECK: Don't process if it's actually the human player's turn
-    if (_gameController.gameState.currentPlayer.name == 'You') {
-      return;
-    }
-
-    // ADDITIONAL SAFETY: Check by player type too
-    if (currentPlayer.type == PlayerType.human) {
+    // ENHANCED SAFETY CHECK: Comprehensive game state validation
+    if (_gameController.gameState.currentPlayer.name == 'You' ||
+        currentPlayer.type == PlayerType.human ||
+        _gameController.gameState.currentPlayer.id != currentPlayer.id ||
+        _gameController.gameState.phase != GamePhase.playing) {
+      DebugLogger.debug('Bot turn processing skipped - invalid game state');
       return;
     }
 
@@ -262,28 +293,20 @@ class _GameScreenState extends State<GameScreen> {
       final decision = _botAI.makeDecision(currentPlayer, _gameController);
 
       // ANTI-LOOP PROTECTION: Track repeated decisions
-      final currentDecisionKey =
-          '${currentPlayer.id}-${decision.action}-${_gameController.gameState.turnPhase}';
-      if (_lastBotDecision == currentDecisionKey &&
-          _lastBotPlayerId == currentPlayer.id) {
-        _botDecisionCounter++;
-        print(
-          'WARNING: Bot ${currentPlayer.name} making same decision ${decision.action} repeatedly (count: $_botDecisionCounter)',
+      final decisionKey =
+          '${decision.action}-${_gameController.gameState.turnPhase}';
+      if (_botLoopTracker.isRepeated(currentPlayer.id, decisionKey)) {
+        DebugLogger.warning(
+          'Bot ${currentPlayer.name} making same decision ${decision.action} repeatedly (count: ${_botLoopTracker.count})',
         );
-        if (_botDecisionCounter > 5) {
+        if (_botLoopTracker.isStuck) {
           print(
             'ERROR: Bot ${currentPlayer.name} stuck in loop with ${decision.action} - forcing turn skip',
           );
           _forceNextTurn();
-          _botDecisionCounter = 0;
-          _lastBotDecision = null;
-          _lastBotPlayerId = null;
+          _botLoopTracker.clear();
           return;
         }
-      } else {
-        _botDecisionCounter = 0;
-        _lastBotDecision = currentDecisionKey;
-        _lastBotPlayerId = currentPlayer.id;
       }
 
       switch (decision.action) {
@@ -326,44 +349,46 @@ class _GameScreenState extends State<GameScreen> {
           final meldIndex = data['meldIndex'] as int?;
           final card = data['card'] as PlayingCard?;
 
-          // DEBUG: Log the addToMeld attempt
-          print(
-            'DEBUG: Bot ${currentPlayer.name} attempting addToMeld - meldIndex: $meldIndex, card: ${card?.displayName}, currentPhase: ${_gameController.gameState.turnPhase}',
+          // DEBUG: Log the addToMeld attempt (removed in release builds)
+          DebugLogger.botDebug(
+            currentPlayer.id,
+            currentPlayer.name,
+            'attempting addToMeld - meldIndex: $meldIndex, card: ${card?.displayName}, currentPhase: ${_gameController.gameState.turnPhase}',
           );
-          print(
-            'DEBUG: Bot has ${currentPlayer.melds.length} melds, hand size: ${currentPlayer.currentHand.length}',
+          DebugLogger.debug(
+            'Bot has ${currentPlayer.melds.length} melds, hand size: ${currentPlayer.currentHand.length}',
           );
           if (meldIndex != null && meldIndex < currentPlayer.melds.length) {
             final targetMeld = currentPlayer.melds[meldIndex];
-            print(
-              'DEBUG: Target meld has ${targetMeld.cards.length} cards, type: ${targetMeld.type}',
+            DebugLogger.debug(
+              'Target meld has ${targetMeld.cards.length} cards, type: ${targetMeld.type}',
             );
           }
 
           if (meldIndex != null && card != null) {
             final success = _gameController.addCardToMeld(meldIndex, card);
-            print('DEBUG: addToMeld result: $success');
-            print(
-              'DEBUG: After addToMeld - currentPhase: ${_gameController.gameState.turnPhase}, hand size: ${currentPlayer.currentHand.length}',
+            DebugLogger.debug('addToMeld result: $success');
+            DebugLogger.debug(
+              'After addToMeld - currentPhase: ${_gameController.gameState.turnPhase}, hand size: ${currentPlayer.currentHand.length}',
             );
 
             if (!success) {
-              print(
-                'ERROR: addToMeld failed - forcing bot to end turn to prevent infinite loop',
+              DebugLogger.error(
+                'addToMeld failed - forcing bot to end turn to prevent infinite loop',
               );
               _forceNextTurn();
               return;
             }
           } else {
-            print(
-              'ERROR: Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
+            DebugLogger.error(
+              'Invalid addToMeld data - meldIndex: $meldIndex, card: $card',
             );
             // Fallback: force bot to discard instead or skip turn
             if (card != null) {
-              print('DEBUG: Attempting fallback discard');
+              DebugLogger.debug('Attempting fallback discard');
               _gameController.discardCard(card);
             } else {
-              print('ERROR: No card to discard - forcing next turn');
+              DebugLogger.error('No card to discard - forcing next turn');
               _forceNextTurn();
               return;
             }

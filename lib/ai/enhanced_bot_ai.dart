@@ -12,6 +12,7 @@ import 'bot_game_analyzer.dart';
 import 'bot_meld_analyzer.dart';
 import 'bot_foot_transition_manager.dart';
 import 'bot_end_game_manager.dart';
+import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
 ///
@@ -53,8 +54,11 @@ class EnhancedBotAI {
     final gameState = controller.gameState;
 
     try {
-      print(
-        'DEBUG: makeDecision for bot ${bot.id} (${bot.name}) in phase ${gameState.turnPhase}',
+      // DEBUG: Log decision context (removed in release builds)
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'makeDecision in phase ${gameState.turnPhase}',
       );
 
       // Set context for personality-based decisions
@@ -76,7 +80,11 @@ class EnhancedBotAI {
         TurnPhase.discard => _makeDiscardDecision(bot, controller),
       };
 
-      print('DEBUG: makeDecision returning: ${decision.action}');
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'makeDecision returning: ${decision.action}',
+      );
       return decision;
     } catch (e, stackTrace) {
       print('ERROR: Bot decision failed for ${bot.id}: $e');
@@ -92,16 +100,21 @@ class EnhancedBotAI {
   BotDecision _makeDrawDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
 
-    // Debug logging to help identify stuck bot issues
-    print('DEBUG: _makeDrawDecision for bot ${bot.id} (${bot.name})');
-    print(
-      'DEBUG: hasPlayedDown=${bot.hasPlayedDown}, melds=${bot.melds.length}, inMultiMeld=$_inMultiMeldSequence',
+    // DEBUG: Log draw decision context (removed in release builds)
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      '_makeDrawDecision - hasPlayedDown=${bot.hasPlayedDown}, melds=${bot.melds.length}, inMultiMeld=$_inMultiMeldSequence',
     );
 
     // If continuing multi-meld sequence, draw from deck to proceed to meld phase
     // Multi-meld sequence should continue in meld phase, not skip drawing
     if (_inMultiMeldSequence) {
-      print('DEBUG: Returning drawFromDeck (multi-meld sequence)');
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Returning drawFromDeck (multi-meld sequence)',
+      );
       return BotDecision(action: 'drawFromDeck');
     }
 
@@ -114,19 +127,23 @@ class EnhancedBotAI {
         );
 
         if (_shouldTakeDiscardPile(bot, controller, riskTolerance)) {
-          print('DEBUG: Returning drawFromDiscard (discard pile opportunity)');
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'Returning drawFromDiscard (discard pile opportunity)',
+          );
           return BotDecision(action: 'drawFromDiscard');
         }
       } catch (e) {
-        print(
-          'WARNING: Risk tolerance calculation failed for bot ${bot.id}: $e',
+        DebugLogger.warning(
+          'Risk tolerance calculation failed for bot ${bot.id}: $e',
         );
         // Skip discard pile evaluation and continue to default
       }
     }
 
     // Default to drawing from deck
-    print('DEBUG: Returning drawFromDeck (default)');
+    DebugLogger.botDebug(bot.id, bot.name, 'Returning drawFromDeck (default)');
     return BotDecision(action: 'drawFromDeck');
   }
 
