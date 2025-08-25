@@ -36,7 +36,8 @@ class Player {
 
   bool get isHandEmpty => hand.isEmpty;
   bool get isFootEmpty => foot.isEmpty;
-  bool get canGoOut => hasPickedUpFoot && foot.isEmpty && canGoOutWithBooks;
+  bool get canGoOut =>
+      hasPickedUpFoot && currentHand.isEmpty && canGoOutWithBooks;
 
   void dealHand(List<PlayingCard> cards) {
     hand.clear();
