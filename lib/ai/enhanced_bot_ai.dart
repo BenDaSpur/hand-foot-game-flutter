@@ -126,7 +126,8 @@ class EnhancedBotAI {
           bot,
         );
 
-        if (_shouldTakeDiscardPile(bot, controller, riskTolerance)) {
+        if (_shouldTakeDiscardPile(bot, controller, riskTolerance) &&
+            controller.gameState.canUnlockDiscard()) {
           DebugLogger.botDebug(
             bot.id,
             bot.name,

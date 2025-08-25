@@ -404,7 +404,19 @@ class _GameScreenState extends State<GameScreen> {
         _gameController.gameState.currentPlayer.type != PlayerType.bot) {
       return;
     }
-    _gameController.drawFromDiscardPile();
+
+    // Check if discard pile draw succeeds - if not, fallback to deck draw
+    final success = _gameController.drawFromDiscardPile();
+    if (!success) {
+      // Bot couldn't unlock discard pile - fallback to drawing from deck
+      DebugLogger.botDebug(
+        currentPlayer.id,
+        currentPlayer.name,
+        'Failed to unlock discard pile, drawing from deck instead',
+      );
+      _gameController.drawFromDeck();
+    }
+
     _scheduleBotTurnContinuation();
   }
 
