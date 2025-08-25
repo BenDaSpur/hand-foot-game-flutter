@@ -8,9 +8,11 @@ import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/meld.dart';
 import '../services/game_save_service.dart';
+import 'game_interface.dart';
 
-class GameController {
+class GameController implements GameInterface {
   final GameState _gameState;
+  @override
   final int? gameSeed;
 
   factory GameController({required List<Player> players, int? seed}) {
@@ -32,30 +34,37 @@ class GameController {
   }) : gameSeed = seed,
        _gameState = gameState;
 
+  @override
   GameState get gameState => _gameState;
 
+  @override
   void initializeGame() {
     _gameState.deck.shuffle();
     _gameState.startRound();
     _gameState.dealCards();
   }
 
+  @override
   bool drawFromDeck() {
     return _gameState.drawFromDeck();
   }
 
+  @override
   bool drawFromDiscardPile() {
     return _gameState.drawFromDiscard();
   }
 
+  @override
   bool unlockDiscardPile() {
     return _gameState.unlockDiscard();
   }
 
+  @override
   bool canUnlockDiscard() {
     return _gameState.canUnlockDiscard();
   }
 
+  @override
   bool createMeld(List<PlayingCard> cards) {
     final result = _gameState.playMeld(cards);
 
@@ -65,6 +74,7 @@ class GameController {
     return result;
   }
 
+  @override
   bool createMeldBypass(List<PlayingCard> cards) {
     final result = _gameState.playMeldBypass(cards);
 
@@ -106,6 +116,7 @@ class GameController {
   /// 6. Creates/adds to melds and handles game state updates
   ///
   /// Throws: No exceptions - returns false for all error conditions
+  @override
   bool createMultipleMeldsFromIndices(
     List<List<int>> allMeldIndices, {
     bool skipPlayDownCheck = false,
@@ -244,6 +255,7 @@ class GameController {
     return false;
   }
 
+  @override
   bool createMeldByIndices(
     List<int> cardIndices, {
     bool skipPlayDownCheck = false,
@@ -341,6 +353,7 @@ class GameController {
     return false;
   }
 
+  @override
   bool addCardToMeld(int meldIndex, PlayingCard card) {
     final result = _gameState.addToMeld(meldIndex, card);
 
@@ -350,6 +363,7 @@ class GameController {
     return result;
   }
 
+  @override
   bool discardCard(PlayingCard card) {
     final result = _gameState.discard(card);
 
@@ -359,11 +373,13 @@ class GameController {
     return result;
   }
 
+  @override
   bool canPlayerGoOut() {
     final player = _gameState.currentPlayer;
     return player.canGoOut && player.hasBook();
   }
 
+  @override
   List<List<PlayingCard>> findPossibleMelds(Player player) {
     final possibleMelds = <List<PlayingCard>>[];
     final hand = List<PlayingCard>.from(player.currentHand);
@@ -406,6 +422,7 @@ class GameController {
     return possibleMelds;
   }
 
+  @override
   List<PlayingCard> getPlayableCards() {
     final player = _gameState.currentPlayer;
     final playableCards = <PlayingCard>[];
@@ -428,24 +445,30 @@ class GameController {
     return playableCards.toSet().toList();
   }
 
+  @override
   void nextRound() {
     if (_gameState.phase == GamePhase.roundEnd) {
       _gameState.resetForNewRound();
     }
   }
 
+  @override
   bool get isGameOver => _gameState.phase == GamePhase.gameEnd;
 
+  @override
   Player? get winner => _gameState.winner;
 
+  @override
   int get currentRound => _gameState.round;
 
+  @override
   List<Player> get leaderboard {
     final sortedPlayers = List<Player>.from(_gameState.players);
     sortedPlayers.sort((a, b) => b.score.compareTo(a.score));
     return sortedPlayers;
   }
 
+  @override
   Map<String, dynamic> getGameStatus() {
     return {
       'phase': _gameState.phase.name,
@@ -460,6 +483,7 @@ class GameController {
     };
   }
 
+  @override
   String exportGameState() {
     // Create compact data structure with minimal redundancy
     final export = {
@@ -934,6 +958,7 @@ class GameController {
   }
 
   /// Save the current game state to local storage
+  @override
   Future<void> saveGame() async {
     await GameSaveService.saveGame(_gameState, gameSeed);
   }
@@ -959,6 +984,7 @@ class GameController {
 
   /// Clear newly drawn card highlighting for all players
   /// Useful when game state becomes inconsistent after export/import
+  @override
   void clearAllNewlyDrawnCards() {
     for (final player in _gameState.players) {
       player.clearNewlyDrawnCards();

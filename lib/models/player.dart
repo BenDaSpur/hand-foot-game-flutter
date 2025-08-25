@@ -129,11 +129,15 @@ class Player {
   /// Update newly drawn card indices after card removal
   /// Handles index shifting when cards are removed from the hand
   void _updateIndicesAfterRemoval(List<int> removedIndices) {
-    final sortedRemovedIndices = List<int>.from(removedIndices)..sort();
+    if (removedIndices.isEmpty) return;
 
+    final sortedRemovedIndices = List<int>.from(removedIndices)..sort();
     final updatedIndices = <int>{};
 
     for (final drawnIndex in newlyDrawnCardIndices) {
+      // Skip invalid indices
+      if (drawnIndex < 0) continue;
+
       // Count how many removed indices are less than this drawn index
       int shiftAmount = 0;
       for (final removedIndex in sortedRemovedIndices) {
@@ -146,13 +150,22 @@ class Player {
 
       // If this drawn index wasn't removed, shift it left by the removal count
       if (!removedIndices.contains(drawnIndex)) {
-        updatedIndices.add(drawnIndex - shiftAmount);
+        final newIndex = drawnIndex - shiftAmount;
+        // Only add valid indices that are still within bounds
+        if (newIndex >= 0 && newIndex < currentHand.length) {
+          updatedIndices.add(newIndex);
+        }
       }
       // If it was removed, don't add it to the updated set (it's no longer newly drawn)
     }
 
     newlyDrawnCardIndices.clear();
     newlyDrawnCardIndices.addAll(updatedIndices);
+
+    // Defensive validation: remove any indices that are out of bounds
+    newlyDrawnCardIndices.removeWhere(
+      (index) => index < 0 || index >= currentHand.length,
+    );
   }
 
   void pickUpFoot() {

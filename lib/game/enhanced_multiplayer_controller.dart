@@ -5,11 +5,15 @@ import '../models/player.dart';
 import '../models/game_state.dart';
 import 'game_controller.dart';
 import 'network_adapter.dart';
+import 'game_interface.dart';
 
 /// Enhanced multiplayer game controller that follows DRY principles
 /// by delegating game logic to the existing GameController while
 /// managing multiplayer-specific concerns through NetworkAdapter
-class EnhancedMultiplayerController {
+class EnhancedMultiplayerController implements MultiplayerGameInterface {
+  // Configuration constants
+  static const Duration _syncRetryDelay = Duration(seconds: 2);
+  static const Duration _reconnectionDelay = Duration(seconds: 5);
   final String gameId;
   final String currentUserId;
   final GameController _gameController;
@@ -123,6 +127,7 @@ class EnhancedMultiplayerController {
   }
 
   /// Start the multiplayer game (host only)
+  @override
   Future<bool> startMultiplayerGame() async {
     if (!_isHost) return false;
     return await _networkAdapter.startGame(gameId);
@@ -187,7 +192,7 @@ class EnhancedMultiplayerController {
 
   void _scheduleReconnection() {
     _reconnectionTimer?.cancel();
-    _reconnectionTimer = Timer(const Duration(seconds: 5), () async {
+    _reconnectionTimer = Timer(_reconnectionDelay, () async {
       if (!_isOnline && _networkAdapter.isConnected) {
         _gameStateSubscription?.cancel();
         _gameStateSubscription = _networkAdapter
@@ -214,15 +219,22 @@ class EnhancedMultiplayerController {
       // Update local game state
       await _updateLocalGameState(newGameState);
 
-      // Emit state to UI listeners
-      _stateStreamController.add(_gameController.gameState);
-
-      // Handle turn changes
-      if (_isCurrentUser()) {
-        _notifyStateChanged();
+      // Initialize from server state if this is the first update (now properly awaited)
+      if (_gameController.gameState.phase == GamePhase.setup &&
+          newGameState.phase != GamePhase.setup) {
+        await _initializeFromServerState(newGameState);
       }
+
+      // Emit state to UI listeners
+      _emitStateUpdate();
+
+      // State has been successfully updated and emitted
     } catch (e) {
-      // Log error
+      // Log error and ensure proper cleanup on error
+      _gameStateSubscription?.cancel();
+      _connectionSubscription?.cancel();
+      _gameStateSubscription = null;
+      _connectionSubscription = null;
     } finally {
       _isUpdating = false;
     }
@@ -254,17 +266,16 @@ class EnhancedMultiplayerController {
   }
 
   void _replaceCollectionAtomically<T>(List<T> targetList, List<T> newData) {
-    if (targetList.isEmpty) {
-      targetList.addAll(newData);
-    } else {
-      targetList.replaceRange(0, targetList.length, newData);
-    }
+    // More efficient approach: clear and add all
+    targetList.clear();
+    targetList.addAll(newData);
   }
 
   bool _isCurrentUser() {
     return _gameController.gameState.currentPlayer.id == currentUserId;
   }
 
+  @override
   Player? getCurrentUserPlayer() {
     try {
       return _gameController.gameState.players.firstWhere(
@@ -320,34 +331,98 @@ class EnhancedMultiplayerController {
     return _queueNetworkOperation(() async {
       _isUpdating = true;
       try {
-        await _networkAdapter.syncGameState(gameId, _gameController.gameState);
+        // Validate game state before syncing
+        if (_validateGameStateForSync()) {
+          await _networkAdapter.syncGameState(
+            gameId,
+            _gameController.gameState,
+          );
+        }
       } catch (e) {
-        // Log sync error - individual network operations handle their own errors
+        // Handle sync errors gracefully
+        _handleSyncError(e);
       } finally {
         _isUpdating = false;
       }
     });
   }
 
-  void _notifyStateChanged() {
-    // Additional UI update logic if needed
+  /// Validate game state before syncing to prevent corrupted states
+  bool _validateGameStateForSync() {
+    final gameState = _gameController.gameState;
+
+    // Basic validation checks
+    if (gameState.currentPlayerIndex < 0 ||
+        gameState.currentPlayerIndex >= gameState.players.length) {
+      return false;
+    }
+
+    if (gameState.round < 1) {
+      return false;
+    }
+
+    // Ensure phase consistency
+    if (gameState.phase == GamePhase.gameEnd && gameState.winner == null) {
+      // Game is ended but no winner - this shouldn't happen
+      return false;
+    }
+
+    return true;
+  }
+
+  /// Handle synchronization errors with appropriate fallback behavior
+  void _handleSyncError(dynamic error) {
+    // For now, just ensure we don't break the game flow
+    // Could implement retry logic, conflict resolution, etc.
+
+    // If we're offline, the error is expected
+    if (!_isOnline) {
+      return;
+    }
+
+    // For sync errors while online, we might want to:
+    // 1. Retry after a delay
+    // 2. Request fresh game state from server
+    // 3. Show user a sync issue notification
+
+    // Simple approach: request fresh sync after a delay
+    Timer(_syncRetryDelay, () {
+      if (_isOnline && !_isUpdating) {
+        _requestGameStateSync();
+      }
+    });
   }
 
   // Delegate all game interface methods to the game controller
   // while adding multiplayer-specific logic
 
+  @override
   GameState get gameState => _gameController.gameState;
 
+  @override
   void initializeGame() {
     // Don't initialize for multiplayer - state comes from server
+    // Game initialization happens in FirebaseService.startGame()
   }
 
+  /// Initialize game state when it arrives from server (used internally)
+  Future<void> _initializeFromServerState(GameState serverState) async {
+    // This method is called when we receive the initial game state from the server
+    // Ensure the local controller is properly set up
+    _gameController.gameState.phase = serverState.phase;
+    _gameController.gameState.currentPlayerIndex =
+        serverState.currentPlayerIndex;
+    _gameController.gameState.turnPhase = serverState.turnPhase;
+    _gameController.gameState.round = serverState.round;
+  }
+
+  @override
   bool drawFromDeck() {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('drawFromDeck')) return false;
 
     final success = _gameController.drawFromDeck();
     if (success) {
-      _stateStreamController.add(_gameController.gameState);
+      _emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -355,147 +430,278 @@ class EnhancedMultiplayerController {
     return success;
   }
 
+  @override
   bool drawFromDiscardPile() {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('drawFromDiscardPile')) return false;
 
     final success = _gameController.drawFromDiscardPile();
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool unlockDiscardPile() {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('unlockDiscardPile')) return false;
 
     final success = _gameController.unlockDiscardPile();
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool canUnlockDiscard() {
     return _gameController.canUnlockDiscard();
   }
 
+  @override
   bool createMeld(List<PlayingCard> cards) {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('createMeld')) return false;
 
     final success = _gameController.createMeld(cards);
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool createMeldBypass(List<PlayingCard> cards) {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('createMeld')) return false;
 
     final success = _gameController.createMeldBypass(cards);
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool createMeldByIndices(
     List<int> cardIndices, {
     bool skipPlayDownCheck = false,
   }) {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('createMeld')) return false;
 
     final success = _gameController.createMeldByIndices(
       cardIndices,
       skipPlayDownCheck: skipPlayDownCheck,
     );
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool createMultipleMeldsFromIndices(
     List<List<int>> allMeldIndices, {
     bool skipPlayDownCheck = false,
   }) {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('createMeld')) return false;
 
     final success = _gameController.createMultipleMeldsFromIndices(
       allMeldIndices,
       skipPlayDownCheck: skipPlayDownCheck,
     );
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool addCardToMeld(int meldIndex, PlayingCard card) {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('addToMeld')) return false;
 
     final success = _gameController.addCardToMeld(meldIndex, card);
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
+  @override
   bool discardCard(PlayingCard card) {
-    if (!_isCurrentUser()) return false;
+    if (!canPerformAction('discardCard')) return false;
 
     final success = _gameController.discardCard(card);
     if (success) {
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
     return success;
   }
 
   // Delegate read-only operations directly
+  @override
   bool canPlayerGoOut() => _gameController.canPlayerGoOut();
 
+  @override
   bool get isGameOver => _gameController.isGameOver;
 
+  @override
   Player? get winner => _gameController.winner;
 
+  @override
   int get currentRound => _gameController.currentRound;
 
+  @override
   List<Player> get leaderboard => _gameController.leaderboard;
 
+  @override
   Map<String, dynamic> getGameStatus() => _gameController.getGameStatus();
 
+  @override
   void nextRound() {
     // Host controls round progression
     if (_isHost) {
       _gameController.nextRound();
-      _syncGameState();
+      _emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
     }
   }
 
+  /// Helper method to emit state updates to UI listeners
+  void _emitStateUpdate() {
+    _stateStreamController.add(_gameController.gameState);
+  }
+
+  @override
   List<List<PlayingCard>> findPossibleMelds(Player player) {
     return _gameController.findPossibleMelds(player);
   }
 
+  @override
   List<PlayingCard> getPlayableCards() {
     return _gameController.getPlayableCards();
   }
 
+  @override
   Future<void> saveGame() async {
     // Multiplayer games are automatically saved via network sync
     // No local persistence needed
   }
 
+  @override
   int? get gameSeed => _gameController.gameSeed;
 
+  @override
   String? exportGameState() => _gameController.exportGameState();
 
+  @override
   void clearAllNewlyDrawnCards() => _gameController.clearAllNewlyDrawnCards();
 
+  // Turn management for multiplayer
+  @override
+  bool get isMyTurn => _isCurrentUser();
+
+  /// Get available actions for the current player
+  @override
+  List<String> getAvailableActions() {
+    if (!isMyTurn) return [];
+
+    final currentPlayer = getCurrentUserPlayer();
+    if (currentPlayer == null) return [];
+
+    final actions = <String>[];
+    final gameState = _gameController.gameState;
+
+    switch (gameState.turnPhase) {
+      case TurnPhase.draw:
+        if (!gameState.hasDrawnFromDeck) {
+          actions.add('drawFromDeck');
+          if (gameState.canDrawFromDiscard) {
+            actions.add('drawFromDiscardPile');
+          }
+        }
+        break;
+
+      case TurnPhase.meld:
+        // Always allow discarding during meld phase
+        actions.add('discardCard');
+
+        // Add melding options if player has cards
+        if (currentPlayer.currentHand.isNotEmpty) {
+          actions.add('createMeld');
+
+          // Allow adding to existing melds if player has played down
+          if (currentPlayer.hasPlayedDown && currentPlayer.melds.isNotEmpty) {
+            actions.add('addToMeld');
+          }
+        }
+
+        // Allow unlocking discard pile if conditions are met
+        if (_gameController.canUnlockDiscard()) {
+          actions.add('unlockDiscardPile');
+        }
+        break;
+
+      case TurnPhase.discard:
+        actions.add('discardCard');
+        break;
+    }
+
+    return actions;
+  }
+
+  /// Check if a specific action is available for the current player
+  @override
+  bool canPerformAction(String action) {
+    return getAvailableActions().contains(action);
+  }
+
+  /// Get turn status information for UI
+  @override
+  Map<String, dynamic> getTurnStatus() {
+    return {
+      'isMyTurn': isMyTurn,
+      'currentPlayer': gameState.currentPlayer.name,
+      'turnPhase': gameState.turnPhase.name,
+      'availableActions': getAvailableActions(),
+      'hasDrawn': gameState.hasDrawnFromDeck,
+      'hasMelded': gameState.hasMelded,
+    };
+  }
+
   // Multiplayer-specific properties
+  @override
   bool get isHost => _isHost;
+  @override
   String get userId => currentUserId;
+  @override
   bool get isOnline => _isOnline;
+  @override
   Stream<bool> get connectionStream => _networkAdapter.connectionStream;
+  @override
   Stream<GameState> get gameStateStream => _stateStreamController.stream;
 
   void dispose() {
