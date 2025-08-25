@@ -243,6 +243,12 @@ class GameConfig {
   /// Maximum cached cards for performance optimization
   static const int maxCachedCards = 100;
 
+  /// Bot turn processing threshold for detecting stuck loops
+  static const int botStuckThreshold = 5;
+
+  /// Bot processing delay for realistic gameplay pacing
+  static const Duration botProcessingDelay = Duration(seconds: 1);
+
   // =============================================================================
   // VALIDATION & HELPERS
   // =============================================================================
