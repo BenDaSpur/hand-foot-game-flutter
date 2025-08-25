@@ -265,13 +265,19 @@ class _GameScreenState extends State<GameScreen> {
   void _processBotTurn() async {
     // RECURSION PROTECTION: Prevent infinite loops
     _botProcessingDepth++;
-    if (_botProcessingDepth > 10) {
+    if (_botProcessingDepth > GameConfig.maxBotProcessingDepth) {
       DebugLogger.error(
-        'Bot processing depth exceeded limit - breaking infinite loop',
+        'Bot processing depth exceeded limit (${GameConfig.maxBotProcessingDepth}) - breaking infinite loop',
       );
       _botProcessingDepth = 0; // Reset counter
       _botLoopTracker.clear(); // Clear stuck tracker
-      return;
+
+      // IMPROVED: Complete the bot turn gracefully instead of just returning
+      final currentPlayer = _gameController.gameState.currentPlayer;
+      if (currentPlayer.type == PlayerType.bot) {
+        _forceCompleteBotTurn(currentPlayer);
+      }
+      return; // Early return - no further decrements needed
     }
 
     final currentPlayer = _gameController.gameState.currentPlayer;
