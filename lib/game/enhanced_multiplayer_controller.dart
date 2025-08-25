@@ -11,6 +11,9 @@ import 'game_interface.dart';
 /// by delegating game logic to the existing GameController while
 /// managing multiplayer-specific concerns through NetworkAdapter
 class EnhancedMultiplayerController implements MultiplayerGameInterface {
+  // Configuration constants
+  static const Duration _syncRetryDelay = Duration(seconds: 2);
+  static const Duration _reconnectionDelay = Duration(seconds: 5);
   final String gameId;
   final String currentUserId;
   final GameController _gameController;
@@ -189,7 +192,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
   void _scheduleReconnection() {
     _reconnectionTimer?.cancel();
-    _reconnectionTimer = Timer(const Duration(seconds: 5), () async {
+    _reconnectionTimer = Timer(_reconnectionDelay, () async {
       if (!_isOnline && _networkAdapter.isConnected) {
         _gameStateSubscription?.cancel();
         _gameStateSubscription = _networkAdapter
@@ -216,21 +219,22 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       // Update local game state
       await _updateLocalGameState(newGameState);
 
-      // Initialize from server state if this is the first update
+      // Initialize from server state if this is the first update (now properly awaited)
       if (_gameController.gameState.phase == GamePhase.setup &&
           newGameState.phase != GamePhase.setup) {
-        _initializeFromServerState(newGameState);
+        await _initializeFromServerState(newGameState);
       }
 
       // Emit state to UI listeners
       _emitStateUpdate();
 
-      // Handle turn changes and notifications
-      if (_isCurrentUser()) {
-        _notifyStateChanged();
-      }
+      // State has been successfully updated and emitted
     } catch (e) {
-      // Log error but continue
+      // Log error and ensure proper cleanup on error
+      _gameStateSubscription?.cancel();
+      _connectionSubscription?.cancel();
+      _gameStateSubscription = null;
+      _connectionSubscription = null;
     } finally {
       _isUpdating = false;
     }
@@ -262,11 +266,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   void _replaceCollectionAtomically<T>(List<T> targetList, List<T> newData) {
-    if (targetList.isEmpty) {
-      targetList.addAll(newData);
-    } else {
-      targetList.replaceRange(0, targetList.length, newData);
-    }
+    // More efficient approach: clear and add all
+    targetList.clear();
+    targetList.addAll(newData);
   }
 
   bool _isCurrentUser() {
@@ -384,15 +386,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     // 3. Show user a sync issue notification
 
     // Simple approach: request fresh sync after a delay
-    Timer(const Duration(seconds: 2), () {
+    Timer(_syncRetryDelay, () {
       if (_isOnline && !_isUpdating) {
         _requestGameStateSync();
       }
     });
-  }
-
-  void _notifyStateChanged() {
-    // Additional UI update logic if needed
   }
 
   // Delegate all game interface methods to the game controller
@@ -408,7 +406,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   /// Initialize game state when it arrives from server (used internally)
-  void _initializeFromServerState(GameState serverState) {
+  Future<void> _initializeFromServerState(GameState serverState) async {
     // This method is called when we receive the initial game state from the server
     // Ensure the local controller is properly set up
     _gameController.gameState.phase = serverState.phase;
