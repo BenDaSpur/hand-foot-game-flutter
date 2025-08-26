@@ -228,11 +228,21 @@ class _GameScreenState extends State<GameScreen> {
           currentPlayer.name == 'You') {
         DebugLogger.debug('Human turn - waiting for input');
         _validateHumanPlayerState();
+        // CRITICAL: Ensure we never auto-process human turns
+        _isProcessingBotTurn = false; // Clear any stuck bot processing flag
+        if (mounted) setState(() {}); // Update UI to show it's human turn
         return;
       }
 
       // Bot turn: Process with safety checks and delays
       if (!_isProcessingBotTurn) {
+        // DOUBLE CHECK: Make absolutely sure this is a bot before processing
+        if (currentPlayer.type != PlayerType.bot) {
+          DebugLogger.error(
+            'CRITICAL: Attempted to process non-bot player ${currentPlayer.name} as bot',
+          );
+          return;
+        }
         DebugLogger.debug('Starting bot turn for ${currentPlayer.name}');
         _processBotTurnWithDelays(currentPlayer);
       } else {
@@ -340,7 +350,14 @@ class _GameScreenState extends State<GameScreen> {
             // Continue processing if it's still a bot turn (same or different bot)
             // Only cancel if turn advanced to human player (prevents interference with manual advancement)
             final currentPlayer = _gameController.gameState.currentPlayer;
-            if (currentPlayer.type != PlayerType.human) {
+
+            // CRITICAL: Double-check we're not skipping the human player
+            if (currentPlayer.type == PlayerType.human) {
+              DebugLogger.debug('Human turn - waiting for input');
+              // Ensure UI reflects human turn
+              if (mounted) setState(() {});
+            } else if (currentPlayer.type == PlayerType.bot) {
+              // Only process bot turns
               processCurrentPlayerTurn();
             } else {
               DebugLogger.debug(
@@ -1146,6 +1163,13 @@ class _GameScreenState extends State<GameScreen> {
 
       // Complete turn legally
       gameState.nextPlayer();
+
+      // Log who's turn it is next for debugging
+      final nextPlayer = gameState.currentPlayer;
+      DebugLogger.debug(
+        'After emergency completion, next player is: ${nextPlayer.name} (${nextPlayer.type})',
+      );
+
       setState(() {});
       // Don't call processCurrentPlayerTurn() - let delayed callbacks handle turn continuation
     } catch (e) {
@@ -2310,7 +2334,7 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            // Action buttons
+            // Action buttons (only show when it's human's turn)
             if (currentPlayer.type == PlayerType.human) ...[
               // Emergency recovery for stuck game
               if (_isGameStuck())
@@ -2397,11 +2421,20 @@ class _GameScreenState extends State<GameScreen> {
                   ],
                 ),
               ),
+            ],
 
-              // Hand
-              Container(
-                height: 120,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+            // Hand (always visible, but only interactive during human turn)
+            Opacity(
+              opacity: currentPlayer.type == PlayerType.human ? 1.0 : 0.7,
+              child: Container(
+                height:
+                    155, // Increased to accommodate selected cards with padding
+                padding: const EdgeInsets.fromLTRB(
+                  8,
+                  10,
+                  8,
+                  10,
+                ), // More generous padding
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2449,13 +2482,20 @@ class _GameScreenState extends State<GameScreen> {
                         ),
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
                           child: SizedBox(
                             width: humanPlayer.currentHand.isNotEmpty
                                 ? (humanPlayer.currentHand.length - 1) * 50.0 +
                                       70.0
                                 : 70.0,
+                            height:
+                                110, // Fixed height for the stack (98 + 12 for selection)
                             child: Stack(
+                              clipBehavior: Clip
+                                  .none, // Allow cards to move outside bounds when selected
                               children: humanPlayer.currentHand
                                   .asMap()
                                   .entries
@@ -2466,10 +2506,20 @@ class _GameScreenState extends State<GameScreen> {
                                     return Positioned(
                                       left: index * 50.0,
                                       child: GestureDetector(
-                                        onTap: () => _onCardTap(index),
-                                        onDoubleTap: () =>
-                                            _onCardDoubleTap(index),
+                                        onTap:
+                                            currentPlayer.type ==
+                                                PlayerType.human
+                                            ? () => _onCardTap(index)
+                                            : null,
+                                        onDoubleTap:
+                                            currentPlayer.type ==
+                                                PlayerType.human
+                                            ? () => _onCardDoubleTap(index)
+                                            : null,
                                         child: PlayingCardWidget(
+                                          key: ValueKey(
+                                            'hand-${card.rank}-${card.suit}-$index-${_viewingPlayerMelds?.id ?? "you"}',
+                                          ),
                                           card: card,
                                           width: 70,
                                           height: 98,
@@ -2491,7 +2541,7 @@ class _GameScreenState extends State<GameScreen> {
                   ],
                 ),
               ),
-            ],
+            ),
 
             const SizedBox(height: 16),
           ],
@@ -2978,18 +3028,26 @@ class _GameScreenState extends State<GameScreen> {
 
       // Check for impossible player states
       for (final player in gameState.players) {
-        if (player.hasPickedUpFoot && player.foot.isNotEmpty) {
+        // When hasPickedUpFoot is true, the foot cards ARE the current hand
+        // So foot should have cards if using foot, or be empty if not
+        if (player.hasPickedUpFoot && player.foot.isEmpty) {
           DebugLogger.error(
-            'Player ${player.name} has picked up foot but foot is not empty',
+            'Player ${player.name} has picked up foot but foot is empty',
           );
           return false;
         }
 
-        if (player.currentHand.isEmpty &&
-            !player.hasPickedUpFoot &&
+        // If not using foot yet, hand shouldn't be empty unless picking up foot
+        if (!player.hasPickedUpFoot &&
+            player.hand.isEmpty &&
+            player.foot.isNotEmpty) {
+          // This is actually fine - player is about to pick up foot
+          // The pickUpFoot() method will be called when they play/discard next
+        } else if (!player.hasPickedUpFoot &&
+            player.hand.isEmpty &&
             player.foot.isEmpty) {
           DebugLogger.error(
-            'Player ${player.name} has no cards and cannot pick up foot',
+            'Player ${player.name} has no cards in hand or foot',
           );
           return false;
         }

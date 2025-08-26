@@ -64,6 +64,9 @@ class PlayerHandWidget extends StatelessWidget {
                           onTap: () => onCardTap(index),
                           onDoubleTap: () => onCardDoubleTap(index),
                           child: PlayingCardWidget(
+                            key: ValueKey(
+                              'hand-${card.rank}-${card.suit}-$index',
+                            ),
                             card: card,
                             width: _cardWidth,
                             height: _cardHeight,

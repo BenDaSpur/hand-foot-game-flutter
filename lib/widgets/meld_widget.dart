@@ -137,9 +137,16 @@ class MeldWidget extends StatelessWidget {
                   (a, b) => a.displayOrder.compareTo(b.displayOrder),
                 );
                 return sortedCards
+                    .asMap()
+                    .entries
                     .map(
-                      (card) =>
-                          PlayingCardWidget(card: card, width: 40, height: 56),
+                      (entry) => PlayingCardWidget(
+                        key: ValueKey('meld-$meldIndex-${entry.key}'),
+                        card: entry.value,
+                        width: 40,
+                        height: 56,
+                        isInMeld: true,
+                      ),
                     )
                     .toList();
               }(),

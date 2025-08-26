@@ -472,10 +472,12 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       child: Stack(
         children: [
           PlayingCardWidget(
+            key: ValueKey('preview-$meldIndex-$cardIndex'),
             card: card,
             width: 40,
             height: 56,
             isSelected: false,
+            isInMeld: true,
           ),
           Positioned(
             top: -4,
@@ -890,6 +892,7 @@ class _MobileCardWidget extends StatelessWidget {
             children: [
               Center(
                 child: PlayingCardWidget(
+                  // Parent widget already has a unique key, so we don't need one here
                   card: card,
                   width: _ResponsiveHelper.getCardWidth(context),
                   height: _ResponsiveHelper.getCardHeight(context),

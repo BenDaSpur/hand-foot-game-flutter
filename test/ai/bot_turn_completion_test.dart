@@ -144,6 +144,7 @@ void main() {
           'drawFromDeck',
           'drawFromDiscard',
           'createMeld',
+          'createMultipleMelds',
           'addToMeld',
           'discard',
           'goOut',
