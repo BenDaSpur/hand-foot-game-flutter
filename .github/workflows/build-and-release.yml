@@ -183,14 +183,9 @@ jobs:
 
       - name: Setup Firebase configs (macOS/iOS)
         run: |
-          # iOS Firebase config
-          if [[ -n "${{ secrets.FIREBASE_CONFIG_IOS }}" ]]; then
-            echo "Using production Firebase iOS configuration"
-            echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
-          else
-            echo "Creating stub iOS Firebase config"
-            echo '<?xml version="1.0" encoding="UTF-8"?><plist><dict><key>PROJECT_ID</key><string>stub-project</string></dict></plist>' > ios/Runner/GoogleService-Info.plist
-          fi
+          # Decode iOS Firebase config for both iOS and macOS
+          echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
+          echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > macos/Runner/GoogleService-Info.plist
           
           # Web Firebase config  
           if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
