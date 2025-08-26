@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
-import '../models/card.dart';
 import '../config/game_config.dart';
 import '../theme/balatro_theme.dart';
 
@@ -13,9 +12,6 @@ class ScoreboardModal extends StatelessWidget {
     int meldPoints = 0;
     int cleanBooks = 0;
     int dirtyBooks = 0;
-    int handFootPenalty = 0;
-    int redThrees = 0;
-    int blackThrees = 0;
 
     final player = gameState.players[playerIndex];
 
@@ -31,34 +27,14 @@ class ScoreboardModal extends StatelessWidget {
       }
     }
 
-    // Calculate cards left in hand/foot penalty
-    final handCards = player.hand;
-    final footCards = player.foot;
+    // For current round: only show what's been played (melds)
+    // Don't include cards still in hand/foot as penalties
+    final currentRoundTotal = meldPoints;
 
-    for (final card in handCards) {
-      handFootPenalty -= card.pointValue.abs().toInt();
-      if (card.rank == CardRank.three) {
-        if (card.suit == Suit.hearts || card.suit == Suit.diamonds) {
-          redThrees++;
-        } else {
-          blackThrees++;
-        }
-      }
-    }
-
-    for (final card in footCards) {
-      handFootPenalty -= card.pointValue.abs().toInt();
-      if (card.rank == CardRank.three) {
-        if (card.suit == Suit.hearts || card.suit == Suit.diamonds) {
-          redThrees++;
-        } else {
-          blackThrees++;
-        }
-      }
-    }
-
-    // Calculate total
-    final total = meldPoints + handFootPenalty;
+    // Calculate previous rounds score (only if not first round)
+    final previousRoundsTotal = gameState.round > 1
+        ? player.score - currentRoundTotal
+        : 0;
 
     return {
       'meldPoints': meldPoints,
@@ -66,13 +42,9 @@ class ScoreboardModal extends StatelessWidget {
       'dirtyBooks': dirtyBooks,
       'cleanBookPoints': cleanBooks * GameConfig.cleanBookBonus,
       'dirtyBookPoints': dirtyBooks * GameConfig.dirtyBookBonus,
-      'handFootPenalty': handFootPenalty,
-      'redThrees': redThrees,
-      'blackThrees': blackThrees,
-      'redThreePoints': redThrees * GameConfig.redThreeBonus,
-      'blackThreePenalty': blackThrees * GameConfig.blackThreePenalty,
-      'roundTotal': total,
-      'gameTotal': gameState.players[playerIndex].score,
+      'currentRoundTotal': currentRoundTotal,
+      'previousRoundsTotal': previousRoundsTotal,
+      'gameTotal': player.score,
     };
   }
 
@@ -93,7 +65,7 @@ class ScoreboardModal extends StatelessWidget {
     final accessibilityLabel =
         'Player ${playerIndex + 1}, '
         'Total score: ${breakdown['gameTotal']}, '
-        'Round ${gameState.round} score: ${breakdown['roundTotal']}, '
+        'Round ${gameState.round} score: ${breakdown['currentRoundTotal']}, '
         '${canGoOut ? 'Can go out, ' : ''}'
         '${isCurrentPlayer ? 'Current player' : ''}';
 
@@ -194,22 +166,12 @@ class ScoreboardModal extends StatelessWidget {
                     breakdown['dirtyBookPoints'],
                   ),
 
-                if (breakdown['redThrees'] > 0)
+                // Show previous rounds if any (and not first round)
+                if (gameState.round > 1 &&
+                    breakdown['previousRoundsTotal'] != 0)
                   _buildScoreRow(
-                    'Red Threes (${breakdown['redThrees']})',
-                    breakdown['redThreePoints'],
-                  ),
-
-                if (breakdown['blackThrees'] > 0)
-                  _buildScoreRow(
-                    'Black Threes (${breakdown['blackThrees']})',
-                    breakdown['blackThreePenalty'],
-                  ),
-
-                if (breakdown['handFootPenalty'] < 0)
-                  _buildScoreRow(
-                    'Cards in Hand/Foot',
-                    breakdown['handFootPenalty'],
+                    'Previous Rounds',
+                    breakdown['previousRoundsTotal'],
                   ),
 
                 const Divider(color: Colors.white24),
@@ -219,7 +181,7 @@ class ScoreboardModal extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Round ${gameState.round} Score',
+                      'This Round',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
@@ -227,11 +189,11 @@ class ScoreboardModal extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${breakdown['roundTotal'] > 0 ? '+' : ''}${breakdown['roundTotal']}',
+                      '${breakdown['currentRoundTotal'] > 0 ? '+' : ''}${breakdown['currentRoundTotal']}',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _getScoreColor(breakdown['roundTotal']),
+                        color: _getScoreColor(breakdown['currentRoundTotal']),
                       ),
                     ),
                   ],
@@ -264,17 +226,14 @@ class ScoreboardModal extends StatelessWidget {
     );
   }
 
-  /// Get players sorted by score (cached for performance)
-  List<int> get _sortedPlayerIndices {
-    return List.generate(gameState.players.length, (index) => index)..sort(
-      (a, b) =>
-          gameState.players[b].score.compareTo(gameState.players[a].score),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final sortedPlayers = _sortedPlayerIndices;
+    // Sort players by score once per build
+    final sortedPlayers =
+        List.generate(gameState.players.length, (index) => index)..sort(
+          (a, b) =>
+              gameState.players[b].score.compareTo(gameState.players[a].score),
+        );
 
     return Semantics(
       label: 'Scoreboard for Round ${gameState.round}',

@@ -296,8 +296,7 @@ void main() {
         // Check that score breakdown components are displayed
         expect(find.textContaining('Meld Points'), findsAtLeastNWidgets(1));
         expect(find.textContaining('Clean Books'), findsAtLeastNWidgets(1));
-        expect(find.textContaining('Red Threes'), findsAtLeastNWidgets(1));
-        expect(find.textContaining('Round'), findsAtLeastNWidgets(1));
+        expect(find.textContaining('This Round'), findsAtLeastNWidgets(1));
       });
     });
   });
