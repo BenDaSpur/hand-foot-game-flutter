@@ -48,6 +48,12 @@ class GameConfig {
   /// Additional cards to pick up when taking discard pile
   static const int additionalDiscardPickup = 5;
 
+  /// Minimum deck size threshold for detecting 3s stalemate situation
+  static const int stalemateDeckThreshold = 10;
+
+  /// Number of recent discard cards to check for 3s stalemate (for performance)
+  static const int stalemateCheckCardCount = 10;
+
   // =============================================================================
   // SCORING SYSTEM
   // =============================================================================

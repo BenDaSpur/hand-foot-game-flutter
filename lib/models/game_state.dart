@@ -51,6 +51,13 @@ class GameState {
   bool hasDrawnFromDeck;
   bool hasMelded;
 
+  // Track 3s stalemate situation
+  /// Player index where stalemate detection started (null if no stalemate detected)
+  int? _stalemateStartPlayer;
+
+  /// Count of consecutive 3 discards in stalemate situation
+  int _stalemateDiscardCount = 0;
+
   GameState({
     required this.players,
     required this.deck,
@@ -157,6 +164,9 @@ class GameState {
     discardPileFrozen = false;
     hasDrawnFromDeck = false;
     hasMelded = false;
+
+    // Reset stalemate tracking for new round
+    _resetStalemateTracking();
 
     discardPile.clear();
     for (final player in players) {
@@ -594,6 +604,14 @@ class GameState {
       discardPile.add(removed);
       _logAction('discarded ${card.displayName}');
 
+      // Check for 3s stalemate situation
+      if (card.isThree) {
+        _handleThreeDiscard();
+      } else {
+        // Reset stalemate tracking if a non-3 is discarded
+        _resetStalemateTracking();
+      }
+
       if (card.isWild) {
         discardPileFrozen = true;
         _logAction('discard pile frozen due to wild card');
@@ -614,6 +632,75 @@ class GameState {
       return true;
     }
     return false;
+  }
+
+  void _handleThreeDiscard() {
+    // Check if discard pile only contains 3s (optimize by checking recent cards)
+    // If pile is large, just check the last N cards for performance
+    final cardsToCheck = discardPile.length > GameConfig.stalemateCheckCardCount
+        ? discardPile
+              .skip(discardPile.length - GameConfig.stalemateCheckCardCount)
+              .toList()
+        : discardPile;
+    final onlyThreesInPile =
+        cardsToCheck.isNotEmpty && cardsToCheck.every((card) => card.isThree);
+
+    // Check if deck is running low
+    final deckLow = deck.size < GameConfig.stalemateDeckThreshold;
+
+    if (onlyThreesInPile && deckLow) {
+      if (_stalemateStartPlayer == null) {
+        // First detection - start tracking
+        _stalemateStartPlayer = currentPlayerIndex;
+        _stalemateDiscardCount = 1;
+      } else {
+        // Continue tracking
+        _stalemateDiscardCount++;
+
+        // Check if we've gone through all players once
+        if (_stalemateDiscardCount == players.length) {
+          // First full rotation complete - show warning
+          _logAction(
+            '⚠️ WARNING: Only 3s in discard pile with low deck (${deck.size} cards remaining)',
+          );
+          _logAction(
+            'Round will end automatically if all players discard 3s again',
+          );
+        } else if (_stalemateDiscardCount == players.length * 2) {
+          // Second full rotation complete - end round
+          _logAction(
+            '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',
+          );
+          _emergencyEndRoundDueToStalemate();
+        }
+      }
+    }
+  }
+
+  void _resetStalemateTracking() {
+    _stalemateStartPlayer = null;
+    _stalemateDiscardCount = 0;
+  }
+
+  void _emergencyEndRoundDueToStalemate() {
+    _logAction('🛑 Round ended due to 3s stalemate - no cards can be drawn');
+    _logAction('Only 3s were in the discard pile with insufficient deck cards');
+
+    // Calculate penalty points for cards in hand
+    for (final player in players) {
+      // Calculate total score including penalties for unplayed cards
+      final meldValue = player.calculateMeldValue();
+      final penalty = player.calculateAllUnplayedCardsValue();
+      final roundScore = meldValue - penalty;
+      player.updateScore(roundScore);
+
+      _logAction(
+        '${player.name}: +$meldValue (melds) -$penalty (cards) = $roundScore',
+      );
+    }
+
+    _logAction('📊 Round $round has ended due to stalemate conditions');
+    endRound();
   }
 
   // Check if any other player can immediately unlock with the newly discarded card
