@@ -163,6 +163,14 @@ class EnhancedBotAI {
       return endGameDecision;
     }
 
+    // NEW: Check if we can play ALL cards to immediately see foot
+    if (bot.hasPlayedDown && !bot.hasPickedUpFoot) {
+      final canPlayAllDecision = _checkCanPlayAllCards(bot, controller);
+      if (canPlayAllDecision != null) {
+        return canPlayAllDecision;
+      }
+    }
+
     // Check for foot transition decisions
     final footTransitionDecision = _footTransitionManager.handleFootTransition(
       bot,
@@ -418,7 +426,18 @@ class EnhancedBotAI {
       return _selectRandomly(bestThrees);
     }
 
-    // Priority 2: Discard lowest value non-useful cards
+    // Priority 2: Check if we should hold wild cards strategically
+    final wildCards = hand.where((card) => card.isWild).toList();
+    final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
+
+    // If we're still on hand pile and have wild cards, keep them for foot transition
+    // unless we have too many (excessive holding is bad)
+    if (stillOnHandPile && wildCards.isNotEmpty && wildCards.length < 8) {
+      // Don't discard wilds - they're valuable for foot transition
+      // Continue to find other cards to discard
+    }
+
+    // Priority 3: Discard lowest value non-useful cards (avoid wilds if still on hand pile)
     final rankCounts = <CardRank, int>{};
     for (final card in hand) {
       if (!card.isWild) {
@@ -441,8 +460,19 @@ class EnhancedBotAI {
       return _selectRandomly(bestSingletons);
     }
 
-    // Fallback: Discard lowest value card
-    final sortedHand = List<PlayingCard>.from(hand);
+    // Fallback: Discard lowest value card (avoiding wilds if still on hand pile)
+    List<PlayingCard> sortedHand;
+    if (stillOnHandPile && wildCards.length < 8) {
+      // Exclude wild cards from discard options when still on hand pile
+      sortedHand = List<PlayingCard>.from(hand.where((card) => !card.isWild));
+      if (sortedHand.isEmpty) {
+        // If only wilds left, must discard one
+        sortedHand = List<PlayingCard>.from(hand);
+      }
+    } else {
+      sortedHand = List<PlayingCard>.from(hand);
+    }
+
     sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
     // Add variability: if there are multiple cards of the same low value, randomly pick one
     final bestValue = sortedHand.first.pointValue;
@@ -516,6 +546,8 @@ class EnhancedBotAI {
     final gameState = controller.gameState;
     final handSize = bot.currentHand.length;
     final playDownRequirement = gameState.playDownRequirement;
+    final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
+    final wildCards = bot.currentHand.where((c) => c.isWild).toList();
 
     // For initial play-down: check if we have enough meld potential for the round requirement
     if (!bot.hasPlayedDown) {
@@ -531,6 +563,12 @@ class EnhancedBotAI {
 
     // Execute if hand is getting dangerously large
     if (handSize >= 15) return true;
+
+    // NEW: Be more aggressive if on hand pile with wilds and close to foot
+    if (stillOnHandPile && wildCards.isNotEmpty && handSize <= 8) {
+      // If we have wilds and are close to foot, dump everything we can
+      if (dumpPotential >= 0.6) return true; // Lower threshold with wilds
+    }
 
     // Execute if we can go directly to foot
     final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
@@ -649,6 +687,59 @@ class EnhancedBotAI {
         cardsToAdd.length;
 
     return (meldableCards / handSize).clamp(0.0, 1.0);
+  }
+
+  /// Check if bot can play ALL cards to immediately transition to foot
+  BotDecision? _checkCanPlayAllCards(Player bot, GameController controller) {
+    final handSize = bot.currentHand.length;
+    if (handSize == 0) return null;
+
+    // Get all cards we can potentially play
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+
+    // Calculate total playable cards
+    int totalPlayableCards = 0;
+    Set<PlayingCard> usedCards = {};
+
+    // Count cards that can be added to existing melds
+    for (final addition in cardsToAdd) {
+      final card = addition['card'] as PlayingCard;
+      if (!usedCards.contains(card)) {
+        usedCards.add(card);
+        totalPlayableCards++;
+      }
+    }
+
+    // Count cards that can form new melds (avoiding double-counting)
+    for (final meld in possibleMelds) {
+      int newCardsInMeld = 0;
+      for (final card in meld) {
+        if (!usedCards.contains(card)) {
+          usedCards.add(card);
+          newCardsInMeld++;
+        }
+      }
+      totalPlayableCards += newCardsInMeld;
+    }
+
+    // If we can play ALL cards, execute the strategy
+    if (totalPlayableCards >= handSize) {
+      // Prioritize adding to existing melds first
+      if (cardsToAdd.isNotEmpty) {
+        return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      }
+      // Then create new melds
+      if (possibleMelds.isNotEmpty) {
+        final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds, bot: bot);
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
+    }
+
+    return null;
   }
 
   /// Determine if we should hold cards based on round play-down requirements
