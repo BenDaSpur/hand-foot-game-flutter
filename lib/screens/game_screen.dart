@@ -3028,13 +3028,29 @@ class _GameScreenState extends State<GameScreen> {
 
       // Check for impossible player states
       for (final player in gameState.players) {
-        // When hasPickedUpFoot is true, the foot cards ARE the current hand
-        // So foot should have cards if using foot, or be empty if not
-        if (player.hasPickedUpFoot && player.foot.isEmpty) {
-          DebugLogger.error(
-            'Player ${player.name} has picked up foot but foot is empty',
-          );
-          return false;
+        // Check if player might be trying to go out
+        final hasCleanBook = player.melds.any(
+          (meld) => meld.isClean && meld.isBook,
+        );
+        final hasDirtyBook = player.melds.any(
+          (meld) => !meld.isClean && meld.isBook,
+        );
+        final canGoOut = hasCleanBook && hasDirtyBook;
+
+        // When hasPickedUpFoot is true and both hand and foot are empty,
+        // it could mean the player went out (valid) or there's an error
+        if (player.hasPickedUpFoot &&
+            player.foot.isEmpty &&
+            player.hand.isEmpty) {
+          // This is OK if:
+          // 1. The round has ended (someone went out)
+          // 2. This player can go out (has required books)
+          if (gameState.phase != GamePhase.roundEnd && !canGoOut) {
+            DebugLogger.error(
+              'Player ${player.name} has no cards but cannot go out (needs clean AND dirty book)',
+            );
+            // Don't return false - let the game continue, they might need emergency discard
+          }
         }
 
         // If not using foot yet, hand shouldn't be empty unless picking up foot
@@ -3045,9 +3061,10 @@ class _GameScreenState extends State<GameScreen> {
           // The pickUpFoot() method will be called when they play/discard next
         } else if (!player.hasPickedUpFoot &&
             player.hand.isEmpty &&
-            player.foot.isEmpty) {
+            player.foot.isEmpty &&
+            gameState.phase != GamePhase.roundEnd) {
           DebugLogger.error(
-            'Player ${player.name} has no cards in hand or foot',
+            'Player ${player.name} has no cards in hand or foot and round hasn\'t ended',
           );
           return false;
         }
