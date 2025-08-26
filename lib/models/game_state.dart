@@ -52,8 +52,11 @@ class GameState {
   bool hasMelded;
 
   // Track 3s stalemate situation
+  /// Player index where stalemate detection started (null if no stalemate detected)
   int? _stalemateStartPlayer;
-  bool _stalemateWarningShown = false;
+
+  /// Count of consecutive 3 discards in stalemate situation
+  int _stalemateDiscardCount = 0;
 
   GameState({
     required this.players,
@@ -632,32 +635,39 @@ class GameState {
   }
 
   void _handleThreeDiscard() {
-    // Check if discard pile only contains 3s
-    final onlyThreesInPile = discardPile.every((card) => card.isThree);
+    // Check if discard pile only contains 3s (optimize by checking recent cards)
+    // If pile is large, just check the last N cards for performance
+    final cardsToCheck = discardPile.length > GameConfig.stalemateCheckCardCount
+        ? discardPile
+              .skip(discardPile.length - GameConfig.stalemateCheckCardCount)
+              .toList()
+        : discardPile;
+    final onlyThreesInPile =
+        cardsToCheck.isNotEmpty && cardsToCheck.every((card) => card.isThree);
 
-    // Check if deck is running low (threshold of 10 cards)
-    final deckLow = deck.size < 10;
+    // Check if deck is running low
+    final deckLow = deck.size < GameConfig.stalemateDeckThreshold;
 
     if (onlyThreesInPile && deckLow) {
       if (_stalemateStartPlayer == null) {
+        // First detection - start tracking
         _stalemateStartPlayer = currentPlayerIndex;
-        _stalemateWarningShown = false;
-      }
+        _stalemateDiscardCount = 1;
+      } else {
+        // Continue tracking
+        _stalemateDiscardCount++;
 
-      // Check if we've gone through all players once
-      final nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
-      if (nextPlayerIndex == _stalemateStartPlayer) {
-        if (!_stalemateWarningShown) {
-          // Show warning - one more round before ending
+        // Check if we've gone through all players once
+        if (_stalemateDiscardCount == players.length) {
+          // First full rotation complete - show warning
           _logAction(
             '⚠️ WARNING: Only 3s in discard pile with low deck (${deck.size} cards remaining)',
           );
           _logAction(
             'Round will end automatically if all players discard 3s again',
           );
-          _stalemateWarningShown = true;
-        } else {
-          // End the round due to stalemate
+        } else if (_stalemateDiscardCount == players.length * 2) {
+          // Second full rotation complete - end round
           _logAction(
             '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',
           );
@@ -669,7 +679,7 @@ class GameState {
 
   void _resetStalemateTracking() {
     _stalemateStartPlayer = null;
-    _stalemateWarningShown = false;
+    _stalemateDiscardCount = 0;
   }
 
   void _emergencyEndRoundDueToStalemate() {
