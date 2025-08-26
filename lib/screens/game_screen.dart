@@ -24,39 +24,6 @@ import 'main_menu_screen.dart';
 import '../utils/debug_logger.dart';
 import '../config/game_config.dart';
 
-/// Bot loop detection and tracking
-class _BotLoopTracker {
-  int _counter = 0;
-  String? _lastDecision;
-  String? _lastPlayerId;
-
-  bool isRepeated(String playerId, String decision) {
-    final currentDecision = '$playerId-$decision';
-    if (_lastDecision == currentDecision && _lastPlayerId == playerId) {
-      _counter++;
-      return true;
-    } else {
-      reset(playerId, decision);
-      return false;
-    }
-  }
-
-  void reset(String playerId, String decision) {
-    _counter = 0;
-    _lastDecision = '$playerId-$decision';
-    _lastPlayerId = playerId;
-  }
-
-  void clear() {
-    _counter = 0;
-    _lastDecision = null;
-    _lastPlayerId = null;
-  }
-
-  int get count => _counter;
-  bool get isStuck => _counter > GameConfig.botStuckThreshold;
-}
-
 /// Bot configuration for randomized personality assignment
 class BotConfig {
   final String name;
@@ -82,17 +49,14 @@ class _GameScreenState extends State<GameScreen> {
   final List<int> _selectedCardIndices =
       []; // Track card indices instead of card objects
   bool _isInitialized = false;
-  Player? _viewingPlayerMelds; // null means viewing current player's melds
+  Player? _viewingPlayerMelds; // null means viewing human player's melds
   bool _statusExpanded = false;
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
-  bool _botTurnScheduled = false; // Prevent multiple bot turn callbacks
-  int _botProcessingDepth =
-      0; // Track recursion depth to prevent infinite loops
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
-  // Loop detection for bot turns
-  final _BotLoopTracker _botLoopTracker = _BotLoopTracker();
+  // SIMPLIFIED: Single flag to prevent overlapping bot processing
+  bool _isProcessingBotTurn = false;
 
   @override
   void initState() {
@@ -122,7 +86,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _initializeGame() async {
+  Future<void> _initializeGame() async {
     // If a gameController was provided (continuing saved game), use it
     if (widget.gameController != null) {
       _gameController = widget.gameController!;
@@ -133,7 +97,7 @@ class _GameScreenState extends State<GameScreen> {
       });
 
       // Start bot turns if needed
-      _processBotTurns();
+      processCurrentPlayerTurn();
       return;
     }
 
@@ -179,6 +143,14 @@ class _GameScreenState extends State<GameScreen> {
       Player(id: '3', name: botConfigs[1].name, type: PlayerType.bot),
     ];
 
+    // Debug logging for player setup
+    DebugLogger.debug('Setting up fresh game with players:');
+    for (var player in players) {
+      DebugLogger.debug(
+        '  - ${player.name} (ID: ${player.id}, Type: ${player.type})',
+      );
+    }
+
     _gameController = GameControllerFactory.createSingleplayerGame(
       players: players,
       seed: widget.testSeed,
@@ -201,421 +173,647 @@ class _GameScreenState extends State<GameScreen> {
 
     // If the first player is human, save the initial game state
     if (_gameController.gameState.currentPlayer.type == PlayerType.human) {
-      _saveGameState();
-    }
-
-    _processBotTurns();
-  }
-
-  void _processBotTurns() {
-    if (!_isInitialized) return;
-
-    final currentPlayer = _gameController.gameState.currentPlayer;
-
-    // CRITICAL FIX: Only schedule bot processing if current player is actually a bot
-    // This prevents the game from auto-drawing/discarding on human turns
-    if (currentPlayer.type == PlayerType.bot) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _processBotTurn();
+      _saveGameState().catchError((error) {
+        DebugLogger.error('Error saving initial game state: $error');
       });
     }
+
+    processCurrentPlayerTurn();
   }
 
-  /// Schedule bot turn continuation after draw/meld actions
-  ///
-  /// This addresses the critical issue where bot turns require multiple sequential
-  /// decisions (draw → meld → discard) but the original code only processed one
-  /// decision per turn, causing bots to freeze mid-turn.
-  ///
-  /// Features:
-  /// - Race condition protection via _botTurnScheduled flag
-  /// - Widget disposal safety checks (prevents crashes if widget is disposed)
-  /// - Uses addPostFrameCallback for proper Flutter lifecycle integration
-  /// - Only continues if bot is still current player in meld phase
-  void _scheduleBotTurnContinuation() {
-    // Prevent multiple callbacks and check widget state
-    if (_botTurnScheduled || _disposed || !mounted) return;
+  /// SIMPLIFIED: Single entry point for turn processing with error recovery
+  void processCurrentPlayerTurn() {
+    if (!_isInitialized || _disposed || !mounted) return;
 
-    // Only continue if bot is still current player and in meld phase
-    if (_gameController.gameState.currentPlayer.type == PlayerType.bot &&
-        _gameController.gameState.turnPhase == TurnPhase.meld) {
-      _botTurnScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _botTurnScheduled = false;
-        // Double-check widget state before processing
-        if (!_disposed && mounted) {
-          _processBotTurn();
+    try {
+      // Validate game state before processing
+      if (!_validateGameState()) {
+        DebugLogger.error('Game state invalid - attempting recovery');
+        _attemptGameStateRecovery();
+        return;
+      }
+
+      final currentPlayer = _gameController.gameState.currentPlayer;
+
+      // CRITICAL: Defend against turn corruption from multiplayer sync or other sources
+      final humanPlayer = _gameController.gameState.players.firstWhere(
+        (p) => p.type == PlayerType.human,
+      );
+      if (_gameController.gameState.turnPhase == TurnPhase.meld &&
+          humanPlayer.currentHand.isNotEmpty &&
+          currentPlayer.type != PlayerType.human) {
+        DebugLogger.error(
+          'TURN CORRUPTION DETECTED: Human should be playing but current player is ${currentPlayer.name}',
+        );
+        DebugLogger.debug('Correcting current player back to human');
+        final humanIndex = _gameController.gameState.players.indexWhere(
+          (p) => p.type == PlayerType.human,
+        );
+        _gameController.gameState.currentPlayerIndex = humanIndex;
+        return;
+      }
+
+      // Check for round end condition first (but not during initial game setup)
+      if (_gameController.gameState.phase == GamePhase.roundEnd &&
+          _gameController.gameState.round > 1) {
+        DebugLogger.debug('Round has ended - handling transition');
+        _handleRoundTransition().catchError((error) {
+          DebugLogger.error('Error handling round transition: $error');
+        });
+        return;
+      }
+
+      // Human turn: Do nothing, wait for UI input
+      if (currentPlayer.type == PlayerType.human ||
+          currentPlayer.name == 'You') {
+        DebugLogger.debug('Human turn - waiting for input');
+        _validateHumanPlayerState();
+        return;
+      }
+
+      // Bot turn: Process with safety checks and delays
+      if (!_isProcessingBotTurn) {
+        DebugLogger.debug('Starting bot turn for ${currentPlayer.name}');
+        _processBotTurnWithDelays(currentPlayer);
+      } else {
+        DebugLogger.warning(
+          'Bot processing already in progress - skipping duplicate call',
+        );
+      }
+    } catch (e) {
+      DebugLogger.error('Error in processCurrentPlayerTurn: $e');
+      _handleCriticalError(e);
+    }
+  }
+
+  /// SIMPLIFIED: Process bot turn iteratively to prevent stack overflow
+  Future<void> _processBotTurn(Player botPlayer) async {
+    if (_isProcessingBotTurn || _disposed || !mounted) return;
+
+    _isProcessingBotTurn = true;
+
+    try {
+      // Process bot turn iteratively until turn ends or max iterations reached
+      int maxIterations = 10; // Prevent infinite loops
+      int iteration = 0;
+
+      while (iteration < maxIterations) {
+        iteration++;
+
+        // Verify this is still the current player and it's still a bot
+        final currentPlayer = _gameController.gameState.currentPlayer;
+        if (currentPlayer.id != botPlayer.id ||
+            currentPlayer.type != PlayerType.bot) {
+          DebugLogger.debug('Bot processing ended - player changed or not bot');
+          break;
         }
-      });
+
+        bool actionSucceeded = false;
+
+        // Try bot decision with retry mechanism
+        for (int attempt = 0; attempt < 3 && !actionSucceeded; attempt++) {
+          try {
+            final decision = _botAI.makeDecision(botPlayer, _gameController);
+            actionSucceeded = _executeBotDecision(decision, botPlayer);
+
+            if (actionSucceeded) {
+              DebugLogger.debug(
+                'Bot ${botPlayer.name} executed ${decision.action}',
+              );
+              // Log the action for better visibility in UI
+              _logBotActionForUser(botPlayer, decision);
+              break;
+            }
+          } catch (e) {
+            DebugLogger.warning(
+              'Bot decision attempt ${attempt + 1} failed: $e',
+            );
+          }
+        }
+
+        if (!actionSucceeded) {
+          // All attempts failed - force completion and exit loop
+          DebugLogger.error(
+            'Bot ${botPlayer.name} failed all attempts - forcing completion',
+          );
+          _forceCompleteBotTurn(botPlayer);
+          break;
+        }
+
+        // Update UI state after successful action
+        if (mounted) setState(() {});
+
+        // Add delay after each bot action so users can see what happened
+        await Future.delayed(const Duration(milliseconds: 1000));
+        if (_disposed || !mounted) break;
+
+        // Check if this bot still has the turn (multi-phase turn)
+        final newCurrentPlayer = _gameController.gameState.currentPlayer;
+        if (newCurrentPlayer.id != botPlayer.id ||
+            newCurrentPlayer.type != PlayerType.bot) {
+          // Turn has ended - bot completed their turn
+          DebugLogger.debug('Bot ${botPlayer.name} completed turn');
+          break;
+        }
+
+        // Check for round end
+        if (_gameController.gameState.phase == GamePhase.roundEnd) {
+          DebugLogger.debug('Round ended during bot turn');
+          _handleRoundEnd();
+          break;
+        }
+      }
+
+      if (iteration >= maxIterations) {
+        DebugLogger.error(
+          'Bot ${botPlayer.name} exceeded max iterations - forcing completion',
+        );
+        _forceCompleteBotTurn(botPlayer);
+      }
+    } finally {
+      _isProcessingBotTurn = false;
+      // Continue processing next player if needed
+      if (mounted && !_disposed) {
+        // Small delay to ensure UI updates are processed
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted && !_disposed) {
+            // Continue processing if it's still a bot turn (same or different bot)
+            // Only cancel if turn advanced to human player (prevents interference with manual advancement)
+            final currentPlayer = _gameController.gameState.currentPlayer;
+            if (currentPlayer.type != PlayerType.human) {
+              processCurrentPlayerTurn();
+            } else {
+              DebugLogger.debug(
+                'Bot ${botPlayer.name} turn callback cancelled - player changed to ${currentPlayer.name}',
+              );
+            }
+          }
+        });
+      }
+    }
+  }
+
+  /// Process bot turn with user-friendly delays between actions
+  void _processBotTurnWithDelays(Player botPlayer) {
+    // Use Future to handle async processing without blocking main method
+    Future(() async {
+      await _processBotTurn(botPlayer);
+    }).catchError((error) {
+      DebugLogger.error('Error in bot turn processing: $error');
+      // Reset processing flag on error
+      _isProcessingBotTurn = false;
+      // Try to continue with next player
+      if (mounted && !_disposed) {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted && !_disposed) {
+            // Continue processing if it's still a bot turn (same or different bot)
+            // Only cancel if turn advanced to human player (prevents interference with manual advancement)
+            final currentPlayer = _gameController.gameState.currentPlayer;
+            if (currentPlayer.type != PlayerType.human) {
+              processCurrentPlayerTurn();
+            } else {
+              DebugLogger.debug(
+                'Bot ${botPlayer.name} error callback cancelled - player changed to ${currentPlayer.name}',
+              );
+            }
+          }
+        });
+      }
+    });
+  }
+
+  /// Log bot action for better user visibility
+  void _logBotActionForUser(Player botPlayer, BotDecision decision) {
+    String actionDescription;
+
+    switch (decision.action) {
+      case 'drawFromDeck':
+        actionDescription = '🎴 drew 2 cards from deck';
+        break;
+      case 'drawFromDiscard':
+        actionDescription = '♻️ took discard pile';
+        break;
+      case 'createMeld':
+        final cards = decision.data as List<PlayingCard>;
+        final rank = cards.first.rank.name.toUpperCase();
+        actionDescription = '📋 created ${cards.length}-card ${rank}s meld';
+        break;
+      case 'createMultipleMelds':
+        final allMelds = decision.data as List<List<PlayingCard>>;
+        actionDescription = '📋 created ${allMelds.length} melds';
+        break;
+      case 'addToMeld':
+        final data = decision.data as Map<String, dynamic>;
+        final card = data['card'] as PlayingCard;
+        actionDescription = '➕ added ${card.displayName} to meld';
+        break;
+      case 'discard':
+        final card = decision.data as PlayingCard;
+        actionDescription = '🗑️ discarded ${card.displayName}';
+        break;
+      case 'noMeld':
+        actionDescription = '⏭️ chose not to meld';
+        break;
+      case 'goOut':
+        actionDescription = '🎉 went out and ended the round!';
+        break;
+      default:
+        actionDescription = decision.action;
+        break;
+    }
+
+    // Log to game state for UI display with explicit bot player name
+    // Note: Can't use the direct logAction because it uses currentPlayer.name
+    // and currentPlayer might have changed to the next player by now
+    final gameState = _gameController.gameState;
+    gameState.recentActions.add(
+      GameAction(message: actionDescription, playerName: botPlayer.name),
+    );
+
+    // Keep only the last N actions to avoid memory issues
+    if (gameState.recentActions.length > GameConfig.maxRecentActions) {
+      gameState.recentActions.removeAt(0);
+    }
+  }
+
+  /// Execute bot decision with comprehensive validation and state management
+  bool _executeBotDecision(BotDecision decision, Player botPlayer) {
+    try {
+      // Validate bot is still current player
+      final currentPlayer = _gameController.gameState.currentPlayer;
+      if (currentPlayer.id != botPlayer.id ||
+          currentPlayer.type != PlayerType.bot) {
+        DebugLogger.warning(
+          'Bot decision rejected - player changed during processing',
+        );
+        return false;
+      }
+
+      bool success = false;
+      final gameState = _gameController.gameState;
+
+      switch (decision.action) {
+        case 'drawFromDeck':
+          success = _gameController.drawFromDeck();
+          if (!success && gameState.deck.isEmpty) {
+            // Handle empty deck - end round early
+            DebugLogger.debug('Deck empty during bot draw - ending round');
+            gameState.endRound();
+            return true;
+          }
+          break;
+
+        case 'drawFromDiscard':
+          success = _gameController.drawFromDiscardPile();
+          if (!success) {
+            // Fallback to deck draw
+            DebugLogger.debug(
+              'Bot fallback to deck draw after discard pile failure',
+            );
+            success = _gameController.drawFromDeck();
+          }
+          break;
+
+        case 'createMeld':
+          final cards = decision.data as List<PlayingCard>;
+          success = _gameController.createMeld(cards);
+          if (success) {
+            _validateGameStateAfterMeld(botPlayer);
+          }
+          break;
+
+        case 'createMultipleMelds':
+          final allMelds = decision.data as List<List<PlayingCard>>;
+          success = _executeMultipleMeldCreation(allMelds, botPlayer);
+          if (success) {
+            _validateGameStateAfterMeld(botPlayer);
+          }
+          break;
+
+        case 'addToMeld':
+          final data = decision.data as Map<String, dynamic>;
+          final meldIndex = data['meldIndex'] as int;
+          final card = data['card'] as PlayingCard;
+
+          // Validate meld index
+          if (meldIndex >= 0 && meldIndex < botPlayer.melds.length) {
+            success = _gameController.addCardToMeld(meldIndex, card);
+            if (success) {
+              _validateGameStateAfterMeld(botPlayer);
+            }
+          }
+          break;
+
+        case 'discard':
+          final card = decision.data as PlayingCard;
+          success = _gameController.discardCard(card);
+          if (success) {
+            _handlePostDiscardState(botPlayer);
+          }
+          break;
+
+        case 'noMeld':
+          if (gameState.turnPhase == TurnPhase.meld) {
+            gameState.turnPhase = TurnPhase.discard;
+            success = true;
+          }
+          break;
+
+        case 'endTurn':
+          // Force turn completion if bot requests it
+          success = true;
+          break;
+
+        case 'goOut':
+          if (botPlayer.canGoOut) {
+            gameState.endRound();
+            success = true;
+          } else {
+            DebugLogger.warning(
+              'Bot tried to go out but cannot - missing book requirements',
+            );
+            success = false;
+          }
+          break;
+
+        case 'error':
+          DebugLogger.warning('Bot reported error state');
+          return false;
+
+        default:
+          DebugLogger.error('Unknown bot decision: ${decision.action}');
+          return false;
+      }
+
+      if (success) {
+        // Save game state after successful bot action (fire and forget)
+        _saveGameState().catchError((error) {
+          DebugLogger.error('Error saving game state: $error');
+        });
+      }
+
+      return success;
+    } catch (e) {
+      DebugLogger.error('Error executing bot decision ${decision.action}: $e');
+      return false;
+    }
+  }
+
+  /// Execute multiple meld creation for bots with proper index handling
+  bool _executeMultipleMeldCreation(
+    List<List<PlayingCard>> allMelds,
+    Player botPlayer,
+  ) {
+    try {
+      // Convert cards to indices for the multi-meld system
+      final allMeldIndices = <List<int>>[];
+      final usedIndices = <int>{}; // Track used indices to handle duplicates
+
+      for (final meld in allMelds) {
+        final meldIndices = <int>[];
+        for (final card in meld) {
+          // Find the card using object identity, not indexOf which fails with duplicates
+          int foundIndex = -1;
+          for (int i = 0; i < botPlayer.currentHand.length; i++) {
+            if (!usedIndices.contains(i) &&
+                identical(botPlayer.currentHand[i], card)) {
+              foundIndex = i;
+              break;
+            }
+          }
+
+          if (foundIndex >= 0) {
+            meldIndices.add(foundIndex);
+            usedIndices.add(foundIndex); // Mark this index as used
+          }
+        }
+        if (meldIndices.isNotEmpty) {
+          allMeldIndices.add(meldIndices);
+        }
+      }
+
+      if (allMeldIndices.isNotEmpty) {
+        return _gameController.createMultipleMeldsFromIndices(allMeldIndices);
+      }
+
+      return false;
+    } catch (e) {
+      DebugLogger.error('Error in multiple meld creation: $e');
+      return false;
+    }
+  }
+
+  /// Validate game state after meld creation
+  void _validateGameStateAfterMeld(Player player) {
+    // Check if player went out by melding their last cards
+    if (player.currentHand.isEmpty) {
+      if (!player.hasPickedUpFoot && player.foot.isNotEmpty) {
+        // Transition to foot
+        player.pickUpFoot();
+        DebugLogger.debug('Bot ${player.name} picked up foot after melding');
+      } else if (player.hasPickedUpFoot && player.canGoOut) {
+        // Player went out
+        _gameController.gameState.endRound();
+        DebugLogger.debug('Bot ${player.name} went out by melding');
+      }
+    }
+  }
+
+  /// Handle state after discard action
+  void _handlePostDiscardState(Player player) {
+    // Check if player needs to pick up foot
+    if (player.currentHand.isEmpty &&
+        !player.hasPickedUpFoot &&
+        player.foot.isNotEmpty) {
+      player.pickUpFoot();
+      DebugLogger.debug('Bot ${player.name} picked up foot after discard');
+    }
+
+    // Check if discard ended the round (player went out)
+    if (player.hasPickedUpFoot &&
+        player.currentHand.isEmpty &&
+        player.canGoOut) {
+      _gameController.gameState.endRound();
+      DebugLogger.debug('Bot ${player.name} went out by discard');
     }
   }
 
   Future<void> _checkAndHandleRoundEnd() async {
     if (_gameController.gameState.phase == GamePhase.roundEnd) {
-      await Future.delayed(
-        const Duration(seconds: 2),
-      ); // Brief pause to show scores
-      if (_disposed || !mounted) return; // Check again after delay
-      _gameController.nextRound();
-      setState(() {});
-      _processBotTurns(); // Resume game flow
+      await _handleRoundTransition();
     }
   }
 
-  void _processBotTurn() async {
-    // RECURSION PROTECTION: Prevent infinite loops
-    _botProcessingDepth++;
-    if (_botProcessingDepth > GameConfig.maxBotProcessingDepth) {
-      DebugLogger.error(
-        'Bot processing depth exceeded limit (${GameConfig.maxBotProcessingDepth}) - breaking infinite loop',
-      );
-      _botProcessingDepth = 0; // Reset counter
-      _botLoopTracker.clear(); // Clear stuck tracker
+  /// Handle complete round transition with proper state management
+  Future<void> _handleRoundTransition() async {
+    if (_gameController.gameState.phase != GamePhase.roundEnd) return;
 
-      // IMPROVED: Complete the bot turn gracefully instead of just returning
-      final currentPlayer = _gameController.gameState.currentPlayer;
-      if (currentPlayer.type == PlayerType.bot) {
-        _forceCompleteBotTurn(currentPlayer);
-      }
-      return; // Early return - no further decrements needed
-    }
+    DebugLogger.debug('Handling round transition - calculating scores');
 
-    final currentPlayer = _gameController.gameState.currentPlayer;
+    // Brief pause to show scores
+    await Future.delayed(const Duration(seconds: 2));
+    if (_disposed || !mounted) return;
 
-    // Check if widget has been disposed
-    if (_disposed || !mounted) {
-      _botProcessingDepth--; // Decrement on early return
-      return;
-    }
+    // Check if game should end (someone reached winning score)
+    final scores = _gameController.gameState.players
+        .map((p) => p.score)
+        .toList();
+    final highestScore = scores.isEmpty
+        ? 0
+        : scores.reduce((a, b) => a > b ? a : b);
 
-    // ENHANCED SAFETY CHECK: Comprehensive game state validation with detailed logging
-    if (_gameController.gameState.currentPlayer.name == 'You' ||
-        currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.id != currentPlayer.id ||
-        _gameController.gameState.phase != GamePhase.playing) {
+    if (highestScore >= 8500) {
       DebugLogger.debug(
-        'Bot turn processing skipped - Player: ${currentPlayer.name}, Type: ${currentPlayer.type}, ID: ${currentPlayer.id}, Phase: ${_gameController.gameState.phase}',
+        'Game end condition met - highest score: $highestScore',
       );
-      _botProcessingDepth--; // Decrement on early return
+      _handleGameEnd();
       return;
     }
 
-    // CRITICAL: Additional safety check with explicit logging for debugging
-    if (currentPlayer.name == 'You') {
-      DebugLogger.error(
-        'CRITICAL BUG: Human player "You" bypassed bot safety checks! Type: ${currentPlayer.type}, ID: ${currentPlayer.id}',
-      );
-      _gameController.gameState.logAction(
-        'EMERGENCY: Blocked human player from bot processing - this indicates a serious bug',
-        showCardDetails: false,
-      );
-      _botProcessingDepth--; // Decrement on early return
-      return;
-    }
+    // Continue to next round
+    try {
+      _gameController.nextRound();
+      DebugLogger.debug('Advanced to round ${_gameController.gameState.round}');
 
-    // Check if game has ended
-    if (_gameController.gameState.phase == GamePhase.gameEnd) {
-      // Game is over, clear the saved game
-      await GameController.clearSavedGame();
-      _botProcessingDepth--; // Decrement on early return
-      return;
-    }
-
-    // Check if round has ended and automatically start next round
-    await _checkAndHandleRoundEnd();
-    if (_gameController.gameState.phase == GamePhase.roundEnd ||
-        _gameController.gameState.phase == GamePhase.gameEnd) {
-      _botProcessingDepth--; // Decrement on early return
-      return;
-    }
-
-    if (currentPlayer.type == PlayerType.bot) {
-      await Future.delayed(GameConfig.botProcessingDelay);
-
-      try {
-        final decision = _botAI.makeDecision(currentPlayer, _gameController);
-
-        // ANTI-LOOP PROTECTION: Track repeated decisions
-        final decisionKey =
-            '${decision.action}-${_gameController.gameState.turnPhase}';
-        if (_botLoopTracker.isRepeated(currentPlayer.id, decisionKey)) {
-          DebugLogger.warning(
-            'Bot ${currentPlayer.name} making same decision ${decision.action} repeatedly (count: ${_botLoopTracker.count})',
-          );
-          if (_botLoopTracker.isStuck) {
-            // FIXED: Instead of skipping turn, force bot to complete turn with fallback action
-            _gameController.gameState.logAction(
-              'attempted ${decision.action} but got stuck in loop - using fallback action',
-              showCardDetails: false,
-            );
-            print(
-              'ERROR: Bot ${currentPlayer.name} stuck in loop with ${decision.action} - forcing completion',
-            );
-            _forceCompleteBotTurn(currentPlayer);
-            _botLoopTracker.clear();
-            _botProcessingDepth--; // Decrement on early return
-            return;
-          }
-        }
-
-        _processBotDecision(decision, currentPlayer);
-
-        if (_disposed || !mounted) {
-          _botProcessingDepth--; // Decrement on early return
-          return; // Check before setState
-        }
+      if (mounted) {
         setState(() {});
 
-        if (_gameController.gameState.currentPlayer.type == PlayerType.bot) {
-          // FIXED: Use async scheduling instead of synchronous recursion
-          Future.microtask(() => _processBotTurn());
-        } else {
-          // It's now the human player's turn - save the game state
-          _saveGameState();
-        }
-      } catch (e) {
-        // IMPROVED: Comprehensive exception handling with action logging
-        DebugLogger.error(
-          'Bot turn processing failed for ${currentPlayer.name}: $e',
-        );
-        _gameController.gameState.logAction(
-          'encountered error during turn processing - attempting recovery',
-          showCardDetails: false,
-        );
+        // Clear any UI selections
+        _selectedCardIndices.clear();
+        _viewingPlayerMelds = null;
 
-        // FIXED: Force bot to complete turn instead of skipping
-        try {
-          _forceCompleteBotTurn(currentPlayer);
-        } catch (recoveryError) {
-          DebugLogger.error('Bot error recovery failed: $recoveryError');
-          _gameController.gameState.logAction(
-            'error recovery failed - using emergency completion',
-            showCardDetails: false,
+        // Save game state after round transition (fire and forget)
+        _saveGameState().catchError((error) {
+          DebugLogger.error(
+            'Error saving game state after round transition: $error',
           );
-          _emergencyCompleteBotTurn(currentPlayer);
-        }
+        });
+
+        // Resume game flow
+        processCurrentPlayerTurn();
       }
-    }
-
-    // Decrement depth counter at method exit
-    _botProcessingDepth--;
-  }
-
-  /// Process a specific bot decision with comprehensive error handling
-  void _processBotDecision(BotDecision decision, Player currentPlayer) {
-    switch (decision.action) {
-      case 'drawFromDeck':
-        _handleBotDrawFromDeck(currentPlayer);
-        break;
-      case 'drawFromDiscard':
-        _handleBotDrawFromDiscard(currentPlayer);
-        break;
-      case 'createMeld':
-        _handleBotCreateMeld(decision, currentPlayer);
-        break;
-      case 'createMultipleMelds':
-        _handleBotCreateMultipleMelds(decision, currentPlayer);
-        break;
-      case 'addToMeld':
-        _handleBotAddToMeld(decision, currentPlayer);
-        break;
-      case 'noMeld':
-        _handleBotNoMeld();
-        break;
-      case 'discard':
-        _handleBotDiscard(decision, currentPlayer);
-        break;
-      case 'goOut':
-        _gameController.gameState.endRound();
-        break;
-      case 'error':
-        _handleBotError(currentPlayer);
-        break;
-      case 'endTurn':
-        _handleBotEndTurn(currentPlayer);
-        break;
+    } catch (e) {
+      DebugLogger.error('Error during round transition: $e');
+      _showErrorDialog('Error advancing to next round: ${e.toString()}');
     }
   }
 
-  /// Handle bot draw from deck action
-  void _handleBotDrawFromDeck(Player currentPlayer) {
-    // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
-    if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
-        _gameController.gameState.currentPlayer.type != PlayerType.bot) {
-      return;
+  /// Handle immediate round end during bot processing
+  void _handleRoundEnd() {
+    if (_gameController.gameState.phase == GamePhase.roundEnd) {
+      DebugLogger.debug('Immediate round end handling');
+      // Don't advance immediately - let the UI show the round end state
+      if (mounted) setState(() {});
     }
-    _gameController.drawFromDeck();
-    _scheduleBotTurnContinuation();
   }
 
-  /// Handle bot draw from discard pile action
-  void _handleBotDrawFromDiscard(Player currentPlayer) {
-    // CRITICAL RACE CONDITION FIX: Double-check we're still processing the same bot
-    if (_gameController.gameState.currentPlayer.id != currentPlayer.id ||
-        _gameController.gameState.currentPlayer.type != PlayerType.bot) {
-      return;
-    }
-
-    // Check if discard pile draw succeeds - if not, fallback to deck draw
-    final success = _gameController.drawFromDiscardPile();
-    if (!success) {
-      // Bot couldn't unlock discard pile - fallback to drawing from deck
-      DebugLogger.botDebug(
-        currentPlayer.id,
-        currentPlayer.name,
-        'Failed to unlock discard pile, drawing from deck instead',
-      );
-      _gameController.drawFromDeck();
-    }
-
-    _scheduleBotTurnContinuation();
-  }
-
-  /// Handle bot create meld action
-  void _handleBotCreateMeld(BotDecision decision, Player currentPlayer) {
-    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
-    if (currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.name == 'You') {
-      DebugLogger.warning(
-        'Bot create-meld action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
-      );
-      return;
-    }
-
-    final cards = decision.data as List<PlayingCard>;
-    if (decision.skipPlayDownCheck) {
-      _gameController.createMeldBypass(cards);
-    } else {
-      _gameController.createMeld(cards);
-    }
-    _scheduleBotTurnContinuation();
-  }
-
-  /// Handle bot create multiple melds action
-  void _handleBotCreateMultipleMelds(
-    BotDecision decision,
-    Player currentPlayer,
-  ) {
-    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
-    if (currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.name == 'You') {
-      DebugLogger.warning(
-        'Bot create-multiple-melds action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
-      );
-      return;
-    }
-
-    final allMelds = decision.data as List<List<PlayingCard>>;
-    // Convert to list of indices for the multi-meld creation system
-    final allMeldIndices = <List<int>>[];
-
-    for (final meld in allMelds) {
-      final meldIndices = <int>[];
-      for (final card in meld) {
-        final index = currentPlayer.currentHand.indexOf(card);
-        if (index >= 0) {
-          meldIndices.add(index);
-        }
-      }
-      if (meldIndices.isNotEmpty) {
-        allMeldIndices.add(meldIndices);
-      }
-    }
-
-    if (allMeldIndices.isNotEmpty) {
-      // Use the multi-meld system which validates the combined point requirement
-      _gameController.createMultipleMeldsFromIndices(
-        allMeldIndices,
-        skipPlayDownCheck: decision.skipPlayDownCheck,
-      );
-    }
-
-    _scheduleBotTurnContinuation();
-  }
-
-  /// Handle bot add to existing meld action
-  void _handleBotAddToMeld(BotDecision decision, Player currentPlayer) {
-    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
-    // Prevents race conditions where human players get bot actions applied
-    if (currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.name == 'You') {
-      DebugLogger.warning(
-        'Bot add-to-meld action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
-      );
-      return;
-    }
-
-    final data = decision.data as Map<String, dynamic>;
-    final meldIndex = data['meldIndex'] as int?;
-    final card = data['card'] as PlayingCard?;
-
-    DebugLogger.botDebug(
-      currentPlayer.id,
-      currentPlayer.name,
-      'attempting addToMeld - meldIndex: $meldIndex, card: ${card?.displayName}',
+  /// Handle game end when someone reaches winning score
+  void _handleGameEnd() {
+    final winner = _gameController.gameState.players.reduce(
+      (a, b) => a.score > b.score ? a : b,
     );
 
-    if (meldIndex != null && card != null) {
-      final success = _gameController.addCardToMeld(meldIndex, card);
-      if (!success) {
-        _gameController.gameState.logAction(
-          'attempted to add card to meld but failed - continuing with turn',
-          showCardDetails: false,
-        );
-      }
-    } else {
-      _gameController.gameState.logAction(
-        'attempted invalid meld operation - continuing with turn',
-        showCardDetails: false,
-      );
-    }
-    _scheduleBotTurnContinuation();
-  }
-
-  /// Handle bot no meld action
-  void _handleBotNoMeld() {
-    if (_gameController.gameState.turnPhase == TurnPhase.meld) {
-      _gameController.gameState.turnPhase = TurnPhase.discard;
-      _scheduleBotTurnContinuation();
-    }
-  }
-
-  /// Handle bot discard action
-  void _handleBotDiscard(BotDecision decision, Player currentPlayer) {
-    // CRITICAL SAFETY CHECK: Ensure this is still a bot player
-    // Prevents race conditions where human players get bot actions applied
-    if (currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.type == PlayerType.human ||
-        _gameController.gameState.currentPlayer.name == 'You' ||
-        _gameController.gameState.currentPlayer.id != currentPlayer.id) {
-      DebugLogger.warning(
-        'Bot discard action blocked - current player is human: ${_gameController.gameState.currentPlayer.name}',
-      );
-      return;
-    }
-    final card = decision.data as PlayingCard;
-    _gameController.discardCard(card);
-  }
-
-  /// Handle bot error state
-  void _handleBotError(Player currentPlayer) {
-    _gameController.gameState.logAction(
-      'encountered error state - forcing turn completion',
-      showCardDetails: false,
+    DebugLogger.debug(
+      'Game ended - winner: ${winner.name} with ${winner.score} points',
     );
-    _forceCompleteBotTurn(currentPlayer);
-  }
 
-  /// Handle bot end turn request
-  void _handleBotEndTurn(Player currentPlayer) {
-    _gameController.gameState.logAction(
-      'requested to end turn but must complete required actions',
-      showCardDetails: false,
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: BalatroTheme.glowColor, width: 2),
+        ),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.emoji_events,
+              color: BalatroTheme.neonYellow,
+              size: 32,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'GAME WINNER!',
+              style: TextStyle(
+                color: BalatroTheme.neonYellow,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    color: BalatroTheme.neonYellow.withValues(alpha: 0.8),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${winner.name} wins with ${winner.score} points!',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Final Scores:',
+              style: const TextStyle(
+                color: BalatroTheme.neonPink,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ..._gameController.gameState.players.map(
+              (player) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  '${player.name}: ${player.score}',
+                  style: TextStyle(
+                    color: player == winner
+                        ? BalatroTheme.neonGreen
+                        : Colors.white70,
+                    fontWeight: player == winner
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _startNewGame();
+            },
+            child: const Text(
+              'New Game',
+              style: TextStyle(color: BalatroTheme.neonGreen),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _returnToMainMenu();
+            },
+            child: const Text(
+              'Main Menu',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
     );
-    _forceCompleteBotTurn(currentPlayer);
   }
 
   /// Force bot to complete their turn using fallback actions that follow game rules
@@ -627,31 +825,151 @@ class _GameScreenState extends State<GameScreen> {
     );
 
     try {
+      // Ensure we're still in a valid state
+      if (gameState.phase == GamePhase.roundEnd) {
+        DebugLogger.debug('Round already ended during force completion');
+        return;
+      }
+
       switch (gameState.turnPhase) {
         case TurnPhase.draw:
           // Bot must draw to continue or move to discard phase
           if (!gameState.hasDrawnFromDeck) {
-            _gameController.drawFromDeck();
+            final drawn = _gameController.drawFromDeck();
+            if (!drawn && gameState.deck.isEmpty) {
+              // Deck is empty - end round
+              DebugLogger.debug('Ending round due to empty deck');
+              gameState.endRound();
+              return;
+            }
           }
-          // Force to discard phase to complete turn - no continuation scheduling
+          // Force to discard phase to complete turn
           gameState.turnPhase = TurnPhase.discard;
           _guaranteedTurnCompletion(botPlayer);
           break;
 
         case TurnPhase.meld:
-          // Bot can skip melding - force to discard phase to complete turn
+          // Bot can skip melding - force to discard phase and GUARANTEE completion
           gameState.turnPhase = TurnPhase.discard;
-          _guaranteedTurnCompletion(botPlayer);
+          _absolutelyGuaranteedDiscard(botPlayer);
           break;
 
         case TurnPhase.discard:
-          // GUARANTEED turn completion: discard, pick up foot, or end round
-          _guaranteedTurnCompletion(botPlayer);
+          // ABSOLUTELY GUARANTEED turn completion - no more failures allowed
+          _absolutelyGuaranteedDiscard(botPlayer);
           break;
       }
     } catch (e) {
       DebugLogger.error('Error in _forceCompleteBotTurn: $e');
-      _guaranteedTurnCompletion(botPlayer);
+      _absolutelyGuaranteedDiscard(botPlayer);
+    }
+  }
+
+  /// ABSOLUTELY GUARANTEED bot turn completion - finds lowest point card and discards it
+  /// This method CANNOT fail and will always advance the turn
+  void _absolutelyGuaranteedDiscard(Player botPlayer) {
+    DebugLogger.debug('ABSOLUTELY GUARANTEED DISCARD for ${botPlayer.name}');
+    final gameState = _gameController.gameState;
+
+    try {
+      // STEP 1: Ensure discard phase
+      gameState.turnPhase = TurnPhase.discard;
+
+      // STEP 2: If bot has hand, find the lowest point card to minimize damage
+      if (botPlayer.currentHand.isNotEmpty) {
+        // Sort cards by point value (ascending) to find least valuable card
+        final sortedCards = [...botPlayer.currentHand];
+        sortedCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+
+        // Prioritize discarding 3s (penalty cards) if available
+        final threes = sortedCards
+            .where((c) => c.rank == CardRank.three)
+            .toList();
+        final cardToDiscard = threes.isNotEmpty
+            ? threes.first
+            : sortedCards.first;
+
+        DebugLogger.debug(
+          'Forcing discard of ${cardToDiscard.displayName} (${cardToDiscard.pointValue} pts)',
+        );
+
+        // MANUAL DISCARD - bypass all validation to guarantee success
+        botPlayer.removeCardFromHand(cardToDiscard);
+        gameState.discardPile.add(cardToDiscard);
+        gameState.recentActions.add(
+          GameAction(
+            message: 'forced discard of ${cardToDiscard.displayName}',
+            playerName: botPlayer.name,
+          ),
+        );
+
+        // Check for foot pickup after discard
+        if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
+          botPlayer.pickUpFoot();
+          gameState.recentActions.add(
+            GameAction(
+              message: 'picked up foot after forced discard',
+              playerName: botPlayer.name,
+            ),
+          );
+        }
+
+        // ADVANCE TURN - this is guaranteed to work
+        gameState.nextPlayer();
+        setState(() {});
+        return;
+      }
+
+      // STEP 3: No hand cards - pick up foot if possible
+      if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
+        botPlayer.pickUpFoot();
+        gameState.recentActions.add(
+          GameAction(message: 'forced foot pickup', playerName: botPlayer.name),
+        );
+
+        // Now discard from foot using same logic
+        if (botPlayer.currentHand.isNotEmpty) {
+          final sortedCards = [...botPlayer.currentHand];
+          sortedCards.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+          final cardToDiscard = sortedCards.first;
+
+          botPlayer.removeCardFromHand(cardToDiscard);
+          gameState.discardPile.add(cardToDiscard);
+          gameState.recentActions.add(
+            GameAction(
+              message: 'forced discard from foot: ${cardToDiscard.displayName}',
+              playerName: botPlayer.name,
+            ),
+          );
+        }
+
+        gameState.nextPlayer();
+        setState(() {});
+        return;
+      }
+
+      // STEP 4: ABSOLUTE LAST RESORT - create an emergency discard card
+      DebugLogger.error(
+        'CRITICAL: Creating emergency card for ${botPlayer.name}',
+      );
+      final emergencyCard = PlayingCard(suit: Suit.clubs, rank: CardRank.three);
+      botPlayer.addCardsToHand([emergencyCard]);
+      botPlayer.removeCardFromHand(emergencyCard);
+      gameState.discardPile.add(emergencyCard);
+      gameState.recentActions.add(
+        GameAction(
+          message: 'emergency card discard - turn completed',
+          playerName: botPlayer.name,
+        ),
+      );
+
+      gameState.nextPlayer();
+      setState(() {});
+    } catch (e) {
+      DebugLogger.error('CRITICAL ERROR in _absolutelyGuaranteedDiscard: $e');
+      // Even if everything fails, force advance turn to prevent infinite loops
+      gameState.nextPlayer();
+      setState(() {});
     }
   }
 
@@ -662,26 +980,31 @@ class _GameScreenState extends State<GameScreen> {
       // Try each card until one works (some might fail due to game state)
       for (final card in [...botPlayer.currentHand]) {
         if (_gameController.discardCard(card)) {
-          _gameController.gameState.logAction(
-            'completed turn with discard',
-            showCardDetails: false,
+          // Use explicit bot name instead of currentPlayer to avoid race conditions
+          _gameController.gameState.recentActions.add(
+            GameAction(
+              message: 'completed turn with discard',
+              playerName: botPlayer.name,
+            ),
           );
           return;
         }
       }
       // If controller failed for all cards, log it but continue to emergency
-      _gameController.gameState.logAction(
-        'all discard attempts failed - escalating to emergency completion',
-        showCardDetails: false,
+      _gameController.gameState.recentActions.add(
+        GameAction(
+          message:
+              'all discard attempts failed - escalating to emergency completion',
+          playerName: botPlayer.name,
+        ),
       );
     }
 
     // Option 2: Pick up foot if hand is empty and foot available
     if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
       botPlayer.pickUpFoot();
-      _gameController.gameState.logAction(
-        'picked up foot pile',
-        showCardDetails: false,
+      _gameController.gameState.recentActions.add(
+        GameAction(message: 'picked up foot pile', playerName: botPlayer.name),
       );
       // Now try to discard from foot - try every card
       if (botPlayer.currentHand.isNotEmpty) {
@@ -695,9 +1018,11 @@ class _GameScreenState extends State<GameScreen> {
 
     // Option 3: Check if bot can go out (end round)
     if (botPlayer.canGoOut) {
-      _gameController.gameState.logAction(
-        'went out and ended the round!',
-        showCardDetails: false,
+      _gameController.gameState.recentActions.add(
+        GameAction(
+          message: 'went out and ended the round!',
+          playerName: botPlayer.name,
+        ),
       );
       _gameController.gameState.endRound();
       return;
@@ -722,9 +1047,11 @@ class _GameScreenState extends State<GameScreen> {
       if (botPlayer.currentHand.isNotEmpty) {
         for (final card in [...botPlayer.currentHand]) {
           if (_gameController.discardCard(card)) {
-            _gameController.gameState.logAction(
-              'emergency discard completed',
-              showCardDetails: false,
+            _gameController.gameState.recentActions.add(
+              GameAction(
+                message: 'emergency discard completed',
+                playerName: botPlayer.name,
+              ),
             );
             return;
           }
@@ -734,55 +1061,68 @@ class _GameScreenState extends State<GameScreen> {
         final cardToDiscard = botPlayer.currentHand.first;
         botPlayer.removeCardFromHand(cardToDiscard);
         gameState.discardPile.add(cardToDiscard);
-        gameState.logAction(
-          'forced discard of ${cardToDiscard.displayName}',
-          showCardDetails: false,
+        gameState.recentActions.add(
+          GameAction(
+            message: 'forced discard of ${cardToDiscard.displayName}',
+            playerName: botPlayer.name,
+          ),
         );
 
         // Check for foot pickup after manual discard
         if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
           botPlayer.pickUpFoot();
-          gameState.logAction(
-            'picked up foot after emergency discard',
-            showCardDetails: false,
+          gameState.recentActions.add(
+            GameAction(
+              message: 'picked up foot after emergency discard',
+              playerName: botPlayer.name,
+            ),
           );
         }
 
         // Complete turn legally
         gameState.nextPlayer();
         setState(() {});
-        _processBotTurns();
+        // Don't call processCurrentPlayerTurn() - let delayed callbacks handle turn continuation
         return;
       }
 
       // STEP 4: No hand cards - try foot pickup
       if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
         botPlayer.pickUpFoot();
-        gameState.logAction('emergency foot pickup', showCardDetails: false);
+        gameState.recentActions.add(
+          GameAction(
+            message: 'emergency foot pickup',
+            playerName: botPlayer.name,
+          ),
+        );
 
         // Now discard from foot
         if (botPlayer.currentHand.isNotEmpty) {
           final cardToDiscard = botPlayer.currentHand.first;
           botPlayer.removeCardFromHand(cardToDiscard);
           gameState.discardPile.add(cardToDiscard);
-          gameState.logAction(
-            'discarded ${cardToDiscard.displayName} from foot',
-            showCardDetails: false,
+          gameState.recentActions.add(
+            GameAction(
+              message: 'discarded ${cardToDiscard.displayName} from foot',
+              playerName: botPlayer.name,
+            ),
           );
 
           // Complete turn legally
           gameState.nextPlayer();
           setState(() {});
-          _processBotTurns();
+          // Don't call processCurrentPlayerTurn() - let delayed callbacks handle turn continuation
           return;
         }
       }
 
       // STEP 5: Check if bot can go out (end game)
       if (botPlayer.canGoOut) {
-        gameState.logAction(
-          'went out and ended the round!',
-          showCardDetails: false,
+        gameState.recentActions.add(
+          GameAction(
+            message: 'went out and ended the round!',
+            playerName: botPlayer.name,
+          ),
         );
         gameState.endRound();
         return;
@@ -797,15 +1137,17 @@ class _GameScreenState extends State<GameScreen> {
       botPlayer.addCardsToHand([emergencyCard]);
       botPlayer.removeCardFromHand(emergencyCard);
       gameState.discardPile.add(emergencyCard);
-      gameState.logAction(
-        'emergency card discard - turn completed',
-        showCardDetails: false,
+      gameState.recentActions.add(
+        GameAction(
+          message: 'emergency card discard - turn completed',
+          playerName: botPlayer.name,
+        ),
       );
 
       // Complete turn legally
       gameState.nextPlayer();
       setState(() {});
-      _processBotTurns();
+      // Don't call processCurrentPlayerTurn() - let delayed callbacks handle turn continuation
     } catch (e) {
       DebugLogger.error('Emergency completion failed: $e');
       // Even if everything fails, ensure state is updated
@@ -985,10 +1327,10 @@ class _GameScreenState extends State<GameScreen> {
   void _forceNextTurn() {
     _gameController.gameState.nextPlayer();
     setState(() {});
-    _processBotTurns();
+    processCurrentPlayerTurn();
   }
 
-  void _saveGameState() async {
+  Future<void> _saveGameState() async {
     try {
       await _gameController.saveGame();
     } catch (e) {
@@ -1024,7 +1366,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _restoreSavedGame() async {
+  Future<void> _restoreSavedGame() async {
     try {
       final savedController = await GameController.loadSavedGame();
 
@@ -1046,7 +1388,7 @@ class _GameScreenState extends State<GameScreen> {
         });
 
         // Continue game flow
-        _processBotTurns();
+        processCurrentPlayerTurn();
       } else {
         _showErrorDialog('Failed to load saved game. Starting new game.');
         _startFreshGame();
@@ -1083,7 +1425,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  void _startNewGame() async {
+  Future<void> _startNewGame() async {
     // Clear any saved game when explicitly starting new
     await GameController.clearSavedGame();
 
@@ -1404,7 +1746,7 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _onDiscard() async {
+  Future<void> _onDiscard() async {
     // CRITICAL FIX: Prevent auto-discard after drawing cards
     if (!_hasPlayerInteractedSinceDraw) {
       return;
@@ -1425,7 +1767,15 @@ class _GameScreenState extends State<GameScreen> {
             setState(() {});
             _selectedCardIndices.clear();
             await _checkAndHandleRoundEnd();
-            _processBotTurns();
+
+            // Schedule bot processing for next frame to avoid immediate execution during human turn
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted &&
+                  _gameController.gameState.currentPlayer.type !=
+                      PlayerType.human) {
+                processCurrentPlayerTurn();
+              }
+            });
           }
           return;
         }
@@ -1457,7 +1807,15 @@ class _GameScreenState extends State<GameScreen> {
         setState(() {});
         _selectedCardIndices.clear();
         await _checkAndHandleRoundEnd();
-        _processBotTurns();
+
+        // Schedule bot processing for next frame to avoid immediate execution during human turn
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _gameController.gameState.currentPlayer.type !=
+                  PlayerType.human) {
+            processCurrentPlayerTurn();
+          }
+        });
       }
     } else {
       // Handle case where player has no cards to discard
@@ -1466,10 +1824,14 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       if (humanPlayer.currentHand.isEmpty) {
-        // If hand is empty but foot hasn't been picked up, do it automatically
+        // DO NOT automatically pick up foot - let human player decide
         if (!humanPlayer.hasPickedUpFoot && humanPlayer.hand.isEmpty) {
-          humanPlayer.pickUpFoot();
-          // The logAction is private, so the GameState will handle logging internally
+          DebugLogger.debug('Human player needs to pick up foot manually');
+          // Show a message to the user instead of doing it automatically
+          _showErrorDialog(
+            'Your hand is empty! Please pick up your foot pile to continue.',
+          );
+          return;
         }
 
         // If both hand and foot are empty, but requirements aren't met
@@ -1485,7 +1847,7 @@ class _GameScreenState extends State<GameScreen> {
         // Force advance turn if we're truly stuck
         _gameController.gameState.nextPlayer();
         setState(() {});
-        _processBotTurns();
+        processCurrentPlayerTurn();
       }
     }
   }
@@ -1660,6 +2022,14 @@ class _GameScreenState extends State<GameScreen> {
     final humanPlayer = gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
+
+    // Debug logging for critical issues only
+    if (currentPlayer.type != PlayerType.human &&
+        currentPlayer.name != humanPlayer.name) {
+      DebugLogger.debug(
+        'Current: ${currentPlayer.name}, Human: ${humanPlayer.name}',
+      );
+    }
 
     return Container(
       decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
@@ -1848,6 +2218,13 @@ class _GameScreenState extends State<GameScreen> {
                             () {
                               final player = _viewingPlayerMelds ?? humanPlayer;
                               final playerName = player.name;
+                              // Minimal debug logging - only when there's a mismatch
+                              if (_viewingPlayerMelds != null &&
+                                  _viewingPlayerMelds != humanPlayer) {
+                                DebugLogger.debug(
+                                  'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
+                                );
+                              }
                               if (playerName == 'You') {
                                 return 'Your Melds:';
                               } else {
@@ -2033,11 +2410,32 @@ class _GameScreenState extends State<GameScreen> {
                         horizontal: 8,
                         vertical: 4,
                       ),
-                      child: Text(
-                        'Your Hand (${humanPlayer.currentHand.length} cards)',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                      child: GestureDetector(
+                        onTap: () {
+                          if (_viewingPlayerMelds != null) {
+                            setState(() {
+                              _viewingPlayerMelds =
+                                  null; // Reset to human player view
+                            });
+                          }
+                        },
+                        child: Text(
+                          () {
+                            if (_viewingPlayerMelds != null &&
+                                _viewingPlayerMelds != humanPlayer) {
+                              return 'Viewing ${_viewingPlayerMelds!.name}\'s cards - Tap here to return to your hand';
+                            }
+                            return 'Your Hand (${humanPlayer.currentHand.length} cards)';
+                          }(),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color:
+                                _viewingPlayerMelds != null &&
+                                    _viewingPlayerMelds != humanPlayer
+                                ? BalatroTheme.neonYellow
+                                : Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -2502,7 +2900,7 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       // Process bot turns if needed
-      _processBotTurns();
+      processCurrentPlayerTurn();
     } catch (e) {
       _showErrorDialog('Error loading game: ${e.toString()}');
     }
@@ -2550,5 +2948,241 @@ class _GameScreenState extends State<GameScreen> {
         ],
       ),
     );
+  }
+
+  /// Validate game state integrity
+  bool _validateGameState() {
+    try {
+      final gameState = _gameController.gameState;
+
+      // Check basic game state validity
+      if (gameState.players.isEmpty) {
+        DebugLogger.error('No players in game state');
+        return false;
+      }
+
+      if (gameState.currentPlayerIndex < 0 ||
+          gameState.currentPlayerIndex >= gameState.players.length) {
+        DebugLogger.error(
+          'Invalid current player index: ${gameState.currentPlayerIndex}',
+        );
+        return false;
+      }
+
+      // Check deck state
+      if (gameState.deck.isEmpty && gameState.phase != GamePhase.roundEnd) {
+        DebugLogger.warning('Deck is empty but round not ended');
+        // This is recoverable - end the round
+        gameState.endRound();
+      }
+
+      // Check for impossible player states
+      for (final player in gameState.players) {
+        if (player.hasPickedUpFoot && player.foot.isNotEmpty) {
+          DebugLogger.error(
+            'Player ${player.name} has picked up foot but foot is not empty',
+          );
+          return false;
+        }
+
+        if (player.currentHand.isEmpty &&
+            !player.hasPickedUpFoot &&
+            player.foot.isEmpty) {
+          DebugLogger.error(
+            'Player ${player.name} has no cards and cannot pick up foot',
+          );
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e) {
+      DebugLogger.error('Error validating game state: $e');
+      return false;
+    }
+  }
+
+  /// Attempt to recover from invalid game state
+  void _attemptGameStateRecovery() {
+    try {
+      DebugLogger.debug('Attempting game state recovery');
+
+      // Reset processing flags
+      _isProcessingBotTurn = false;
+
+      // Clear UI selections
+      _selectedCardIndices.clear();
+
+      // Try to restore from last saved state
+      _restoreFromSavedState().catchError((error) {
+        DebugLogger.error('Error restoring from saved state: $error');
+      });
+    } catch (e) {
+      DebugLogger.error('Game state recovery failed: $e');
+      _showCriticalErrorDialog(
+        'Game state corrupted. Please restart the game.',
+      );
+    }
+  }
+
+  /// Validate human player state WITHOUT making automatic moves
+  void _validateHumanPlayerState() {
+    try {
+      final humanPlayer = _gameController.gameState.players.firstWhere(
+        (p) => p.type == PlayerType.human,
+        orElse: () => throw StateError('No human player found'),
+      );
+
+      // ONLY VALIDATE - DO NOT MAKE AUTOMATIC MOVES FOR HUMANS
+      // Just log potential issues for debugging
+      if (humanPlayer.currentHand.isEmpty &&
+          !humanPlayer.hasPickedUpFoot &&
+          humanPlayer.foot.isNotEmpty) {
+        DebugLogger.debug('Human player can pick up foot when ready');
+      }
+
+      if (humanPlayer.hasPickedUpFoot &&
+          humanPlayer.currentHand.isEmpty &&
+          humanPlayer.canGoOut) {
+        DebugLogger.debug('Human player can go out when ready');
+      }
+    } catch (e) {
+      DebugLogger.error('Error validating human player state: $e');
+    }
+  }
+
+  /// Handle critical errors that require user intervention
+  void _handleCriticalError(dynamic error) {
+    DebugLogger.error('Critical error occurred: $error');
+
+    // Stop all processing
+    _isProcessingBotTurn = false;
+
+    // Show error dialog with recovery options
+    _showCriticalErrorDialog(
+      'A critical error occurred: ${error.toString()}\n\n'
+      'The game may be in an unstable state. What would you like to do?',
+    );
+  }
+
+  /// Show critical error dialog with recovery options
+  void _showCriticalErrorDialog(String message) {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.red, width: 2),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.error, color: Colors.red, size: 32),
+            SizedBox(width: 12),
+            Text(
+              'Critical Error',
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _attemptGameRecovery();
+            },
+            child: const Text(
+              'Try Recovery',
+              style: TextStyle(color: BalatroTheme.neonYellow),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _startNewGame();
+            },
+            child: const Text(
+              'New Game',
+              style: TextStyle(color: BalatroTheme.neonGreen),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _returnToMainMenu();
+            },
+            child: const Text(
+              'Main Menu',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Attempt to recover the game from a critical error
+  void _attemptGameRecovery() {
+    try {
+      DebugLogger.debug('Attempting critical game recovery');
+
+      // Reset all processing flags
+      _isProcessingBotTurn = false;
+
+      // Clear UI state
+      _selectedCardIndices.clear();
+      _viewingPlayerMelds = null;
+
+      // Try to restore a valid game state
+      _restoreFromSavedState().catchError((error) {
+        DebugLogger.error('Error in critical recovery: $error');
+      });
+
+      // Force UI refresh
+      if (mounted) {
+        setState(() {});
+
+        // Resume game processing
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) processCurrentPlayerTurn();
+        });
+      }
+    } catch (e) {
+      DebugLogger.error('Critical recovery failed: $e');
+      _showErrorDialog(
+        'Recovery failed. Please start a new game or return to main menu.',
+      );
+    }
+  }
+
+  /// Restore game from saved state as fallback
+  Future<void> _restoreFromSavedState() async {
+    try {
+      final hasSaved = await GameController.hasSavedGame();
+      if (hasSaved) {
+        final savedController = await GameController.loadSavedGame();
+        if (savedController != null) {
+          DebugLogger.debug('Restored game from saved state');
+          _gameController = savedController;
+          _botAI = EnhancedBotAI();
+          _assignBotPersonalities();
+
+          if (mounted) setState(() {});
+          return;
+        }
+      }
+
+      DebugLogger.warning('No saved state available for recovery');
+    } catch (e) {
+      DebugLogger.error('Error restoring from saved state: $e');
+    }
   }
 }

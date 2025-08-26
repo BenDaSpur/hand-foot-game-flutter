@@ -400,6 +400,7 @@ class GameController implements GameInterface {
 
       // Skip 3s - they cannot be melded in Hand & Foot
       if (entry.key == CardRank.three) {
+        _debugLog('Correctly filtering out 3s from meld analysis');
         continue;
       }
 
@@ -418,6 +419,20 @@ class GameController implements GameInterface {
 
     // Note: Wild-only melds are not allowed in Hand & Foot rules
     // Wild cards can only supplement natural card melds
+
+    // Debug log the final possible melds to ensure no 3s are included
+    for (int i = 0; i < possibleMelds.length; i++) {
+      final meld = possibleMelds[i];
+      final cardNames = meld.map((c) => c.displayName).join(', ');
+      final hasThrees = meld.any((c) => c.rank == CardRank.three);
+      if (hasThrees) {
+        _debugLog(
+          'ERROR: findPossibleMelds returning meld with 3s: $cardNames',
+        );
+      } else {
+        _debugLog('Valid meld found: $cardNames');
+      }
+    }
 
     return possibleMelds;
   }

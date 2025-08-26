@@ -145,7 +145,8 @@ class GameState {
     hasDrawnFromDeck = false;
     hasMelded = false;
 
-    // Clear newly drawn cards from the new current player at the start of their turn
+    // Clear newly drawn cards from the NEW current player at the start of their turn
+    // This clears highlights from their PREVIOUS turn when it's their turn again
     currentPlayer.clearNewlyDrawnCards();
   }
 
