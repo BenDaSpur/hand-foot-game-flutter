@@ -230,11 +230,27 @@ class BotFootTransitionManager {
     GameController controller,
   ) {
     final handSize = bot.currentHand.length;
+    final wildCards = bot.currentHand.where((c) => c.isWild).toList();
 
     // Emergency discard for extremely large hands
     if (handSize > largeHandEmergencyThreshold) {
       final cardToDiscard = _chooseCardToDiscard(bot);
       return BotDecision(action: 'discard', data: cardToDiscard);
+    }
+
+    // Priority 1: Use wild cards aggressively when transitioning to foot
+    if (wildCards.isNotEmpty && handSize <= 8) {
+      // Try to add wilds to existing melds to clear hand faster
+      final cardsToAddWithWilds =
+          _findCardsToAddToExistingMeldsWithWildPriority(
+            bot,
+            controller,
+            prioritizeWilds: true,
+          );
+      if (cardsToAddWithWilds.isNotEmpty) {
+        final cardToAdd = cardsToAddWithWilds.first;
+        return BotDecision(action: 'addToMeld', data: cardToAdd);
+      }
     }
 
     // Add to existing melds if hand is small enough
@@ -244,10 +260,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'addToMeld', data: cardToAdd);
     }
 
-    // Try to create any meld possible
+    // Try to create any meld possible (prioritize using wilds)
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = _chooseLargestMeld(possibleMelds);
+      final bestMeld = _chooseBestMeldForTransition(possibleMelds, wildCards);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -440,21 +456,49 @@ class BotFootTransitionManager {
     final remainingCards = bot.currentHand.length;
     if (remainingCards <= 3) return true;
 
-    // Count addable cards
-    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot, controller);
-    final addableCards = cardsToAddToMelds.length;
+    // Count addable cards and meldable cards more accurately
+    final totalPlayable = _calculateTotalPlayableCards(bot, controller);
 
-    // Count meldable cards
-    final possibleMelds = controller.findPossibleMelds(bot);
-    int meldableCards = 0;
-    if (possibleMelds.isNotEmpty) {
-      final bestMeld = _chooseLargestMeld(possibleMelds);
-      meldableCards = bestMeld.length;
-    }
+    // Can we play ALL cards? (immediate foot transition)
+    if (totalPlayable >= remainingCards) return true;
 
     // Can we use 60%+ of remaining cards?
-    final usableCards = addableCards + meldableCards;
-    return usableCards >= (remainingCards * mostCardsPlayableThreshold).floor();
+    return totalPlayable >=
+        (remainingCards * mostCardsPlayableThreshold).floor();
+  }
+
+  /// Calculate total cards that can be played (avoiding double-counting)
+  int _calculateTotalPlayableCards(Player bot, GameController controller) {
+    Set<PlayingCard> usedCards = {};
+    int totalPlayable = 0;
+
+    // Count cards that can be added to existing melds
+    final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot, controller);
+    for (final addition in cardsToAddToMelds) {
+      final card = addition['card'] as PlayingCard;
+      if (!usedCards.contains(card)) {
+        usedCards.add(card);
+        totalPlayable++;
+      }
+    }
+
+    // Count cards in possible melds (avoiding cards already counted)
+    final possibleMelds = controller.findPossibleMelds(bot);
+    for (final meld in possibleMelds) {
+      int newCardsInMeld = 0;
+      for (final card in meld) {
+        if (!usedCards.contains(card)) {
+          usedCards.add(card);
+          newCardsInMeld++;
+        }
+      }
+      // Only count this meld if it adds new cards
+      if (newCardsInMeld >= GameConfig.minTotalCardsForMeld) {
+        totalPlayable += newCardsInMeld;
+      }
+    }
+
+    return totalPlayable;
   }
 
   /// Check if bot can play some of their cards (50% threshold)
@@ -483,6 +527,39 @@ class BotFootTransitionManager {
   List<PlayingCard> _chooseLargestMeld(List<List<PlayingCard>> possibleMelds) {
     possibleMelds.sort((a, b) => b.length.compareTo(a.length));
     return possibleMelds.first;
+  }
+
+  /// Choose the best meld for foot transition (prioritize using wilds)
+  List<PlayingCard> _chooseBestMeldForTransition(
+    List<List<PlayingCard>> possibleMelds,
+    List<PlayingCard> wildCards,
+  ) {
+    if (wildCards.isEmpty) {
+      // No wilds, just choose largest meld
+      return _chooseLargestMeld(possibleMelds);
+    }
+
+    // Find melds that contain wild cards
+    final meldsWithWilds = possibleMelds.where((meld) {
+      return meld.any((card) => card.isWild);
+    }).toList();
+
+    if (meldsWithWilds.isNotEmpty) {
+      // Prefer melds that use our wild cards
+      meldsWithWilds.sort((a, b) {
+        final aWildCount = a.where((c) => c.isWild).length;
+        final bWildCount = b.where((c) => c.isWild).length;
+        // First by wild count (more wilds used = better)
+        final wildCompare = bWildCount.compareTo(aWildCount);
+        if (wildCompare != 0) return wildCompare;
+        // Then by total size
+        return b.length.compareTo(a.length);
+      });
+      return meldsWithWilds.first;
+    }
+
+    // No melds with wilds, choose largest
+    return _chooseLargestMeld(possibleMelds);
   }
 
   /// Calculate the total point value of a hand
@@ -536,6 +613,39 @@ class BotFootTransitionManager {
     }
 
     // Sort by priority (highest point value first)
+    additions.sort((a, b) => b['priority'].compareTo(a['priority']));
+    return additions;
+  }
+
+  /// Find cards that can be added to existing melds with wild card priority
+  List<Map<String, dynamic>> _findCardsToAddToExistingMeldsWithWildPriority(
+    Player bot,
+    GameController controller, {
+    bool prioritizeWilds = false,
+  }) {
+    final additions = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < bot.melds.length; i++) {
+      final meld = bot.melds[i];
+      for (final card in bot.currentHand) {
+        if (_canAddCardToMeld(card, meld, controller)) {
+          // When prioritizing wilds for foot transition, give them higher priority
+          int priority = card.pointValue;
+          if (prioritizeWilds && card.isWild) {
+            priority += 100; // Boost wild card priority
+          }
+
+          additions.add({
+            'card': card,
+            'meld': meld,
+            'meldIndex': i,
+            'priority': priority,
+          });
+        }
+      }
+    }
+
+    // Sort by priority (highest value first, wilds boosted if prioritizeWilds)
     additions.sort((a, b) => b['priority'].compareTo(a['priority']));
     return additions;
   }
