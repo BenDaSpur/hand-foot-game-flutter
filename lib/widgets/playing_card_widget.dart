@@ -470,82 +470,82 @@ class SpadePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
-      ..style = PaintingStyle.fill;
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
 
-    final path = Path();
-    final width = size.width;
-    final height = size.height;
+    final w = size.width;
+    final h = size.height;
 
-    // Draw spade shape with proper concave top
-    // Start from bottom center
-    path.moveTo(width * 0.5, height * 0.75);
+    // ----- Spade head: exact vertical flip of your heart -----
+    final head = Path()
+      // Start at the bottom cusp (mirror of heart’s top seam)
+      ..moveTo(w * 0.5, h * 0.75)
+      // Left lobe up toward the tip
+      ..cubicTo(
+        w * 0.2,
+        h * 0.90, // was (0.2, 0.10) -> flipped
+        w * 0.1,
+        h * 0.70, // was (0.1, 0.30)
+        w * 0.1,
+        h * 0.60, // was (0.1, 0.40)
+      )
+      // Into the sharp top point
+      ..cubicTo(
+        w * 0.1,
+        h * 0.45, // was (0.1, 0.55)
+        w * 0.5,
+        h * 0.10, // was (0.5, 0.90)  <-- tip’s handle = tip -> sharp
+        w * 0.5,
+        h * 0.10, // tip (sharp)
+      )
+      // Down the right lobe (mirror)
+      ..cubicTo(
+        w * 0.5,
+        h * 0.10, // tip’s handle = tip
+        w * 0.9,
+        h * 0.45, // was (0.9, 0.55)
+        w * 0.9,
+        h * 0.60, // was (0.9, 0.40)
+      )
+      // Back to the bottom cusp
+      ..cubicTo(
+        w * 0.9,
+        h * 0.70, // was (0.9, 0.30)
+        w * 0.8,
+        h * 0.90, // was (0.8, 0.10)
+        w * 0.5,
+        h * 0.75, // was (0.5, 0.25)
+      )
+      ..close();
 
-    // Left curve
-    path.cubicTo(
-      width * 0.2,
-      height * 0.75,
-      width * 0.1,
-      height * 0.55,
-      width * 0.1,
-      height * 0.45,
-    );
-    path.cubicTo(
-      width * 0.1,
-      height * 0.3,
-      width * 0.25,
-      height * 0.2,
-      width * 0.4,
-      height * 0.25,
-    );
+    canvas.drawPath(head, paint);
 
-    // Concave top - dips inward
-    path.cubicTo(
-      width * 0.45,
-      height * 0.15,
-      width * 0.45,
-      height * 0.1,
-      width * 0.5,
-      height * 0.05,
-    );
-    path.cubicTo(
-      width * 0.55,
-      height * 0.1,
-      width * 0.55,
-      height * 0.15,
-      width * 0.6,
-      height * 0.25,
-    );
+    // ----- Stem: small pedestal + tiny foot (card-style) -----
+    final cx = w * 0.5;
+    final stemTopY = h * 0.75; // attaches at the cusp
+    final neckHalf = w * 0.06;
+    final baseHalf = w * 0.09;
+    final baseY = h * 0.90;
+    final footY = h * 0.96;
+    final footHalf = w * 0.03;
 
-    // Right curve
-    path.cubicTo(
-      width * 0.75,
-      height * 0.2,
-      width * 0.9,
-      height * 0.3,
-      width * 0.9,
-      height * 0.45,
-    );
-    path.cubicTo(
-      width * 0.9,
-      height * 0.55,
-      width * 0.8,
-      height * 0.75,
-      width * 0.5,
-      height * 0.75,
-    );
+    final stem = Path()
+      ..moveTo(cx - neckHalf, stemTopY)
+      ..quadraticBezierTo(cx, stemTopY + h * 0.03, cx + neckHalf, stemTopY)
+      ..lineTo(cx + baseHalf, baseY)
+      ..lineTo(cx - baseHalf, baseY)
+      ..close();
 
-    path.close();
-    canvas.drawPath(path, paint);
+    final foot = Path()
+      ..moveTo(cx, baseY)
+      ..lineTo(cx - footHalf, footY)
+      ..lineTo(cx + footHalf, footY)
+      ..close();
 
-    // Draw stem
-    final stemPath = Path();
-    stemPath.moveTo(width * 0.5, height * 0.65);
-    stemPath.lineTo(width * 0.45, height * 0.95);
-    stemPath.lineTo(width * 0.55, height * 0.95);
-    stemPath.close();
-    canvas.drawPath(stemPath, paint);
+    canvas.drawPath(stem, paint);
+    canvas.drawPath(foot, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
