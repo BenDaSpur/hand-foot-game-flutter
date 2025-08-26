@@ -158,14 +158,22 @@ class BotEndGameManager {
   bool _canCompleteRequiredBooks(Player bot, GameController controller) {
     int cleanBooks = 0;
     int dirtyBooks = 0;
+    int cleanMeldsNearBook = 0; // Clean melds with 5-6 cards
+    int dirtyMeldsNearBook = 0; // Dirty melds with 5-6 cards
 
-    // Count existing books
+    // Count existing books and near-books
     for (final meld in bot.melds) {
       if (meld.cards.length >= bookMinSize) {
         if (meld.isClean) {
           cleanBooks++;
         } else {
           dirtyBooks++;
+        }
+      } else if (meld.cards.length >= 5) {
+        if (meld.isClean) {
+          cleanMeldsNearBook++;
+        } else {
+          dirtyMeldsNearBook++;
         }
       }
     }
@@ -177,49 +185,76 @@ class BotEndGameManager {
       return true; // Already have required books
     }
 
-    // Priority: If we have a near-complete book (6 cards), always try to complete it
-    // This takes precedence over needing both book types
-    final nearCompleteBooks = bot.melds
-        .where((m) => m.cards.length == 6)
-        .toList();
+    // IMPORTANT: Check if we have potential for BOTH types of books
+    // Don't just focus on completing any book - we need one of each type!
 
-    if (nearCompleteBooks.isNotEmpty) {
-      // Check if we can complete any of these near-complete books
-      for (final meld in nearCompleteBooks) {
-        // Check if any card in hand can be added to this meld
-        for (final card in bot.currentHand) {
-          if (_canAddCardToMeld(card, meld)) {
-            return true; // Can complete a near-complete book
+    // If we need a clean book, check our potential
+    if (needsCleanBook) {
+      // Check if we have clean melds close to book status
+      if (cleanMeldsNearBook > 0) {
+        // We have clean melds that could become books
+        for (final meld in bot.melds) {
+          if (meld.cards.length >= 5 &&
+              meld.cards.length < bookMinSize &&
+              meld.isClean) {
+            // Check if we can add natural cards (not wilds) to complete it
+            for (final card in bot.currentHand) {
+              if (_canAddCardToMeld(card, meld) && !card.isWild) {
+                // Can complete clean book - but only if we also have dirty book potential
+                if (!needsDirtyBook ||
+                    dirtyMeldsNearBook > 0 ||
+                    dirtyBooks > 0) {
+                  return true;
+                }
+              }
+            }
           }
         }
       }
-    }
 
-    // Check if we can potentially complete missing books
-    if (needsCleanBook) {
-      final potentialCleanBooks = bot.melds
-          .where((m) => m.cards.length >= 5 && m.cards.length <= 6 && m.isClean)
-          .length;
-
+      // Check if we can create new clean melds
       final possibleCleanMelds = controller
           .findPossibleMelds(bot)
-          .where((meld) => !meld.any((card) => card.isWild))
+          .where((meld) => !meld.any((card) => card.isWild) && meld.length >= 4)
           .toList();
 
-      if (potentialCleanBooks == 0 && possibleCleanMelds.isEmpty) {
+      if (cleanMeldsNearBook == 0 && possibleCleanMelds.isEmpty) {
         return false; // Can't get required clean book
       }
     }
 
+    // If we need a dirty book, check our potential
     if (needsDirtyBook) {
-      final potentialBooks = bot.melds
-          .where((m) => m.cards.length >= 5 && m.cards.length <= 6)
-          .length;
+      // Check if we have melds that could become dirty books
+      if (dirtyMeldsNearBook > 0 || cleanMeldsNearBook > 0) {
+        // We have melds that could become dirty books (can add wilds to clean melds)
+        for (final meld in bot.melds) {
+          if (meld.cards.length >= 5 && meld.cards.length < bookMinSize) {
+            // Check if we can add any card (including wilds) to complete it
+            for (final card in bot.currentHand) {
+              if (_canAddCardToMeld(card, meld)) {
+                // Can complete dirty book - but only if we also have clean book potential
+                if (!needsCleanBook ||
+                    cleanMeldsNearBook > 0 ||
+                    cleanBooks > 0) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
 
-      final possibleMelds = controller.findPossibleMelds(bot);
+      // Check if we can create new mixed melds with wilds
+      final possibleMixedMelds = controller
+          .findPossibleMelds(bot)
+          .where((meld) => meld.any((card) => card.isWild) && meld.length >= 4)
+          .toList();
 
-      if (potentialBooks == 0 && possibleMelds.isEmpty) {
-        return false; // Can't get required dirty book
+      if (dirtyMeldsNearBook == 0 &&
+          possibleMixedMelds.isEmpty &&
+          cleanMeldsNearBook == 0) {
+        return false; // Can't get required dirty book (and no clean melds to make dirty)
       }
     }
 

@@ -58,18 +58,76 @@ class BotMeldAnalyzer {
   }
 
   /// Find the best meld based on multiple criteria (size, points, cleanliness)
+  /// Now considers the bot's existing book balance to ensure both types are built
   List<PlayingCard> findBestMeld(
     List<List<PlayingCard>> possibleMelds, {
     bool preferClean = true,
     bool preferLarger = true,
+    Player? bot,
   }) {
     if (possibleMelds.isEmpty) {
       throw ArgumentError('Cannot choose from empty meld list');
     }
 
+    // If bot is provided, check their book balance
+    bool needsCleanBookMore = false;
+    bool needsDirtyBookMore = false;
+
+    if (bot != null) {
+      int cleanBooks = 0;
+      int dirtyBooks = 0;
+      int cleanMeldsNearBook = 0; // 5-6 cards
+      int dirtyMeldsNearBook = 0;
+
+      for (final meld in bot.melds) {
+        if (meld.cards.length >= 7) {
+          if (meld.isClean) {
+            cleanBooks++;
+          } else {
+            dirtyBooks++;
+          }
+        } else if (meld.cards.length >= 5) {
+          if (meld.isClean) {
+            cleanMeldsNearBook++;
+          } else {
+            dirtyMeldsNearBook++;
+          }
+        }
+      }
+
+      // Determine what type of book we need more urgently
+      if (cleanBooks == 0 && dirtyBooks > 0) {
+        needsCleanBookMore = true;
+        preferClean = true; // Override preference
+      } else if (dirtyBooks == 0 && cleanBooks > 0) {
+        needsDirtyBookMore = true;
+        preferClean = false; // Override preference
+      } else if (cleanBooks == 0 && dirtyBooks == 0) {
+        // Need both - check which we're closer to completing
+        if (cleanMeldsNearBook > dirtyMeldsNearBook) {
+          needsCleanBookMore = true; // Focus on clean since we're closer
+        } else if (dirtyMeldsNearBook > cleanMeldsNearBook) {
+          needsDirtyBookMore = true; // Focus on dirty since we're closer
+        }
+        // Otherwise maintain original preference
+      }
+    }
+
     possibleMelds.sort((a, b) {
-      int scoreA = _calculateMeldScore(a, preferClean, preferLarger);
-      int scoreB = _calculateMeldScore(b, preferClean, preferLarger);
+      int scoreA = _calculateMeldScore(
+        a,
+        preferClean,
+        preferLarger,
+        needsCleanBookMore: needsCleanBookMore,
+        needsDirtyBookMore: needsDirtyBookMore,
+      );
+      int scoreB = _calculateMeldScore(
+        b,
+        preferClean,
+        preferLarger,
+        needsCleanBookMore: needsCleanBookMore,
+        needsDirtyBookMore: needsDirtyBookMore,
+      );
       return scoreB.compareTo(scoreA);
     });
 
@@ -80,8 +138,10 @@ class BotMeldAnalyzer {
   int _calculateMeldScore(
     List<PlayingCard> meld,
     bool preferClean,
-    bool preferLarger,
-  ) {
+    bool preferLarger, {
+    bool needsCleanBookMore = false,
+    bool needsDirtyBookMore = false,
+  }) {
     int score = 0;
 
     // Base score from meld size
@@ -97,13 +157,24 @@ class BotMeldAnalyzer {
 
     // Clean meld bonus
     final isClean = !meld.any((card) => card.isWild);
-    if (isClean && preferClean) {
-      score += cleanMeldBonus;
+
+    // CRITICAL: Strongly prefer the book type we're missing
+    if (needsCleanBookMore && isClean) {
+      score +=
+          cleanMeldBonus * 3; // Triple bonus for desperately needed clean meld
+    } else if (needsDirtyBookMore && !isClean) {
+      score +=
+          cleanMeldBonus * 2; // Double bonus for desperately needed dirty meld
+    } else if (isClean && preferClean) {
+      score += cleanMeldBonus; // Normal clean bonus
     }
 
-    // Book potential bonus
+    // Book potential bonus - extra important for the type we need
     if (meld.length >= 5) {
       score += bookProgressBonus;
+      if ((needsCleanBookMore && isClean) || (needsDirtyBookMore && !isClean)) {
+        score += bookProgressBonus * 2; // Extra bonus for needed book type
+      }
     }
 
     return score;

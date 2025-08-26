@@ -197,10 +197,11 @@ class EnhancedBotAI {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
-    // Try to create new melds
+    // Try to create new melds with book balance consideration
     final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds);
+      // Pass bot context to consider book balance
+      final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds, bot: bot);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -342,6 +343,7 @@ class EnhancedBotAI {
   }
 
   /// Find best natural meld combination for play-down
+  /// Enhanced to prefer having both clean and mixed melds for book diversity
   List<List<PlayingCard>> _findBestNaturalCombination(
     List<List<PlayingCard>> naturalMelds,
     int requirement,
@@ -356,15 +358,38 @@ class EnhancedBotAI {
       }
     }
 
-    // Try two-meld combinations
+    // Try two-meld combinations - prefer one clean and one that could become dirty
+    List<List<PlayingCard>>? bestMixedCombination;
+    int bestMixedScore = 0;
+
     for (int i = 0; i < naturalMelds.length; i++) {
       for (int j = i + 1; j < naturalMelds.length; j++) {
         final combination = [naturalMelds[i], naturalMelds[j]];
         final value = _meldAnalyzer.calculateTotalMeldValue(combination);
         if (value >= requirement) {
-          return combination;
+          // Check if this gives us meld diversity (different ranks)
+          final rank1 = naturalMelds[i].first.rank;
+          final rank2 = naturalMelds[j].first.rank;
+
+          // Score based on potential for book diversity
+          int score = value;
+          if (rank1 != rank2) score += 50; // Bonus for different ranks
+
+          // Extra bonus if one meld is larger (closer to book)
+          if (naturalMelds[i].length >= 5 || naturalMelds[j].length >= 5) {
+            score += 30;
+          }
+
+          if (score > bestMixedScore) {
+            bestMixedScore = score;
+            bestMixedCombination = combination;
+          }
         }
       }
+    }
+
+    if (bestMixedCombination != null) {
+      return bestMixedCombination;
     }
 
     return [];
@@ -525,22 +550,50 @@ class EnhancedBotAI {
   }
 
   /// Execute dump strategy: create all possible melds in this turn
+  /// Enhanced to maintain book balance (both clean and dirty books)
   BotDecision _executeDumpStrategy(Player bot, GameController controller) {
+    // Check current book status
+    int cleanBooks = 0;
+    for (final meld in bot.melds) {
+      if (meld.cards.length >= 7) {
+        if (meld.isClean) {
+          cleanBooks++;
+        }
+      }
+    }
+
     // Priority 1: Add to existing melds first (highest efficiency)
+    // But be strategic about which melds to add to
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
     );
     if (cardsToAdd.isNotEmpty) {
+      // If we lack a clean book, avoid adding wilds to clean melds
+      if (cleanBooks == 0) {
+        for (final addition in cardsToAdd) {
+          final meld = addition['meld'] as Meld;
+          final card = addition['card'] as PlayingCard;
+          // Prioritize keeping clean melds clean if we don't have a clean book yet
+          if (meld.isClean && !card.isWild) {
+            return BotDecision(action: 'addToMeld', data: addition);
+          }
+        }
+      }
+      // Otherwise take the first good addition
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
-    // Priority 2: Create the largest possible new meld
+    // Priority 2: Create new melds with book balance in mind
     final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
     if (possibleMelds.isNotEmpty) {
-      // Sort by size descending to get maximum impact
-      possibleMelds.sort((a, b) => b.length.compareTo(a.length));
-      return BotDecision(action: 'createMeld', data: possibleMelds.first);
+      // Use the enhanced findBestMeld that considers book balance
+      final bestMeld = _meldAnalyzer.findBestMeld(
+        possibleMelds,
+        bot: bot,
+        preferLarger: true, // Still want large melds for dumping
+      );
+      return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
     return BotDecision(action: 'noMeld');
