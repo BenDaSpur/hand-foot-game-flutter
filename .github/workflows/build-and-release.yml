@@ -410,6 +410,17 @@ jobs:
           Enjoy the game! 🃏✨
           EOF
 
+      - name: Rename artifacts with version
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          # Rename artifacts to include version (name-platform-version format)
+          mv android-apk/app-release.apk android-apk/HandFoot-Android-${VERSION}.apk
+          mv android-aab/app-release.aab android-aab/HandFoot-Android-${VERSION}.aab
+          mv windows-build/hand-foot-windows.zip windows-build/HandFoot-Windows-${VERSION}.zip
+          mv macos-build/hand-foot-macos.tar.gz macos-build/HandFoot-macOS-${VERSION}.tar.gz
+          mv linux-build/hand-foot-linux.tar.gz linux-build/HandFoot-Linux-${VERSION}.tar.gz
+          mv web-build/hand-foot-web.tar.gz web-build/HandFoot-Web-${VERSION}.tar.gz
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -419,9 +430,9 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            android-apk/app-release.apk
-            android-aab/app-release.aab
-            windows-build/hand-foot-windows.zip
-            macos-build/hand-foot-macos.tar.gz
-            linux-build/hand-foot-linux.tar.gz
-            web-build/hand-foot-web.tar.gz
+            android-apk/HandFoot-Android-${{ steps.version.outputs.VERSION }}.apk
+            android-aab/HandFoot-Android-${{ steps.version.outputs.VERSION }}.aab
+            windows-build/HandFoot-Windows-${{ steps.version.outputs.VERSION }}.zip
+            macos-build/HandFoot-macOS-${{ steps.version.outputs.VERSION }}.tar.gz
+            linux-build/HandFoot-Linux-${{ steps.version.outputs.VERSION }}.tar.gz
+            web-build/HandFoot-Web-${{ steps.version.outputs.VERSION }}.tar.gz
