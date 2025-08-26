@@ -348,7 +348,14 @@ jobs:
             PREV_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
           
-          echo "Generating changelog from $PREV_TAG to $CURRENT_TAG"
+          # For workflow dispatch, we need to compare against HEAD since the tag doesn't exist yet
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Generating changelog from $PREV_TAG to HEAD (workflow dispatch)"
+            COMMITS=$(git log --pretty=format:"- %s" $PREV_TAG..HEAD 2>/dev/null)
+          else
+            echo "Generating changelog from $PREV_TAG to $CURRENT_TAG (tag push)"
+            COMMITS=$(git log --pretty=format:"- %s" $PREV_TAG..$CURRENT_TAG 2>/dev/null)
+          fi
           
           # Generate changelog
           CHANGELOG=$(cat <<EOF
@@ -356,9 +363,6 @@ jobs:
           
           EOF
           )
-          
-          # Get commit messages since last tag
-          COMMITS=$(git log --pretty=format:"- %s" $PREV_TAG..$CURRENT_TAG 2>/dev/null || git log --pretty=format:"- %s" $PREV_TAG..HEAD)
           
           if [ -n "$COMMITS" ]; then
             CHANGELOG="$CHANGELOG"$'\n'"$COMMITS"
