@@ -20,6 +20,7 @@ import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/emergency_round_end_dialog.dart';
+import '../widgets/scoreboard_modal.dart';
 import 'main_menu_screen.dart';
 import '../utils/debug_logger.dart';
 import '../config/game_config.dart';
@@ -2076,6 +2077,20 @@ class _GameScreenState extends State<GameScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           actions: [
+            // Scoreboard button
+            IconButton(
+              icon: const Icon(
+                Icons.leaderboard,
+                color: BalatroTheme.neonYellow,
+              ),
+              tooltip: 'View Scoreboard',
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => ScoreboardModal(gameState: gameState),
+                );
+              },
+            ),
             Container(
               margin: const EdgeInsets.all(8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
