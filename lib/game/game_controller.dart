@@ -121,14 +121,12 @@ class GameController implements GameInterface {
     List<List<int>> allMeldIndices, {
     bool skipPlayDownCheck = false,
   }) {
-    final humanPlayer = _gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final currentPlayer = _gameState.currentPlayer;
 
     // First validate all indices are within bounds
     for (final meldIndices in allMeldIndices) {
       for (final index in meldIndices) {
-        if (index < 0 || index >= humanPlayer.currentHand.length) {
+        if (index < 0 || index >= currentPlayer.currentHand.length) {
           return false; // Invalid index
         }
       }
@@ -140,7 +138,7 @@ class GameController implements GameInterface {
 
     for (final meldIndices in allMeldIndices) {
       final cards = meldIndices
-          .map((index) => humanPlayer.currentHand[index])
+          .map((index) => currentPlayer.currentHand[index])
           .toList();
       allMeldCards.add(cards);
 
@@ -163,7 +161,7 @@ class GameController implements GameInterface {
     }
 
     // Check total play down requirement if needed
-    if (!skipPlayDownCheck && !humanPlayer.hasPlayedDown) {
+    if (!skipPlayDownCheck && !currentPlayer.hasPlayedDown) {
       final totalPoints = allMeldCards
           .expand((cards) => cards)
           .fold<int>(0, (sum, card) => sum + card.pointValue);
@@ -193,7 +191,7 @@ class GameController implements GameInterface {
     }
 
     // Remove cards from hand and handle side effects
-    _removeCardsAndHandleSideEffects(humanPlayer, uniqueIndices);
+    _removeCardsAndHandleSideEffects(currentPlayer, uniqueIndices);
 
     // Create all melds and add to existing melds where appropriate
     int meldsCreated = 0;
@@ -206,11 +204,11 @@ class GameController implements GameInterface {
       // Check if we should add to existing meld
       if (naturalCards.isNotEmpty) {
         final rank = naturalCards.first.rank;
-        final existingMeldIndex = humanPlayer.findMeldByRank(rank);
+        final existingMeldIndex = currentPlayer.findMeldByRank(rank);
 
         if (existingMeldIndex != -1) {
           // Add to existing meld
-          final existingMeld = humanPlayer.melds[existingMeldIndex];
+          final existingMeld = currentPlayer.melds[existingMeldIndex];
           for (final card in cards) {
             existingMeld.addCard(card);
           }
@@ -220,7 +218,7 @@ class GameController implements GameInterface {
         } else {
           // Create new meld
           final meld = Meld.createMeld(cards)!; // We already validated this
-          humanPlayer.melds.add(meld);
+          currentPlayer.melds.add(meld);
           cardNamesCreated.add(
             'new ${rank.name}: ${cards.map((c) => c.displayName).join(', ')}',
           );
@@ -231,11 +229,11 @@ class GameController implements GameInterface {
 
     if (meldsCreated > 0 || cardNamesCreated.isNotEmpty) {
       // Log actions
-      final wasFirstPlayDown = !humanPlayer.hasPlayedDown;
+      final wasFirstPlayDown = !currentPlayer.hasPlayedDown;
 
       // Update game state
       _gameState.hasMelded = true;
-      humanPlayer.hasPlayedDown = true;
+      currentPlayer.hasPlayedDown = true;
 
       if (wasFirstPlayDown) {
         final totalPoints = allMeldCards

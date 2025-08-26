@@ -106,20 +106,28 @@ class PlayingCardWidget extends StatelessWidget {
                   spreadRadius: 2,
                 ),
               ] else ...[
-                // Enhanced default shadow with stronger neon edge for Balatro theme
+                // Enhanced default Balatro styling - ALWAYS visible neon theme
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.8),
                   offset: const Offset(2, 4),
                   blurRadius: 10,
                 ),
+                // Strong neon border that's always visible
                 BoxShadow(
-                  color: BalatroTheme.cardBorder.withValues(alpha: 0.5),
-                  blurRadius: 6,
+                  color: BalatroTheme.cardBorder.withValues(alpha: 0.6),
+                  blurRadius: 8,
                   spreadRadius: 1,
                 ),
+                // Balatro signature glow
                 BoxShadow(
-                  color: BalatroTheme.glowColor.withValues(alpha: 0.15),
-                  blurRadius: 8,
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  spreadRadius: 3,
+                ),
+                // Additional neon accent
+                BoxShadow(
+                  color: BalatroTheme.neonPink.withValues(alpha: 0.1),
+                  blurRadius: 12,
                   spreadRadius: 2,
                 ),
               ],
