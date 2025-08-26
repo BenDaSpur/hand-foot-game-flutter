@@ -51,33 +51,84 @@ class PlayingCardWidget extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               if (isSelected) ...[
+                // Bright inner glow
                 BoxShadow(
-                  color: BalatroTheme.glowColor.withValues(alpha: 0.5),
-                  blurRadius: 12,
-                  spreadRadius: 2,
-                ),
-                BoxShadow(
-                  color: BalatroTheme.glowColor.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  spreadRadius: 4,
-                ),
-              ] else if (isNewlyDrawn) ...[
-                BoxShadow(
-                  color: BalatroTheme.neonYellow.withValues(alpha: 0.4),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                ),
-              ] else if (isPlayable) ...[
-                BoxShadow(
-                  color: BalatroTheme.neonGreen.withValues(alpha: 0.3),
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.7),
                   blurRadius: 8,
                   spreadRadius: 1,
                 ),
-              ] else ...[
+                // Outer glow for selection
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  offset: const Offset(2, 4),
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  spreadRadius: 3,
+                ),
+                // Far glow for extra effect
+                BoxShadow(
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.2),
+                  blurRadius: 24,
+                  spreadRadius: 6,
+                ),
+              ] else if (isNewlyDrawn) ...[
+                // Newly drawn cards get yellow glow
+                BoxShadow(
+                  color: BalatroTheme.neonYellow.withValues(alpha: 0.6),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+                BoxShadow(
+                  color: BalatroTheme.neonYellow.withValues(alpha: 0.3),
+                  blurRadius: 14,
+                  spreadRadius: 3,
+                ),
+              ] else if (isPlayable) ...[
+                // Playable cards get green glow
+                BoxShadow(
+                  color: BalatroTheme.neonGreen.withValues(alpha: 0.5),
                   blurRadius: 6,
+                  spreadRadius: 1,
+                ),
+                BoxShadow(
+                  color: BalatroTheme.neonGreen.withValues(alpha: 0.2),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ] else if (card.isWild) ...[
+                // Wild cards always have subtle rainbow glow
+                BoxShadow(
+                  color: BalatroTheme.neonPink.withValues(alpha: 0.3),
+                  blurRadius: 6,
+                  spreadRadius: 1,
+                ),
+                BoxShadow(
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.2),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ] else ...[
+                // Enhanced default Balatro styling - ALWAYS visible neon theme
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.8),
+                  offset: const Offset(2, 4),
+                  blurRadius: 10,
+                ),
+                // Strong neon border that's always visible
+                BoxShadow(
+                  color: BalatroTheme.cardBorder.withValues(alpha: 0.6),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+                // Balatro signature glow
+                BoxShadow(
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  spreadRadius: 3,
+                ),
+                // Additional neon accent
+                BoxShadow(
+                  color: BalatroTheme.neonPink.withValues(alpha: 0.1),
+                  blurRadius: 12,
+                  spreadRadius: 2,
                 ),
               ],
             ],
