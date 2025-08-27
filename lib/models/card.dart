@@ -126,10 +126,24 @@ class PlayingCard {
     }
   }
 
+  String get suitIcon {
+    if (isJoker) return '';
+    switch (suit!) {
+      case Suit.hearts:
+        return '♥';
+      case Suit.diamonds:
+        return '♦';
+      case Suit.clubs:
+        return '♣';
+      case Suit.spades:
+        return '♠';
+    }
+  }
+
   String get displayName {
     if (isJoker) return 'Joker';
     final rankName = rank.name[0].toUpperCase() + rank.name.substring(1);
-    return '$rankName of ${suit?.name ?? ''}';
+    return '$rankName$suitIcon';
   }
 
   @override
