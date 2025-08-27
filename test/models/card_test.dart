@@ -174,11 +174,11 @@ void main() {
     test('should generate correct display names', () {
       expect(
         const PlayingCard(suit: Suit.hearts, rank: CardRank.ace).displayName,
-        equals('Ace of hearts'),
+        equals('Ace♥'),
       );
       expect(
         const PlayingCard(suit: Suit.spades, rank: CardRank.king).displayName,
-        equals('King of spades'),
+        equals('King♠'),
       );
       expect(
         const PlayingCard(rank: CardRank.joker).displayName,
