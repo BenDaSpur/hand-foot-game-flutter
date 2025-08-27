@@ -299,17 +299,21 @@ jobs:
             PREV_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
 
-          # Get commit messages with more detail
+          # Get commit messages with more detail and better error handling
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "Generating changelog from $PREV_TAG to HEAD (workflow dispatch)"
-            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..HEAD 2>/dev/null | sed '/^$/d')
+            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..HEAD 2>/dev/null | sed '/^$/d' || echo "")
           else
             echo "Generating changelog from $PREV_TAG to $CURRENT_TAG (tag push)"
-            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..$CURRENT_TAG 2>/dev/null | sed '/^$/d')
+            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..$CURRENT_TAG 2>/dev/null | sed '/^$/d' || echo "")
           fi
 
-          # If no commits, use a simple message
-          if [ -z "$COMMITS" ]; then
+          echo "Found commits: ${#COMMITS} characters"
+          echo "Commits preview: ${COMMITS:0:200}..."
+
+          # If no commits or git log failed, use a simple message
+          if [ -z "$COMMITS" ] || [ "$COMMITS" = "" ]; then
+            echo "No commits found - generating simple changelog"
             echo "## 🔄 Changes Since Last Release" > changelog.md
             echo "" >> changelog.md
             echo "- No changes since last release" >> changelog.md
@@ -325,8 +329,8 @@ jobs:
 
           Generate markdown starting with: ## 🔄 Changes Since Last Release"
             
-            # Call Claude API with better error handling
-            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json \
+            # Call Claude API with timeout and better error handling
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json --max-time 60 \
               https://api.anthropic.com/v1/messages \
               -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
               -H "anthropic-version: 2023-06-01" \
@@ -336,9 +340,9 @@ jobs:
                 \"max_tokens\": 1000,
                 \"messages\": [{
                   \"role\": \"user\",
-                  \"content\": $(echo "$PROMPT" | jq -Rs .)
+                  \"content\": $(echo "$PROMPT" | jq -Rs . || echo '\"Failed to encode prompt\"')
                 }]
-              }")
+              }" || echo "000")
             
             echo "Claude API HTTP response code: $HTTP_CODE"
             
@@ -350,13 +354,15 @@ jobs:
             else
               echo "Claude API call failed with HTTP $HTTP_CODE"
               cat response.json || true
+              # Clean up response file
+              rm -f response.json
               # Fallback to simple changelog
               echo "## 🔄 Changes Since Last Release" > changelog.md
               echo "" >> changelog.md
               echo "$COMMITS" >> changelog.md
             fi
             
-            # Clean up
+            # Final cleanup
             rm -f response.json
           fi
 
