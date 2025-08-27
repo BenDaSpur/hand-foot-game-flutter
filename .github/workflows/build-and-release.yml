@@ -26,10 +26,10 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
             ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
@@ -65,17 +65,17 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
             ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
 
       - name: Cache Android build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
@@ -137,10 +137,10 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
             ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
@@ -188,10 +188,10 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
             %APPDATA%\Pub\Cache
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
@@ -239,17 +239,17 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
             ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
 
       - name: Cache CocoaPods
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cocoapods
@@ -261,7 +261,7 @@ jobs:
             ${{ runner.os }}-cocoapods-
 
       - name: Cache Xcode build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/Library/Developer/Xcode/DerivedData
@@ -273,8 +273,15 @@ jobs:
       - name: Setup Firebase configs (macOS/iOS)
         run: |
           # Decode iOS Firebase config for both iOS and macOS
-          echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
-          echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > macos/Runner/GoogleService-Info.plist
+          if [[ -n "${{ secrets.FIREBASE_CONFIG_IOS }}" ]]; then
+            echo "Using production Firebase iOS configuration"
+            echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
+            echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > macos/Runner/GoogleService-Info.plist
+          else
+            echo "FIREBASE_CONFIG_IOS not found, creating stub configurations"
+            echo '{"project_info":{"project_number":"000000000000","project_id":"stub-project"}}' > ios/Runner/GoogleService-Info.plist
+            echo '{"project_info":{"project_number":"000000000000","project_id":"stub-project"}}' > macos/Runner/GoogleService-Info.plist
+          fi
 
           # Web Firebase config  
           if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
@@ -317,17 +324,17 @@ jobs:
           cache: true
 
       - name: Cache pub dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
-            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
             ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
 
       - name: Cache Linux dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /var/cache/apt
           key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/build-and-release.yml') }}
@@ -433,7 +440,7 @@ jobs:
           Generate markdown starting with: ## 🔄 Changes Since Last Release"
             
             # Call Claude API with timeout and better error handling
-            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json --max-time 60 \
+            HTTP_CODE=$(curl --fail --silent -w "%{http_code}" -o response.json --max-time 60 \
               https://api.anthropic.com/v1/messages \
               -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
               -H "anthropic-version: 2023-06-01" \
@@ -445,7 +452,7 @@ jobs:
                   \"role\": \"user\",
                   \"content\": $(echo "$PROMPT" | jq -Rs . || echo '\"Failed to encode prompt\"')
                 }]
-              }" || echo "000")
+              }" 2>/dev/null || echo "000")
             
             echo "Claude API HTTP response code: $HTTP_CODE"
             
