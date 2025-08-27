@@ -186,7 +186,7 @@ jobs:
           # Decode iOS Firebase config for both iOS and macOS
           echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > ios/Runner/GoogleService-Info.plist
           echo "${{ secrets.FIREBASE_CONFIG_IOS }}" | base64 -d > macos/Runner/GoogleService-Info.plist
-          
+
           # Web Firebase config  
           if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
             echo "Using production Firebase web configuration"
@@ -263,57 +263,6 @@ jobs:
           name: linux-build
           path: hand-foot-linux.tar.gz
 
-  deploy-pages:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.8"
-          channel: "stable"
-
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
-
-      - name: Setup Firebase config (Pages Deploy)
-        run: |
-          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
-            echo "Using production Firebase web configuration"
-            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
-          else
-            echo "FIREBASE_WEB_CONFIG not found, using stub configuration"
-            # App will use the default stub configuration in firebase_options.dart
-          fi
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Build Web for GitHub Pages
-        run: flutter build web --release --base-href /hand-foot-game-flutter/
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload to GitHub Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
   create-release:
     needs: [build-android, build-web, build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
@@ -324,7 +273,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history and tags
+          fetch-depth: 0 # Fetch all history and tags
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -344,37 +293,45 @@ jobs:
           # Get the previous tag
           PREV_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
           CURRENT_TAG=${{ steps.version.outputs.VERSION }}
-          
+
           # If this is the first tag, compare against first commit
           if [ -z "$PREV_TAG" ]; then
             PREV_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
-          
-          # Get commit messages with more detail
+
+          # Get commit messages with more detail and better error handling
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "Generating changelog from $PREV_TAG to HEAD (workflow dispatch)"
-            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..HEAD 2>/dev/null | sed '/^$/d')
+            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..HEAD 2>/dev/null | sed '/^$/d' || echo "")
           else
             echo "Generating changelog from $PREV_TAG to $CURRENT_TAG (tag push)"
-            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..$CURRENT_TAG 2>/dev/null | sed '/^$/d')
+            COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..$CURRENT_TAG 2>/dev/null | sed '/^$/d' || echo "")
           fi
-          
-          # If no commits, use a simple message
-          if [ -z "$COMMITS" ]; then
+
+          echo "Found commits: ${#COMMITS} characters"
+          echo "Commits preview: ${COMMITS:0:200}..."
+
+          # If no commits or git log failed, use a simple message
+          if [ -z "$COMMITS" ] || [ "$COMMITS" = "" ]; then
+            echo "No commits found - generating simple changelog"
             echo "## 🔄 Changes Since Last Release" > changelog.md
             echo "" >> changelog.md
             echo "- No changes since last release" >> changelog.md
           else
             # Use Claude to generate a better changelog
-            PROMPT="You are a helpful assistant generating release notes for a Flutter card game app. Given these git commits since the last release, create a clean, organized changelog. Group related changes together under categories like Features, Bug Fixes, Improvements, etc. Use emoji for visual appeal. Keep it concise but informative.
+            echo "Generating changelog with Claude..."
+            
+            # Prepare the prompt
+            PROMPT="You are generating release notes for a Flutter card game app called Hand & Foot. Given these git commits, create a clean changelog with categories like Features, Bug Fixes, Improvements. Use emoji and be concise.
 
-          Raw commits:
+          Commits:
           $COMMITS
 
-          Generate a markdown changelog section (just the content, not the full release notes). Start with ## 🔄 Changes Since Last Release"
+          Generate markdown starting with: ## 🔄 Changes Since Last Release"
             
-            # Call Claude API
-            RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            # Call Claude API with timeout and better error handling
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json --max-time 60 \
+              https://api.anthropic.com/v1/messages \
               -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
               -H "anthropic-version: 2023-06-01" \
               -H "content-type: application/json" \
@@ -383,17 +340,32 @@ jobs:
                 \"max_tokens\": 1000,
                 \"messages\": [{
                   \"role\": \"user\",
-                  \"content\": $(echo "$PROMPT" | jq -Rs .)
+                  \"content\": $(echo "$PROMPT" | jq -Rs . || echo '\"Failed to encode prompt\"')
                 }]
-              }")
+              }" || echo "000")
             
-            # Extract the content from Claude's response
-            CHANGELOG=$(echo "$RESPONSE" | jq -r '.content[0].text // "## 🔄 Changes Since Last Release\n\n- Failed to generate changelog"')
+            echo "Claude API HTTP response code: $HTTP_CODE"
             
-            # Save changelog to file
-            echo "$CHANGELOG" > changelog.md
+            if [ "$HTTP_CODE" = "200" ]; then
+              # Extract the content from Claude's response
+              CHANGELOG=$(jq -r '.content[0].text // "## 🔄 Changes Since Last Release\n\n- Failed to parse Claude response"' response.json)
+              echo "$CHANGELOG" > changelog.md
+              echo "Claude changelog generated successfully"
+            else
+              echo "Claude API call failed with HTTP $HTTP_CODE"
+              cat response.json || true
+              # Clean up response file
+              rm -f response.json
+              # Fallback to simple changelog
+              echo "## 🔄 Changes Since Last Release" > changelog.md
+              echo "" >> changelog.md
+              echo "$COMMITS" >> changelog.md
+            fi
+            
+            # Final cleanup
+            rm -f response.json
           fi
-          
+
           # Create complete release notes file
           cat > release_notes.md << 'EOF'
           ## 🎮 Hand & Foot Card Game Release ${{ steps.version.outputs.VERSION }}
@@ -401,10 +373,10 @@ jobs:
           A beautiful Flutter implementation of the classic Hand & Foot card game with Balatro-inspired visuals!
 
           EOF
-          
+
           # Add changelog content
           cat changelog.md >> release_notes.md
-          
+
           # Add the rest of the release notes
           cat >> release_notes.md << 'EOF'
 

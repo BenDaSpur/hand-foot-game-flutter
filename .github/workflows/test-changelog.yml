@@ -1,0 +1,156 @@
+name: Test Changelog Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Test version (e.g., v1.0.0-test)"
+        required: true
+        default: "v1.0.0-test"
+      create_release:
+        description: "Create actual test release?"
+        type: boolean
+        default: false
+
+jobs:
+  test-changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history and tags
+
+      - name: Get version
+        id: version
+        run: |
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog with Claude (TEST)
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | head -1)
+          CURRENT_TAG=${{ steps.version.outputs.VERSION }}
+
+          echo "Testing changelog generation..."
+          echo "Previous tag: $PREV_TAG"
+          echo "Current version: $CURRENT_TAG"
+
+          # If this is the first tag, compare against first commit
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+            echo "No previous tags found, using first commit: $PREV_TAG"
+          fi
+
+          # Get commit messages with more detail and better error handling
+          echo "Generating changelog from $PREV_TAG to HEAD"
+          COMMITS=$(git log --pretty=format:"%s|%b" $PREV_TAG..HEAD 2>/dev/null | sed '/^$/d' || echo "")
+
+          echo "Found commits: ${#COMMITS} characters"
+          echo "Commits preview: ${COMMITS:0:500}..."
+          echo ""
+          echo "Full commit list:"
+          echo "$COMMITS"
+          echo ""
+
+          # If no commits or git log failed, use a simple message
+          if [ -z "$COMMITS" ] || [ "$COMMITS" = "" ]; then
+            echo "No commits found - generating simple changelog"
+            echo "## 🔄 Changes Since Last Release" > changelog.md
+            echo "" >> changelog.md
+            echo "- No changes since last release" >> changelog.md
+          else
+            # Test Claude API connection first
+            echo "Testing Claude API connection..."
+            
+            # Prepare the prompt
+            PROMPT="You are generating release notes for a Flutter card game app called Hand & Foot. Given these git commits, create a clean changelog with categories like Features, Bug Fixes, Improvements. Use emoji and be concise.
+
+          Commits:
+          $COMMITS
+
+          Generate markdown starting with: ## 🔄 Changes Since Last Release"
+            
+            echo "Prompt prepared, calling Claude API..."
+            
+            # Call Claude API with timeout and better error handling
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json --max-time 60 \
+              https://api.anthropic.com/v1/messages \
+              -H "x-api-key: ${{ secrets.ANTHROPIC_API_KEY }}" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "content-type: application/json" \
+              -d "{
+                \"model\": \"claude-3-haiku-20240307\",
+                \"max_tokens\": 1000,
+                \"messages\": [{
+                  \"role\": \"user\",
+                  \"content\": $(echo "$PROMPT" | jq -Rs . || echo '\"Failed to encode prompt\"')
+                }]
+              }" || echo "000")
+            
+            echo "Claude API HTTP response code: $HTTP_CODE"
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              # Extract the content from Claude's response
+              CHANGELOG=$(jq -r '.content[0].text // "## 🔄 Changes Since Last Release\n\n- Failed to parse Claude response"' response.json)
+              echo "$CHANGELOG" > changelog.md
+              echo "✅ Claude changelog generated successfully"
+              echo ""
+              echo "Generated changelog:"
+              cat changelog.md
+            else
+              echo "❌ Claude API call failed with HTTP $HTTP_CODE"
+              echo "Response content:"
+              cat response.json || echo "No response file"
+              # Clean up response file
+              rm -f response.json
+              # Fallback to simple changelog
+              echo "## 🔄 Changes Since Last Release" > changelog.md
+              echo "" >> changelog.md
+              echo "$COMMITS" >> changelog.md
+              echo "📝 Using fallback changelog with raw commits"
+              echo ""
+              echo "Fallback changelog:"
+              cat changelog.md
+            fi
+            
+            # Final cleanup
+            rm -f response.json
+          fi
+
+          # Create test release notes
+          cat > release_notes.md << 'EOF'
+          ## 🧪 TEST RELEASE - Hand & Foot Card Game ${{ steps.version.outputs.VERSION }}
+
+          **This is a test release to verify changelog generation**
+
+          EOF
+
+          # Add changelog content
+          cat changelog.md >> release_notes.md
+
+          echo ""
+          echo "🎯 Final release notes:"
+          echo "========================"
+          cat release_notes.md
+
+      - name: Create test release (optional)
+        if: github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: "TEST: Changelog Generation ${{ steps.version.outputs.VERSION }}"
+          body_path: release_notes.md
+          draft: true
+          prerelease: true
+
+      - name: Upload changelog artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-changelog-${{ steps.version.outputs.VERSION }}
+          path: |
+            changelog.md
+            release_notes.md
