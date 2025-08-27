@@ -26,52 +26,6 @@ jobs:
       flutter_version: "3.32.8"
     secrets: inherit
 
-  # Build job (only on PRs for validation)
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.8"
-          channel: "stable"
-          cache: true
-
-      - name: Cache pub dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      - name: Setup Firebase config (production for multiplayer)
-        run: |
-          echo "Using production Firebase configuration from secrets for multiplayer functionality"
-          echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
-          if [[ ! -s lib/firebase_options.dart ]]; then
-            echo "Error: Failed to write lib/firebase_options.dart from secret"
-            echo "FIREBASE_WEB_CONFIG secret is required for GitHub Pages deployment with multiplayer"
-            exit 1
-          fi
-          if ! grep -q "class DefaultFirebaseOptions" lib/firebase_options.dart; then
-            echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
-            exit 1
-          fi
-          echo "Production Firebase configuration written and verified successfully"
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Web (validation only)
-        run: flutter build web --release --base-href /${{ github.event.repository.name }}/
-
   # Deployment job
   deploy-pages:
     runs-on: ubuntu-latest
