@@ -353,8 +353,9 @@ class EnhancedBotAI {
     final gameState = controller.gameState;
     final discardPile = gameState.discardPile;
 
-    if (discardPile.isEmpty)
+    if (discardPile.isEmpty) {
       return false; // More aggressive - take even single card piles
+    }
 
     final constants = _personalityManager.currentConstants;
     final pileValue = discardPile.fold<int>(
@@ -557,8 +558,9 @@ class EnhancedBotAI {
 
     // Hold if we have decent hand size for unlocking opportunities
     // More cards = more potential matches for discard pile
-    if (handSize >= 10 && unlockPotential >= 3)
+    if (handSize >= 10 && unlockPotential >= 3) {
       return true; // Increased thresholds to be more aggressive
+    }
 
     // Be more aggressive about round requirements - don't hold as much
     final playDownRequirement = gameState.playDownRequirement;
@@ -579,8 +581,9 @@ class EnhancedBotAI {
 
     // Hold if we can potentially dump everything soon
     final dumpPotential = _calculateDumpPotential(bot, controller);
-    if (dumpPotential >= 0.8)
+    if (dumpPotential >= 0.8) {
       return true; // Increased threshold - be more selective about holding
+    }
 
     return false;
   }
@@ -603,11 +606,14 @@ class EnhancedBotAI {
 
     // Post-play-down: Execute if we can dump a good portion of our hand
     final dumpPotential = _calculateDumpPotential(bot, controller);
-    if (dumpPotential >= 0.6 && handSize >= 4)
+    if (dumpPotential >= 0.6 && handSize >= 4) {
       return true; // Reduced from 80% to 60%
+    }
 
     // Execute if hand is getting large
-    if (handSize >= 12) return true; // Reduced from 15 to 12
+    if (handSize >= 12) {
+      return true; // Reduced from 15 to 12
+    }
 
     // NEW: Be more aggressive if on hand pile with wilds and close to foot
     if (stillOnHandPile && wildCards.isNotEmpty && handSize <= 10) {
@@ -702,8 +708,9 @@ class EnhancedBotAI {
     // Check if we can unlock with the top card
     if (!topCard.isWild && !topCard.isThree) {
       final matchingCards = rankCounts[topCard.rank] ?? 0;
-      if (matchingCards >= 2)
+      if (matchingCards >= 2) {
         potential += 2; // Increased from 1 - Can unlock is very valuable
+      }
 
       // Bonus for each additional matching card (more flexible unlocking)
       potential += (matchingCards - 2).clamp(0, 4); // Increased max bonus
