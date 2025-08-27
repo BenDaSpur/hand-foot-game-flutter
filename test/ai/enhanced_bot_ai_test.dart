@@ -72,7 +72,10 @@ void main() {
 
     group('Strategic Constants', () {
       test('should have appropriate strategic constants', () {
-        expect(EnhancedBotAI.maxTurnsBeforeForcePlayDown, equals(5));
+        expect(
+          EnhancedBotAI.maxTurnsBeforeForcePlayDown,
+          equals(3),
+        ); // Updated for more aggressive AI
         expect(EnhancedBotAI.strongPlayDownBuffer, equals(10));
         expect(EnhancedBotAI.wildCardDiscardThreshold, equals(10));
         expect(EnhancedBotAI.emergencyRiskTolerance, equals(2.0));

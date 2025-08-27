@@ -188,22 +188,24 @@ class BotEndGameManager {
     // IMPORTANT: Check if we have potential for BOTH types of books
     // Don't just focus on completing any book - we need one of each type!
 
-    // If we need a clean book, check our potential
+    // If we need a clean book, check our potential - MORE AGGRESSIVE
     if (needsCleanBook) {
       // Check if we have clean melds close to book status
       if (cleanMeldsNearBook > 0) {
         // We have clean melds that could become books
         for (final meld in bot.melds) {
-          if (meld.cards.length >= 5 &&
+          if (meld.cards.length >= 4 && // Reduced from 5 - more optimistic
               meld.cards.length < bookMinSize &&
               meld.isClean) {
             // Check if we can add natural cards (not wilds) to complete it
             for (final card in bot.currentHand) {
               if (_canAddCardToMeld(card, meld) && !card.isWild) {
-                // Can complete clean book - but only if we also have dirty book potential
+                // Can complete clean book - be more optimistic about dirty book potential
                 if (!needsDirtyBook ||
                     dirtyMeldsNearBook > 0 ||
-                    dirtyBooks > 0) {
+                    dirtyBooks > 0 ||
+                    bot.currentHand.where((c) => c.isWild).length >= 2) {
+                  // NEW: wilds help with dirty books
                   return true;
                 }
               }
@@ -212,13 +214,19 @@ class BotEndGameManager {
         }
       }
 
-      // Check if we can create new clean melds
+      // Check if we can create new clean melds - MORE AGGRESSIVE
       final possibleCleanMelds = controller
           .findPossibleMelds(bot)
-          .where((meld) => !meld.any((card) => card.isWild) && meld.length >= 4)
+          .where(
+            (meld) => !meld.any((card) => card.isWild) && meld.length >= 3,
+          ) // Reduced from 4 to 3
           .toList();
 
-      if (cleanMeldsNearBook == 0 && possibleCleanMelds.isEmpty) {
+      // Be more optimistic - if we have ANY clean meld potential, try to go for it
+      if (cleanMeldsNearBook == 0 &&
+          possibleCleanMelds.isEmpty &&
+          bot.currentHand.where((c) => !c.isWild && !c.isThree).length < 6) {
+        // NEW: more optimistic threshold
         return false; // Can't get required clean book
       }
     }
@@ -229,14 +237,20 @@ class BotEndGameManager {
       if (dirtyMeldsNearBook > 0 || cleanMeldsNearBook > 0) {
         // We have melds that could become dirty books (can add wilds to clean melds)
         for (final meld in bot.melds) {
-          if (meld.cards.length >= 5 && meld.cards.length < bookMinSize) {
+          if (meld.cards.length >= 4 && meld.cards.length < bookMinSize) {
+            // Reduced from 5 - more aggressive
             // Check if we can add any card (including wilds) to complete it
             for (final card in bot.currentHand) {
               if (_canAddCardToMeld(card, meld)) {
-                // Can complete dirty book - but only if we also have clean book potential
+                // Can complete dirty book - be more optimistic about clean book potential
                 if (!needsCleanBook ||
                     cleanMeldsNearBook > 0 ||
-                    cleanBooks > 0) {
+                    cleanBooks > 0 ||
+                    bot.currentHand
+                            .where((c) => !c.isWild && !c.isThree)
+                            .length >=
+                        4) {
+                  // NEW: optimistic about clean potential
                   return true;
                 }
               }
@@ -245,15 +259,21 @@ class BotEndGameManager {
         }
       }
 
-      // Check if we can create new mixed melds with wilds
+      // Check if we can create new mixed melds with wilds - MORE AGGRESSIVE
       final possibleMixedMelds = controller
           .findPossibleMelds(bot)
-          .where((meld) => meld.any((card) => card.isWild) && meld.length >= 4)
+          .where(
+            (meld) => meld.any((card) => card.isWild) && meld.length >= 3,
+          ) // Reduced from 4 to 3
           .toList();
 
+      // Be more optimistic about dirty book potential
+      final wildCount = bot.currentHand.where((c) => c.isWild).length;
       if (dirtyMeldsNearBook == 0 &&
           possibleMixedMelds.isEmpty &&
-          cleanMeldsNearBook == 0) {
+          cleanMeldsNearBook == 0 &&
+          wildCount < 3) {
+        // NEW: if we have wilds, we can make dirty books
         return false; // Can't get required dirty book (and no clean melds to make dirty)
       }
     }
