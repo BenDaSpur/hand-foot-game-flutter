@@ -1,5 +1,7 @@
 import 'card.dart';
 import 'meld.dart';
+import 'round_score_breakdown.dart';
+import '../config/game_config.dart';
 
 enum PlayerType { human, bot }
 
@@ -12,6 +14,8 @@ class Player {
   final List<Meld> melds;
   final Set<int>
   newlyDrawnCardIndices; // Track indices of cards drawn this turn
+  final List<RoundScoreBreakdown>
+  roundScoreHistory; // Track score breakdown for each completed round
   bool hasPickedUpFoot;
   bool hasPlayedDown;
   int score;
@@ -24,13 +28,15 @@ class Player {
     List<PlayingCard>? foot,
     List<Meld>? melds,
     Set<int>? newlyDrawnCardIndices,
+    List<RoundScoreBreakdown>? roundScoreHistory,
     this.hasPickedUpFoot = false,
     this.hasPlayedDown = false,
     this.score = 0,
   }) : hand = hand ?? [],
        foot = foot ?? [],
        melds = melds ?? [],
-       newlyDrawnCardIndices = newlyDrawnCardIndices ?? {};
+       newlyDrawnCardIndices = newlyDrawnCardIndices ?? {},
+       roundScoreHistory = roundScoreHistory ?? [];
 
   List<PlayingCard> get currentHand => hasPickedUpFoot ? foot : hand;
 
@@ -370,6 +376,46 @@ class Player {
   void updateScore(int points) {
     score += points;
   }
+
+  /// Records the detailed score breakdown for a completed round
+  void recordRoundScoreBreakdown({required int round, required bool wentOut}) {
+    final cardPoints =
+        calculateMeldValue() - (cleanBookPoints + dirtyBookPoints);
+    final penaltyPoints = calculateAllUnplayedCardsValue();
+    final goingOutBonus = wentOut ? GameConfig.goingOutBonus : 0;
+    final totalRoundScore =
+        cardPoints +
+        cleanBookPoints +
+        dirtyBookPoints +
+        goingOutBonus -
+        penaltyPoints;
+
+    final breakdown = RoundScoreBreakdown(
+      round: round,
+      cardPoints: cardPoints,
+      cleanBooks: cleanBookCount,
+      dirtyBooks: dirtyBookCount,
+      penaltyPoints: penaltyPoints,
+      goingOutBonus: goingOutBonus,
+      totalRoundScore: totalRoundScore,
+    );
+
+    roundScoreHistory.add(breakdown);
+  }
+
+  /// Get the number of clean books this player has
+  int get cleanBookCount =>
+      melds.where((meld) => meld.isBook && meld.isClean).length;
+
+  /// Get the number of dirty books this player has
+  int get dirtyBookCount =>
+      melds.where((meld) => meld.isBook && meld.isDirty).length;
+
+  /// Get bonus points from clean books
+  int get cleanBookPoints => cleanBookCount * GameConfig.cleanBookBonus;
+
+  /// Get bonus points from dirty books
+  int get dirtyBookPoints => dirtyBookCount * GameConfig.dirtyBookBonus;
 
   bool hasBook() {
     return melds.any((meld) => meld.isBook);

@@ -6,6 +6,7 @@ import '../../models/deck.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../models/meld.dart';
+import '../../models/round_score_breakdown.dart';
 
 /// Handles serialization and deserialization of game state.
 ///
@@ -137,6 +138,9 @@ class GameSerializer {
             'melds': _serializeMelds(player.melds),
             'h': player.hand.map(_compactCard).toList(),
             'f': player.foot.map(_compactCard).toList(),
+            'rsh': player.roundScoreHistory
+                .map((breakdown) => breakdown.toCompactJson())
+                .toList(),
           },
         )
         .toList();
@@ -235,6 +239,7 @@ class GameSerializer {
         'foot': (playerData['f'] as List)
             .map((c) => parseCompactCard(c as String))
             .toList(),
+        'roundScoreHistory': _parseRoundScoreHistory(playerData['rsh']),
       };
     }).toList();
   }
@@ -264,6 +269,21 @@ class GameSerializer {
         .toList();
   }
 
+  /// Parses round score history data.
+  static List<RoundScoreBreakdown> _parseRoundScoreHistory(
+    List<dynamic>? historyData,
+  ) {
+    if (historyData == null) return [];
+
+    return historyData
+        .map(
+          (roundData) => RoundScoreBreakdown.fromCompactJson(
+            roundData as Map<String, dynamic>,
+          ),
+        )
+        .toList();
+  }
+
   static List<Map<String, dynamic>> _parseLegacyPlayers(
     List<dynamic> playersData,
   ) {
@@ -279,6 +299,8 @@ class GameSerializer {
             'melds': playerData['melds'],
             'hand': playerData['hand'],
             'foot': playerData['foot'],
+            'roundScoreHistory':
+                <RoundScoreBreakdown>[], // Empty for legacy saves
           },
         )
         .toList();

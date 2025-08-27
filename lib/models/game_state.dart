@@ -688,6 +688,9 @@ class GameState {
 
     // Calculate penalty points for cards in hand
     for (final player in players) {
+      // Record detailed score breakdown for stalemate (no one went out)
+      player.recordRoundScoreBreakdown(round: round, wentOut: false);
+
       // Calculate total score including penalties for unplayed cards
       final meldValue = player.calculateMeldValue();
       final penalty = player.calculateAllUnplayedCardsValue();
@@ -771,6 +774,12 @@ class GameState {
         : playersWhoCanGoOut.first;
 
     for (final player in players) {
+      // Record detailed score breakdown before updating total score
+      player.recordRoundScoreBreakdown(
+        round: round,
+        wentOut: player == playerWhoWentOut,
+      );
+
       // CRITICAL FIX: Include ALL unplayed cards (hand + foot) as negative when round ends
       var roundScore = player.calculateTotalScore(
         includeAllUnplayedCards: true,

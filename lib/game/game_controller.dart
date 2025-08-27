@@ -4,6 +4,7 @@ import '../models/deck.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/meld.dart';
+import '../models/round_score_breakdown.dart';
 import '../services/game_save_service.dart';
 import 'game_interface.dart';
 import 'managers/meld_manager.dart';
@@ -290,6 +291,12 @@ class GameController implements GameInterface {
       if (meld != null) {
         player.melds.add(meld);
       }
+    }
+
+    // Restore round score history
+    final roundScoreHistoryData = playerData['roundScoreHistory'];
+    if (roundScoreHistoryData is List<RoundScoreBreakdown>) {
+      player.roundScoreHistory.addAll(roundScoreHistoryData);
     }
 
     return player;
