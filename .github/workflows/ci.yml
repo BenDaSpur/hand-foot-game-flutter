@@ -7,10 +7,19 @@ on:
     branches: [main, master, develop]
 
 jobs:
-  ci-checks:
+  quality-checks:
     uses: ./.github/workflows/shared-quality-checks.yml
     with:
       setup_firebase_android: true
+      run_e2e_tests: false
+      flutter_version: "3.32.8"
+    secrets: inherit
+
+  e2e-tests:
+    uses: ./.github/workflows/shared-quality-checks.yml
+    with:
+      setup_firebase_android: false
       run_e2e_tests: true
       flutter_version: "3.32.8"
     secrets: inherit
+    needs: quality-checks
