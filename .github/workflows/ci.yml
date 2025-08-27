@@ -8,61 +8,18 @@ on:
 
 jobs:
   quality-checks:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.8"
-          channel: "stable"
-
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
-
-      - name: Create Firebase config (for analysis)
-        run: |
-          echo "${{ secrets.FIREBASE_CONFIG_ANDROID }}" | base64 -d > android/app/google-services.json || echo "{}" > android/app/google-services.json
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed .
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Analyze code
-        run: flutter analyze --no-fatal-warnings
-
-      - name: Verify dependencies
-        run: flutter pub deps
+    uses: ./.github/workflows/shared-quality-checks.yml
+    with:
+      setup_firebase_android: true
+      run_e2e_tests: false
+      flutter_version: "3.32.8"
+    secrets: inherit
 
   e2e-tests:
-    runs-on: macos-latest
+    uses: ./.github/workflows/shared-quality-checks.yml
+    with:
+      setup_firebase_android: false
+      run_e2e_tests: true
+      flutter_version: "3.32.8"
+    secrets: inherit
     needs: quality-checks
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.8"
-          channel: "stable"
-
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Enable macOS desktop
-        run: flutter config --enable-macos-desktop
-
-      - name: Run E2E Tests
-        run: flutter test e2e_test/ -d macos
-        timeout-minutes: 15
