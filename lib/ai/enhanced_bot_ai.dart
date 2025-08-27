@@ -35,7 +35,7 @@ class EnhancedBotAI {
   bool _inMultiMeldSequence = false;
 
   // Strategic constants
-  static const int maxTurnsBeforeForcePlayDown = 5;
+  static const int maxTurnsBeforeForcePlayDown = 3;
   static const int strongPlayDownBuffer = 10;
   static const int wildCardDiscardThreshold = 10;
   static const double emergencyRiskTolerance = 2.0;
@@ -118,7 +118,7 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
-    // Evaluate discard pile opportunity
+    // Evaluate discard pile opportunity - more aggressive evaluation
     if (gameState.discardPile.isNotEmpty && bot.hasPlayedDown) {
       try {
         final riskTolerance = _personalityManager.calculateRiskTolerance(
@@ -126,8 +126,15 @@ class EnhancedBotAI {
           bot,
         );
 
-        if (_shouldTakeDiscardPile(bot, controller, riskTolerance) &&
-            controller.gameState.canUnlockDiscard()) {
+        // Enhanced: also check for pre-play-down opportunities if pile is very valuable
+        final shouldTake = _shouldTakeDiscardPile(
+          bot,
+          controller,
+          riskTolerance,
+        );
+        final canUnlock = controller.gameState.canUnlockDiscard();
+
+        if (shouldTake && canUnlock) {
           DebugLogger.botDebug(
             bot.id,
             bot.name,
@@ -140,6 +147,31 @@ class EnhancedBotAI {
           'Risk tolerance calculation failed for bot ${bot.id}: $e',
         );
         // Skip discard pile evaluation and continue to default
+      }
+    }
+
+    // NEW: Even more aggressive - check discard pile before playing down if pile is huge
+    if (gameState.discardPile.length >= 8 && !bot.hasPlayedDown) {
+      try {
+        final riskTolerance = _personalityManager.calculateRiskTolerance(
+          gameState,
+          bot,
+        );
+        if (_shouldTakeDiscardPile(
+              bot,
+              controller,
+              riskTolerance * 2.0,
+            ) && // 2x risk tolerance for huge piles
+            controller.gameState.canUnlockDiscard()) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'Returning drawFromDiscard (huge pile, pre-play-down)',
+          );
+          return BotDecision(action: 'drawFromDiscard');
+        }
+      } catch (e) {
+        // Continue to default if error
       }
     }
 
@@ -321,7 +353,9 @@ class EnhancedBotAI {
     final gameState = controller.gameState;
     final discardPile = gameState.discardPile;
 
-    if (discardPile.length < 2) return false;
+    if (discardPile.isEmpty) {
+      return false; // More aggressive - take even single card piles
+    }
 
     final constants = _personalityManager.currentConstants;
     final pileValue = discardPile.fold<int>(
@@ -330,24 +364,32 @@ class EnhancedBotAI {
     );
     final pileSize = discardPile.length;
 
-    // Adjust thresholds based on risk tolerance and personality
+    // Adjust thresholds based on risk tolerance and personality - more aggressive
     final adjustedValueThreshold =
-        (constants.valuablePileThreshold / riskTolerance).round();
-    final adjustedSizeThreshold = (constants.largePileThreshold / riskTolerance)
-        .round();
+        (constants.valuablePileThreshold / (riskTolerance * 1.5))
+            .round(); // Divide by more to lower threshold
+    final adjustedSizeThreshold =
+        (constants.largePileThreshold / (riskTolerance * 1.3))
+            .round(); // More aggressive size threshold
 
-    // Conservative check for pre-play-down
+    // More aggressive check for pre-play-down
     if (!bot.hasPlayedDown) {
-      final conservativeMultiplier =
+      final aggressiveMultiplier =
           _personalityManager.shouldBeMoreConservativeWithDiscardPile(bot.id)
-          ? 1.5
-          : 1.2;
-      return pileValue > adjustedValueThreshold * conservativeMultiplier ||
-          pileSize >= adjustedSizeThreshold + 3;
+          ? 1.1 // Reduced from 1.5 - much more aggressive
+          : 0.9; // Reduced from 1.2 - more aggressive
+      return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
+          pileSize >= adjustedSizeThreshold + 1; // Reduced from +3 to +1
     }
 
-    return pileValue > adjustedValueThreshold ||
-        pileSize >= adjustedSizeThreshold;
+    // More aggressive post-play-down thresholds
+    return pileValue >
+            adjustedValueThreshold * 0.8 || // 20% lower value threshold
+        pileSize >=
+            (adjustedSizeThreshold - 1).clamp(
+              2,
+              adjustedSizeThreshold,
+            ); // Lower size threshold
   }
 
   /// Find best natural meld combination for play-down
@@ -516,17 +558,20 @@ class EnhancedBotAI {
 
     // Hold if we have decent hand size for unlocking opportunities
     // More cards = more potential matches for discard pile
-    if (handSize >= 8 && unlockPotential >= 2) return true;
+    if (handSize >= 10 && unlockPotential >= 3) {
+      return true; // Increased thresholds to be more aggressive
+    }
 
-    // Hold based on round requirements - higher rounds need more accumulation
+    // Be more aggressive about round requirements - don't hold as much
     final playDownRequirement = gameState.playDownRequirement;
-    if (_shouldHoldForRoundRequirement(
-      bot,
-      controller,
-      playDownRequirement,
-      handSize,
-    )) {
-      return true;
+    if (handSize >= 12 &&
+        _shouldHoldForRoundRequirement(
+          bot,
+          controller,
+          playDownRequirement,
+          handSize,
+        )) {
+      return true; // Only hold if hand is already large
     }
 
     // Strategic book completion: hold if we can complete books in later rounds
@@ -536,7 +581,9 @@ class EnhancedBotAI {
 
     // Hold if we can potentially dump everything soon
     final dumpPotential = _calculateDumpPotential(bot, controller);
-    if (dumpPotential >= 0.7) return true; // Can dump 70%+ of hand
+    if (dumpPotential >= 0.8) {
+      return true; // Increased threshold - be more selective about holding
+    }
 
     return false;
   }
@@ -557,17 +604,21 @@ class EnhancedBotAI {
       return false; // Keep accumulating if we can't meet the requirement
     }
 
-    // Post-play-down: Execute if we can dump most of our hand
+    // Post-play-down: Execute if we can dump a good portion of our hand
     final dumpPotential = _calculateDumpPotential(bot, controller);
-    if (dumpPotential >= 0.8 && handSize >= 5) return true; // Can dump 80%+
+    if (dumpPotential >= 0.6 && handSize >= 4) {
+      return true; // Reduced from 80% to 60%
+    }
 
-    // Execute if hand is getting dangerously large
-    if (handSize >= 15) return true;
+    // Execute if hand is getting large
+    if (handSize >= 12) {
+      return true; // Reduced from 15 to 12
+    }
 
     // NEW: Be more aggressive if on hand pile with wilds and close to foot
-    if (stillOnHandPile && wildCards.isNotEmpty && handSize <= 8) {
+    if (stillOnHandPile && wildCards.isNotEmpty && handSize <= 10) {
       // If we have wilds and are close to foot, dump everything we can
-      if (dumpPotential >= 0.6) return true; // Lower threshold with wilds
+      if (dumpPotential >= 0.5) return true; // Even lower threshold with wilds
     }
 
     // Execute if we can go directly to foot
@@ -657,16 +708,23 @@ class EnhancedBotAI {
     // Check if we can unlock with the top card
     if (!topCard.isWild && !topCard.isThree) {
       final matchingCards = rankCounts[topCard.rank] ?? 0;
-      if (matchingCards >= 2) potential++; // Can unlock
+      if (matchingCards >= 2) {
+        potential += 2; // Increased from 1 - Can unlock is very valuable
+      }
 
       // Bonus for each additional matching card (more flexible unlocking)
-      potential += (matchingCards - 2).clamp(0, 3);
+      potential += (matchingCards - 2).clamp(0, 4); // Increased max bonus
     }
 
     // General unlock potential (pairs that could match future discards)
     for (final count in rankCounts.values) {
       if (count >= 2) potential++; // Each pair increases unlock potential
+      if (count >= 3) potential++; // Extra bonus for triplets
     }
+
+    // Bonus for wild cards (can help with unlocking)
+    final wildCount = hand.where((card) => card.isWild).length;
+    potential += (wildCount / 3).floor(); // Every 3 wilds adds potential
 
     return potential;
   }
@@ -752,27 +810,27 @@ class EnhancedBotAI {
     // Calculate current meld potential points
     final currentMeldPoints = _calculateCurrentMeldPotential(bot, controller);
 
-    // Round-specific holding strategy
+    // More aggressive round-specific strategy
     if (requirement <= 60) {
       // Round 1: 60 points - can often be done with 1 good meld
       // Hold if we're close but not quite there
-      return currentMeldPoints >= 40 && currentMeldPoints < 60 && handSize >= 7;
+      return currentMeldPoints >= 45 && currentMeldPoints < 60 && handSize >= 6;
     } else if (requirement <= 90) {
       // Round 2: 90 points - usually needs 2 melds
-      // Hold more aggressively to get multiple meld opportunities
-      return currentMeldPoints >= 50 && currentMeldPoints < 90 && handSize >= 9;
+      // More aggressive - lower thresholds
+      return currentMeldPoints >= 60 && currentMeldPoints < 90 && handSize >= 8;
     } else if (requirement <= 120) {
       // Round 3: 120 points - definitely needs multiple melds
-      // Hold even more cards for better combinations
-      return currentMeldPoints >= 70 &&
+      // More aggressive - lower hand size requirement
+      return currentMeldPoints >= 80 &&
           currentMeldPoints < 120 &&
-          handSize >= 11;
+          handSize >= 9;
     } else {
       // Round 4+: 150+ points - requires significant accumulation
-      // Must hold many cards to have enough meld opportunities
-      return currentMeldPoints >= 90 &&
+      // More aggressive - lower requirements
+      return currentMeldPoints >= 100 &&
           currentMeldPoints < requirement &&
-          handSize >= 13;
+          handSize >= 11;
     }
   }
 
@@ -873,23 +931,23 @@ class EnhancedBotAI {
 
     switch (personality) {
       case BotPersonality.conservative:
-        baseLimit = 18; // Can hold more cards
+        baseLimit = 14; // Reduced from 18 - more aggressive
         break;
       case BotPersonality.aggressive:
-        baseLimit = 14; // Holds fewer cards
+        baseLimit = 10; // Reduced from 14 - much more aggressive
         break;
       case BotPersonality.bookBuilder:
-        baseLimit = 16; // Moderate holding for book building
+        baseLimit = 12; // Reduced from 16 - more aggressive
         break;
       case BotPersonality.adaptive:
-        baseLimit = 16; // Standard holding
+        baseLimit = 12; // Reduced from 16 - more aggressive
         break;
     }
 
     // Reduce limit based on time pressure
-    final pressureReduction = (timePressure * 4)
-        .round(); // Up to 4 card reduction
-    return (baseLimit - pressureReduction).clamp(12, baseLimit);
+    final pressureReduction = (timePressure * 5)
+        .round(); // Up to 5 card reduction - more pressure
+    return (baseLimit - pressureReduction).clamp(8, baseLimit);
   }
 
   /// Should hold cards to complete books in later rounds as defensive strategy
