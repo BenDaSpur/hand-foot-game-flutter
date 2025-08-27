@@ -20,28 +20,11 @@ concurrency:
 jobs:
   # Test and validate (runs on all events)
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.8"
-          channel: "stable"
-
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Analyze code
-        run: flutter analyze
+    uses: ./.github/workflows/shared-quality-checks.yml
+    with:
+      setup_firebase_web: true
+      flutter_version: "3.32.8"
+    secrets: inherit
 
   # Build job (only on PRs for validation)
   build:
@@ -57,9 +40,17 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
 
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
 
       - name: Setup Firebase config (production for multiplayer)
         run: |
@@ -82,7 +73,7 @@ jobs:
       - name: Build Web (validation only)
         run: flutter build web --release --base-href /${{ github.event.repository.name }}/
 
-  # Deployment job (reusing working steps from build-and-release.yml)
+  # Deployment job
   deploy-pages:
     runs-on: ubuntu-latest
     needs: test
@@ -104,9 +95,17 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
 
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
 
       - name: Setup Firebase config (production for multiplayer)
         run: |

@@ -12,7 +12,40 @@ on:
         default: "v1.0.0"
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.32.8"
+          channel: "stable"
+          cache: true
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Analyze code
+        run: flutter analyze
+
   build-android:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -29,15 +62,34 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache Android build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/build-cache
+          key: ${{ runner.os }}-android-${{ hashFiles('android/**/*.gradle*', 'android/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-android-
 
       - name: Setup Android NDK
         run: |
           echo "Installing Android NDK 27.0.12077973"
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.12077973"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
-
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
 
       - name: Create Firebase config (Android)
         run: |
@@ -51,12 +103,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Analyze code
-        run: flutter analyze
 
       - name: Build Android APK
         run: flutter build apk --release
@@ -77,6 +123,7 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
 
   build-web:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -87,9 +134,17 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
 
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
 
       - name: Setup Firebase config (Web)
         run: |
@@ -103,9 +158,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Run tests
-        run: flutter test
 
       - name: Build Web
         run: flutter build web --release --base-href /handfoot/
@@ -122,6 +174,7 @@ jobs:
           path: hand-foot-web.tar.gz
 
   build-windows:
+    needs: test
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -132,9 +185,17 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
 
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            %APPDATA%\Pub\Cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
 
       - name: Setup Firebase config (Windows)
         run: |
@@ -150,9 +211,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run tests
-        run: flutter test
-
       - name: Build Windows
         run: flutter build windows --release
 
@@ -167,6 +225,7 @@ jobs:
           path: hand-foot-windows.zip
 
   build-macos:
+    needs: test
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -177,9 +236,39 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
 
-      - name: Disable Flutter analytics
-        run: flutter config --no-analytics
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cocoapods
+            ~/Library/Caches/CocoaPods
+            macos/Pods
+            ios/Pods
+          key: ${{ runner.os }}-cocoapods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cocoapods-
+
+      - name: Cache Xcode build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ~/.xcode_cache
+          key: ${{ runner.os }}-xcode-${{ hashFiles('macos/**/*.pbxproj', 'macos/**/*.xcconfig') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-
 
       - name: Setup Firebase configs (macOS/iOS)
         run: |
@@ -199,9 +288,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run tests
-        run: flutter test
-
       - name: Build macOS
         run: flutter build macos --release
 
@@ -217,6 +303,7 @@ jobs:
           path: hand-foot-macos.tar.gz
 
   build-linux:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -227,6 +314,25 @@ jobs:
         with:
           flutter-version: "3.32.8"
           channel: "stable"
+          cache: true
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache Linux dependencies
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/build-and-release.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
 
       - name: Install Linux dependencies
         run: |
@@ -245,9 +351,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Run tests
-        run: flutter test
 
       - name: Build Linux
         run: flutter build linux --release

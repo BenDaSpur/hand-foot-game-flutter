@@ -1,0 +1,141 @@
+name: Shared Quality Checks
+
+on:
+  workflow_call:
+    inputs:
+      setup_firebase_android:
+        description: 'Setup Android Firebase config'
+        type: boolean
+        default: false
+      setup_firebase_web:
+        description: 'Setup Web Firebase config'  
+        type: boolean
+        default: false
+      run_e2e_tests:
+        description: 'Run E2E tests on macOS'
+        type: boolean
+        default: false
+      flutter_version:
+        description: 'Flutter version to use'
+        type: string
+        default: '3.32.8'
+    outputs:
+      tests_passed:
+        description: 'Whether tests passed'
+        value: ${{ jobs.quality-checks.outputs.tests_passed }}
+      analysis_passed:
+        description: 'Whether analysis passed'
+        value: ${{ jobs.quality-checks.outputs.analysis_passed }}
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      tests_passed: ${{ steps.tests.outputs.passed }}
+      analysis_passed: ${{ steps.analysis.outputs.passed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: "stable"
+          cache: true
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Setup Firebase config (Android)
+        if: inputs.setup_firebase_android
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_CONFIG_ANDROID }}" ]]; then
+            echo "Using production Firebase Android configuration"
+            echo "${{ secrets.FIREBASE_CONFIG_ANDROID }}" | base64 -d > android/app/google-services.json
+          else
+            echo "Creating stub Android Firebase config"
+            echo '{"project_info":{"project_number":"000000000000","project_id":"stub-project"}}' > android/app/google-services.json
+          fi
+
+      - name: Setup Firebase config (Web)
+        if: inputs.setup_firebase_web
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_WEB_CONFIG }}" ]]; then
+            echo "Using production Firebase web configuration"
+            echo "${{ secrets.FIREBASE_WEB_CONFIG }}" | base64 -d > lib/firebase_options.dart
+          else
+            echo "FIREBASE_WEB_CONFIG not found, using stub configuration"
+            # App will use the default stub configuration in firebase_options.dart
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Run tests
+        id: tests
+        run: |
+          if flutter test; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Analyze code
+        id: analysis
+        run: |
+          if flutter analyze --no-fatal-warnings; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Verify dependencies
+        run: flutter pub deps
+
+  e2e-tests:
+    if: inputs.run_e2e_tests
+    runs-on: macos-latest
+    needs: quality-checks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ inputs.flutter_version }}
+          channel: "stable"
+          cache: true
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.PUB_CACHE }}
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Run E2E Tests
+        run: flutter test e2e_test/ -d macos
+        timeout-minutes: 15
