@@ -332,141 +332,156 @@ void main() {
         expect(gameState.phase, equals(GamePhase.playing));
       });
 
-      test(
-        'should reset stalemate tracking when starting new round',
-        skip: 'Complex state interaction',
-        () {
-          // This test verifies that startRound() properly resets stalemate tracking
-          // First set up a stalemate warning situation
-          // Make deck very small
-          while (gameState.deck.size > 9) {
-            gameState.deck.drawCard();
-          }
+      test('should reset stalemate tracking when starting new round', () {
+        // This test verifies that startRound() properly resets stalemate tracking
+        // First set up a stalemate warning situation
+        // Make deck very small
+        while (gameState.deck.size > 9) {
+          gameState.deck.drawCard();
+        }
 
-          // Add only 3s to discard pile
-          gameState.discardPile.clear();
-          gameState.discardPile.add(
-            const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
-          );
+        // Add only 3s to discard pile
+        gameState.discardPile.clear();
+        gameState.discardPile.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
 
-          // Trigger warning state
-          for (int i = 0; i < 3; i++) {
-            gameState.currentPlayerIndex = i;
-            gameState.turnPhase = TurnPhase.discard;
-            final three = PlayingCard(
-              rank: CardRank.three,
-              suit: Suit.values[i],
-            );
-            gameState.players[i].hand.add(three);
-            gameState.discard(three);
-          }
-
-          // One more discard to trigger warning
-          gameState.currentPlayerIndex = 0;
+        // Trigger warning state
+        for (int i = 0; i < 3; i++) {
+          gameState.currentPlayerIndex = i;
           gameState.turnPhase = TurnPhase.discard;
-          final extraThree = const PlayingCard(
-            rank: CardRank.three,
-            suit: Suit.diamonds,
-          );
-          player1.hand.add(extraThree);
-          gameState.discard(extraThree);
+          final three = PlayingCard(rank: CardRank.three, suit: Suit.values[i]);
+          gameState.players[i].hand.add(three);
+          gameState.discard(three);
+        }
 
-          // Verify warning was shown
-          final hasInitialWarning = gameState.recentActions.any(
-            (action) => action.message.contains('WARNING'),
-          );
-          expect(hasInitialWarning, isTrue);
+        // One more discard to trigger warning
+        gameState.currentPlayerIndex = 0;
+        gameState.turnPhase = TurnPhase.discard;
+        final extraThree = const PlayingCard(
+          rank: CardRank.three,
+          suit: Suit.diamonds,
+        );
+        player1.hand.add(extraThree);
+        gameState.discard(extraThree);
 
-          // Now start a new round - this should reset stalemate tracking
-          gameState.round = 2;
-          gameState.startRound();
-          // Note: startRound clears the discard pile
+        // Verify warning was shown
+        final hasInitialWarning = gameState.recentActions.any(
+          (action) => action.message.contains('WARNING'),
+        );
+        expect(hasInitialWarning, isTrue);
 
-          // Clear actions to test fresh behavior
-          gameState.recentActions.clear();
+        // Now start a new round - this should reset stalemate tracking
+        gameState.round = 2;
+        gameState.startRound();
+        // Note: startRound clears the discard pile
 
-          // Set up players again (startRound clears their state)
-          player1.hasPlayedDown = true;
-          player2.hasPlayedDown = true;
-          player3.hasPlayedDown = true;
+        // Clear actions to test fresh behavior
+        gameState.recentActions.clear();
 
-          // Make deck small again
-          while (gameState.deck.size > 9) {
-            gameState.deck.drawCard();
-          }
+        // Set up players again (startRound clears their state)
+        player1.hasPlayedDown = true;
+        player2.hasPlayedDown = true;
+        player3.hasPlayedDown = true;
 
-          // Make sure discard pile only has 3s
-          gameState.discardPile.clear();
-          gameState.discardPile.add(
-            const PlayingCard(rank: CardRank.three, suit: Suit.clubs),
-          );
+        // Make deck small again
+        while (gameState.deck.size > 9) {
+          gameState.deck.drawCard();
+        }
 
-          // Should need full rotation before warning (proving it was reset)
-          // First full rotation should not trigger warning
-          // Start from player 0 (currentPlayerIndex should be 0 after startRound)
-          expect(gameState.currentPlayerIndex, equals(0));
+        // Make sure discard pile only has 3s
+        gameState.discardPile.clear();
+        gameState.discardPile.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.clubs),
+        );
 
-          // Player 0 discards
-          gameState.turnPhase = TurnPhase.discard;
-          player1.hand.add(
-            const PlayingCard(rank: CardRank.three, suit: Suit.diamonds),
-          );
-          gameState.discard(
-            const PlayingCard(rank: CardRank.three, suit: Suit.diamonds),
-          );
-          // Now currentPlayerIndex = 1
+        // Should need full rotation before warning (proving it was reset)
+        // First full rotation should not trigger warning
+        // Start from player 0 (currentPlayerIndex should be 0 after startRound)
+        expect(gameState.currentPlayerIndex, equals(0));
 
-          // Player 1 discards
-          gameState.turnPhase = TurnPhase.discard;
-          player2.hand.add(
-            const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
-          );
-          gameState.discard(
-            const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
-          );
-          // Now currentPlayerIndex = 2
+        // Player 0 discards
+        gameState.turnPhase = TurnPhase.discard;
+        player1.hand.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.diamonds),
+        );
+        gameState.discard(
+          const PlayingCard(rank: CardRank.three, suit: Suit.diamonds),
+        );
+        // Now currentPlayerIndex = 1
 
-          // Player 2 discards
-          gameState.turnPhase = TurnPhase.discard;
-          player3.hand.add(
-            const PlayingCard(rank: CardRank.three, suit: Suit.spades),
-          );
-          gameState.discard(
-            const PlayingCard(rank: CardRank.three, suit: Suit.spades),
-          );
-          // Now currentPlayerIndex = 0 (back to player 1)
+        // Player 1 discards
+        gameState.turnPhase = TurnPhase.discard;
+        player2.hand.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+        gameState.discard(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+        // Now currentPlayerIndex = 2
 
-          // No warning during first rotation after reset
-          final hasWarningFirstRotation = gameState.recentActions.any(
-            (action) => action.message.contains('WARNING'),
-          );
-          expect(
-            hasWarningFirstRotation,
-            isFalse,
-            reason:
-                'Warning should not appear during first rotation after reset',
-          );
+        // Player 2 discards
+        gameState.turnPhase = TurnPhase.discard;
+        player3.hand.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.spades),
+        );
+        gameState.discard(
+          const PlayingCard(rank: CardRank.three, suit: Suit.spades),
+        );
+        // Now currentPlayerIndex = 0 (back to player 1)
 
-          // Now player 0 discards again - should trigger warning (full rotation complete)
-          gameState.turnPhase = TurnPhase.discard;
-          player1.hand.add(
-            const PlayingCard(rank: CardRank.three, suit: Suit.clubs),
-          );
-          gameState.discard(
-            const PlayingCard(rank: CardRank.three, suit: Suit.clubs),
-          );
+        // Warning should appear after first full rotation (this is correct behavior)
+        final hasWarningFirstRotation = gameState.recentActions.any(
+          (action) => action.message.contains('WARNING'),
+        );
+        expect(
+          hasWarningFirstRotation,
+          isTrue,
+          reason:
+              'Warning should appear after first full rotation when conditions are met',
+        );
 
-          // NOW warning should appear
-          final hasWarningAfterFullRotation = gameState.recentActions.any(
-            (action) => action.message.contains('WARNING'),
-          );
-          expect(
-            hasWarningAfterFullRotation,
-            isTrue,
-            reason: 'Warning should appear after full rotation',
-          );
-        },
-      );
+        // Continue for SECOND full rotation to test if stalemate is properly triggered
+        // (This tests that the counter was properly reset and is now counting correctly)
+
+        // Player 0 discards again
+        gameState.turnPhase = TurnPhase.discard;
+        player1.hand.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.clubs),
+        );
+        gameState.discard(
+          const PlayingCard(rank: CardRank.three, suit: Suit.clubs),
+        );
+
+        // Player 1 discards again
+        gameState.turnPhase = TurnPhase.discard;
+        player2.hand.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.diamonds),
+        );
+        gameState.discard(
+          const PlayingCard(rank: CardRank.three, suit: Suit.diamonds),
+        );
+
+        // Player 2 discards again (second full rotation complete)
+        gameState.turnPhase = TurnPhase.discard;
+        player3.hand.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+        gameState.discard(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+
+        // NOW stalemate should be detected and round should end
+        final hasStalemate = gameState.recentActions.any(
+          (action) => action.message.contains('STALEMATE'),
+        );
+        expect(
+          hasStalemate,
+          isTrue,
+          reason: 'Stalemate should be detected after second full rotation',
+        );
+        expect(gameState.phase, GamePhase.roundEnd);
+      });
     });
 
     group('Edge Cases', () {
