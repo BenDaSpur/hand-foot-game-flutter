@@ -479,7 +479,7 @@ class EnhancedBotAI {
       // Continue to find other cards to discard
     }
 
-    // Priority 3: Discard lowest value non-useful cards (avoid wilds if still on hand pile)
+    // Priority 3: ENHANCED discard logic with clean book preservation
     final rankCounts = <CardRank, int>{};
     for (final card in hand) {
       if (!card.isWild) {
@@ -487,19 +487,49 @@ class EnhancedBotAI {
       }
     }
 
-    // Find singletons (cards without pairs)
-    final singletons = hand
-        .where((card) => !card.isWild && (rankCounts[card.rank] ?? 0) <= 1)
+    // Check if bot has clean books for strategic decision-making
+    final hasCleanBook = bot.melds.any((m) => m.isClean && m.cards.length >= 7);
+    final cleanMeldsNearBook = bot.melds
+        .where((m) => m.isClean && m.cards.length >= 5)
         .toList();
 
-    if (singletons.isNotEmpty) {
-      singletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      // Add variability: if there are multiple singletons of the same low value, randomly pick one
-      final bestValue = singletons.first.pointValue;
-      final bestSingletons = singletons
+    // Find singletons but PROTECT potential clean book cards
+    final protectedSingletons = <PlayingCard>[];
+    final safeSingletons = <PlayingCard>[];
+
+    for (final card in hand) {
+      if (!card.isWild && (rankCounts[card.rank] ?? 0) <= 1) {
+        // Check if this card could help complete a clean meld
+        final couldHelpCleanMeld = cleanMeldsNearBook.any(
+          (meld) => meld.rank == card.rank && !card.isWild,
+        );
+
+        if (!hasCleanBook && couldHelpCleanMeld) {
+          protectedSingletons.add(card); // Protect for clean book building
+        } else {
+          safeSingletons.add(card); // Safe to discard
+        }
+      }
+    }
+
+    // Prefer safe singletons first
+    if (safeSingletons.isNotEmpty) {
+      safeSingletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      final bestValue = safeSingletons.first.pointValue;
+      final bestSingletons = safeSingletons
           .where((card) => card.pointValue == bestValue)
           .toList();
       return _selectRandomly(bestSingletons);
+    }
+
+    // If no safe singletons, use protected ones only if absolutely necessary
+    if (protectedSingletons.isNotEmpty) {
+      protectedSingletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      final bestValue = protectedSingletons.first.pointValue;
+      final bestProtected = protectedSingletons
+          .where((card) => card.pointValue == bestValue)
+          .toList();
+      return _selectRandomly(bestProtected);
     }
 
     // Fallback: Discard lowest value card (avoiding wilds if still on hand pile)

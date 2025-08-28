@@ -214,10 +214,11 @@ class _GameScreenState extends State<GameScreen> {
         return;
       }
 
-      // Check for round end condition first (but not during initial game setup)
-      if (_gameController.gameState.phase == GamePhase.roundEnd &&
-          _gameController.gameState.round > 1) {
-        DebugLogger.debug('Round has ended - handling transition');
+      // Check for round end condition first
+      if (_gameController.gameState.phase == GamePhase.roundEnd) {
+        DebugLogger.debug(
+          'Round has ended - handling transition (Round ${_gameController.gameState.round})',
+        );
         _handleRoundTransition().catchError((error) {
           DebugLogger.error('Error handling round transition: $error');
         });
@@ -231,7 +232,10 @@ class _GameScreenState extends State<GameScreen> {
         _validateHumanPlayerState();
         // CRITICAL: Ensure we never auto-process human turns
         _isProcessingBotTurn = false; // Clear any stuck bot processing flag
-        if (mounted) setState(() {}); // Update UI to show it's human turn
+        if (mounted) {
+          setState(() {}); // Update UI to show it's human turn
+          checkForRoundTransition();
+        }
         return;
       }
 
@@ -312,7 +316,10 @@ class _GameScreenState extends State<GameScreen> {
         }
 
         // Update UI state after successful action
-        if (mounted) setState(() {});
+        if (mounted) {
+          setState(() {});
+          checkForRoundTransition();
+        }
 
         // Add delay after each bot action so users can see what happened
         await Future.delayed(const Duration(milliseconds: 1000));
@@ -659,6 +666,16 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _checkAndHandleRoundEnd() async {
     if (_gameController.gameState.phase == GamePhase.roundEnd) {
       await _handleRoundTransition();
+    }
+  }
+
+  /// Check if round transition is needed and trigger it
+  void checkForRoundTransition() {
+    if (_gameController.gameState.phase == GamePhase.roundEnd && mounted) {
+      DebugLogger.debug('Triggering round transition check');
+      _handleRoundTransition().catchError((error) {
+        DebugLogger.error('Error in round transition check: $error');
+      });
     }
   }
 

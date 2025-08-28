@@ -161,12 +161,18 @@ class BotMeldAnalyzer {
     // CRITICAL: Strongly prefer the book type we're missing
     if (needsCleanBookMore && isClean) {
       score +=
-          cleanMeldBonus * 3; // Triple bonus for desperately needed clean meld
+          cleanMeldBonus * 5; // MASSIVE bonus for desperately needed clean meld
     } else if (needsDirtyBookMore && !isClean) {
       score +=
           cleanMeldBonus * 2; // Double bonus for desperately needed dirty meld
     } else if (isClean && preferClean) {
       score += cleanMeldBonus; // Normal clean bonus
+    }
+
+    // ADDITIONAL: Heavily penalize creating dirty melds when no clean books exist
+    if (needsCleanBookMore && !isClean) {
+      score -=
+          cleanMeldBonus * 3; // Major penalty for wrong type when desperate
     }
 
     // Book potential bonus - extra important for the type we need
@@ -191,7 +197,7 @@ class BotMeldAnalyzer {
       final meld = bot.melds[i];
       for (final card in bot.currentHand) {
         if (_canAddCardToMeld(card, meld)) {
-          final priority = _calculateAdditionPriority(card, meld, i);
+          final priority = _calculateAdditionPriority(card, meld, i, bot: bot);
           cardsToAdd.add({
             'card': card,
             'meld': meld,
@@ -208,8 +214,19 @@ class BotMeldAnalyzer {
   }
 
   /// Calculate the priority score for adding a card to a meld
-  int _calculateAdditionPriority(PlayingCard card, Meld meld, int meldIndex) {
+  int _calculateAdditionPriority(
+    PlayingCard card,
+    Meld meld,
+    int meldIndex, {
+    Player? bot,
+  }) {
     int priority = card.pointValue;
+
+    // Check if bot has clean books (for enhanced protection)
+    bool hasCleanBook = false;
+    if (bot != null) {
+      hasCleanBook = bot.melds.any((m) => m.isClean && m.cards.length >= 7);
+    }
 
     // Bonus for book progression
     if (meld.cards.length == 6) {
@@ -218,12 +235,32 @@ class BotMeldAnalyzer {
       priority += 50; // Good progress
     }
 
-    // Clean meld protection - prioritize natural cards for clean melds
+    // ENHANCED Clean meld protection - prioritize natural cards for clean melds
     if (meld.isClean) {
       if (!card.isWild) {
         priority += 200; // Keep it clean
+
+        // CRITICAL: Extra bonus if we don't have a clean book yet
+        if (meld.cards.length >= 4) {
+          priority += 300; // Building toward essential clean book
+        }
+
+        // ULTRA-CRITICAL: If no clean books exist, heavily prioritize building one
+        if (!hasCleanBook && meld.cards.length >= 3) {
+          priority += 500; // Essential for going out
+        }
       } else {
-        priority -= 100; // Penalty for making it dirty
+        // MUCH stronger penalty for making clean meld dirty
+        priority -= 500; // Strong penalty for making it dirty
+
+        // CRITICAL: Extremely harsh penalty if we have no clean books
+        if (!hasCleanBook) {
+          priority -= 2000; // Never contaminate when no clean books exist
+        }
+
+        if (meld.cards.length >= 5) {
+          priority -= 1000; // Never contaminate a near-complete clean meld
+        }
       }
     }
 
