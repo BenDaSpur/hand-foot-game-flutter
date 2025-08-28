@@ -430,11 +430,11 @@ class _GameScreenState extends State<GameScreen> {
       case 'addToMeld':
         final data = decision.data as Map<String, dynamic>;
         final card = data['card'] as PlayingCard;
-        actionDescription = '➕ added ${card.displayName} to meld';
+        actionDescription = '➕ added ${card.compactName} to meld';
         break;
       case 'discard':
         final card = decision.data as PlayingCard;
-        actionDescription = '🗑️ discarded ${card.displayName}';
+        actionDescription = '🗑️ discarded ${card.compactName}';
         break;
       case 'noMeld':
         actionDescription = '⏭️ chose not to meld';

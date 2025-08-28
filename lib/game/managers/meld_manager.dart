@@ -48,7 +48,7 @@ class MeldManager {
     for (int i = 0; i < allMeldCards.length; i++) {
       final meld = Meld.createMeld(allMeldCards[i]);
       if (meld == null) {
-        final cardNames = allMeldCards[i].map((c) => c.displayName).join(', ');
+        final cardNames = allMeldCards[i].map((c) => c.compactName).join(', ');
         _debugLog('Failed to create meld ${i + 1}: $cardNames');
         return false;
       }
@@ -155,7 +155,7 @@ class MeldManager {
 
         // Update state
         _gameState.hasMelded = true;
-        final cardNames = cards.map((c) => c.displayName).join(', ');
+        final cardNames = cards.map((c) => c.compactName).join(', ');
         _gameState.logAction('added to existing meld: $cardNames');
         currentPlayer.hasPlayedDown = true;
         return true;
@@ -169,7 +169,7 @@ class MeldManager {
       currentPlayer.melds.add(meld);
       _gameState.hasMelded = true;
 
-      final cardNames = cards.map((c) => c.displayName).join(', ');
+      final cardNames = cards.map((c) => c.compactName).join(', ');
       final wasFirstMeld = !currentPlayer.hasPlayedDown;
       if (wasFirstMeld) {
         final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
@@ -280,14 +280,14 @@ class MeldManager {
         existingMeld.addCard(card);
       }
       cardNamesCreated.add(
-        'added to ${rank.name}: ${cards.map((c) => c.displayName).join(', ')}',
+        'added to ${rank.name}: ${cards.map((c) => c.compactName).join(', ')}',
       );
     } else {
       // Create new meld
       final meld = Meld.createMeld(cards)!;
       player.melds.add(meld);
       cardNamesCreated.add(
-        'new ${rank.name}: ${cards.map((c) => c.displayName).join(', ')}',
+        'new ${rank.name}: ${cards.map((c) => c.compactName).join(', ')}',
       );
     }
   }

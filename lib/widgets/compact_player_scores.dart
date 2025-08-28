@@ -8,12 +8,14 @@ class CompactPlayerScores extends StatelessWidget {
   final GameState gameState;
   final Player? viewingPlayerMelds;
   final Function(Player) onPlayerTap;
+  final String? currentUserId; // For multiplayer support
 
   const CompactPlayerScores({
     super.key,
     required this.gameState,
     required this.viewingPlayerMelds,
     required this.onPlayerTap,
+    this.currentUserId, // Optional - for multiplayer
   });
 
   @override
@@ -27,7 +29,11 @@ class CompactPlayerScores extends StatelessWidget {
         children: gameState.players.map((player) {
           final isViewing = viewingPlayerMelds == player;
           final isCurrent = player == gameState.currentPlayer;
-          final isHuman = player.type == PlayerType.human;
+
+          // REUSE SINGLE-PLAYER LOGIC: Adapt human check for multiplayer
+          final isCurrentUser = currentUserId != null
+              ? player.id == currentUserId
+              : player.type == PlayerType.human;
 
           return Expanded(
             child: GestureDetector(
@@ -74,13 +80,20 @@ class CompactPlayerScores extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (isHuman)
+                          if (isCurrentUser)
                             const Icon(
                               Icons.person,
                               size: UIConstants.playerScoresIconSize,
                               color: Colors.white,
                             )
-                          else
+                          else if (currentUserId !=
+                              null) // Multiplayer - other human player
+                            const Icon(
+                              Icons.group,
+                              size: UIConstants.playerScoresIconSize,
+                              color: Colors.white70,
+                            )
+                          else // Single-player - bot
                             const Icon(
                               Icons.smart_toy,
                               size: UIConstants.playerScoresIconSize,

@@ -3,19 +3,18 @@ import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../game/enhanced_multiplayer_controller.dart';
-import '../widgets/mobile_status_bar.dart';
-import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
-import '../widgets/advanced_meld_selector.dart';
-import '../widgets/emergency_round_end_dialog.dart';
 import '../widgets/game_app_bar.dart';
-import '../widgets/player_hand_widget.dart';
 import '../widgets/game_action_buttons.dart';
 import '../widgets/melds_section.dart';
-import '../widgets/connection_status_widget.dart';
+import '../widgets/collapsible_recent_actions.dart';
+import '../widgets/game_hand_display.dart';
+import '../widgets/advanced_meld_selector.dart';
+import '../services/multiplayer_resume_service.dart';
 import '../theme/balatro_theme.dart';
 import 'main_menu_screen.dart';
 
+/// Multiplayer game screen that reuses single-player components for consistency
 class MultiplayerGameScreen extends StatefulWidget {
   final EnhancedMultiplayerController gameController;
 
@@ -27,25 +26,18 @@ class MultiplayerGameScreen extends StatefulWidget {
 
 class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   late EnhancedMultiplayerController _gameController;
-
   final List<int> _selectedCardIndices = [];
   Player? _viewingPlayerMelds;
-  bool _statusExpanded = false;
   bool _actionsExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _gameController = widget.gameController;
-
-    // Note: Do NOT call initializeGame() here for multiplayer games
-    // The game state is already initialized by the host and synced via Firebase
-    // Calling initializeGame() would overwrite the synced state
   }
 
   @override
   void dispose() {
-    // Safely dispose game controller to prevent memory leaks
     try {
       _gameController.dispose();
     } catch (e) {
@@ -54,13 +46,17 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     super.dispose();
   }
 
+  // REUSE: Copy single-player card interaction logic
   void _onCardTap(int cardIndex) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
+      return; // Same pattern as single-player checking PlayerType.human
+    }
 
-    // Bounds checking
-    if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) return;
+    if (cardIndex < 0 || cardIndex >= currentUserPlayer.currentHand.length) {
+      return;
+    }
 
     setState(() {
       if (_selectedCardIndices.contains(cardIndex)) {
@@ -72,29 +68,30 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
+      return;
+    }
 
-    if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) return;
+    if (cardIndex < 0 || cardIndex >= currentUserPlayer.currentHand.length) {
+      return;
+    }
 
-    final selectedCard = humanPlayer.currentHand[cardIndex];
+    final selectedCard = currentUserPlayer.currentHand[cardIndex];
     final matchingIndices = <int>[];
 
-    // Find all cards of the same rank (including the tapped one)
-    for (int i = 0; i < humanPlayer.currentHand.length; i++) {
-      final card = humanPlayer.currentHand[i];
+    for (int i = 0; i < currentUserPlayer.currentHand.length; i++) {
+      final card = currentUserPlayer.currentHand[i];
       if (card.rank == selectedCard.rank && !card.isWild) {
         matchingIndices.add(i);
       }
     }
 
     setState(() {
-      // If any matching cards are already selected, deselect all matching cards
       if (matchingIndices.any((i) => _selectedCardIndices.contains(i))) {
         _selectedCardIndices.removeWhere((i) => matchingIndices.contains(i));
       } else {
-        // Otherwise, select all matching cards
         for (final i in matchingIndices) {
           if (!_selectedCardIndices.contains(i)) {
             _selectedCardIndices.add(i);
@@ -104,68 +101,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     });
   }
 
-  void _selectAllCardsForMeld(int meldIndex) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-
-    if (meldIndex >= humanPlayer.melds.length) return;
-
-    final meld = humanPlayer.melds[meldIndex];
-    final naturalIndices = <int>[];
-    final wildIndices = <int>[];
-
-    // First pass: collect natural cards of the same rank and all wild cards
-    for (int i = 0; i < humanPlayer.currentHand.length; i++) {
-      final card = humanPlayer.currentHand[i];
-
-      if (card.rank == meld.rank && !card.isWild) {
-        // Natural cards of the same rank as the meld
-        naturalIndices.add(i);
-      } else if (card.isWild) {
-        // All wild cards (we'll filter later based on meld type and strategy)
-        wildIndices.add(i);
-      }
-    }
-
-    final selectedIndices = <int>[];
-
-    if (naturalIndices.isNotEmpty) {
-      // For existing melds, prefer natural cards of the same rank over wilds
-      // This provides cleaner gameplay - add natural cards first, wilds only if needed
-      selectedIndices.addAll(naturalIndices);
-    } else if (wildIndices.isNotEmpty) {
-      // Only select wilds if no natural cards of this rank are available
-      final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
-      final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
-      final maxAdditionalWilds = currentNaturalsInMeld - currentWildsInMeld;
-
-      if (maxAdditionalWilds > 0) {
-        final wildsToAdd = wildIndices.take(maxAdditionalWilds).toList();
-        selectedIndices.addAll(wildsToAdd);
-      }
-    }
-
-    setState(() {
-      // Clear current selection and select the smart selection
-      _selectedCardIndices.clear();
-      _selectedCardIndices.addAll(selectedIndices);
-    });
-  }
-
-  List<PlayingCard> get _selectedCards {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-    return _selectedCardIndices
-        .where((index) => index < humanPlayer.currentHand.length)
-        .map((index) => humanPlayer.currentHand[index])
-        .toList();
-  }
-
   bool _isCardPlayable(PlayingCard card) {
-    // MULTIPLAYER FIX: Check if it's this user's turn instead of checking player type
-    if (!_gameController.isMyTurn) {
+    if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
       return false;
     }
 
@@ -173,171 +110,52 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       return false;
     }
 
-    // Get current user's player object
     final currentUserPlayer = _gameController.getCurrentUserPlayer();
-    if (currentUserPlayer == null) {
-      return false;
-    }
+    if (currentUserPlayer == null) return false;
 
-    // Check if this card can be added to any existing meld
     for (int i = 0; i < currentUserPlayer.melds.length; i++) {
       if (currentUserPlayer.melds[i].canAddCard(card)) {
         return true;
       }
     }
-
     return false;
   }
 
+  List<PlayingCard> get _selectedCards {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) return [];
+
+    return _selectedCardIndices
+        .where((index) => index < currentUserPlayer.currentHand.length)
+        .map((index) => currentUserPlayer.currentHand[index])
+        .toList();
+  }
+
+  // REUSE: Copy single-player action methods (simplified)
   void _onDrawFromDeck() {
-    try {
-      final success = _gameController.drawFromDeck();
-      if (success) {
-        setState(() {
-          _selectedCardIndices.clear();
-        });
-      } else {
-        // Check if the round ended automatically due to insufficient cards
-        if (_gameController.gameState.phase == GamePhase.roundEnd) {
-          _showEmergencyRoundEndDialog();
-        } else {
-          _showErrorDialog(
-            'Draw Error',
-            'Unable to draw from deck. Deck may be empty or insufficient.',
-          );
-        }
-      }
-    } catch (e) {
-      _showErrorDialog('Draw Error', e.toString());
-    }
+    _gameController.drawFromDeck();
+    setState(() => _selectedCardIndices.clear());
   }
 
   void _onUnlockDiscard() {
-    try {
-      _gameController.unlockDiscardPile();
-      setState(() {
-        _selectedCardIndices.clear();
-      });
-    } catch (e) {
-      _showErrorDialog('Unlock Error', e.toString());
-    }
+    _gameController.unlockDiscardPile();
+    setState(() => _selectedCardIndices.clear());
   }
 
-  Future<void> _onAddCardToMeld(int meldIndex) async {
-    if (_selectedCards.isEmpty) {
-      _showErrorDialog(
-        'Add Card Error',
-        'Select at least one card first before clicking on a meld.',
-      );
-      return;
+  void _onDiscard() {
+    if (_selectedCards.length == 1) {
+      _gameController.discardCard(_selectedCards.first);
+      setState(() => _selectedCardIndices.clear());
     }
-
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-
-    if (meldIndex >= humanPlayer.melds.length) {
-      _showErrorDialog('Add Card Error', 'Invalid meld selected.');
-      return;
-    }
-
-    final meld = humanPlayer.melds[meldIndex];
-    final cardsToAdd = <PlayingCard>[];
-    final invalidCards = <PlayingCard>[];
-
-    // Check which selected cards can be added to this meld
-    for (final card in _selectedCards) {
-      if (meld.canAddCard(card)) {
-        cardsToAdd.add(card);
-      } else {
-        invalidCards.add(card);
-      }
-    }
-
-    if (cardsToAdd.isEmpty) {
-      final cardNames = _selectedCards.map((c) => c.displayName).join(', ');
-      _showErrorDialog(
-        'Add Card Error',
-        'None of the selected cards ($cardNames) can be added to this meld!',
-      );
-      return;
-    }
-
-    // Add all valid cards one by one
-    await _addCardsToMeld(meldIndex, cardsToAdd, invalidCards);
-  }
-
-  bool _canAddCardToMeld(int meldIndex) {
-    if (_selectedCards.isEmpty) return false;
-
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-
-    if (meldIndex >= humanPlayer.melds.length) return false;
-
-    final meld = humanPlayer.melds[meldIndex];
-
-    // Return true if at least one selected card can be added
-    return _selectedCards.any((card) => meld.canAddCard(card));
-  }
-
-  ({int count, bool areWilds}) _getCompatibleCardsInfo(int meldIndex) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-
-    if (meldIndex >= humanPlayer.melds.length) {
-      return (count: 0, areWilds: false);
-    }
-
-    final meld = humanPlayer.melds[meldIndex];
-    int naturalCount = 0;
-    int wildAsWildCount = 0;
-
-    for (final card in humanPlayer.currentHand) {
-      if (card.rank == meld.rank && !card.isWild) {
-        // Natural cards of the same rank
-        naturalCount++;
-      } else if (card.isWild) {
-        // Wild cards that could be used as wilds
-        wildAsWildCount++;
-      }
-    }
-
-    // For existing melds, prioritize natural cards over wilds
-    if (naturalCount > 0) {
-      // Only count natural cards when they're available for existing melds
-      return (count: naturalCount, areWilds: false);
-    }
-
-    // If no natural cards available, count wilds that could be added
-    if (wildAsWildCount > 0) {
-      final currentWildsInMeld = meld.cards.where((c) => c.isWild).length;
-      final currentNaturalsInMeld = meld.cards.where((c) => !c.isWild).length;
-      final maxAdditionalWilds = currentNaturalsInMeld - currentWildsInMeld;
-      final usableWilds = wildAsWildCount > maxAdditionalWilds
-          ? maxAdditionalWilds
-          : wildAsWildCount;
-      return usableWilds > 0
-          ? (count: usableWilds, areWilds: true)
-          : (count: 0, areWilds: false);
-    }
-
-    return (count: 0, areWilds: false);
   }
 
   void _showAdvancedMeldSelector() {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) return;
 
-    // Safety check: Ensure we're in the correct turn phase
-    if (_gameController.gameState.turnPhase != TurnPhase.meld) {
-      _showErrorDialog(
-        'Meld Error',
-        'You can only create melds during the meld phase.',
-      );
+    // Safety check: Ensure we're in the correct turn phase and it's user's turn
+    if (_gameController.gameState.turnPhase != TurnPhase.meld ||
+        _gameController.gameState.currentPlayer.id != _gameController.userId) {
       return;
     }
 
@@ -345,7 +163,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AdvancedMeldSelector(
-        player: humanPlayer,
+        player: currentUserPlayer,
         playDownRequirement: _gameController.gameState.playDownRequirement,
         onCancel: () {
           Navigator.of(context).pop();
@@ -359,13 +177,14 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _executeAdvancedMeldCreation(List<List<int>> meldIndices) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) return;
 
     // Safety check: Validate all indices are valid
     for (final indices in meldIndices) {
-      if (indices.any((index) => index >= humanPlayer.currentHand.length)) {
+      if (indices.any(
+        (index) => index >= currentUserPlayer.currentHand.length,
+      )) {
         _showErrorDialog(
           'Advanced Meld Error',
           'Invalid card selection. Please try again.',
@@ -374,99 +193,29 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       }
     }
 
-    _performMultiMeldCreation(meldIndices);
-  }
-
-  Future<void> _performMultiMeldCreation(List<List<int>> meldIndices) async {
+    // Use the multiplayer controller's multi-meld creation
     try {
-      // Convert indices to cards for each meld
-      final humanPlayer = _gameController.gameState.players.firstWhere(
-        (p) => p.type == PlayerType.human,
+      final success = _gameController.createMultipleMeldsFromIndices(
+        meldIndices,
       );
-
-      for (final indices in meldIndices) {
-        final cards = indices.map((i) => humanPlayer.currentHand[i]).toList();
-        _gameController.createMeld(cards);
-      }
-
-      setState(() {
-        _selectedCardIndices.clear();
-      });
-
-      // Show success message
-      final message = meldIndices.length == 1
-          ? 'Successfully created meld!'
-          : 'Successfully created ${meldIndices.length} melds!';
-
-      if (mounted) {
+      if (success) {
+        setState(() => _selectedCardIndices.clear());
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(
+              'Successfully created ${meldIndices.length} meld(s)!',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        _showErrorDialog(
+          'Meld Creation Failed',
+          'Unable to create melds. Please check your selection.',
         );
       }
     } catch (e) {
-      _showErrorDialog(
-        'Multiple Meld Error',
-        'Failed to create melds. Please check your selections and try again.',
-      );
-    }
-  }
-
-  void _onDiscard() async {
-    if (_selectedCards.length == 1) {
-      final humanPlayer = _gameController.gameState.players.firstWhere(
-        (p) => p.type == PlayerType.human,
-      );
-
-      // Check if discarding this card would empty the hand/foot
-      final willBeEmpty = humanPlayer.currentHand.length == 1;
-
-      if (willBeEmpty) {
-        // If this would be the last card, validate going out requirements
-        if (!humanPlayer.hasPickedUpFoot) {
-          // Going from hand to foot is always allowed
-          try {
-            _gameController.discardCard(_selectedCards.first);
-            setState(() {
-              _selectedCardIndices.clear();
-            });
-          } catch (e) {
-            _showErrorDialog('Discard Error', e.toString());
-          }
-          return;
-        }
-
-        // This would end the game - check requirements
-        if (!humanPlayer.canGoOutWithBooks) {
-          String missingBooks = '';
-          final cleanBooks = humanPlayer.melds.where((m) => m.isClean).length;
-          final dirtyBooks = humanPlayer.melds.where((m) => m.isDirty).length;
-          final totalBooks = humanPlayer.melds.where((m) => m.isBook).length;
-
-          if (!humanPlayer.hasCleanBook && !humanPlayer.hasDirtyBook) {
-            missingBooks =
-                'You need both a clean book (no wild cards) and a dirty book (with wild cards) to go out.';
-          } else if (!humanPlayer.hasCleanBook) {
-            missingBooks = 'You need a clean book (no wild cards) to go out.';
-          } else if (!humanPlayer.hasDirtyBook) {
-            missingBooks = 'You need a dirty book (with wild cards) to go out.';
-          }
-
-          _showErrorDialog(
-            'Cannot Go Out',
-            'Cannot go out! $missingBooks\n\nYou currently have:\n• $totalBooks book(s) total\n• $cleanBooks clean book(s)\n• $dirtyBooks dirty book(s)',
-          );
-          return;
-        }
-      }
-
-      try {
-        _gameController.discardCard(_selectedCards.first);
-        setState(() {
-          _selectedCardIndices.clear();
-        });
-      } catch (e) {
-        _showErrorDialog('Discard Error', e.toString());
-      }
+      _showErrorDialog('Meld Error', e.toString());
     }
   }
 
@@ -486,85 +235,107 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     );
   }
 
-  void _showEmergencyRoundEndDialog() {
-    EmergencyRoundEndDialog.show(
-      context,
-      autoAdvance: true, // Multiplayer auto-advances
-      onContinue: () {
-        setState(() {}); // Refresh UI to show round transition
-      },
-    );
-  }
+  // REUSE: Implement meld interaction methods (copied from earlier)
+  Future<void> _onAddCardToMeld(int meldIndex) async {
+    if (_selectedCards.isEmpty) return;
 
-  Future<void> _addCardsToMeld(
-    int meldIndex,
-    List<PlayingCard> cardsToAdd,
-    List<PlayingCard> invalidCards,
-  ) async {
-    int addedCount = 0;
-    final List<String> failureReasons = [];
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null ||
+        meldIndex >= currentUserPlayer.melds.length) {
+      return;
+    }
+
+    final meld = currentUserPlayer.melds[meldIndex];
+    final cardsToAdd = <PlayingCard>[];
+
+    for (final card in _selectedCards) {
+      if (meld.canAddCard(card)) {
+        cardsToAdd.add(card);
+      }
+    }
+
+    if (cardsToAdd.isEmpty) return;
 
     for (final card in cardsToAdd) {
       try {
         _gameController.addCardToMeld(meldIndex, card);
-        addedCount++;
       } catch (e) {
-        // Log specific error for debugging
-        debugPrint(
-          'Failed to add card ${card.displayName} to meld $meldIndex: $e',
-        );
-        failureReasons.add('${card.displayName}: ${e.toString()}');
+        debugPrint('Failed to add card: $e');
       }
     }
 
-    if (addedCount > 0) {
+    setState(() => _selectedCardIndices.clear());
+  }
+
+  void _selectAllCardsForMeld(int meldIndex) {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null ||
+        meldIndex >= currentUserPlayer.melds.length) {
+      return;
+    }
+
+    final meld = currentUserPlayer.melds[meldIndex];
+    final naturalIndices = <int>[];
+    final wildIndices = <int>[];
+
+    for (int i = 0; i < currentUserPlayer.currentHand.length; i++) {
+      final card = currentUserPlayer.currentHand[i];
+
+      if (card.rank == meld.rank && !card.isWild) {
+        naturalIndices.add(i);
+      } else if (card.isWild) {
+        wildIndices.add(i);
+      }
+    }
+
+    final selectedIndices = <int>[];
+    if (naturalIndices.isNotEmpty) {
+      selectedIndices.addAll(naturalIndices);
+    } else if (wildIndices.isNotEmpty) {
+      selectedIndices.addAll(wildIndices.take(2));
+    }
+
+    setState(() {
       _selectedCardIndices.clear();
-      setState(() {});
+      _selectedCardIndices.addAll(selectedIndices);
+    });
+  }
 
-      // Show feedback for any cards that couldn't be added
-      final allFailures = <String>[];
+  bool _canAddCardToMeld(int meldIndex) {
+    if (_selectedCards.isEmpty) return false;
 
-      if (invalidCards.isNotEmpty) {
-        final invalidNames = invalidCards.map((c) => c.displayName).toList();
-        allFailures.addAll(
-          invalidNames.map((name) => '$name: Invalid for this meld'),
-        );
-      }
-
-      if (failureReasons.isNotEmpty) {
-        allFailures.addAll(failureReasons);
-      }
-
-      if (allFailures.isNotEmpty) {
-        _showErrorDialog(
-          'Partial Success',
-          'Added $addedCount cards to meld.\n\nCould not add:\n${allFailures.join('\n')}',
-        );
-      }
-    } else {
-      // Provide specific feedback about why no cards could be added
-      final allFailures = <String>[];
-
-      if (invalidCards.isNotEmpty) {
-        final invalidNames = invalidCards.map((c) => c.displayName).toList();
-        allFailures.addAll(
-          invalidNames.map((name) => '$name: Invalid for this meld'),
-        );
-      }
-
-      if (failureReasons.isNotEmpty) {
-        allFailures.addAll(failureReasons);
-      }
-
-      final errorDetail = allFailures.isNotEmpty
-          ? '\n\nReasons:\n${allFailures.join('\n')}'
-          : '';
-
-      _showErrorDialog(
-        'Add Card Error',
-        'Failed to add any cards to the meld.$errorDetail',
-      );
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null ||
+        meldIndex >= currentUserPlayer.melds.length) {
+      return false;
     }
+
+    final meld = currentUserPlayer.melds[meldIndex];
+    return _selectedCards.any((card) => meld.canAddCard(card));
+  }
+
+  ({int count, bool areWilds}) _getCompatibleCardsInfo(int meldIndex) {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null ||
+        meldIndex >= currentUserPlayer.melds.length) {
+      return (count: 0, areWilds: false);
+    }
+
+    final meld = currentUserPlayer.melds[meldIndex];
+    int naturalCount = 0;
+    int wildCount = 0;
+
+    for (final card in currentUserPlayer.currentHand) {
+      if (card.rank == meld.rank && !card.isWild) {
+        naturalCount++;
+      } else if (card.isWild) {
+        wildCount++;
+      }
+    }
+
+    return naturalCount > 0
+        ? (count: naturalCount, areWilds: false)
+        : (count: wildCount, areWilds: true);
   }
 
   @override
@@ -576,21 +347,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         final gameState = snapshot.data ?? _gameController.gameState;
         final humanPlayer = _gameController.getCurrentUserPlayer();
 
-        // Don't render if user is not in the game
         if (humanPlayer == null) {
-          return Container(
-            decoration: const BoxDecoration(
-              gradient: BalatroTheme.primaryGradient,
-            ),
-            child: const Scaffold(
-              body: Center(
-                child: Text(
-                  'Loading game state...',
-                  style: TextStyle(color: Colors.white, fontSize: 18),
-                ),
-              ),
-            ),
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
           );
+        }
+
+        // HANDLE ROUND TRANSITIONS: Show appropriate UI for round end
+        if (gameState.phase == GamePhase.roundEnd) {
+          return _buildRoundEndScreen(gameState);
+        }
+
+        // HANDLE GAME END: Show winner screen
+        if (gameState.phase == GamePhase.gameEnd) {
+          return _buildGameEndScreen(gameState);
         }
 
         return Container(
@@ -604,151 +374,146 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
               isMultiplayer: true,
               connectionStream: _gameController.connectionStream,
               isOnline: _gameController.isOnline,
-              onLeaveGame: _leaveGame,
+              onLeaveGame: () => Navigator.pop(context),
             ),
             body: Column(
               children: [
-                // Connection status for multiplayer
-                Padding(
+                // REUSE: Compact status bar
+                Container(
                   padding: const EdgeInsets.all(8),
-                  child: Column(
+                  child: Row(
                     children: [
-                      ConnectionStatusWidget(
-                        controller: _gameController,
-                        compact: true,
+                      Icon(
+                        _gameController.isOnline ? Icons.wifi : Icons.wifi_off,
+                        color: _gameController.isOnline
+                            ? Colors.green
+                            : Colors.red,
+                        size: 16,
                       ),
-                      // MULTIPLAYER ADDITION: Turn indicator
+                      const SizedBox(width: 8),
+                      Text(
+                        'Round ${gameState.round}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setState(
+                          () => _actionsExpanded = !_actionsExpanded,
+                        ),
+                        child: Text(
+                          _actionsExpanded
+                              ? 'Hide Actions ▲'
+                              : 'Recent Actions ▼',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
+                          horizontal: 8,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
                           color: _gameController.isMyTurn
-                              ? Colors.green.withValues(alpha: 0.2)
-                              : Colors.orange.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _gameController.isMyTurn
-                                ? Colors.green
-                                : Colors.orange,
-                            width: 2,
-                          ),
+                              ? Colors.green.withValues(alpha: 0.3)
+                              : Colors.orange.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           _gameController.isMyTurn
-                              ? '🎮 YOUR TURN'
-                              : '⏳ ${gameState.currentPlayer.name}\'s turn',
+                              ? 'YOUR TURN'
+                              : gameState.currentPlayer.name,
                           style: TextStyle(
                             color: _gameController.isMyTurn
                                 ? Colors.green
                                 : Colors.orange,
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontSize: 11,
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // Mobile-optimized status bar
-                MobileStatusBar(
-                  gameState: gameState,
-                  isExpanded: _statusExpanded,
-                  onToggle: () {
-                    setState(() {
-                      _statusExpanded = !_statusExpanded;
-                    });
-                  },
-                ),
-
-                // Collapsible recent actions
-                CollapsibleRecentActions(
-                  gameState: gameState,
-                  isExpanded: _actionsExpanded,
-                  onToggle: () {
-                    setState(() {
-                      _actionsExpanded = !_actionsExpanded;
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 8),
-
-                // Compact player scores
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Text(
-                    'Tap a player to view their melds:',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                // REUSE: Recent actions (collapsible)
+                if (_actionsExpanded)
+                  CollapsibleRecentActions(
+                    gameState: gameState,
+                    isExpanded: _actionsExpanded,
+                    onToggle: () =>
+                        setState(() => _actionsExpanded = !_actionsExpanded),
                   ),
-                ),
+
+                // REUSE: Player scores with multiplayer support
                 CompactPlayerScores(
                   gameState: gameState,
                   viewingPlayerMelds: _viewingPlayerMelds,
-                  onPlayerTap: (player) {
-                    setState(() {
-                      _viewingPlayerMelds = player;
-                    });
-                  },
+                  onPlayerTap: (player) =>
+                      setState(() => _viewingPlayerMelds = player),
+                  currentUserId:
+                      _gameController.userId, // Enable multiplayer mode
                 ),
 
-                // Melds section
-                MeldsSection(
-                  gameState: gameState,
-                  humanPlayer: humanPlayer,
-                  viewingPlayerMelds: _viewingPlayerMelds,
-                  onViewPlayerMelds: (player) {
-                    setState(() {
-                      _viewingPlayerMelds = player;
-                    });
-                  },
-                  onAddCardToMeld: _onAddCardToMeld,
-                  onSelectAllCardsForMeld: _selectAllCardsForMeld,
-                  canAddCardToMeld: _canAddCardToMeld,
-                  getCompatibleCardsInfo: _getCompatibleCardsInfo,
-                ),
+                // REUSE: Melds section with multiplayer support
+                if (_viewingPlayerMelds != null)
+                  Expanded(
+                    flex: 2,
+                    child: MeldsSection(
+                      gameState: gameState,
+                      humanPlayer: humanPlayer,
+                      viewingPlayerMelds: _viewingPlayerMelds,
+                      onViewPlayerMelds: (player) =>
+                          setState(() => _viewingPlayerMelds = player),
+                      onAddCardToMeld: _onAddCardToMeld,
+                      onSelectAllCardsForMeld: _selectAllCardsForMeld,
+                      canAddCardToMeld: _canAddCardToMeld,
+                      getCompatibleCardsInfo: _getCompatibleCardsInfo,
+                      currentUserId:
+                          _gameController.userId, // Enable multiplayer mode
+                    ),
+                  ),
 
-                // Action buttons and hand
+                // SPACER: Push hand to bottom (like single-player)
+                if (_viewingPlayerMelds == null) const Spacer(),
+
+                // REUSE: Action buttons with single-player logic
                 GameActionButtons(
                   gameState: gameState,
                   humanPlayer: humanPlayer,
                   selectedCardIndices: _selectedCardIndices,
                   onDrawFromDeck: _onDrawFromDeck,
-                  onUnlockDiscard: gameState.turnPhase == TurnPhase.draw
+                  onUnlockDiscard:
+                      (gameState.turnPhase == TurnPhase.draw &&
+                          _gameController.canUnlockDiscard())
                       ? _onUnlockDiscard
                       : null,
                   onShowAdvancedMeldSelector: _showAdvancedMeldSelector,
                   onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
-                  onClearSelection: () {
-                    setState(() {
-                      _selectedCardIndices.clear();
-                    });
-                  },
+                  onClearSelection: () =>
+                      setState(() => _selectedCardIndices.clear()),
+                  currentUserId: _gameController.userId,
                 ),
 
-                // MULTIPLAYER FIX: Show hand widget for current user only
-                Builder(
-                  builder: (context) {
-                    final currentUserPlayer = _gameController
-                        .getCurrentUserPlayer();
-                    if (currentUserPlayer == null) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return PlayerHandWidget(
-                      player: currentUserPlayer,
-                      selectedCardIndices: _selectedCardIndices,
-                      onCardTap: _onCardTap,
-                      onCardDoubleTap: _onCardDoubleTap,
-                      isCardPlayable: _isCardPlayable,
-                    );
-                  },
+                // REUSE: Perfect hand display from single-player with proper turn state
+                GameHandDisplay(
+                  player: humanPlayer,
+                  selectedCardIndices: _selectedCardIndices,
+                  onCardTap: _onCardTap,
+                  onCardDoubleTap: _onCardDoubleTap,
+                  isCardPlayable: _isCardPlayable,
+                  viewingPlayerMelds: _viewingPlayerMelds,
+                  onReturnToHand: () =>
+                      setState(() => _viewingPlayerMelds = null),
+                  isCurrentPlayerTurn:
+                      _gameController.gameState.currentPlayer.id ==
+                      _gameController.userId,
+                  showHighlights:
+                      true, // Always show newly drawn highlights in multiplayer
                 ),
-
-                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -757,33 +522,206 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     );
   }
 
-  void _leaveGame() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('Leave Game'),
-        content: const Text(
-          'Are you sure you want to leave this multiplayer game? Other players will continue without you.',
+  /// Build round end screen - only host can advance, others wait
+  Widget _buildRoundEndScreen(GameState gameState) {
+    return Container(
+      decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Round Ended'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
         ),
-        actions: <Widget>[
-          TextButton(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.emoji_events, color: Colors.amber[400], size: 80),
+              const SizedBox(height: 16),
+              Text(
+                'Round ${gameState.round - 1} Complete!',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Show score summary
+              ...gameState.players.map(
+                (player) => Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${player.name}: ${player.score} points',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Host controls round advancement
+              if (_gameController.isHost)
+                ElevatedButton(
+                  onPressed: () {
+                    _gameController.nextRound();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Text(
+                    'Start Next Round',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Column(
+                    children: [
+                      CircularProgressIndicator(color: Colors.orange),
+                      SizedBox(height: 8),
+                      Text(
+                        'Waiting for host to start next round...',
+                        style: TextStyle(color: Colors.orange, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
-          TextButton(
-            child: const Text('Leave'),
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Leave the multiplayer game and return to main menu
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-                (route) => false,
-              );
-            },
-          ),
-        ],
+        ),
       ),
+    );
+  }
+
+  /// Build game end screen with winner announcement
+  Widget _buildGameEndScreen(GameState gameState) {
+    return Container(
+      decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Game Complete'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.celebration, color: Colors.amber[400], size: 100),
+              const SizedBox(height: 16),
+              Text(
+                '🎉 ${gameState.winner?.name ?? "Unknown"} Wins! 🎉',
+                style: TextStyle(
+                  color: Colors.amber[400],
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Final Score: ${gameState.winner?.score ?? 0} points',
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              const SizedBox(height: 32),
+
+              // Final leaderboard
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Final Standings:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...gameState.players
+                        .map((player) => player)
+                        .toList()
+                        .asMap()
+                        .entries
+                        .map((entry) {
+                          final position = entry.key + 1;
+                          final player = entry.value;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Text(
+                              '$position. ${player.name}: ${player.score} points',
+                              style: TextStyle(
+                                color: position == 1
+                                    ? Colors.amber[400]
+                                    : Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                          );
+                        }),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              ElevatedButton(
+                onPressed: () {
+                  // Clean up game and return to main menu
+                  _cleanupAndExit();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text(
+                  'Return to Main Menu',
+                  style: TextStyle(fontSize: 16, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Clean up multiplayer game and return to main menu
+  void _cleanupAndExit() {
+    // Clear active game info (user is intentionally leaving)
+    MultiplayerResumeService.clearActiveGame().catchError((e) {
+      debugPrint('Warning: Failed to clear active game on exit: $e');
+    });
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
+      (route) => false,
     );
   }
 }

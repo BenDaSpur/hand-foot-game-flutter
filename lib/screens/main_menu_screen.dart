@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
+import 'multiplayer_game_screen.dart';
 import '../services/firebase_service.dart';
 import '../services/game_save_service.dart';
+import '../services/multiplayer_resume_service.dart';
 import '../models/player.dart';
 
 class MainMenuScreen extends StatefulWidget {
@@ -16,11 +18,28 @@ class MainMenuScreen extends StatefulWidget {
 class _MainMenuScreenState extends State<MainMenuScreen> {
   bool _isLoading = false;
   bool _hasSavedSinglePlayerGame = false;
+  Map<String, dynamic>? _rejoinableGame;
 
   @override
   void initState() {
     super.initState();
     _checkForSavedSinglePlayerGame();
+    _checkForRejoinableMultiplayerGame();
+  }
+
+  /// Check for rejoinable multiplayer games
+  void _checkForRejoinableMultiplayerGame() async {
+    try {
+      final rejoinOpportunity =
+          await MultiplayerResumeService.checkForRejoinOpportunity();
+      if (rejoinOpportunity != null && mounted) {
+        setState(() {
+          _rejoinableGame = rejoinOpportunity;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking for rejoinable games: $e');
+    }
   }
 
   /// Check if there's a saved single player game against bots
@@ -124,6 +143,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                             label: 'CONTINUE',
                             description: 'Resume your saved game',
                             onPressed: _continueSavedGame,
+                            isPrimary: true,
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                        if (_rejoinableGame != null) ...[
+                          _buildMenuButton(
+                            icon: Icons.wifi,
+                            label: 'REJOIN GAME',
+                            description:
+                                'Reconnect to ${_rejoinableGame!['gameId']}',
+                            onPressed: _rejoinMultiplayerGame,
                             isPrimary: true,
                           ),
                           const SizedBox(height: 20),
@@ -335,6 +365,59 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     }
 
     setState(() => _isLoading = false);
+  }
+
+  /// Rejoin an active multiplayer game after crash/disconnect
+  void _rejoinMultiplayerGame() async {
+    if (_rejoinableGame == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final gameId = _rejoinableGame!['gameId'] as String;
+      final playerName = _rejoinableGame!['playerName'] as String;
+
+      // Attempt to rejoin the game
+      final controller = await MultiplayerResumeService.rejoinGame(
+        gameId: gameId,
+        playerName: playerName,
+      );
+
+      if (controller != null && mounted) {
+        // Navigate directly to the game screen
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) =>
+                MultiplayerGameScreen(gameController: controller),
+          ),
+        );
+
+        // Clear the rejoin state since we successfully rejoined
+        setState(() {
+          _rejoinableGame = null;
+        });
+      } else {
+        // Failed to rejoin - clear stale data and show error
+        await MultiplayerResumeService.clearActiveGame();
+        setState(() {
+          _rejoinableGame = null;
+        });
+
+        if (mounted) {
+          _showErrorDialog(
+            'Unable to rejoin game. The game may have ended or you may have been disconnected.',
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorDialog('Failed to rejoin game: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _startSoloGame() async {

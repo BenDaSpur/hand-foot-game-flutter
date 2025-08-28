@@ -146,6 +146,30 @@ class PlayingCard {
     return '$rankName$suitIcon';
   }
 
+  /// Compact display name for action logs (4♦ instead of Four♦)
+  String get compactName {
+    if (isJoker) return 'JK';
+
+    final compactRank = switch (rank) {
+      CardRank.ace => 'A',
+      CardRank.two => '2',
+      CardRank.three => '3',
+      CardRank.four => '4',
+      CardRank.five => '5',
+      CardRank.six => '6',
+      CardRank.seven => '7',
+      CardRank.eight => '8',
+      CardRank.nine => '9',
+      CardRank.ten => '10',
+      CardRank.jack => 'J',
+      CardRank.queen => 'Q',
+      CardRank.king => 'K',
+      CardRank.joker => 'JK',
+    };
+
+    return '$compactRank $suitIcon';
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

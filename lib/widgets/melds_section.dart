@@ -13,6 +13,7 @@ class MeldsSection extends StatelessWidget {
   final Function(int) onSelectAllCardsForMeld;
   final bool Function(int) canAddCardToMeld;
   final ({int count, bool areWilds}) Function(int) getCompatibleCardsInfo;
+  final String? currentUserId; // For multiplayer support
 
   const MeldsSection({
     super.key,
@@ -24,6 +25,7 @@ class MeldsSection extends StatelessWidget {
     required this.onSelectAllCardsForMeld,
     required this.canAddCardToMeld,
     required this.getCompatibleCardsInfo,
+    this.currentUserId, // Optional - for multiplayer
   });
 
   /// Get the appropriate header text for the melds section
@@ -95,9 +97,14 @@ class MeldsSection extends StatelessWidget {
                 });
 
                 return indexedMelds.map((entry) {
+                  // REUSE SINGLE-PLAYER LOGIC: Adapt human check for multiplayer
+                  final isCurrentUserTurn = currentUserId != null
+                      ? currentPlayer.id == currentUserId
+                      : currentPlayer.type == PlayerType.human;
+
                   final canAdd =
                       viewingPlayerMelds == null &&
-                      currentPlayer.type == PlayerType.human &&
+                      isCurrentUserTurn &&
                       gameState.turnPhase == TurnPhase.meld;
 
                   final compatibleInfo = canAdd

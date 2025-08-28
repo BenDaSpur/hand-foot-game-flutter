@@ -11,6 +11,7 @@ class GameActionButtons extends StatelessWidget {
   final VoidCallback onShowAdvancedMeldSelector;
   final VoidCallback? onDiscard;
   final VoidCallback onClearSelection;
+  final String? currentUserId; // For multiplayer turn detection
 
   const GameActionButtons({
     super.key,
@@ -22,6 +23,7 @@ class GameActionButtons extends StatelessWidget {
     required this.onShowAdvancedMeldSelector,
     required this.onDiscard,
     required this.onClearSelection,
+    this.currentUserId, // Optional - for multiplayer
   });
 
   bool get _hasSelectedCard => selectedCardIndices.length == 1;
@@ -40,9 +42,20 @@ class GameActionButtons extends StatelessWidget {
     return null;
   }
 
+  /// Check if it's the current user's turn (works for both single-player and multiplayer)
+  bool get _isCurrentUserTurn {
+    if (currentUserId != null) {
+      // Multiplayer: check if current player is this user
+      return gameState.currentPlayer.id == currentUserId;
+    } else {
+      // Single-player: check if current player is human
+      return gameState.currentPlayer.type == PlayerType.human;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (gameState.currentPlayer.type != PlayerType.human) {
+    if (!_isCurrentUserTurn) {
       return Container(
         padding: const EdgeInsets.all(32),
         child: Column(

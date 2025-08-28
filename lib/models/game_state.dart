@@ -241,7 +241,7 @@ class GameState {
     hasDrawnFromDeck = true;
     turnPhase = TurnPhase.meld;
 
-    final cardNames = cardsDrawn.map((c) => c.displayName).join(', ');
+    final cardNames = cardsDrawn.map((c) => c.compactName).join(', ');
     _logAction('drew: $cardNames');
 
     return true;
@@ -287,7 +287,7 @@ class GameState {
         if (!existingMeld.canAddCard(card)) {
           // This shouldn't happen with proper unlock validation, but safety check
           // Log the issue for debugging if needed
-          final cardName = card.displayName;
+          final cardName = card.compactName;
           final meldRank = existingMeld.rank.name;
           _logAction(
             'ERROR: Could not add $cardName to $meldRank meld during unlock',
@@ -301,7 +301,7 @@ class GameState {
         if (!existingMeld.addCard(card)) {
           // Extra safety: if addCard fails, log and return false
           // Note: This error logging is rare and shouldn't spam logs under normal gameplay
-          final cardName = card.displayName;
+          final cardName = card.compactName;
           final meldRank = existingMeld.rank.name;
           _logAction(
             'ERROR: Failed to add $cardName to $meldRank meld during unlock',
@@ -309,7 +309,7 @@ class GameState {
           return false;
         }
       }
-      final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
+      final meldCardNames = meldCards.map((c) => c.compactName).join(', ');
       _logAction(
         'unlocked discard pile and added to existing meld: $meldCardNames',
       );
@@ -318,7 +318,7 @@ class GameState {
       final meld = Meld.createMeld(meldCards);
       if (meld != null) {
         currentPlayer.melds.add(meld);
-        final meldCardNames = meldCards.map((c) => c.displayName).join(', ');
+        final meldCardNames = meldCards.map((c) => c.compactName).join(', ');
         _logAction('unlocked discard pile and melded: $meldCardNames');
       }
     }
@@ -349,7 +349,7 @@ class GameState {
         if (cardsFromDeck.isNotEmpty) {
           currentPlayer.addNewlyDrawnCards(cardsFromDeck);
           final deckCardNames = cardsFromDeck
-              .map((c) => c.displayName)
+              .map((c) => c.compactName)
               .join(', ');
           _logAction(
             'took ${cardsFromDeck.length} cards from deck to complete pickup: $deckCardNames',
@@ -361,7 +361,7 @@ class GameState {
     if (additionalDiscards.isNotEmpty) {
       currentPlayer.addNewlyDrawnCards(additionalDiscards);
       final additionalNames = additionalDiscards
-          .map((c) => c.displayName)
+          .map((c) => c.compactName)
           .join(', ');
       _logAction(
         'took ${additionalDiscards.length} more cards from discard pile: $additionalNames',
@@ -391,7 +391,7 @@ class GameState {
     )) {
       hasMelded = true;
 
-      final cardNames = cards.map((c) => c.displayName).join(', ');
+      final cardNames = cards.map((c) => c.compactName).join(', ');
       if (wasFirstMeld) {
         final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
         _logAction('played down with $points points: $cardNames');
@@ -456,7 +456,7 @@ class GameState {
     if (currentPlayer.createMeld(cards, playDownRequirement: 0)) {
       hasMelded = true;
 
-      final cardNames = cards.map((c) => c.displayName).join(', ');
+      final cardNames = cards.map((c) => c.compactName).join(', ');
       if (wasFirstMeld) {
         final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
         _logAction('played down (multi-meld) with $points points: $cardNames');
@@ -542,7 +542,7 @@ class GameState {
     if (!currentPlayer.addToMeld(meldIndex, card)) return false;
 
     hasMelded = true; // Mark that player has melded this turn
-    _logAction('added ${card.displayName} to existing meld');
+    _logAction('added ${card.compactName} to existing meld');
 
     // Check if hand is empty after adding to meld and pick up foot if needed
     if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
@@ -602,7 +602,7 @@ class GameState {
     final removed = currentPlayer.removeCardFromHand(card);
     if (removed != null) {
       discardPile.add(removed);
-      _logAction('discarded ${card.displayName}');
+      _logAction('discarded ${card.compactName}');
 
       // Check for 3s stalemate situation
       if (card.isThree) {

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../config/game_config.dart';
+import '../services/multiplayer_resume_service.dart';
 import 'game_controller.dart';
 import 'network_adapter.dart';
 import 'game_interface.dart';
@@ -36,6 +38,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   // Reactive state management
   final StreamController<GameState> _stateStreamController =
       StreamController<GameState>.broadcast();
+  bool _isDisposed = false;
 
   EnhancedMultiplayerController._({
     required this.gameId,
@@ -81,6 +84,14 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       );
 
       await controller._startListening();
+
+      // Save active game for crash recovery
+      await MultiplayerResumeService.saveActiveGame(
+        gameId: gameId,
+        playerName: hostPlayerName,
+        isHost: true,
+      );
+
       return controller;
     } catch (e) {
       return null;
@@ -121,6 +132,14 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       );
 
       await controller._startListening();
+
+      // Save active game for crash recovery (joining player)
+      await MultiplayerResumeService.saveActiveGame(
+        gameId: gameId,
+        playerName: playerName,
+        isHost: false,
+      );
+
       return controller;
     } catch (e) {
       return null;
@@ -214,9 +233,22 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   Future<void> _handleGameStateUpdate(GameState newGameState) async {
+    if (_isDisposed) return; // Don't process updates after disposal
+
     _isUpdating = true;
 
     try {
+      // Check for player disconnections (player count decreased)
+      final oldPlayerCount = _gameController.gameState.players.length;
+      final newPlayerCount = newGameState.players.length;
+
+      if (newPlayerCount < oldPlayerCount && newPlayerCount > 0) {
+        _handlePlayerDisconnect(oldPlayerCount, newPlayerCount);
+      }
+
+      // Validate state consistency before applying update
+      _validateStateConsistency(newGameState);
+
       // Update local game state
       await _updateLocalGameState(newGameState);
 
@@ -226,18 +258,67 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
         await initializeFromServerState(newGameState);
       }
 
-      // Emit state to UI listeners
-      emitStateUpdate();
+      // Emit state to UI listeners (only if not disposed)
+      if (!_isDisposed) {
+        emitStateUpdate();
+      }
 
       // State has been successfully updated and emitted
     } catch (e) {
-      // Log error and ensure proper cleanup on error
-      _gameStateSubscription?.cancel();
-      _connectionSubscription?.cancel();
-      _gameStateSubscription = null;
-      _connectionSubscription = null;
+      // Enhanced error handling with recovery
+      _handleConnectionError(e);
     } finally {
       _isUpdating = false;
+    }
+  }
+
+  /// Handle player disconnection events
+  void _handlePlayerDisconnect(int oldCount, int newCount) {
+    final disconnectedCount = oldCount - newCount;
+    print(
+      'DEBUG: $disconnectedCount player(s) disconnected. Game continuing with $newCount players.',
+    );
+
+    // Could add UI notification here
+    // For now, game just continues with remaining players
+  }
+
+  /// Enhanced error handling with recovery mechanisms
+  void _handleConnectionError(dynamic error) {
+    print('ERROR: Game state update failed: $error');
+
+    // Cancel current subscriptions
+    _gameStateSubscription?.cancel();
+    _connectionSubscription?.cancel();
+    _gameStateSubscription = null;
+    _connectionSubscription = null;
+
+    // Attempt to reconnect after a delay
+    _reconnectionTimer?.cancel();
+    _reconnectionTimer = Timer(_reconnectionDelay, () {
+      if (!_isDisposed) {
+        _attemptReconnection();
+      }
+    });
+  }
+
+  /// Attempt to reconnect to game after connection loss
+  Future<void> _attemptReconnection() async {
+    try {
+      print('DEBUG: Attempting to reconnect to game...');
+
+      // Restart listeners
+      await _startListening();
+
+      // Verify we can still access the game
+      final canRejoin = await MultiplayerResumeService.canRejoinGame(gameId);
+      if (!canRejoin) {
+        print('DEBUG: Cannot rejoin game - may have ended or been deleted');
+        // Game may have ended, user should return to main menu
+      }
+    } catch (e) {
+      print('ERROR: Reconnection failed: $e');
+      // Could implement exponential backoff here
     }
   }
 
@@ -327,17 +408,25 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   Future<void> _syncGameState() async {
-    if (_isUpdating) return;
+    if (_isDisposed || _isUpdating) return;
 
     return _queueNetworkOperation(() async {
+      if (_isDisposed) return; // Double-check after queuing
+
       _isUpdating = true;
       try {
         // Validate game state before syncing
         if (_validateGameStateForSync()) {
+          print(
+            'DEBUG: Syncing to Firebase - currentPlayerIndex: ${_gameController.gameState.currentPlayerIndex}',
+          );
           await _networkAdapter.syncGameState(
             gameId,
             _gameController.gameState,
           );
+          print('DEBUG: Firebase sync completed successfully');
+        } else {
+          print('DEBUG: Game state validation failed - not syncing');
         }
       } catch (e) {
         // Handle sync errors gracefully
@@ -348,27 +437,75 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     });
   }
 
-  /// Validate game state before syncing to prevent corrupted states
+  /// Comprehensive game state validation to prevent corrupted states
   bool _validateGameStateForSync() {
     final gameState = _gameController.gameState;
 
-    // Basic validation checks
-    if (gameState.currentPlayerIndex < 0 ||
-        gameState.currentPlayerIndex >= gameState.players.length) {
+    // Critical validations
+    if (gameState.players.isEmpty) {
+      print('ERROR: Cannot sync - no players in game state');
       return false;
     }
 
+    if (gameState.currentPlayerIndex < 0 ||
+        gameState.currentPlayerIndex >= gameState.players.length) {
+      print(
+        'ERROR: Invalid current player index: ${gameState.currentPlayerIndex}',
+      );
+      return false;
+    }
+
+    // Ensure current user is still in the game
+    final currentUserPlayer = getCurrentUserPlayer();
+    if (currentUserPlayer == null) {
+      print('ERROR: Current user not found in game players');
+      return false;
+    }
+
+    // Validate round consistency
     if (gameState.round < 1) {
+      print('ERROR: Invalid round number: ${gameState.round}');
+      return false;
+    }
+
+    // Validate deck state
+    if (gameState.deck.size < 0) {
+      print('ERROR: Invalid deck size: ${gameState.deck.size}');
       return false;
     }
 
     // Ensure phase consistency
     if (gameState.phase == GamePhase.gameEnd && gameState.winner == null) {
-      // Game is ended but no winner - this shouldn't happen
+      print('ERROR: Game ended but no winner declared');
       return false;
     }
 
     return true;
+  }
+
+  /// Detect and handle state conflicts
+  void _validateStateConsistency(GameState serverState) {
+    final localState = _gameController.gameState;
+
+    // Detect major inconsistencies that require full state reset
+    bool needsFullReset = false;
+
+    if (serverState.players.length != localState.players.length) {
+      print('DEBUG: Player count mismatch - forcing full state reset');
+      needsFullReset = true;
+    }
+
+    if (serverState.round != localState.round) {
+      print(
+        'DEBUG: Round mismatch - server: ${serverState.round}, local: ${localState.round}',
+      );
+      needsFullReset = true;
+    }
+
+    if (needsFullReset) {
+      print('DEBUG: Forcing complete state replacement due to inconsistencies');
+      // Force complete state replacement will happen in next update cycle
+    }
   }
 
   /// Handle synchronization errors with appropriate fallback behavior
@@ -423,6 +560,14 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     _gameController.gameState.hasDrawnFromDeck = serverState.hasDrawnFromDeck;
     _gameController.gameState.hasMelded = serverState.hasMelded;
 
+    // Keep minimal logging for important game state changes
+    if (serverState.currentPlayerIndex !=
+        _gameController.gameState.currentPlayerIndex) {
+      print(
+        'DEBUG: Turn changed to player ${serverState.currentPlayerIndex} (${serverState.players[serverState.currentPlayerIndex].name})',
+      );
+    }
+
     // Replace players list with server players (this is the key fix)
     _gameController.gameState.players.clear();
     _gameController.gameState.players.addAll(serverState.players);
@@ -441,10 +586,32 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
   @override
   bool drawFromDeck() {
-    if (!canPerformAction('drawFromDeck')) return false;
+    if (_isDisposed) {
+      print('DEBUG: drawFromDeck failed - controller disposed');
+      return false;
+    }
+
+    if (!canPerformAction('drawFromDeck')) {
+      print('DEBUG: drawFromDeck failed - canPerformAction returned false');
+      print('  isMyTurn: $isMyTurn');
+      print('  gamePhase: ${_gameController.gameState.phase}');
+      print('  turnPhase: ${_gameController.gameState.turnPhase}');
+      print('  currentPlayer: ${getCurrentUserPlayer()?.name ?? "null"}');
+      print('  availableActions: ${getAvailableActions()}');
+      print(
+        '  hasDrawnFromDeck: ${_gameController.gameState.hasDrawnFromDeck}',
+      );
+      return false;
+    }
+
+    print('DEBUG: Attempting to draw from deck...');
+    print('  deckSize: ${_gameController.gameState.deck.size}');
+    print('  requiredDrawCount: ${GameConfig.requiredDrawCount}');
 
     final success = _gameController.drawFromDeck();
-    if (success) {
+    print('DEBUG: drawFromDeck result: $success');
+
+    if (success && !_isDisposed) {
       emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
@@ -572,12 +739,26 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   bool discardCard(PlayingCard card) {
     if (!canPerformAction('discardCard')) return false;
 
+    print('DEBUG: Attempting to discard ${card.compactName}...');
+    print(
+      '  currentPlayerIndex before: ${_gameController.gameState.currentPlayerIndex}',
+    );
+    print('  turnPhase before: ${_gameController.gameState.turnPhase}');
+
     final success = _gameController.discardCard(card);
+
+    print('DEBUG: Discard result: $success');
     if (success) {
+      print(
+        '  currentPlayerIndex after: ${_gameController.gameState.currentPlayerIndex}',
+      );
+      print('  turnPhase after: ${_gameController.gameState.turnPhase}');
+
       // The GameController.discardCard() automatically advances turn and handles round end
       // We just need to sync the new state to all players
       emitStateUpdate();
       if (_isOnline) {
+        print('DEBUG: Syncing game state after discard...');
         _syncGameState();
       }
     }
@@ -618,7 +799,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   /// Helper method to emit state updates to UI listeners
   @visibleForTesting
   void emitStateUpdate() {
-    _stateStreamController.add(_gameController.gameState);
+    if (!_isDisposed && !_stateStreamController.isClosed) {
+      _stateStreamController.add(_gameController.gameState);
+    }
   }
 
   @override
@@ -649,6 +832,10 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   // Turn management for multiplayer
   @override
   bool get isMyTurn => _isCurrentUser();
+
+  // Debug properties for troubleshooting
+  @visibleForTesting
+  bool get isDisposed => _isDisposed;
 
   /// Get available actions for the current player
   @override
@@ -748,15 +935,30 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   Stream<GameState> get gameStateStream => _stateStreamController.stream;
 
   void dispose() {
+    print(
+      'DEBUG: EnhancedMultiplayerController.dispose() called for game: $gameId',
+    );
+    print('  userId: $currentUserId');
+    print('  isHost: $_isHost');
+
+    _isDisposed = true; // Mark as disposed to prevent further operations
+
     _gameStateSubscription?.cancel();
     _connectionSubscription?.cancel();
     _reconnectionTimer?.cancel();
-    _stateStreamController.close();
+
+    if (!_stateStreamController.isClosed) {
+      _stateStreamController.close();
+    }
 
     // Clear network operation queue to prevent memory leaks
     _networkOperationQueue.clear();
     _isNetworkOperationInProgress = false;
 
+    // Only clear active game info when explicitly leaving (not on crashes)
+    // MultiplayerResumeService.clearActiveGame() should be called manually when leaving
+
     _networkAdapter.dispose();
+    print('DEBUG: EnhancedMultiplayerController disposal complete');
   }
 }
