@@ -120,9 +120,10 @@ class GameHandDisplay extends StatelessWidget {
                               height: 98,
                               isSelected: selectedCardIndices.contains(index),
                               isPlayable: isCardPlayable?.call(card) ?? false,
-                              isNewlyDrawn: showHighlights
-                                  ? player.isCardIndexNewlyDrawn(index)
-                                  : false,
+                              isNewlyDrawn:
+                                  showHighlights &&
+                                  index < player.currentHand.length &&
+                                  player.isCardIndexNewlyDrawn(index),
                             ),
                           ),
                         );

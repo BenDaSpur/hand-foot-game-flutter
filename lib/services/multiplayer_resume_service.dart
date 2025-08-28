@@ -114,14 +114,20 @@ class MultiplayerResumeService {
       );
 
       if (controller != null) {
-        // Save the rejoined game info
+        // Determine if rejoining player was originally host
+        final activeGame = await getActiveGame();
+        final wasHost = activeGame?['isHost'] ?? false;
+
+        // Save the rejoined game info with correct host status
         await saveActiveGame(
           gameId: gameId,
           playerName: playerName,
-          isHost: false, // Rejoining players are not hosts
+          isHost: wasHost, // Preserve original host status
         );
 
-        DebugLogger.debug('Successfully rejoined game: $gameId');
+        DebugLogger.debug(
+          'Successfully rejoined game: $gameId (wasHost: $wasHost)',
+        );
       }
 
       return controller;

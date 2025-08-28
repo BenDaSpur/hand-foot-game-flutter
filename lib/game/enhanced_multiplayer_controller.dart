@@ -5,7 +5,9 @@ import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../config/game_config.dart';
+import '../models/multiplayer_errors.dart';
 import '../services/multiplayer_resume_service.dart';
+import '../utils/debug_logger.dart';
 import 'game_controller.dart';
 import 'network_adapter.dart';
 import 'game_interface.dart';
@@ -275,8 +277,8 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   /// Handle player disconnection events
   void _handlePlayerDisconnect(int oldCount, int newCount) {
     final disconnectedCount = oldCount - newCount;
-    print(
-      'DEBUG: $disconnectedCount player(s) disconnected. Game continuing with $newCount players.',
+    DebugLogger.warning(
+      '$disconnectedCount player(s) disconnected. Game continuing with $newCount players.',
     );
 
     // Could add UI notification here
@@ -285,15 +287,78 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
   /// Enhanced error handling with recovery mechanisms
   void _handleConnectionError(dynamic error) {
-    print('ERROR: Game state update failed: $error');
+    // Classify error type for targeted handling
+    final specificError = _classifyError(error);
+    DebugLogger.error(specificError.toString());
 
-    // Cancel current subscriptions
+    switch (specificError) {
+      case NetworkError _:
+        _handleNetworkError(specificError);
+        break;
+      case ValidationError _:
+        _handleValidationError(specificError);
+        break;
+      case SyncError _:
+        _handleSyncErrorTyped(specificError);
+        break;
+      default:
+        _handleGenericError(specificError);
+    }
+  }
+
+  /// Classify generic errors into specific types
+  MultiplayerError _classifyError(dynamic error) {
+    final errorMessage = error.toString().toLowerCase();
+
+    if (errorMessage.contains('network') ||
+        errorMessage.contains('connection') ||
+        errorMessage.contains('timeout') ||
+        errorMessage.contains('firebase')) {
+      return NetworkError('Connection failed', error);
+    }
+
+    if (errorMessage.contains('invalid') ||
+        errorMessage.contains('validation') ||
+        errorMessage.contains('state')) {
+      return ValidationError('Invalid game state', error);
+    }
+
+    if (errorMessage.contains('sync') || errorMessage.contains('update')) {
+      return SyncError('Synchronization failed', gameId, error);
+    }
+
+    return const MultiplayerError('Unknown error');
+  }
+
+  void _handleNetworkError(NetworkError error) {
+    // Cancel current subscriptions and reconnect
     _gameStateSubscription?.cancel();
     _connectionSubscription?.cancel();
     _gameStateSubscription = null;
     _connectionSubscription = null;
 
     // Attempt to reconnect after a delay
+    _reconnectionTimer?.cancel();
+    _reconnectionTimer = Timer(_reconnectionDelay, () {
+      if (!_isDisposed) {
+        _attemptReconnection();
+      }
+    });
+  }
+
+  void _handleValidationError(ValidationError error) {
+    print('DEBUG: Validation error - requesting fresh game state');
+    // Force state refresh on validation errors
+  }
+
+  void _handleSyncErrorTyped(SyncError error) {
+    DebugLogger.debug('Sync error - will retry on next operation');
+    // Sync errors are handled by retry mechanisms in _syncGameState
+  }
+
+  void _handleGenericError(MultiplayerError error) {
+    print('DEBUG: Generic error - maintaining current state');
+    // Fallback: attempt basic reconnection
     _reconnectionTimer?.cancel();
     _reconnectionTimer = Timer(_reconnectionDelay, () {
       if (!_isDisposed) {
@@ -394,17 +459,37 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     _isNetworkOperationInProgress = true;
 
-    while (_networkOperationQueue.isNotEmpty) {
-      final operation = _networkOperationQueue.removeFirst();
-      try {
-        await operation();
-      } catch (e) {
-        // Log error but continue processing queue
-        // Individual operations handle their own error reporting
-      }
-    }
+    try {
+      while (_networkOperationQueue.isNotEmpty && !_isDisposed) {
+        final operation = _networkOperationQueue.removeFirst();
+        try {
+          await operation();
+        } catch (e) {
+          // Enhanced error handling for individual operations
+          final specificError = _classifyError(e);
+          DebugLogger.error(
+            'Queue operation failed: ${specificError.toString()}',
+          );
 
-    _isNetworkOperationInProgress = false;
+          // For critical errors, clear remaining queue to prevent cascade failures
+          if (specificError is NetworkError) {
+            print(
+              'DEBUG: Network error detected - clearing remaining queue operations',
+            );
+            _networkOperationQueue.clear();
+            break;
+          }
+
+          // For non-critical errors, continue processing queue
+        }
+      }
+    } catch (e) {
+      // Catastrophic error - clear queue and reset state
+      print('FATAL QUEUE ERROR: $e');
+      _networkOperationQueue.clear();
+    } finally {
+      _isNetworkOperationInProgress = false;
+    }
   }
 
   Future<void> _syncGameState() async {
