@@ -164,7 +164,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   bool _isCardPlayable(PlayingCard card) {
-    if (_gameController.gameState.currentPlayer.type != PlayerType.human) {
+    // MULTIPLAYER FIX: Check if it's this user's turn instead of checking player type
+    if (!_gameController.isMyTurn) {
       return false;
     }
 
@@ -172,13 +173,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       return false;
     }
 
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    // Get current user's player object
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) {
+      return false;
+    }
 
     // Check if this card can be added to any existing meld
-    for (int i = 0; i < humanPlayer.melds.length; i++) {
-      if (humanPlayer.melds[i].canAddCard(card)) {
+    for (int i = 0; i < currentUserPlayer.melds.length; i++) {
+      if (currentUserPlayer.melds[i].canAddCard(card)) {
         return true;
       }
     }
@@ -571,10 +574,24 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       initialData: _gameController.gameState,
       builder: (context, snapshot) {
         final gameState = snapshot.data ?? _gameController.gameState;
-        final currentPlayer = gameState.currentPlayer;
-        final humanPlayer = gameState.players.firstWhere(
-          (p) => p.type == PlayerType.human,
-        );
+        final humanPlayer = _gameController.getCurrentUserPlayer();
+
+        // Don't render if user is not in the game
+        if (humanPlayer == null) {
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: BalatroTheme.primaryGradient,
+            ),
+            child: const Scaffold(
+              body: Center(
+                child: Text(
+                  'Loading game state...',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+            ),
+          );
+        }
 
         return Container(
           decoration: const BoxDecoration(
@@ -594,9 +611,45 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                 // Connection status for multiplayer
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: ConnectionStatusWidget(
-                    controller: _gameController,
-                    compact: true,
+                  child: Column(
+                    children: [
+                      ConnectionStatusWidget(
+                        controller: _gameController,
+                        compact: true,
+                      ),
+                      // MULTIPLAYER ADDITION: Turn indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _gameController.isMyTurn
+                              ? Colors.green.withValues(alpha: 0.2)
+                              : Colors.orange.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _gameController.isMyTurn
+                                ? Colors.green
+                                : Colors.orange,
+                            width: 2,
+                          ),
+                        ),
+                        child: Text(
+                          _gameController.isMyTurn
+                              ? '🎮 YOUR TURN'
+                              : '⏳ ${gameState.currentPlayer.name}\'s turn',
+                          style: TextStyle(
+                            color: _gameController.isMyTurn
+                                ? Colors.green
+                                : Colors.orange,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -676,14 +729,24 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                   },
                 ),
 
-                if (currentPlayer.type == PlayerType.human)
-                  PlayerHandWidget(
-                    player: humanPlayer,
-                    selectedCardIndices: _selectedCardIndices,
-                    onCardTap: _onCardTap,
-                    onCardDoubleTap: _onCardDoubleTap,
-                    isCardPlayable: _isCardPlayable,
-                  ),
+                // MULTIPLAYER FIX: Show hand widget for current user only
+                Builder(
+                  builder: (context) {
+                    final currentUserPlayer = _gameController
+                        .getCurrentUserPlayer();
+                    if (currentUserPlayer == null) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return PlayerHandWidget(
+                      player: currentUserPlayer,
+                      selectedCardIndices: _selectedCardIndices,
+                      onCardTap: _onCardTap,
+                      onCardDoubleTap: _onCardDoubleTap,
+                      isCardPlayable: _isCardPlayable,
+                    );
+                  },
+                ),
 
                 const SizedBox(height: 16),
               ],

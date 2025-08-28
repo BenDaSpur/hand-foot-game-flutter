@@ -235,6 +235,11 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
   int syncCalls = 0;
   bool isDisposed = false;
 
+  // Public setters for easier testing
+  set mockUserId(String? value) => _mockUserId = value;
+  set mockGameId(String? value) => _mockGameId = value;
+  set mockJoinSuccess(bool value) => _mockJoinSuccess = value;
+
   @override
   Future<String?> getCurrentUserId() async => _mockUserId;
 
