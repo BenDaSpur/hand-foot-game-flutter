@@ -186,6 +186,26 @@ void main() {
       );
     });
 
+    test('should generate compact names for action logs', () {
+      expect(
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.four).compactName,
+        equals('4 ♦'),
+      );
+      expect(
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ten).compactName,
+        equals('10 ♣'),
+      );
+      expect(
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace).compactName,
+        equals('A ♥'),
+      );
+      expect(
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king).compactName,
+        equals('K ♠'),
+      );
+      expect(const PlayingCard(rank: CardRank.joker).compactName, equals('JK'));
+    });
+
     test('should handle equality correctly', () {
       const card1 = PlayingCard(suit: Suit.hearts, rank: CardRank.ace);
       const card2 = PlayingCard(suit: Suit.hearts, rank: CardRank.ace);

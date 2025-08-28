@@ -50,7 +50,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     _playerNameController.dispose();
     _gameIdController.dispose();
     _lobbySubscription?.cancel();
-    _gameController?.dispose();
+
+    // DON'T dispose game controller here - it's passed to the game screen
+    // The game screen will take ownership and dispose it when needed
+    // _gameController?.dispose(); // REMOVED - this was causing the bug!
+
     super.dispose();
   }
 

@@ -620,13 +620,19 @@ class FirebaseService {
       );
       final players = playersData.map(_playerFromMap).toList();
 
-      // Create initial game state
-      final deck = Deck.createHandAndFootDeck(players.length);
+      // Create initial game state with deterministic seed
+      final gameSeed = DateTime.now().millisecondsSinceEpoch % 1000000;
+      final deck = Deck.createHandAndFootDeck(players.length, seed: gameSeed);
       final gameState = GameState(players: players, deck: deck);
 
-      // Deal initial cards
+      // CRITICAL FIX: Shuffle deck before dealing (same as single-player)
+      gameState.deck.shuffle();
       gameState.dealCards();
       gameState.startRound();
+
+      _logger.info(
+        'Created multiplayer game with seed: $gameSeed, deck size: ${deck.size}',
+      );
 
       await _firestore.collection(gamesCollection).doc(gameId).update({
         'status': FirebaseConstants.gameStatusPlaying,
@@ -648,14 +654,86 @@ class FirebaseService {
     GameState gameState,
   ) async {
     try {
-      await _firestore.collection(gamesCollection).doc(gameId).update({
+      final updateData = {
         'gameState': _gameStateToMap(gameState),
         'lastUpdated': FieldValue.serverTimestamp(),
-      });
+      };
+
+      // If game has ended, mark for cleanup
+      if (gameState.phase == GamePhase.gameEnd) {
+        updateData['status'] = FirebaseConstants.gameStatusCompleted;
+        updateData['completedAt'] = FieldValue.serverTimestamp();
+
+        // Schedule automatic cleanup after 1 hour
+        updateData['cleanupAt'] = Timestamp.fromDate(
+          DateTime.now().add(const Duration(hours: 1)),
+        );
+      }
+
+      await _firestore
+          .collection(gamesCollection)
+          .doc(gameId)
+          .update(updateData);
       return true;
     } catch (e) {
       _logger.severe('Failed to update game state: $e');
       return false;
+    }
+  }
+
+  /// Get a single game document (for rejoin checks)
+  static Future<Map<String, dynamic>?> getGame(String gameId) async {
+    try {
+      final doc = await _firestore
+          .collection(gamesCollection)
+          .doc(gameId)
+          .get();
+      if (!doc.exists) return null;
+      return doc.data();
+    } catch (e) {
+      _logger.severe('Failed to get game: $e');
+      return null;
+    }
+  }
+
+  /// Clean up completed games (called periodically or manually)
+  static Future<void> cleanupCompletedGames() async {
+    try {
+      final cutoffTime = Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(hours: 1)),
+      );
+
+      final completedGames = await _firestore
+          .collection(gamesCollection)
+          .where('status', isEqualTo: FirebaseConstants.gameStatusCompleted)
+          .where('completedAt', isLessThan: cutoffTime)
+          .limit(50) // Process in batches
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in completedGames.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+
+      if (completedGames.docs.isNotEmpty) {
+        _logger.info(
+          'Cleaned up ${completedGames.docs.length} completed games',
+        );
+      }
+    } catch (e) {
+      _logger.warning('Failed to cleanup completed games: $e');
+    }
+  }
+
+  /// Force cleanup a specific game (when players leave)
+  static Future<void> cleanupGame(String gameId) async {
+    try {
+      await _firestore.collection(gamesCollection).doc(gameId).delete();
+      _logger.info('Manually cleaned up game: $gameId');
+    } catch (e) {
+      _logger.warning('Failed to cleanup game $gameId: $e');
     }
   }
 
