@@ -213,7 +213,7 @@ void main() {
     );
 
     test('should handle highlighting correctly in 3+ player games', () {
-      // Create a 3-player game
+      // Create a 3-player game with deterministic seed
       final humanPlayer = Player(
         id: '1',
         name: 'Human',
@@ -224,14 +224,39 @@ void main() {
 
       final controller = GameController(
         players: [humanPlayer, botPlayer1, botPlayer2],
+        seed: 12345, // Fixed seed for deterministic behavior
       );
       controller.initializeGame();
 
+      // Verify initial state - no cards should be highlighted initially
+      for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+        expect(
+          humanPlayer.isCardIndexNewlyDrawn(i),
+          false,
+          reason: 'No cards should be highlighted before drawing',
+        );
+      }
+
       // Human draws and discards
       expect(controller.drawFromDeck(), true);
-      // Choose a card that's NOT newly drawn to avoid removing highlighted cards
-      // But if all cards are highlighted, just use the first non-highlighted or first card
-      PlayingCard humanCard = humanPlayer.currentHand.first;
+
+      // Count how many cards are newly drawn after the draw
+      int initialHighlightedCount = 0;
+      for (int i = 0; i < humanPlayer.currentHand.length; i++) {
+        if (humanPlayer.isCardIndexNewlyDrawn(i)) {
+          initialHighlightedCount++;
+        }
+      }
+      expect(
+        initialHighlightedCount,
+        GameConfig.requiredDrawCount,
+        reason:
+            'Should have exactly ${GameConfig.requiredDrawCount} newly drawn cards after draw',
+      );
+
+      // Deterministically choose the FIRST non-highlighted card to discard
+      // This ensures we know exactly what should happen
+      PlayingCard? humanCard;
       bool foundNonHighlighted = false;
       for (int i = 0; i < humanPlayer.currentHand.length; i++) {
         if (!humanPlayer.isCardIndexNewlyDrawn(i)) {
@@ -241,26 +266,36 @@ void main() {
         }
       }
 
-      // Store expected count based on whether we're discarding a highlighted card
+      // If all cards are highlighted (shouldn't happen with proper initial deal), use last card
+      if (!foundNonHighlighted) {
+        humanCard = humanPlayer.currentHand.last;
+      }
+
+      // Expected count: should keep all highlighted cards if discarding non-highlighted
       final expectedRemainingHighlighted = foundNonHighlighted
           ? GameConfig.requiredDrawCount
           : GameConfig.requiredDrawCount - 1;
 
-      expect(controller.discardCard(humanCard), true);
+      expect(controller.discardCard(humanCard!), true);
 
       // Bot 1's turn - human should still have highlighting
       expect(controller.gameState.currentPlayer.id, '2');
       int highlightedCount = 0;
+      final highlightedIndices = <int>[];
       for (int i = 0; i < humanPlayer.currentHand.length; i++) {
         if (humanPlayer.isCardIndexNewlyDrawn(i)) {
           highlightedCount++;
+          highlightedIndices.add(i);
         }
       }
       expect(
         highlightedCount,
         expectedRemainingHighlighted,
         reason:
-            'Human should keep $expectedRemainingHighlighted cards highlighted during bot 1 turn',
+            'Human should keep $expectedRemainingHighlighted cards highlighted during bot 1 turn. '
+            'Found highlighted cards at indices: $highlightedIndices, '
+            'discarded ${foundNonHighlighted ? "non-highlighted" : "highlighted"} card, '
+            'hand size: ${humanPlayer.currentHand.length}',
       );
 
       // Bot 1 draws and discards
