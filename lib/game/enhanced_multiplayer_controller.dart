@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'package:flutter/foundation.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -222,11 +223,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       // Initialize from server state if this is the first update (now properly awaited)
       if (_gameController.gameState.phase == GamePhase.setup &&
           newGameState.phase != GamePhase.setup) {
-        await _initializeFromServerState(newGameState);
+        await initializeFromServerState(newGameState);
       }
 
       // Emit state to UI listeners
-      _emitStateUpdate();
+      emitStateUpdate();
 
       // State has been successfully updated and emitted
     } catch (e) {
@@ -405,15 +406,37 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     // Game initialization happens in FirebaseService.startGame()
   }
 
-  /// Initialize game state when it arrives from server (used internally)
-  Future<void> _initializeFromServerState(GameState serverState) async {
-    // This method is called when we receive the initial game state from the server
-    // Ensure the local controller is properly set up
+  /// Initialize game state when it arrives from server (public for testing)
+  @visibleForTesting
+  Future<void> initializeFromServerState(GameState serverState) async {
+    // CRITICAL FIX: Replace entire local game state with server state
+    // The server has the authoritative game state with all players and proper initialization
+
+    // Replace all game state properties
     _gameController.gameState.phase = serverState.phase;
     _gameController.gameState.currentPlayerIndex =
         serverState.currentPlayerIndex;
     _gameController.gameState.turnPhase = serverState.turnPhase;
     _gameController.gameState.round = serverState.round;
+    _gameController.gameState.winner = serverState.winner;
+    _gameController.gameState.discardPileFrozen = serverState.discardPileFrozen;
+    _gameController.gameState.hasDrawnFromDeck = serverState.hasDrawnFromDeck;
+    _gameController.gameState.hasMelded = serverState.hasMelded;
+
+    // Replace players list with server players (this is the key fix)
+    _gameController.gameState.players.clear();
+    _gameController.gameState.players.addAll(serverState.players);
+
+    // Replace deck state
+    _gameController.gameState.deck.replaceCards(serverState.deck.cards);
+
+    // Replace discard pile
+    _gameController.gameState.discardPile.clear();
+    _gameController.gameState.discardPile.addAll(serverState.discardPile);
+
+    // Replace recent actions
+    _gameController.gameState.recentActions.clear();
+    _gameController.gameState.recentActions.addAll(serverState.recentActions);
   }
 
   @override
@@ -422,7 +445,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.drawFromDeck();
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -436,7 +459,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.drawFromDiscardPile();
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -450,7 +473,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.unlockDiscardPile();
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -469,7 +492,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.createMeld(cards);
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -483,7 +506,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.createMeldBypass(cards);
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -503,7 +526,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       skipPlayDownCheck: skipPlayDownCheck,
     );
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -523,7 +546,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       skipPlayDownCheck: skipPlayDownCheck,
     );
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -537,7 +560,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.addCardToMeld(meldIndex, card);
     if (success) {
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -551,7 +574,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
     final success = _gameController.discardCard(card);
     if (success) {
-      _emitStateUpdate();
+      // The GameController.discardCard() automatically advances turn and handles round end
+      // We just need to sync the new state to all players
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -583,7 +608,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     // Host controls round progression
     if (_isHost) {
       _gameController.nextRound();
-      _emitStateUpdate();
+      emitStateUpdate();
       if (_isOnline) {
         _syncGameState();
       }
@@ -591,7 +616,8 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   /// Helper method to emit state updates to UI listeners
-  void _emitStateUpdate() {
+  @visibleForTesting
+  void emitStateUpdate() {
     _stateStreamController.add(_gameController.gameState);
   }
 
@@ -676,6 +702,23 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   /// Check if a specific action is available for the current player
   @override
   bool canPerformAction(String action) {
+    // CRITICAL: Only allow actions if it's the current user's turn
+    if (!isMyTurn) {
+      return false;
+    }
+
+    // Additional validation: ensure game is in playable state (playing or setup)
+    if (_gameController.gameState.phase != GamePhase.playing &&
+        _gameController.gameState.phase != GamePhase.setup) {
+      return false;
+    }
+
+    // Check if user is in the game
+    final currentPlayer = getCurrentUserPlayer();
+    if (currentPlayer == null) {
+      return false;
+    }
+
     return getAvailableActions().contains(action);
   }
 
