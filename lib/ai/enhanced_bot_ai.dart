@@ -34,12 +34,17 @@ class EnhancedBotAI {
   List<List<PlayingCard>>? _plannedMelds;
   bool _inMultiMeldSequence = false;
 
-  // Strategic constants
-  static const int maxTurnsBeforeForcePlayDown = 3;
-  static const int strongPlayDownBuffer = 10;
-  static const int wildCardDiscardThreshold = 10;
-  static const double emergencyRiskTolerance = 2.0;
-  static const double maxEmergencyRiskTolerance = 6.0;
+  // Strategic constants - MADE MORE AGGRESSIVE for competitive play
+  static const int maxTurnsBeforeForcePlayDown =
+      2; // Reduced from 3 - play down faster
+  static const int strongPlayDownBuffer =
+      5; // Reduced from 10 - don't wait for excessive points
+  static const int wildCardDiscardThreshold =
+      8; // Reduced from 10 - use wilds more aggressively
+  static const double emergencyRiskTolerance =
+      1.5; // Reduced from 2.0 - take more risks
+  static const double maxEmergencyRiskTolerance =
+      4.0; // Reduced from 6.0 - be more aggressive
 
   EnhancedBotAI({int? seed})
     : _personalityManager = BotPersonalityManager(),
@@ -71,6 +76,11 @@ class EnhancedBotAI {
       // Clear meld cache if needed
       if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
         _meldAnalyzer.clearCache();
+      }
+
+      // PANIC MODE: Override normal logic for bots in terrible situations
+      if (bot.score < -100 && !bot.hasPlayedDown) {
+        return _handlePanicMode(bot, controller, gameState);
       }
 
       // Route to appropriate decision handler based on turn phase
@@ -277,8 +287,15 @@ class EnhancedBotAI {
       return BotDecision(action: 'noMeld');
     }
 
-    // Force play-down after max turns
-    if (turnCount >= maxTurnsBeforeForcePlayDown) {
+    // AGGRESSIVE ROUND-BASED URGENCY: Higher rounds = more desperate
+    final roundUrgencyMultiplier = gameState.round >= 3
+        ? 0.5
+        : 1.0; // Very aggressive in Round 3+
+    final urgentTurnLimit =
+        (maxTurnsBeforeForcePlayDown * roundUrgencyMultiplier).round();
+
+    // Force play-down after urgent turn limit (much shorter in high rounds)
+    if (turnCount >= urgentTurnLimit || gameState.round >= 3) {
       final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
         bot,
         controller,
@@ -294,11 +311,13 @@ class EnhancedBotAI {
       gameState,
       bot,
     );
-    final thresholdModifier = _personalityManager.getPlayDownThresholdModifier(
-      bot.id,
-    );
-    final adjustedRequirement = (playDownRequirement * thresholdModifier)
-        .round();
+    // AGGRESSIVE FIX: Don't increase requirement beyond base + small buffer
+    // (Removed thresholdModifier - was making bots too conservative)
+    final adjustedRequirement = (playDownRequirement + strongPlayDownBuffer)
+        .clamp(
+          playDownRequirement,
+          playDownRequirement + 20, // Max 20 extra points, not multiplicative
+        );
 
     // Try natural melds first (preferred)
     final naturalMelds = _meldAnalyzer.findNaturalMeldOpportunities(
@@ -313,8 +332,9 @@ class EnhancedBotAI {
       return _executePlayDown(naturalCombination);
     }
 
-    // Consider wild melds if risk tolerance allows
-    if (riskTolerance > 1.2) {
+    // AGGRESSIVE FIX: Consider wild melds much more readily
+    if (riskTolerance > 0.6) {
+      // Reduced from 1.2 - much more willing to use wilds
       final wildCombination = _meldAnalyzer.findBestPlayDownCombination(
         bot,
         controller,
@@ -325,7 +345,107 @@ class EnhancedBotAI {
       }
     }
 
+    // EMERGENCY PLAY-DOWN: If in high rounds and still haven't played down, be desperate
+    if (gameState.round >= 3 && !bot.hasPlayedDown) {
+      final desperateCombination = _meldAnalyzer.findBestPlayDownCombination(
+        bot,
+        controller,
+        playDownRequirement, // Use base requirement, no buffer
+      );
+      if (desperateCombination.isNotEmpty) {
+        return _executePlayDown(desperateCombination);
+      }
+
+      // SUPER EMERGENCY: Try to play down with ANY valid combination
+      final anyValidMeld = possibleMelds.firstWhere(
+        (meld) =>
+            meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+            playDownRequirement,
+        orElse: () => [],
+      );
+      if (anyValidMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: anyValidMeld);
+      }
+    }
+
+    // ULTRA EMERGENCY: Round 4+ and still no play-down = play ANY meld possible
+    if (gameState.round >= 4 &&
+        !bot.hasPlayedDown &&
+        possibleMelds.isNotEmpty) {
+      return BotDecision(action: 'createMeld', data: possibleMelds.first);
+    }
+
+    // NEGATIVE SCORE/HAND EMERGENCY: If bot has terrible score OR terrible hand value
+    final handPenalty = bot.currentHand.fold<int>(
+      0,
+      (sum, card) => sum + (card.pointValue < 0 ? card.pointValue : 0),
+    );
+    if ((bot.score < -50 || handPenalty < -250) &&
+        !bot.hasPlayedDown &&
+        possibleMelds.isNotEmpty) {
+      final emergencyMeld = possibleMelds.firstWhere(
+        (meld) =>
+            meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+            (playDownRequirement * 0.7).round(),
+        orElse: () => possibleMelds.first, // ANY meld if desperate enough
+      );
+      return BotDecision(action: 'createMeld', data: emergencyMeld);
+    }
+
     return BotDecision(action: 'noMeld');
+  }
+
+  /// Handle panic mode for bots with terrible scores
+  BotDecision _handlePanicMode(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+  ) {
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      'PANIC MODE activated (score: ${bot.score})',
+    );
+
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    final playDownRequirement = gameState.playDownRequirement;
+
+    switch (gameState.turnPhase) {
+      case TurnPhase.draw:
+        // In panic mode, always draw from deck (fastest)
+        return BotDecision(action: 'drawFromDeck');
+
+      case TurnPhase.meld:
+        // Play ANY meld that gets close to requirement, ignore normal strategy
+        if (possibleMelds.isNotEmpty) {
+          final desperateMeld = possibleMelds.firstWhere(
+            (meld) =>
+                meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+                (playDownRequirement * 0.7).round(),
+            orElse: () => possibleMelds.first,
+          );
+          return BotDecision(action: 'createMeld', data: desperateMeld);
+        }
+        return BotDecision(action: 'noMeld');
+
+      case TurnPhase.discard:
+        // Discard highest penalty cards immediately
+        final hand = bot.currentHand;
+        final penaltyCards = hand.where((card) => card.pointValue < 0).toList();
+        if (penaltyCards.isNotEmpty) {
+          penaltyCards.sort(
+            (a, b) => a.pointValue.compareTo(b.pointValue),
+          ); // Most negative first
+          return BotDecision(action: 'discard', data: penaltyCards.first);
+        }
+
+        // Discard highest value cards to minimize damage
+        final sortedHand = List<PlayingCard>.from(hand);
+        sortedHand.sort(
+          (a, b) => b.pointValue.compareTo(a.pointValue),
+        ); // Highest first
+        return BotDecision(action: 'discard', data: sortedHand.first);
+    }
   }
 
   /// Execute a play-down sequence (single or multi-meld)
