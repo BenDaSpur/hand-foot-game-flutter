@@ -52,63 +52,93 @@ class PersonalityConstants {
     switch (personality) {
       case BotPersonality.conservative:
         return const PersonalityConstants(
-          strategicBufferPoints: 30, // +50% buffer
-          minCardsForAggressiveUnlock: 4, // Need more cards
-          valuablePileThreshold: 140, // +40% threshold
-          largePileThreshold: 8, // +33% threshold
-          footPileValueThreshold: 70, // +40% threshold
-          footPileSizeThreshold: 7, // +40% threshold
-          handPileValueThreshold: 105, // +40% threshold
-          handPileSizeThreshold: 9, // +50% threshold
-          maxTurnsBeforeForcePlayDown: 6, // +20% more turns
-          highValuePairBreakChance: 0.15, // 70% less likely
-          bookCompletionPriority: 200, // Higher priority for books
-          aggressivenessMultiplier: 0.7, // 30% less aggressive
+          strategicBufferPoints: 20, // Reduced from 30 - more competitive
+          minCardsForAggressiveUnlock:
+              3, // Reduced from 4 - more willing to unlock
+          valuablePileThreshold:
+              100, // Reduced from 140 - more aggressive pile taking
+          largePileThreshold: 6, // Reduced from 8 - lower threshold
+          footPileValueThreshold:
+              50, // Reduced from 70 - more aggressive in foot
+          footPileSizeThreshold:
+              5, // Reduced from 7 - more willing to take smaller piles
+          handPileValueThreshold:
+              75, // Reduced from 105 - more aggressive in hand
+          handPileSizeThreshold: 7, // Reduced from 9 - lower threshold
+          maxTurnsBeforeForcePlayDown: 4, // Reduced from 6 - force faster play
+          highValuePairBreakChance:
+              0.25, // Increased from 0.15 - more willing to break pairs
+          bookCompletionPriority: 200, // Keep high priority for books
+          aggressivenessMultiplier:
+              0.8, // Increased from 0.7 - less conservative
         );
       case BotPersonality.aggressive:
         return const PersonalityConstants(
-          strategicBufferPoints: 10, // 50% less buffer
-          minCardsForAggressiveUnlock: 2, // Need fewer cards
-          valuablePileThreshold: 70, // 30% lower threshold
-          largePileThreshold: 4, // 33% lower threshold
-          footPileValueThreshold: 35, // 30% lower threshold
-          footPileSizeThreshold: 3, // 40% lower threshold
-          handPileValueThreshold: 45, // 40% lower threshold
-          handPileSizeThreshold: 4, // 33% lower threshold
-          maxTurnsBeforeForcePlayDown: 3, // 40% fewer turns
-          highValuePairBreakChance: 0.7, // 40% more likely
-          bookCompletionPriority: 100, // Standard priority
-          aggressivenessMultiplier: 1.4, // 40% more aggressive
+          strategicBufferPoints: 5, // Reduced from 10 - even more aggressive
+          minCardsForAggressiveUnlock: 2, // Keep at 2 - very willing to unlock
+          valuablePileThreshold:
+              50, // Reduced from 70 - take even smaller piles
+          largePileThreshold: 3, // Reduced from 4 - very low threshold
+          footPileValueThreshold:
+              25, // Reduced from 35 - extremely aggressive in foot
+          footPileSizeThreshold: 2, // Reduced from 3 - take almost any pile
+          handPileValueThreshold:
+              35, // Reduced from 45 - more aggressive in hand
+          handPileSizeThreshold: 3, // Reduced from 4 - very low threshold
+          maxTurnsBeforeForcePlayDown:
+              2, // Reduced from 3 - force very fast play
+          highValuePairBreakChance:
+              0.8, // Increased from 0.7 - almost always break pairs
+          bookCompletionPriority:
+              80, // Reduced from 100 - prioritize speed over books
+          aggressivenessMultiplier:
+              1.6, // Increased from 1.4 - much more aggressive
         );
       case BotPersonality.bookBuilder:
         return const PersonalityConstants(
-          strategicBufferPoints: 25, // Moderate buffer
-          minCardsForAggressiveUnlock: 3, // Standard
-          valuablePileThreshold: 100, // Standard
-          largePileThreshold: 6, // Standard
-          footPileValueThreshold: 50, // Standard
-          footPileSizeThreshold: 5, // Standard
-          handPileValueThreshold: 75, // Standard
-          handPileSizeThreshold: 6, // Standard
-          maxTurnsBeforeForcePlayDown: 6, // More patient for books
-          highValuePairBreakChance: 0.3, // Moderate
-          bookCompletionPriority: 300, // Very high priority
-          aggressivenessMultiplier: 1.0, // Standard aggression
+          strategicBufferPoints:
+              15, // Reduced from 25 - less conservative waiting
+          minCardsForAggressiveUnlock: 3, // Keep at 3 - balanced approach
+          valuablePileThreshold:
+              80, // Reduced from 100 - more willing to take piles for books
+          largePileThreshold:
+              5, // Reduced from 6 - lower threshold for book building
+          footPileValueThreshold:
+              40, // Reduced from 50 - more aggressive in foot for books
+          footPileSizeThreshold:
+              4, // Reduced from 5 - take smaller piles for book cards
+          handPileValueThreshold:
+              60, // Reduced from 75 - more aggressive in hand for books
+          handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
+          maxTurnsBeforeForcePlayDown:
+              4, // Reduced from 6 - can't wait too long for perfect books
+          highValuePairBreakChance:
+              0.4, // Increased from 0.3 - more willing to break for books
+          bookCompletionPriority:
+              250, // Reduced from 300 - still high but more balanced
+          aggressivenessMultiplier:
+              1.2, // Increased from 1.0 - more aggressive about books
         );
       case BotPersonality.adaptive:
         return const PersonalityConstants(
-          strategicBufferPoints: 20, // Standard (will be modified dynamically)
-          minCardsForAggressiveUnlock: 3, // Standard
-          valuablePileThreshold: 100, // Standard
-          largePileThreshold: 6, // Standard
-          footPileValueThreshold: 50, // Standard
-          footPileSizeThreshold: 5, // Standard
-          handPileValueThreshold: 75, // Standard
-          handPileSizeThreshold: 6, // Standard
-          maxTurnsBeforeForcePlayDown: 5, // Standard
-          highValuePairBreakChance: 0.5, // Standard
-          bookCompletionPriority: 150, // Standard
-          aggressivenessMultiplier: 1.0, // Will be modified dynamically
+          strategicBufferPoints:
+              15, // Reduced from 20 - more competitive baseline
+          minCardsForAggressiveUnlock: 3, // Keep at 3 - good balance
+          valuablePileThreshold:
+              75, // Reduced from 100 - more willing to take piles
+          largePileThreshold: 5, // Reduced from 6 - lower threshold
+          footPileValueThreshold:
+              40, // Reduced from 50 - more aggressive in foot
+          footPileSizeThreshold: 4, // Reduced from 5 - take smaller piles
+          handPileValueThreshold:
+              60, // Reduced from 75 - more aggressive in hand
+          handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
+          maxTurnsBeforeForcePlayDown: 3, // Reduced from 5 - adapt faster
+          highValuePairBreakChance:
+              0.6, // Increased from 0.5 - more willing to break pairs
+          bookCompletionPriority: 150, // Keep balanced priority
+          aggressivenessMultiplier:
+              1.1, // Increased from 1.0 - slightly more aggressive baseline
         );
     }
   }
@@ -198,61 +228,70 @@ class BotPersonalityManager {
     final personality = getPersonality(botPlayer.id);
     final constants = getConstants(botPlayer.id);
 
-    // Base risk tolerance from personality
-    double baseRisk = constants.aggressivenessMultiplier;
+    // Base risk tolerance from personality - increased for all personalities
+    double baseRisk =
+        constants.aggressivenessMultiplier *
+        1.2; // 20% more aggressive baseline
     double riskModifier = 1.0;
 
-    // 1. Score position pressure
+    // 1. Score position pressure - enhanced for competitiveness
     final scores = gameState.players.map((p) => p.score).toList()..sort();
     final botScore = botPlayer.score;
     final isLeading = botScore == scores.last;
     final isFarBehind = botScore < (scores.first + scores.last) / 2;
 
     if (isLeading && personality == BotPersonality.conservative) {
-      riskModifier *= 0.7; // Play even more conservatively when leading
+      riskModifier *= 0.8; // Less conservative than before (was 0.7)
     } else if (isFarBehind) {
-      riskModifier *= 1.5; // Take more risks when behind
+      riskModifier *= 1.8; // Much more aggressive when behind (was 1.5)
     }
 
-    // 2. Opponent threat assessment
+    // 2. Enhanced opponent threat assessment - more sensitive to danger
     final dangerousOpponents = gameState.players
         .where(
           (p) =>
               p.id != botPlayer.id &&
               p.hasPickedUpFoot &&
-              p.currentHand.length <= 5,
+              p.currentHand.length <= 7, // Expanded danger threshold
         )
         .length;
 
     if (dangerousOpponents > 0) {
       riskModifier *=
-          (1.0 + dangerousOpponents * 0.3); // More aggressive when threatened
+          (1.0 +
+          dangerousOpponents *
+              0.4); // More aggressive when threatened (was 0.3)
     }
 
     // 3. Turn pressure (would need turn tracking)
     // This would require turn count tracking from game analyzer
 
-    // 4. Hand quality assessment
+    // 4. Enhanced hand quality assessment - more competitive
     final handQuality = _assessHandQuality(botPlayer);
     if (handQuality > 0.7) {
-      riskModifier *= 0.8; // Good hand, can be patient
+      riskModifier *= 0.85; // Less patient than before (was 0.8)
     } else if (handQuality < 0.4) {
-      riskModifier *= 1.4; // Poor hand, need to take chances
+      riskModifier *= 1.6; // Much more aggressive with poor hands (was 1.4)
     }
 
-    // 5. Book completion opportunity (for book builders)
+    // 5. Book completion opportunity - balanced for competitiveness
     if (personality == BotPersonality.bookBuilder) {
       final nearBooks = botPlayer.melds
           .where((m) => m.cards.length >= 6)
           .length;
       if (nearBooks > 0) {
-        riskModifier *= 0.6; // Very conservative when close to books
+        riskModifier *= 0.7; // Less conservative than before (was 0.6)
       }
     }
 
-    // 6. Foot transition considerations
+    // 6. Foot transition considerations - more aggressive
     if (botPlayer.hasPickedUpFoot && botPlayer.currentHand.length <= 5) {
-      riskModifier *= 1.5; // End game approaching, more aggressive
+      riskModifier *= 1.8; // Much more aggressive in endgame (was 1.5)
+    }
+
+    // 7. Round pressure - new enhancement for competitiveness
+    if (gameState.round >= 3) {
+      riskModifier *= 1.3; // Much more aggressive in later rounds
     }
 
     // Apply adaptive personality modifications
@@ -260,8 +299,11 @@ class BotPersonalityManager {
       riskModifier *= _calculateAdaptiveModifier(gameState, botPlayer);
     }
 
-    // Cap risk tolerance at reasonable bounds
-    final finalRisk = (baseRisk * riskModifier).clamp(0.3, 3.0);
+    // Cap risk tolerance at higher bounds for more competitive play
+    final finalRisk = (baseRisk * riskModifier).clamp(
+      0.4,
+      4.0,
+    ); // Increased upper bound
     return finalRisk;
   }
 
