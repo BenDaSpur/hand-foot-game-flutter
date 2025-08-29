@@ -11,14 +11,21 @@ import 'bot_decision.dart';
 /// multiple factors including hand size, card quality, game round, and
 /// strategic position.
 class BotFootTransitionManager {
-  // Transition thresholds
-  static const int aggressiveFootTransitionThreshold = 4;
-  static const int handSizePressureThreshold = 7;
-  static const int lateRoundTransitionRound = 3;
-  static const int lateRoundHandSizeThreshold = 6;
-  static const int postPlaydownTransitionThreshold = 5;
-  static const int emergencyTransitionThreshold = 3;
-  static const int largeHandEmergencyThreshold = 15;
+  // Transition thresholds - MADE MORE AGGRESSIVE
+  static const int aggressiveFootTransitionThreshold =
+      6; // Increased from 4 - transition with more cards
+  static const int handSizePressureThreshold =
+      9; // Increased from 7 - transition earlier
+  static const int lateRoundTransitionRound =
+      2; // Reduced from 3 - earlier urgency
+  static const int lateRoundHandSizeThreshold =
+      8; // Increased from 6 - transition with more cards
+  static const int postPlaydownTransitionThreshold =
+      7; // Increased from 5 - don't wait so long
+  static const int emergencyTransitionThreshold =
+      4; // Increased from 3 - earlier emergency
+  static const int largeHandEmergencyThreshold =
+      12; // Reduced from 15 - earlier emergency
 
   // Hand quality thresholds
   static const int handQualityNegativeThreshold = -40;

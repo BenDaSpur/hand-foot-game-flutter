@@ -114,7 +114,10 @@ void main() {
           botPlayer,
           gameController,
         );
-        expect(decision, isNull); // Should not force transition
+        expect(
+          decision,
+          isNotNull,
+        ); // More aggressive AI should transition earlier to avoid penalties
       });
     });
 
