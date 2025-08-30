@@ -15,7 +15,7 @@ class AnalyticsConfigService {
   static const bool _defaultAnalyticsEnabled =
       true; // Basic analytics enabled by default
   static const bool _defaultDetailedLoggingEnabled =
-      false; // Detailed logging opt-in only
+      true; // Enable detailed logging for bot gameplay data
 
   static SharedPreferences? _prefs;
 

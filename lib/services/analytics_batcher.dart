@@ -12,11 +12,14 @@ class AnalyticsBatcher {
   static const int _maxBatchSize =
       450; // Firestore limit is 500, leave some margin
   static const Duration _batchTimeout = Duration(
-    seconds: 10,
-  ); // Auto-flush every 10s
+    seconds: 30,
+  ); // Auto-flush every 30s (individual actions)
+  static const Duration _turnCompletionTimeout = Duration(
+    seconds: 5,
+  ); // Fast flush after turn completion
   static const Duration _criticalFlushTimeout = Duration(
-    seconds: 2,
-  ); // Fast flush for critical events
+    seconds: 1,
+  ); // Immediate flush for critical events (round end, etc.)
 
   // Batch queues by collection
   static final Map<String, Queue<Map<String, dynamic>>> _batches = {};
@@ -39,6 +42,7 @@ class AnalyticsBatcher {
     required String collection,
     required Map<String, dynamic> data,
     bool priority = false, // High priority items flush faster
+    bool turnCompletion = false, // Turn completion gets medium priority
   }) async {
     if (!_enabled) {
       // If batching is disabled, write immediately
@@ -61,18 +65,30 @@ class AnalyticsBatcher {
       // Batch is full, flush immediately
       await _flushBatch(collection);
     } else {
-      // Set up or reset flush timer
-      _scheduleFlush(collection, priority);
+      // Set up or reset flush timer based on priority
+      _scheduleFlush(collection, priority, turnCompletion);
     }
   }
 
   /// Schedule a flush for a collection
-  static void _scheduleFlush(String collection, bool priority) {
+  static void _scheduleFlush(
+    String collection,
+    bool priority,
+    bool turnCompletion,
+  ) {
     // Cancel existing timer
     _flushTimers[collection]?.cancel();
 
     // Set new timer based on priority
-    final timeout = priority ? _criticalFlushTimeout : _batchTimeout;
+    Duration timeout;
+    if (priority) {
+      timeout = _criticalFlushTimeout; // 1 second - immediate
+    } else if (turnCompletion) {
+      timeout = _turnCompletionTimeout; // 5 seconds - turn completion
+    } else {
+      timeout = _batchTimeout; // 30 seconds - individual actions
+    }
+
     _flushTimers[collection] = Timer(timeout, () {
       _flushBatch(collection);
     });
@@ -133,6 +149,24 @@ class AnalyticsBatcher {
     if (futures.isNotEmpty) {
       await Future.wait(futures);
       _logger.info('Flushed all pending analytics batches');
+    }
+  }
+
+  /// Force flush on turn completion (optimized timing)
+  static Future<void> flushOnTurnCompletion() async {
+    final futures = <Future<void>>[];
+
+    for (final collection in _batches.keys.toList()) {
+      if (_batches[collection]?.isNotEmpty ?? false) {
+        // Cancel existing timers and flush immediately
+        _flushTimers[collection]?.cancel();
+        futures.add(_flushBatch(collection));
+      }
+    }
+
+    if (futures.isNotEmpty) {
+      await Future.wait(futures);
+      _logger.fine('Flushed analytics on turn completion');
     }
   }
 
