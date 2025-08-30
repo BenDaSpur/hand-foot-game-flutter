@@ -23,6 +23,8 @@ class GameAnalyticsLogger {
   // Privacy settings
   static bool _analyticsEnabled = true;
   static bool _detailedLoggingEnabled = false; // Only enable for opt-in users
+  static const bool _readOperationsEnabled =
+      false; // Disable reads for write-only mode
   static String? _currentSessionId;
   static DateTime? _sessionStartTime;
 
@@ -237,6 +239,7 @@ class GameAnalyticsLogger {
         collection: botDecisionsCollection,
         data: decisionData,
         priority: false, // Bot decisions can be batched
+        turnCompletion: true, // Flush faster on turn completion
       );
 
       if (kDebugMode) {
@@ -278,6 +281,7 @@ class GameAnalyticsLogger {
         collection: gameEventsCollection,
         data: eventLogData,
         priority: false, // Game events can be batched
+        turnCompletion: true, // Flush faster on turn completion
       );
 
       if (kDebugMode) {
@@ -382,7 +386,7 @@ class GameAnalyticsLogger {
     int? specificSeed, // Analyze performance on specific seed
     List<int>? seedRange, // Analyze performance across seed range
   }) async {
-    if (!_analyticsEnabled) return null;
+    if (!_analyticsEnabled || !_readOperationsEnabled) return null;
 
     try {
       final cutoffDate = limitDays != null
@@ -488,7 +492,7 @@ class GameAnalyticsLogger {
     int? limitDays,
     int limit = 10,
   }) async {
-    if (!_analyticsEnabled) return [];
+    if (!_analyticsEnabled || !_readOperationsEnabled) return [];
 
     try {
       final cutoffDate = limitDays != null
@@ -674,7 +678,8 @@ class GameAnalyticsLogger {
     int? limitDays,
     bool includeDetailedLogs = false,
   }) async {
-    if (!_analyticsEnabled) return {'error': 'Analytics not enabled'};
+    if (!_analyticsEnabled || !_readOperationsEnabled)
+      return {'error': 'Analytics not enabled or read operations disabled'};
 
     try {
       final cutoffDate = limitDays != null

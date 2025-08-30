@@ -25,6 +25,7 @@ import '../widgets/scoreboard_modal.dart';
 import 'main_menu_screen.dart';
 import '../utils/debug_logger.dart';
 import '../config/game_config.dart';
+import '../services/analytics_batcher.dart';
 
 /// Bot configuration for randomized personality assignment
 class BotConfig {
@@ -979,6 +980,8 @@ class _GameScreenState extends State<GameScreen> {
 
         // ADVANCE TURN - this is guaranteed to work
         gameState.nextPlayer();
+        // Flush analytics on turn completion for better timing
+        AnalyticsBatcher.flushOnTurnCompletion();
         setState(() {});
         return;
       }
@@ -1511,6 +1514,12 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
+      // Log human action for analytics
+      _logHumanAction(
+        action: 'drawFromDeck',
+        reasoning: 'Human player drew 2 cards from deck',
+      );
+
       // Cards are now automatically inserted in sorted position
       _hasPlayerInteractedSinceDraw =
           false; // Reset interaction flag after drawing
@@ -1793,6 +1802,17 @@ class _GameScreenState extends State<GameScreen> {
     );
 
     if (success) {
+      // Log human meld creation
+      _logHumanAction(
+        action: meldIndices.length == 1 ? 'createMeld' : 'createMultipleMelds',
+        reasoning: meldIndices.length == 1
+            ? 'Human created new meld'
+            : 'Human created ${meldIndices.length} new melds',
+        context: {
+          'meldCount': meldIndices.length,
+          'totalCards': meldIndices.expand((x) => x).length,
+        },
+      );
       _sortHand('rank');
       setState(() {});
 
@@ -1834,6 +1854,16 @@ class _GameScreenState extends State<GameScreen> {
         if (!humanPlayer.hasPickedUpFoot) {
           // Going from hand to foot is always allowed
           if (_gameController.discardCard(_selectedCards.first)) {
+            // Log human discard action
+            _logHumanAction(
+              action: 'discardCard',
+              reasoning: 'Human discarded ${_selectedCards.first.compactName}',
+              context: {
+                'card': _selectedCards.first.compactName,
+                'transitioningToFoot': !humanPlayer.hasPickedUpFoot,
+              },
+            );
+
             setState(() {});
             _selectedCardIndices.clear();
             await _checkAndHandleRoundEnd();
@@ -1874,6 +1904,16 @@ class _GameScreenState extends State<GameScreen> {
       }
 
       if (_gameController.discardCard(_selectedCards.first)) {
+        // Log human discard action
+        _logHumanAction(
+          action: 'discardCard',
+          reasoning: 'Human discarded ${_selectedCards.first.compactName}',
+          context: {
+            'card': _selectedCards.first.compactName,
+            'goingOut': willBeEmpty,
+          },
+        );
+
         setState(() {});
         _selectedCardIndices.clear();
         await _checkAndHandleRoundEnd();
@@ -2058,6 +2098,12 @@ class _GameScreenState extends State<GameScreen> {
     int addedCount = 0;
     for (final card in cardsToAdd) {
       if (_gameController.addCardToMeld(meldIndex, card)) {
+        // Log human meld addition
+        _logHumanAction(
+          action: 'addToMeld',
+          reasoning: 'Human added ${card.compactName} to existing meld',
+          context: {'card': card.compactName, 'meldIndex': meldIndex},
+        );
         addedCount++;
       }
     }
@@ -3399,6 +3445,44 @@ class _GameScreenState extends State<GameScreen> {
       );
     } catch (e) {
       DebugLogger.warning('Failed to log bot decision: $e');
+    }
+  }
+
+  /// Log human player actions for analytics comparison
+  Future<void> _logHumanAction({
+    required String action,
+    required String reasoning,
+    Map<String, dynamic>? context,
+  }) async {
+    if (_analyticsSessionId == null) return;
+
+    try {
+      final humanPlayer = _gameController.gameState.players.firstWhere(
+        (p) => p.type == PlayerType.human,
+      );
+
+      await GameAnalyticsLogger.logGameEvent(
+        eventType: action,
+        playerId: humanPlayer.id,
+        playerType: PlayerType.human,
+        eventData: {
+          'reasoning': reasoning,
+          'context': context,
+          'round': _gameController.gameState.round,
+          'turnPhase': _gameController.gameState.turnPhase.name,
+          'handSize': humanPlayer.currentHand.length,
+          'hasPlayedDown': humanPlayer.hasPlayedDown,
+          'hasPickedUpFoot': humanPlayer.hasPickedUpFoot,
+          'score': humanPlayer.score,
+          'meldCount': humanPlayer.melds.length,
+          'bookCount': humanPlayer.melds
+              .where((m) => m.cards.length >= 7)
+              .length,
+        },
+        success: true,
+      );
+    } catch (e) {
+      DebugLogger.warning('Failed to log human action: $e');
     }
   }
 }
