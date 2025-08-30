@@ -218,6 +218,9 @@ class GameAnalyticsLogger {
         'gameSeed': gameState.deck.seed, // For reproducible analysis
         // Bot state
         'botHandSize': botPlayer.currentHand.length,
+        'botHandCards': botPlayer.currentHand
+            .map((c) => c.compactName)
+            .toList(),
         'botHasPlayedDown': botPlayer.hasPlayedDown,
         'botHasPickedUpFoot': botPlayer.hasPickedUpFoot,
         'botScore': botPlayer.score,
@@ -225,10 +228,54 @@ class GameAnalyticsLogger {
         'botBookCount': botPlayer.melds
             .where((m) => m.cards.length >= 7)
             .length,
+        'botMelds': botPlayer.melds
+            .map(
+              (meld) => {
+                'cards': meld.cards.map((c) => c.compactName).toList(),
+                'rank': meld.cards.first.rank.name,
+                'isClean': meld.isClean,
+                'isBook': meld.cards.length >= 7,
+                'size': meld.cards.length,
+              },
+            )
+            .toList(),
+
+        // Game state context
+        'deckSize': gameState.deck.size,
+        'topDiscardCard': gameState.discardPile.isNotEmpty
+            ? gameState.discardPile.last.compactName
+            : null,
 
         // Opponent context
         'opponentCount': gameState.players.length - 1,
         'dangerousOpponents': _countDangerousOpponents(gameState, botId),
+        'opponents': gameState.players
+            .where((p) => p.id != botId)
+            .map(
+              (opponent) => {
+                'id': opponent.id,
+                'type': opponent.type.name,
+                'handSize': opponent.currentHand.length,
+                'hasPlayedDown': opponent.hasPlayedDown,
+                'hasPickedUpFoot': opponent.hasPickedUpFoot,
+                'score': opponent.score,
+                'meldCount': opponent.melds.length,
+                'bookCount': opponent.melds
+                    .where((m) => m.cards.length >= 7)
+                    .length,
+                'visibleMelds': opponent.melds
+                    .map(
+                      (meld) => {
+                        'rank': meld.cards.first.rank.name,
+                        'size': meld.cards.length,
+                        'isClean': meld.isClean,
+                        'isBook': meld.cards.length >= 7,
+                      },
+                    )
+                    .toList(),
+              },
+            )
+            .toList(),
 
         // Additional context
         'decisionContext': decisionContext,

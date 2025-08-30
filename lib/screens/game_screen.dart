@@ -61,6 +61,7 @@ class _GameScreenState extends State<GameScreen> {
   // Analytics tracking
   String? _analyticsSessionId;
   int _totalTurns = 0;
+  int _actionSequenceNumber = 0; // Track action sequence within game
 
   // SIMPLIFIED: Single flag to prevent overlapping bot processing
   bool _isProcessingBotTurn = false;
@@ -3381,6 +3382,7 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
 
+      _actionSequenceNumber = 0; // Reset sequence counter for new game
       _analyticsSessionId = await GameAnalyticsLogger.startGameSession(
         players: _gameController.gameState.players,
         gameState: _gameController.gameState,
@@ -3434,6 +3436,8 @@ class _GameScreenState extends State<GameScreen> {
     if (_analyticsSessionId == null) return;
 
     try {
+      _actionSequenceNumber++; // Increment sequence for this action
+
       final personality = _botAI.personalityManager.getPersonality(botId);
       await GameAnalyticsLogger.logBotDecision(
         botId: botId,
@@ -3441,7 +3445,13 @@ class _GameScreenState extends State<GameScreen> {
         reasoning: reasoning,
         personality: personality,
         gameState: _gameController.gameState,
-        decisionContext: context,
+        decisionContext: {
+          ...?context,
+          // Add sequencing information
+          'actionSequence': _actionSequenceNumber,
+          'turnNumber': _totalTurns,
+          'playerTurnIndex': _gameController.gameState.currentPlayerIndex,
+        },
       );
     } catch (e) {
       DebugLogger.warning('Failed to log bot decision: $e');
@@ -3457,6 +3467,8 @@ class _GameScreenState extends State<GameScreen> {
     if (_analyticsSessionId == null) return;
 
     try {
+      _actionSequenceNumber++; // Increment sequence for this action
+
       final humanPlayer = _gameController.gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
       );
@@ -3468,16 +3480,77 @@ class _GameScreenState extends State<GameScreen> {
         eventData: {
           'reasoning': reasoning,
           'context': context,
+
+          // Sequencing information
+          'actionSequence': _actionSequenceNumber,
+          'turnNumber': _totalTurns,
+          'playerTurnIndex': _gameController.gameState.currentPlayerIndex,
+
           'round': _gameController.gameState.round,
           'turnPhase': _gameController.gameState.turnPhase.name,
+
+          // Player state
           'handSize': humanPlayer.currentHand.length,
+          'handCards': humanPlayer.currentHand
+              .map((c) => c.compactName)
+              .toList(),
           'hasPlayedDown': humanPlayer.hasPlayedDown,
           'hasPickedUpFoot': humanPlayer.hasPickedUpFoot,
           'score': humanPlayer.score,
+
+          // Player's melds (what they have on table)
           'meldCount': humanPlayer.melds.length,
           'bookCount': humanPlayer.melds
               .where((m) => m.cards.length >= 7)
               .length,
+          'playerMelds': humanPlayer.melds
+              .map(
+                (meld) => {
+                  'cards': meld.cards.map((c) => c.compactName).toList(),
+                  'rank': meld.cards.first.rank.name,
+                  'isClean': meld.isClean,
+                  'isBook': meld.cards.length >= 7,
+                  'size': meld.cards.length,
+                },
+              )
+              .toList(),
+
+          // Game state context
+          'deckSize': _gameController.gameState.deck.size,
+          'discardPileSize': _gameController.gameState.discardPile.length,
+          'topDiscardCard': _gameController.gameState.discardPile.isNotEmpty
+              ? _gameController.gameState.discardPile.last.compactName
+              : null,
+          'discardPileFrozen': _gameController.gameState.discardPileFrozen,
+
+          // Opponent context (for strategic decisions)
+          'opponents': _gameController.gameState.players
+              .where((p) => p.id != humanPlayer.id)
+              .map(
+                (opponent) => {
+                  'id': opponent.id,
+                  'type': opponent.type.name,
+                  'handSize': opponent.currentHand.length,
+                  'hasPlayedDown': opponent.hasPlayedDown,
+                  'hasPickedUpFoot': opponent.hasPickedUpFoot,
+                  'score': opponent.score,
+                  'meldCount': opponent.melds.length,
+                  'bookCount': opponent.melds
+                      .where((m) => m.cards.length >= 7)
+                      .length,
+                  'visibleMelds': opponent.melds
+                      .map(
+                        (meld) => {
+                          'rank': meld.cards.first.rank.name,
+                          'size': meld.cards.length,
+                          'isClean': meld.isClean,
+                          'isBook': meld.cards.length >= 7,
+                        },
+                      )
+                      .toList(),
+                },
+              )
+              .toList(),
         },
         success: true,
       );
