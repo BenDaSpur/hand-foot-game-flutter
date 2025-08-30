@@ -678,8 +678,9 @@ class GameAnalyticsLogger {
     int? limitDays,
     bool includeDetailedLogs = false,
   }) async {
-    if (!_analyticsEnabled || !_readOperationsEnabled)
+    if (!_analyticsEnabled || !_readOperationsEnabled) {
       return {'error': 'Analytics not enabled or read operations disabled'};
+    }
 
     try {
       final cutoffDate = limitDays != null
