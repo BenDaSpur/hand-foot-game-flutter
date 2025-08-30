@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:math';
 
 import '../models/player.dart';
@@ -464,7 +465,7 @@ class EnhancedBotAI {
     }
   }
 
-  /// Check if bot should take the discard pile
+  /// Enhanced discard pile unlocking logic for competitive play
   bool _shouldTakeDiscardPile(
     Player bot,
     GameController controller,
@@ -474,7 +475,7 @@ class EnhancedBotAI {
     final discardPile = gameState.discardPile;
 
     if (discardPile.isEmpty) {
-      return false; // More aggressive - take even single card piles
+      return false;
     }
 
     final constants = _personalityManager.currentConstants;
@@ -484,32 +485,80 @@ class EnhancedBotAI {
     );
     final pileSize = discardPile.length;
 
-    // Adjust thresholds based on risk tolerance and personality - more aggressive
-    final adjustedValueThreshold =
-        (constants.valuablePileThreshold / (riskTolerance * 1.5))
-            .round(); // Divide by more to lower threshold
-    final adjustedSizeThreshold =
-        (constants.largePileThreshold / (riskTolerance * 1.3))
-            .round(); // More aggressive size threshold
+    // Enhanced strategic analysis
+    final bookStatus = _analyzeBookRequirements(bot);
+    final opponentThreat = _assessOpponentThreat(gameState, bot);
 
-    // More aggressive check for pre-play-down
-    if (!bot.hasPlayedDown) {
-      final aggressiveMultiplier =
-          _personalityManager.shouldBeMoreConservativeWithDiscardPile(bot.id)
-          ? 1.1 // Reduced from 1.5 - much more aggressive
-          : 0.9; // Reduced from 1.2 - more aggressive
-      return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
-          pileSize >= adjustedSizeThreshold + 1; // Reduced from +3 to +1
+    // Dynamic thresholds based on multiple factors
+    var adjustedValueThreshold =
+        constants.valuablePileThreshold / riskTolerance;
+    var adjustedSizeThreshold = constants.largePileThreshold / riskTolerance;
+
+    // Book completion urgency - take piles if they help complete books
+    if (bookStatus['needsBookBalance'] == true) {
+      adjustedValueThreshold *= 0.7; // 30% more willing to take pile for books
+      adjustedSizeThreshold *= 0.8; // Lower size threshold for book completion
     }
 
-    // More aggressive post-play-down thresholds
+    // Opponent threat adjustment - be more aggressive when opponents are dangerous
+    if (opponentThreat > 0.6) {
+      adjustedValueThreshold *= 0.6; // Much more aggressive when threatened
+      adjustedSizeThreshold *= 0.7; // Lower threshold when opponents are close
+    }
+
+    // Round pressure - later rounds require more aggressive pile taking
+    if (gameState.round >= 3) {
+      adjustedValueThreshold *= 0.8; // 20% more aggressive in late rounds
+      adjustedSizeThreshold *= 0.9; // Lower threshold in high rounds
+    }
+
+    // Enhanced pre-play-down logic
+    if (!bot.hasPlayedDown) {
+      final playDownRequirement = gameState.playDownRequirement;
+      final currentMeldPotential = _calculateCurrentMeldPotential(
+        bot,
+        controller,
+      );
+
+      // If pile helps meet play-down requirement, be much more aggressive
+      if (currentMeldPotential + (pileValue * 0.6) >= playDownRequirement) {
+        adjustedValueThreshold *=
+            0.5; // Very aggressive for play-down opportunities
+      }
+
+      final aggressiveMultiplier =
+          _personalityManager.shouldBeMoreConservativeWithDiscardPile(bot.id)
+          ? 0.9 // Much more aggressive (was 1.1)
+          : 0.7; // Very aggressive (was 0.9)
+      return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
+          pileSize >=
+              (adjustedSizeThreshold - 1).clamp(2, adjustedSizeThreshold);
+    }
+
+    // Enhanced post-play-down logic - consider hand management and foot transition
+    final isInFoot = bot.hasPickedUpFoot;
+    final handSize = bot.currentHand.length;
+
+    // If close to foot transition or in foot with few cards, be selective
+    if (isInFoot && handSize <= 4) {
+      return pileValue >
+          adjustedValueThreshold * 1.2; // More selective in endgame
+    }
+
+    // If hand is getting large, prioritize pile taking to prevent getting stuck
+    if (handSize >= 15) {
+      adjustedValueThreshold *= 0.6; // Very aggressive with large hands
+      adjustedSizeThreshold *= 0.7; // Lower threshold to prevent hand overflow
+    }
+
+    // Standard post-play-down thresholds with competitive adjustments
     return pileValue >
-            adjustedValueThreshold * 0.8 || // 20% lower value threshold
+            adjustedValueThreshold * 0.7 || // 30% lower value threshold
         pileSize >=
-            (adjustedSizeThreshold - 1).clamp(
+            (adjustedSizeThreshold - 2).clamp(
               2,
               adjustedSizeThreshold,
-            ); // Lower size threshold
+            ); // Even lower size threshold
   }
 
   /// Find best natural meld combination for play-down
@@ -789,50 +838,75 @@ class EnhancedBotAI {
   }
 
   /// Execute dump strategy: create all possible melds in this turn
-  /// Enhanced to maintain book balance (both clean and dirty books)
+  /// Enhanced with competitive book balance analysis
   BotDecision _executeDumpStrategy(Player bot, GameController controller) {
-    // Check current book status
-    int cleanBooks = 0;
-    for (final meld in bot.melds) {
-      if (meld.cards.length >= 7) {
-        if (meld.isClean) {
-          cleanBooks++;
-        }
-      }
-    }
+    // Enhanced book analysis
+    final bookStatus = _analyzeBookRequirements(bot);
+    final needsCleanBook = bookStatus['needsCleanBook'] as bool;
+    final needsDirtyBook = bookStatus['needsDirtyBook'] as bool;
+    final hasRequiredBooks = bookStatus['hasRequiredBooks'] as bool;
 
-    // Priority 1: Add to existing melds first (highest efficiency)
-    // But be strategic about which melds to add to
+    // Priority 1: Add to existing melds with strategic book balance
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
     );
     if (cardsToAdd.isNotEmpty) {
-      // If we lack a clean book, avoid adding wilds to clean melds
-      if (cleanBooks == 0) {
-        for (final addition in cardsToAdd) {
-          final meld = addition['meld'] as Meld;
-          final card = addition['card'] as PlayingCard;
-          // Prioritize keeping clean melds clean if we don't have a clean book yet
-          if (meld.isClean && !card.isWild) {
-            return BotDecision(action: 'addToMeld', data: addition);
-          }
+      // Strategic addition based on book requirements
+      for (final addition in cardsToAdd) {
+        final meld = addition['meld'] as Meld;
+        final card = addition['card'] as PlayingCard;
+
+        // If we need a clean book, prioritize keeping clean melds clean
+        if (needsCleanBook && meld.isClean && !card.isWild) {
+          return BotDecision(action: 'addToMeld', data: addition);
+        }
+
+        // If we need a dirty book, prioritize adding to dirty melds
+        if (needsDirtyBook && !meld.isClean) {
+          return BotDecision(action: 'addToMeld', data: addition);
+        }
+
+        // If we have both book types, prioritize largest melds for efficiency
+        if (hasRequiredBooks && meld.cards.length >= 6) {
+          return BotDecision(action: 'addToMeld', data: addition);
         }
       }
-      // Otherwise take the first good addition
+
+      // If no strategic match, take the first good addition
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
-    // Priority 2: Create new melds with book balance in mind
+    // Priority 2: Create new melds with enhanced book balance strategy
     final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
     if (possibleMelds.isNotEmpty) {
-      // Use the enhanced findBestMeld that considers book balance
-      final bestMeld = _meldAnalyzer.findBestMeld(
-        possibleMelds,
-        bot: bot,
-        preferLarger: true, // Still want large melds for dumping
-      );
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      // Select meld type based on book requirements for competitive advantage
+      List<PlayingCard>? strategicMeld;
+
+      if (needsCleanBook) {
+        // Prioritize natural melds that can become clean books
+        strategicMeld = possibleMelds.firstWhere(
+          (meld) => !meld.any((card) => card.isWild),
+          orElse: () => [],
+        );
+      } else if (needsDirtyBook) {
+        // Prioritize melds with wilds that can become dirty books
+        strategicMeld = possibleMelds.firstWhere(
+          (meld) => meld.any((card) => card.isWild),
+          orElse: () => [],
+        );
+      }
+
+      // Use strategic meld if found, otherwise use enhanced best meld selection
+      final selectedMeld = (strategicMeld?.isNotEmpty ?? false)
+          ? strategicMeld!
+          : _meldAnalyzer.findBestMeld(
+              possibleMelds,
+              bot: bot,
+              preferLarger: true, // Prefer larger melds for efficiency
+            );
+
+      return BotDecision(action: 'createMeld', data: selectedMeld);
     }
 
     return BotDecision(action: 'noMeld');
@@ -1100,51 +1174,144 @@ class EnhancedBotAI {
     return (baseLimit - pressureReduction).clamp(8, baseLimit);
   }
 
-  /// Should hold cards to complete books in later rounds as defensive strategy
+  /// Enhanced book completion strategy for competitive play
   bool _shouldHoldForBookCompletion(
     Player bot,
     GameState gameState,
     BotPersonality personality,
   ) {
-    // Only relevant in later rounds (3+) when someone might go out soon
-    if (gameState.round < 3) return false;
+    // Start considering book completion earlier (round 2+) for competitiveness
+    if (gameState.round < 2) return false;
 
-    // BookBuilder personality is most likely to use this strategy
-    if (personality != BotPersonality.bookBuilder &&
-        _random.nextDouble() > 0.3) {
-      return false; // 30% chance for other personalities
+    // All personalities should consider book completion, not just BookBuilder
+    bool shouldConsider = false;
+    switch (personality) {
+      case BotPersonality.bookBuilder:
+        shouldConsider = true; // Always consider
+        break;
+      case BotPersonality.adaptive:
+        shouldConsider = _random.nextDouble() > 0.2; // 80% chance
+        break;
+      case BotPersonality.conservative:
+        shouldConsider = _random.nextDouble() > 0.4; // 60% chance
+        break;
+      case BotPersonality.aggressive:
+        shouldConsider =
+            _random.nextDouble() > 0.6; // 40% chance (focus on speed)
+        break;
     }
 
-    // Check if we have potential for completing books
-    final nearCompleteBooks = _findNearCompleteBooks(bot);
-    if (nearCompleteBooks.isEmpty) return false;
+    if (!shouldConsider) return false;
 
-    // Hold if we can complete books and opponents might be close to going out
+    // Enhanced book analysis - check both clean and dirty book requirements
+    final bookStatus = _analyzeBookRequirements(bot);
+    if (!bookStatus['hasNearCompleteBooks'] &&
+        !bookStatus['needsBookBalance']) {
+      return false;
+    }
+
+    // More aggressive about book completion when opponents are threatening
     _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
     final opponentAnalysis = _gameAnalyzer.opponentAnalysis;
 
-    // If any opponent has small hand, prioritize completing books defensively
+    // If any opponent is in foot with small hand, prioritize books more aggressively
     for (final analysis in opponentAnalysis.values) {
-      if (analysis.handSize <= 5) {
-        return nearCompleteBooks.isNotEmpty; // Complete at least one book
+      if (analysis.hasPickedUpFoot && analysis.handSize <= 6) {
+        return true; // Must complete books to have going out potential
       }
     }
 
-    return false;
+    // Hold if we're close to completing books and in good position
+    return bookStatus['hasNearCompleteBooks'] as bool;
   }
 
-  /// Find melds that are close to becoming books (6 cards, need 1 more)
-  List<Meld> _findNearCompleteBooks(Player bot) {
-    final nearCompleteBooks = <Meld>[];
+  /// Enhanced book requirements analysis for competitive play
+  Map<String, dynamic> _analyzeBookRequirements(Player bot) {
+    final analysis = <String, dynamic>{};
+
+    // Count current book status
+    int cleanBooks = 0;
+    int dirtyBooks = 0;
+    int nearCompleteBooks = 0;
+    int nearCompleteCleanBooks = 0;
+    int nearCompleteDirtyBooks = 0;
 
     for (final meld in bot.melds) {
-      if (meld.cards.length == 6) {
-        // One card away from book
-        nearCompleteBooks.add(meld);
+      final isBook = meld.cards.length >= GameConfig.bookSize;
+      final isNearComplete = meld.cards.length >= 6;
+
+      if (isBook) {
+        if (meld.isClean) {
+          cleanBooks++;
+        } else {
+          dirtyBooks++;
+        }
+      } else if (isNearComplete) {
+        nearCompleteBooks++;
+        if (meld.isClean) {
+          nearCompleteCleanBooks++;
+        } else {
+          nearCompleteDirtyBooks++;
+        }
       }
     }
 
-    return nearCompleteBooks;
+    // Strategic analysis for competitive play
+    analysis['cleanBooks'] = cleanBooks;
+    analysis['dirtyBooks'] = dirtyBooks;
+    analysis['hasRequiredBooks'] = cleanBooks > 0 && dirtyBooks > 0;
+    analysis['hasNearCompleteBooks'] = nearCompleteBooks > 0;
+    analysis['needsCleanBook'] = cleanBooks == 0 && nearCompleteCleanBooks > 0;
+    analysis['needsDirtyBook'] = dirtyBooks == 0 && nearCompleteDirtyBooks > 0;
+    analysis['needsBookBalance'] =
+        (cleanBooks == 0 && dirtyBooks > 0) ||
+        (dirtyBooks == 0 && cleanBooks > 0);
+    analysis['canGoOut'] = cleanBooks > 0 && dirtyBooks > 0;
+    analysis['bookCompletionPotential'] = nearCompleteBooks;
+
+    return analysis;
+  }
+
+  /// Assess threat level from opponents for competitive decision-making
+  double _assessOpponentThreat(GameState gameState, Player botPlayer) {
+    _gameAnalyzer.updateOpponentAnalysis(gameState, botPlayer);
+    final opponentAnalysis = _gameAnalyzer.opponentAnalysis;
+
+    if (opponentAnalysis.isEmpty) return 0.0;
+
+    double maxThreat = 0.0;
+
+    for (final analysis in opponentAnalysis.values) {
+      double threat = 0.0;
+
+      // Immediate threat - opponents in foot with few cards
+      if (analysis.hasPickedUpFoot && analysis.handSize <= 3) {
+        threat += 0.8; // Very high threat
+      } else if (analysis.hasPickedUpFoot && analysis.handSize <= 6) {
+        threat += 0.5; // High threat
+      }
+
+      // Development threat - opponents ahead in game phases
+      if (analysis.hasPickedUpFoot && !botPlayer.hasPickedUpFoot) {
+        threat += 0.3; // Ahead in development
+      } else if (analysis.hasPlayedDown && !botPlayer.hasPlayedDown) {
+        threat += 0.2; // Ahead in play-down
+      }
+
+      // Book completion threat
+      if (analysis.hasNearCompleteBook) {
+        threat += 0.2; // Close to completing books
+      }
+
+      // Score pressure
+      if (analysis.score > botPlayer.score + 500) {
+        threat += 0.1; // Score advantage
+      }
+
+      maxThreat = math.max(maxThreat, threat);
+    }
+
+    return maxThreat.clamp(0.0, 1.0);
   }
 
   // Getters for testing and debugging

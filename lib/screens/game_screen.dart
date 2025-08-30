@@ -18,6 +18,7 @@ import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../theme/balatro_theme.dart';
+import '../services/game_analytics_logger.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/emergency_round_end_dialog.dart';
 import '../widgets/scoreboard_modal.dart';
@@ -55,6 +56,10 @@ class _GameScreenState extends State<GameScreen> {
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
+
+  // Analytics tracking
+  String? _analyticsSessionId;
+  int _totalTurns = 0;
 
   // SIMPLIFIED: Single flag to prevent overlapping bot processing
   bool _isProcessingBotTurn = false;
@@ -167,6 +172,9 @@ class _GameScreenState extends State<GameScreen> {
     // Sort the human player's initial hand
     final humanPlayer = players.firstWhere((p) => p.type == PlayerType.human);
     humanPlayer.sortHandByRank();
+
+    // Start analytics session tracking
+    _startAnalyticsSession();
 
     setState(() {
       _isInitialized = true;
@@ -297,6 +305,23 @@ class _GameScreenState extends State<GameScreen> {
               );
               // Log the action for better visibility in UI
               _logBotActionForUser(botPlayer, decision);
+
+              // Log bot decision for analytics
+              _logBotDecision(
+                botId: botPlayer.id,
+                decision: decision.action,
+                reasoning: 'Bot decision executed successfully',
+                context: decision.data != null
+                    ? {'data': decision.data.toString()}
+                    : null,
+              );
+
+              // Track turn completion for analytics
+              if (decision.action == 'discard' ||
+                  decision.action == 'endTurn') {
+                _totalTurns++;
+              }
+
               break;
             }
           } catch (e) {
@@ -751,6 +776,9 @@ class _GameScreenState extends State<GameScreen> {
     DebugLogger.debug(
       'Game ended - winner: ${winner.name} with ${winner.score} points',
     );
+
+    // End analytics session tracking
+    _endAnalyticsSession();
 
     showDialog(
       context: context,
@@ -3290,6 +3318,87 @@ class _GameScreenState extends State<GameScreen> {
       DebugLogger.warning('No saved state available for recovery');
     } catch (e) {
       DebugLogger.error('Error restoring from saved state: $e');
+    }
+  }
+
+  // ============= ANALYTICS METHODS =============
+
+  /// Start analytics session tracking
+  Future<void> _startAnalyticsSession() async {
+    try {
+      // Get bot personalities for tracking
+      final botPersonalities = <String, BotPersonality>{};
+      for (final player in _gameController.gameState.players) {
+        if (player.type == PlayerType.bot) {
+          botPersonalities[player.id] = _botAI.personalityManager
+              .getPersonality(player.id);
+        }
+      }
+
+      _analyticsSessionId = await GameAnalyticsLogger.startGameSession(
+        players: _gameController.gameState.players,
+        gameState: _gameController.gameState,
+        gameMode: 'singleplayer',
+        botPersonalities: botPersonalities,
+      );
+
+      if (_analyticsSessionId != null) {
+        DebugLogger.debug('Started analytics session: $_analyticsSessionId');
+      }
+    } catch (e) {
+      DebugLogger.warning('Failed to start analytics session: $e');
+    }
+  }
+
+  /// End analytics session tracking
+  Future<void> _endAnalyticsSession() async {
+    if (_analyticsSessionId == null) return;
+
+    try {
+      final winner = _gameController.gameState.winner;
+      final botPersonalities = <String, BotPersonality>{};
+      for (final player in _gameController.gameState.players) {
+        if (player.type == PlayerType.bot) {
+          botPersonalities[player.id] = _botAI.personalityManager
+              .getPersonality(player.id);
+        }
+      }
+
+      await GameAnalyticsLogger.endGameSession(
+        gameState: _gameController.gameState,
+        winnerId: winner?.id,
+        totalTurns: _totalTurns,
+        botPersonalities: botPersonalities,
+      );
+
+      DebugLogger.debug('Ended analytics session: $_analyticsSessionId');
+      _analyticsSessionId = null;
+    } catch (e) {
+      DebugLogger.warning('Failed to end analytics session: $e');
+    }
+  }
+
+  /// Log bot decision for analytics
+  Future<void> _logBotDecision({
+    required String botId,
+    required String decision,
+    required String reasoning,
+    Map<String, dynamic>? context,
+  }) async {
+    if (_analyticsSessionId == null) return;
+
+    try {
+      final personality = _botAI.personalityManager.getPersonality(botId);
+      await GameAnalyticsLogger.logBotDecision(
+        botId: botId,
+        decision: decision,
+        reasoning: reasoning,
+        personality: personality,
+        gameState: _gameController.gameState,
+        decisionContext: context,
+      );
+    } catch (e) {
+      DebugLogger.warning('Failed to log bot decision: $e');
     }
   }
 }

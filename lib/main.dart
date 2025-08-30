@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'screens/main_menu_screen.dart';
 import 'services/firebase_service.dart';
+import 'services/analytics_config_service.dart';
 import 'theme/balatro_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Try to initialize Firebase, but continue gracefully if it fails
+  // Try to initialize Firebase and analytics, but continue gracefully if they fail
   try {
     await FirebaseService.initialize();
+    await AnalyticsConfigService.initialize();
 
     // Log app startup event for analytics
     await FirebaseService.logGameEvent(
