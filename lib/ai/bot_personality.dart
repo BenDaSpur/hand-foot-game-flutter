@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../config/game_config.dart';
@@ -304,6 +305,12 @@ class BotPersonalityManager {
       0.4,
       4.0,
     ); // Increased upper bound
+
+    // Log extreme risk tolerance for monitoring
+    if (finalRisk > 3.0) {
+      _logExtremeRiskTolerance(botPlayer, finalRisk, gameState);
+    }
+
     return finalRisk;
   }
 
@@ -440,5 +447,23 @@ class BotPersonalityManager {
   /// Get all assigned personalities for debugging
   Map<String, BotPersonality> getAllAssignedPersonalities() {
     return Map.from(_playerPersonalities);
+  }
+
+  /// Log extreme risk tolerance events for monitoring
+  void _logExtremeRiskTolerance(
+    Player botPlayer,
+    double riskTolerance,
+    GameState gameState,
+  ) {
+    if (kDebugMode) {
+      print(
+        'EXTREME RISK: Bot ${botPlayer.name} (${getPersonality(botPlayer.id).name}) '
+        'has risk tolerance of ${riskTolerance.toStringAsFixed(2)} '
+        '(Round ${gameState.round}, Score: ${botPlayer.score})',
+      );
+    }
+
+    // Could also log to analytics for tracking extreme decisions
+    // GameAnalyticsLogger.logGameEvent(...) if needed
   }
 }

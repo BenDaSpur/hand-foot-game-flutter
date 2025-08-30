@@ -7,6 +7,7 @@ import '../models/player.dart';
 import '../ai/bot_personality.dart';
 import 'firebase_service.dart';
 import 'device_service.dart';
+import 'analytics_batcher.dart';
 
 /// Comprehensive game analytics logging service for bot performance analysis
 class GameAnalyticsLogger {
@@ -231,7 +232,12 @@ class GameAnalyticsLogger {
         'decisionContext': decisionContext,
       };
 
-      await _firestore.collection(botDecisionsCollection).add(decisionData);
+      // Use batching for bot decisions (high frequency)
+      await AnalyticsBatcher.addToBatch(
+        collection: botDecisionsCollection,
+        data: decisionData,
+        priority: false, // Bot decisions can be batched
+      );
 
       if (kDebugMode) {
         _logger.fine(
@@ -267,7 +273,12 @@ class GameAnalyticsLogger {
         'eventData': eventData,
       };
 
-      await _firestore.collection(gameEventsCollection).add(eventLogData);
+      // Use batching for game events (high frequency)
+      await AnalyticsBatcher.addToBatch(
+        collection: gameEventsCollection,
+        data: eventLogData,
+        priority: false, // Game events can be batched
+      );
 
       if (kDebugMode) {
         _logger.fine('🎯 Logged game event: $eventType for $playerId');
@@ -308,9 +319,12 @@ class GameAnalyticsLogger {
         'bookProgress': _calculateBookProgress(botPlayer),
       };
 
-      await _firestore
-          .collection(performanceMetricsCollection)
-          .add(metricsData);
+      // Use batching for performance metrics (medium frequency)
+      await AnalyticsBatcher.addToBatch(
+        collection: performanceMetricsCollection,
+        data: metricsData,
+        priority: false, // Performance metrics can be batched
+      );
 
       if (kDebugMode) {
         _logger.fine('📈 Logged performance metrics for $botId ($personality)');
@@ -344,7 +358,12 @@ class GameAnalyticsLogger {
         'outcomeContext': outcomeContext,
       };
 
-      await _firestore.collection(botDecisionsCollection).add(outcomeData);
+      // Use batching for decision outcomes (low frequency but can be batched)
+      await AnalyticsBatcher.addToBatch(
+        collection: botDecisionsCollection,
+        data: outcomeData,
+        priority: false, // Decision outcomes can be batched
+      );
 
       if (kDebugMode) {
         _logger.fine(
