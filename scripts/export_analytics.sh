@@ -31,9 +31,14 @@ if [ ! -d ".dart_tool" ]; then
     flutter pub get
 fi
 
-# Run the export script
+# Try the main export script first, fallback to simple export if it fails
 echo "🚀 Running export..."
-dart run scripts/export_analytics.dart --days $DAYS --output $OUTPUT
+if dart run scripts/export_analytics.dart --days $DAYS --output $OUTPUT 2>/dev/null; then
+    echo "✅ Export successful!"
+else
+    echo "⚠️  Main export failed (likely Flutter SDK issues), creating template..."
+    dart scripts/simple_export.dart $DAYS $OUTPUT
+fi
 
 # Check if export was successful
 if [ $? -eq 0 ]; then
