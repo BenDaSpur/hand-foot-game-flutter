@@ -58,12 +58,13 @@ class BotMeldAnalyzer {
   }
 
   /// Find the best meld based on multiple criteria (size, points, cleanliness)
-  /// Now considers the bot's existing book balance to ensure both types are built
+  /// ENHANCED with competitive human-like aggressive meld building
   List<PlayingCard> findBestMeld(
     List<List<PlayingCard>> possibleMelds, {
     bool preferClean = true,
     bool preferLarger = true,
     Player? bot,
+    dynamic gameState,
   }) {
     if (possibleMelds.isEmpty) {
       throw ArgumentError('Cannot choose from empty meld list');
@@ -144,16 +145,20 @@ class BotMeldAnalyzer {
   }) {
     int score = 0;
 
-    // Base score from meld size
+    // Base score from meld size - ENHANCED for human-like aggressive building
     if (preferLarger) {
-      score += meld.length * 10;
+      score +=
+          meld.length * 15; // INCREASED from 10 - prioritize larger melds more
     } else {
       score += minMeldSize * 10; // Prefer minimum viable melds
     }
 
-    // Bonus for point value
+    // Bonus for point value - ENHANCED
     final pointValue = meld.fold<int>(0, (sum, card) => sum + card.pointValue);
-    score += (pointValue / 10).floor();
+    score += (pointValue / 8).floor(); // INCREASED bonus (was /10)
+
+    // NEW: Aggressive meld building bonus (human pattern showed 18+ melds)
+    score += 25; // Base bonus for creating any meld (be more meld-aggressive)
 
     // Clean meld bonus
     final isClean = !meld.any((card) => card.isWild);

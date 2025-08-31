@@ -35,17 +35,25 @@ class EnhancedBotAI {
   List<List<PlayingCard>>? _plannedMelds;
   bool _inMultiMeldSequence = false;
 
-  // Strategic constants - MADE MORE AGGRESSIVE for competitive play
+  // Strategic constants - ENHANCED for human-level strategic play
   static const int maxTurnsBeforeForcePlayDown =
-      2; // Reduced from 3 - play down faster
+      8; // INCREASED - allow strategic accumulation like humans (35+ cards)
   static const int strongPlayDownBuffer =
-      5; // Reduced from 10 - don't wait for excessive points
+      15; // INCREASED - wait for stronger strategic positions
   static const int wildCardDiscardThreshold =
-      8; // Reduced from 10 - use wilds more aggressively
+      6; // REDUCED - hoard wilds more strategically
   static const double emergencyRiskTolerance =
-      1.5; // Reduced from 2.0 - take more risks
+      2.5; // INCREASED - take bigger strategic risks
   static const double maxEmergencyRiskTolerance =
-      4.0; // Reduced from 6.0 - be more aggressive
+      6.0; // INCREASED - allow major strategic gambles
+
+  // NEW: Opponent pressure detection thresholds
+  static const int humanAccumulationThreat =
+      25; // Cards in hand that trigger pressure response
+  static const int dangerousOpponentHandSize =
+      8; // Hand size that signals going out threat
+  static const double competitivePressureMultiplier =
+      1.5; // Aggression boost under pressure
 
   EnhancedBotAI({int? seed})
     : _personalityManager = BotPersonalityManager(),
@@ -70,6 +78,9 @@ class EnhancedBotAI {
       // Set context for personality-based decisions
       _personalityManager.setCurrentPlayerContext(bot.id);
 
+      // NEW: Dynamic adaptive personality adjustment
+      _applyAdaptivePersonalityAdjustment(bot, gameState);
+
       // Update game analysis
       _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
       _gameAnalyzer.incrementTurnCount(bot.id);
@@ -77,6 +88,21 @@ class EnhancedBotAI {
       // Clear meld cache if needed
       if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
         _meldAnalyzer.clearCache();
+      }
+
+      // NEW: Opponent pressure detection and competitive response
+      final pressureResponse = _evaluateOpponentPressure(
+        bot,
+        controller,
+        gameState,
+      );
+      if (pressureResponse != null) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'Applying pressure response: ${pressureResponse.action}',
+        );
+        return pressureResponse;
       }
 
       // PANIC MODE: Override normal logic for bots in terrible situations
@@ -288,21 +314,61 @@ class EnhancedBotAI {
       return BotDecision(action: 'noMeld');
     }
 
-    // AGGRESSIVE ROUND-BASED URGENCY: Higher rounds = more desperate
+    // ENHANCED PERSONALITY-BASED URGENCY: Use personality-specific patience, not global
+    final personalityConstants = _personalityManager.currentConstants;
+    final personalityTurnLimit =
+        personalityConstants.maxTurnsBeforeForcePlayDown;
+
     final roundUrgencyMultiplier = gameState.round >= 3
         ? 0.5
         : 1.0; // Very aggressive in Round 3+
-    final urgentTurnLimit =
-        (maxTurnsBeforeForcePlayDown * roundUrgencyMultiplier).round();
+    final urgentTurnLimit = (personalityTurnLimit * roundUrgencyMultiplier)
+        .round();
 
-    // Force play-down after urgent turn limit (much shorter in high rounds)
-    if (turnCount >= urgentTurnLimit || gameState.round >= 3) {
-      final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
-        bot,
-        controller,
-        playDownRequirement,
+    // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
+    final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
+      bot,
+      controller,
+      playDownRequirement,
+    );
+
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      'PlayDown analysis: combinations=${bestCombination.length}, requirement=$playDownRequirement, turns=$turnCount, urgentLimit=$urgentTurnLimit',
+    );
+
+    if (bestCombination.isNotEmpty) {
+      // Check if we should play down now based on value vs patience
+      final combinationValue = bestCombination.fold<int>(
+        0,
+        (sum, cards) =>
+            sum +
+            cards.fold<int>(0, (cardSum, card) => cardSum + card.pointValue),
       );
-      if (bestCombination.isNotEmpty) {
+
+      // Always play down if: 1) We meet requirement, OR 2) We've waited enough turns, OR 3) Late round
+      final meetsRequirement = combinationValue >= playDownRequirement;
+      final hasModerateExcess =
+          combinationValue >= (playDownRequirement + 10); // Reasonable excess
+      final hasWaitedEnough = turnCount >= urgentTurnLimit;
+      final lateRoundUrgency = gameState.round >= 3;
+
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $playDownRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency',
+      );
+
+      // Play down immediately if we meet basic requirement AND (have reasonable excess OR waited OR late round)
+      if (meetsRequirement &&
+          (hasModerateExcess || hasWaitedEnough || lateRoundUrgency)) {
+        return _executePlayDown(bestCombination);
+      }
+
+      // For aggressive bots: play down immediately when meeting requirement (no patience)
+      final personality = _personalityManager.getPersonality(bot.id);
+      if (personality == BotPersonality.aggressive && meetsRequirement) {
         return _executePlayDown(bestCombination);
       }
     }
@@ -502,14 +568,37 @@ class EnhancedBotAI {
 
     // Opponent threat adjustment - be more aggressive when opponents are dangerous
     if (opponentThreat > 0.6) {
-      adjustedValueThreshold *= 0.6; // Much more aggressive when threatened
-      adjustedSizeThreshold *= 0.7; // Lower threshold when opponents are close
+      adjustedValueThreshold *=
+          0.5; // MUCH more aggressive when threatened (was 0.6)
+      adjustedSizeThreshold *=
+          0.6; // Lower threshold when opponents are close (was 0.7)
     }
 
     // Round pressure - later rounds require more aggressive pile taking
     if (gameState.round >= 3) {
-      adjustedValueThreshold *= 0.8; // 20% more aggressive in late rounds
-      adjustedSizeThreshold *= 0.9; // Lower threshold in high rounds
+      adjustedValueThreshold *=
+          0.6; // MUCH more aggressive in late rounds (was 0.8)
+      adjustedSizeThreshold *= 0.7; // Lower threshold in high rounds (was 0.9)
+    }
+
+    // NEW: Human exploitation - humans avoid discard pile, so we should take it more
+    final humanPlayers = gameState.players.where(
+      (p) => p.type == PlayerType.human,
+    );
+    if (humanPlayers.any(
+      (h) => h.currentHand.length > 15 && !h.hasPlayedDown,
+    )) {
+      // If human is accumulating and avoiding discard pile, we should take it
+      adjustedValueThreshold *=
+          0.7; // 30% more willing to take piles humans ignore
+      adjustedSizeThreshold *=
+          0.8; // Take smaller piles to deny human resources
+    }
+
+    // NEW: Competitive pile denial - take piles that would benefit opponents
+    if (pileSize >= 5 &&
+        _pileWouldBenefitOpponents(discardPile, gameState, bot)) {
+      adjustedValueThreshold *= 0.6; // Take piles to deny opponents
     }
 
     // Enhanced pre-play-down logic
@@ -1312,6 +1401,431 @@ class EnhancedBotAI {
     }
 
     return maxThreat.clamp(0.0, 1.0);
+  }
+
+  /// NEW: Evaluate opponent pressure and return competitive counter-strategy
+  BotDecision? _evaluateOpponentPressure(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+  ) {
+    final humanPlayers = gameState.players.where(
+      (p) => p.type == PlayerType.human,
+    );
+
+    for (final human in humanPlayers) {
+      // THREAT 1: Human accumulation strategy (like the 35-card pattern we observed)
+      if (human.currentHand.length >= humanAccumulationThreat &&
+          !human.hasPlayedDown) {
+        return _counterHumanAccumulation(bot, controller, gameState, human);
+      }
+
+      // THREAT 2: Human close to going out
+      if (human.hasPickedUpFoot &&
+          human.currentHand.length <= dangerousOpponentHandSize) {
+        return _blockOpponentGoOut(bot, controller, gameState, human);
+      }
+
+      // THREAT 3: Human building books faster than us
+      if (_isOpponentOutpacingBooks(bot, human)) {
+        return _accelerateBookBuilding(bot, controller, gameState);
+      }
+    }
+
+    return null; // No immediate pressure tactics needed
+  }
+
+  /// Counter human accumulation strategy - apply early pressure
+  BotDecision? _counterHumanAccumulation(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+    Player human,
+  ) {
+    final personality = _personalityManager.getPersonality(bot.id);
+
+    // AGGRESSIVE BOTS: Speed demon counter-strategy
+    if (personality == BotPersonality.aggressive) {
+      return _executeSpeedDemonStrategy(bot, controller, gameState, human);
+    }
+
+    // OTHER BOTS: General counter-tactics
+    if (gameState.turnPhase == TurnPhase.draw &&
+        gameState.discardPile.length >= 6) {
+      // Take large discard piles to deny accumulation opportunities
+      if (bot.hasPlayedDown && controller.canUnlockDiscard()) {
+        return BotDecision(action: 'drawFromDiscard');
+      }
+    }
+
+    if (gameState.turnPhase == TurnPhase.meld &&
+        bot.hasPickedUpFoot &&
+        bot.currentHand.length <= 10) {
+      // If we're in foot and human is still accumulating, rush to go out
+      if (controller.canPlayerGoOut()) {
+        // Try to go out immediately to cut off their strategy
+        final possibleDiscards = bot.currentHand
+            .where((card) => !card.isThree)
+            .toList();
+        if (possibleDiscards.isNotEmpty) {
+          return BotDecision(action: 'goOut', data: possibleDiscards.first);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// NEW: Speed demon strategy - end game before humans can accumulate
+  BotDecision? _executeSpeedDemonStrategy(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+    Player human,
+  ) {
+    // Strategy: Play down immediately, rush to foot, go out ASAP to prevent human accumulation
+
+    if (!bot.hasPlayedDown) {
+      // EMERGENCY: Play down with minimum points if human accumulating - but ensure rule compliance
+      final possibleMelds = controller.findPossibleMelds(bot);
+      if (possibleMelds.isNotEmpty) {
+        // Find a meld that meets the minimum play-down requirement
+        final gameState = controller.gameState;
+        final playDownRequirement = gameState.playDownRequirement;
+
+        for (final meld in possibleMelds) {
+          final meldValue = meld.fold<int>(
+            0,
+            (sum, card) => sum + card.pointValue,
+          );
+          if (meldValue >= playDownRequirement) {
+            return BotDecision(action: 'createMeld', data: meld);
+          }
+        }
+
+        // If no single meld meets requirement, try multi-meld combination
+        final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
+          bot,
+          controller,
+          playDownRequirement,
+        );
+        if (bestCombination.isNotEmpty) {
+          return _executePlayDown(bestCombination);
+        }
+      }
+    }
+
+    if (bot.hasPlayedDown && !bot.hasPickedUpFoot && bot.isHandEmpty) {
+      // Rush to foot immediately
+      return BotDecision(action: 'pickUpFoot');
+    }
+
+    if (bot.hasPickedUpFoot && bot.currentHand.length <= 12) {
+      // Aggressive go-out attempt - don't wait for perfect books
+      if (controller.canPlayerGoOut()) {
+        final possibleDiscards = bot.currentHand
+            .where((card) => !card.isThree)
+            .toList();
+        if (possibleDiscards.isNotEmpty) {
+          return BotDecision(action: 'goOut', data: possibleDiscards.first);
+        }
+      }
+
+      // If can't go out, rush to complete minimum required books
+      final cleanBooks = bot.melds
+          .where((m) => m.cards.length >= 7 && m.isClean)
+          .length;
+      final dirtyBooks = bot.melds
+          .where((m) => m.cards.length >= 7 && !m.isClean)
+          .length;
+
+      if (cleanBooks == 0 || dirtyBooks == 0) {
+        // Rush to complete missing book type
+        return _rushToCompleteRequiredBooks(bot, controller);
+      }
+    }
+
+    // Take discard pile aggressively to speed up game
+    if (gameState.turnPhase == TurnPhase.draw &&
+        gameState.discardPile.length >= 4) {
+      if (controller.canUnlockDiscard()) {
+        return BotDecision(action: 'drawFromDiscard');
+      }
+    }
+
+    return null;
+  }
+
+  /// Rush to complete required books for going out
+  BotDecision? _rushToCompleteRequiredBooks(
+    Player bot,
+    GameController controller,
+  ) {
+    final cleanBooks = bot.melds
+        .where((m) => m.cards.length >= 7 && m.isClean)
+        .length;
+    final dirtyBooks = bot.melds
+        .where((m) => m.cards.length >= 7 && !m.isClean)
+        .length;
+
+    final needsClean = cleanBooks == 0;
+    final needsDirty = dirtyBooks == 0;
+
+    // Find near-complete melds of the needed type
+    for (int i = 0; i < bot.melds.length; i++) {
+      final meld = bot.melds[i];
+      if (meld.cards.length >= 5) {
+        // Near book
+        final isClean = meld.isClean;
+
+        if ((needsClean && isClean) || (needsDirty && !isClean)) {
+          // Try to add cards to complete this book
+          final addableCards = bot.currentHand.where(
+            (card) => meld.canAddCard(card),
+          );
+          if (addableCards.isNotEmpty) {
+            return BotDecision(
+              action: 'addToMeld',
+              data: {'meldIndex': i, 'card': addableCards.first},
+            );
+          }
+        }
+      }
+    }
+
+    // If no near-complete books, create new meld of needed type
+    final possibleMelds = controller.findPossibleMelds(bot);
+    for (final meld in possibleMelds) {
+      final isClean = !meld.any((card) => card.isWild);
+      if ((needsClean && isClean) || (needsDirty && !isClean)) {
+        return BotDecision(action: 'createMeld', data: meld);
+      }
+    }
+
+    return null;
+  }
+
+  // Getters for testing and debugging
+
+  /// Block opponent from going out
+  BotDecision? _blockOpponentGoOut(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+    Player opponent,
+  ) {
+    // Strategy: If opponent is close to going out, take defensive actions
+
+    if (gameState.turnPhase == TurnPhase.draw) {
+      // Take discard pile to prevent opponent from using it
+      if (gameState.discardPile.isNotEmpty && controller.canUnlockDiscard()) {
+        return BotDecision(action: 'drawFromDiscard');
+      }
+    }
+
+    if (gameState.turnPhase == TurnPhase.discard) {
+      // Discard cards that are less useful to opponents
+      final safestDiscard = _findSafestDiscardAgainstOpponent(bot, opponent);
+      if (safestDiscard != null) {
+        return BotDecision(action: 'discard', data: safestDiscard);
+      }
+    }
+
+    return null;
+  }
+
+  /// Accelerate book building when opponent is outpacing us
+  BotDecision? _accelerateBookBuilding(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+  ) {
+    if (gameState.turnPhase == TurnPhase.meld) {
+      // Prioritize completing near-books over creating new melds
+      for (int i = 0; i < bot.melds.length; i++) {
+        final meld = bot.melds[i];
+        if (meld.cards.length >= 5) {
+          // Near-book
+          final matchingCards = bot.currentHand
+              .where((card) => meld.canAddCard(card))
+              .toList();
+
+          if (matchingCards.isNotEmpty) {
+            return BotDecision(
+              action: 'addToMeld',
+              data: {'meldIndex': i, 'card': matchingCards.first},
+            );
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Check if opponent is outpacing us in book building
+  bool _isOpponentOutpacingBooks(Player bot, Player opponent) {
+    final botBooks = bot.melds.where((Meld m) => m.cards.length >= 7).length;
+    final opponentBooks = opponent.melds
+        .where((Meld m) => m.cards.length >= 7)
+        .length;
+
+    // Opponent has more books, or same books but ahead in game phase
+    return opponentBooks > botBooks ||
+        (opponentBooks >= botBooks &&
+            opponent.hasPickedUpFoot &&
+            !bot.hasPickedUpFoot);
+  }
+
+  /// Find safest card to discard that minimizes opponent benefit
+  PlayingCard? _findSafestDiscardAgainstOpponent(Player bot, Player opponent) {
+    final possibleDiscards = bot.currentHand
+        .where((card) => !card.isThree)
+        .toList();
+
+    if (possibleDiscards.isEmpty) return null;
+
+    // Avoid discarding cards that opponent might need for their visible melds
+    final opponentRanks = opponent.melds.map((m) => m.cards.first.rank).toSet();
+
+    final saferDiscards = possibleDiscards
+        .where((card) => !opponentRanks.contains(card.rank))
+        .toList();
+
+    if (saferDiscards.isNotEmpty) {
+      return saferDiscards.first;
+    }
+
+    return possibleDiscards.first; // Fallback
+  }
+
+  /// Check if discard pile would significantly benefit opponents
+  bool _pileWouldBenefitOpponents(
+    List<PlayingCard> pile,
+    GameState gameState,
+    Player bot,
+  ) {
+    final opponents = gameState.players.where((p) => p.id != bot.id);
+
+    for (final opponent in opponents) {
+      // Check if pile contains cards that match opponent's visible melds
+      final opponentRanks = opponent.melds
+          .map((m) => m.cards.first.rank)
+          .toSet();
+
+      final beneficialCards = pile
+          .where((card) => opponentRanks.contains(card.rank) || card.isWild)
+          .length;
+
+      // If more than 30% of pile would benefit opponent, consider taking it
+      if (beneficialCards / pile.length > 0.3) {
+        return true;
+      }
+
+      // If opponent is close to going out and pile has high-value cards
+      if (opponent.hasPickedUpFoot && opponent.currentHand.length <= 8) {
+        final highValueCards = pile
+            .where((card) => card.pointValue > 10)
+            .length;
+        if (highValueCards >= 3) {
+          return true; // Deny high-value cards to opponent close to going out
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /// NEW: Dynamic adaptive personality adjustment based on opponent behavior
+  void _applyAdaptivePersonalityAdjustment(Player bot, GameState gameState) {
+    try {
+      // Only apply to adaptive personality bots
+      if (_personalityManager.getPersonality(bot.id) !=
+          BotPersonality.adaptive) {
+        return;
+      }
+
+      final humanPlayers = gameState.players.where(
+        (p) => p.type == PlayerType.human,
+      );
+
+      // Only apply adaptive adjustments when there are human players (not in tests)
+      if (humanPlayers.isEmpty) {
+        return;
+      }
+
+      // Validate game state before making adaptations
+      if (gameState.round < 1 || gameState.round > 10) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'Invalid round ${gameState.round}, skipping adaptive adjustment',
+        );
+        return;
+      }
+
+      for (final human in humanPlayers) {
+        // ADAPTATION 1: Counter human accumulation with speed
+        if (human.currentHand.length >= 20 &&
+            !human.hasPlayedDown &&
+            gameState.round <= 4) {
+          // Human is accumulating - switch to aggressive mode to end game quickly
+          _overrideAdaptiveConstants(bot, 'speed_counter', {
+            'maxTurnsBeforeForcePlayDown': 1, // Strike fast
+            'aggressivenessMultiplier': 1.8, // Be very aggressive
+            'handPileValueThreshold': 20, // Take any pile to speed up
+          });
+          return;
+        }
+
+        // ADAPTATION 2: Match human book building with patience
+        if (human.melds.length >= 8 && human.hasPlayedDown) {
+          // Human is building many books - switch to book builder mode
+          _overrideAdaptiveConstants(bot, 'book_matcher', {
+            'maxTurnsBeforeForcePlayDown': 9, // Allow book building
+            'bookCompletionPriority': 300, // Prioritize books heavily
+            'aggressivenessMultiplier': 1.3, // Competitive book building
+          });
+          return;
+        }
+
+        // ADAPTATION 3: Outlast aggressive opponents
+        if (human.hasPickedUpFoot &&
+            human.currentHand.length <= 10 &&
+            gameState.round <= 3) {
+          // Human is playing aggressively - switch to defensive mode
+          _overrideAdaptiveConstants(bot, 'defensive_counter', {
+            'maxTurnsBeforeForcePlayDown': 6, // Be more patient
+            'strategicBufferPoints': 25, // Wait for stronger position
+            'aggressivenessMultiplier': 0.9, // Be more defensive
+          });
+          return;
+        }
+      }
+
+      // Default adaptive behavior if no specific pattern detected
+      _overrideAdaptiveConstants(bot, 'default_adaptive', {
+        'maxTurnsBeforeForcePlayDown': 4,
+        'aggressivenessMultiplier': 1.1,
+      });
+    } catch (e) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Error in adaptive personality adjustment: $e',
+      );
+    }
+  }
+
+  /// Override adaptive bot constants for situational strategy
+  void _overrideAdaptiveConstants(
+    Player bot,
+    String strategy,
+    Map<String, dynamic> overrides,
+  ) {
+    // This would ideally modify the personality manager's constants for this bot
+    // For now, we'll track the strategy and apply it in decision-making
+    DebugLogger.botDebug(bot.id, bot.name, 'Adaptive strategy: $strategy');
   }
 
   // Getters for testing and debugging

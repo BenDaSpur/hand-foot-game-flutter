@@ -11,11 +11,14 @@ import 'bot_decision.dart';
 /// complete books, and position themselves for winning. It focuses on the
 /// strategic timing of going out while maximizing points through book completion.
 class BotEndGameManager {
-  // Book completion constants
+  // Book completion constants - ENHANCED for competitive play
   static const int bookMinSize = 7;
   static const int cleanBookBonus = 500;
   static const int dirtyBookBonus = 300;
-  static const int winningPositionHandSize = 4;
+  static const int winningPositionHandSize =
+      6; // INCREASED - allow larger hand for strategic advantage
+  static const int aggressiveGoOutHandSize =
+      8; // NEW - go out more aggressively under pressure
 
   // Priority scores for book completion
   static const int cleanBookCompletionPriority = 2000;
@@ -39,6 +42,13 @@ class BotEndGameManager {
     // Immediate go-out check
     if (bot.currentHand.isEmpty && bot.canGoOut) {
       return BotDecision(action: 'goOut');
+    }
+
+    // NEW: Aggressive go-out under competitive pressure
+    final gameState = controller.gameState;
+    if (_shouldGoOutAggressively(bot, gameState)) {
+      final goOutDecision = _attemptAggressiveGoOut(bot, controller);
+      if (goOutDecision != null) return goOutDecision;
     }
 
     // Check if bot is in winning position (has required books and few cards)
@@ -476,5 +486,86 @@ class BotEndGameManager {
     final sortedHand = List<PlayingCard>.from(hand);
     sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
     return sortedHand.first;
+  }
+
+  /// NEW: Check if bot should go out aggressively under pressure
+  bool _shouldGoOutAggressively(Player bot, dynamic gameState) {
+    // Get human players
+    final humanPlayers = gameState.players.where(
+      (p) => p.type == PlayerType.human,
+    );
+
+    for (final human in humanPlayers) {
+      // If human is accumulating massive hands (25+ cards), cut off their strategy
+      if (human.currentHand.length >= 25 && !human.hasPlayedDown) {
+        return bot.currentHand.length <= aggressiveGoOutHandSize;
+      }
+
+      // If human has more books than us, go out to prevent them from gaining more advantage
+      final humanBooks = human.melds
+          .where((Meld m) => m.cards.length >= 7)
+          .length;
+      final botBooks = bot.melds.where((Meld m) => m.cards.length >= 7).length;
+      if (humanBooks > botBooks &&
+          bot.currentHand.length <= aggressiveGoOutHandSize) {
+        return true;
+      }
+
+      // Late game aggression - if we're past round 4, be more willing to go out
+      if (gameState.round >= 4 &&
+          bot.currentHand.length <= aggressiveGoOutHandSize) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// NEW: Attempt aggressive go-out when under competitive pressure
+  BotDecision? _attemptAggressiveGoOut(Player bot, GameController controller) {
+    // Check book requirements - need at least one clean and one dirty book
+    final cleanBooks = bot.melds
+        .where((m) => m.cards.length >= 7 && m.isClean)
+        .length;
+    final dirtyBooks = bot.melds
+        .where((m) => m.cards.length >= 7 && !m.isClean)
+        .length;
+
+    if (cleanBooks > 0 && dirtyBooks > 0) {
+      // Have required books, find card to discard and go out
+      final possibleDiscards = bot.currentHand
+          .where((card) => !card.isThree)
+          .toList();
+      if (possibleDiscards.isNotEmpty) {
+        return BotDecision(action: 'goOut', data: possibleDiscards.first);
+      }
+    }
+
+    // If we're close to books, try to complete them aggressively
+    if ((cleanBooks > 0 || dirtyBooks > 0) && bot.currentHand.length <= 3) {
+      // Try to complete the missing book type
+      final needsClean = cleanBooks == 0;
+      final needsDirty = dirtyBooks == 0;
+
+      for (int i = 0; i < bot.melds.length; i++) {
+        final meld = bot.melds[i];
+        if (meld.cards.length >= 5) {
+          // Near book - try to complete it
+          if ((needsClean && meld.isClean) || (needsDirty && !meld.isClean)) {
+            final addableCards = bot.currentHand.where(
+              (card) => meld.canAddCard(card),
+            );
+            if (addableCards.isNotEmpty) {
+              return BotDecision(
+                action: 'addToMeld',
+                data: {'meldIndex': i, 'card': addableCards.first},
+              );
+            }
+          }
+        }
+      }
+    }
+
+    return null;
   }
 }
