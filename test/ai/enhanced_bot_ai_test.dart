@@ -74,11 +74,11 @@ void main() {
       test('should have appropriate strategic constants', () {
         expect(
           EnhancedBotAI.maxTurnsBeforeForcePlayDown,
-          equals(8),
-        ); // Updated for enhanced strategic patience
-        expect(EnhancedBotAI.strongPlayDownBuffer, equals(15));
-        expect(EnhancedBotAI.wildCardDiscardThreshold, equals(6));
-        expect(EnhancedBotAI.emergencyRiskTolerance, equals(2.5));
+          equals(6),
+        ); // EMERGENCY FIX - reduced to prevent catastrophic accumulation
+        expect(EnhancedBotAI.strongPlayDownBuffer, equals(10));
+        expect(EnhancedBotAI.wildCardDiscardThreshold, equals(8));
+        expect(EnhancedBotAI.emergencyRiskTolerance, equals(1.8));
         expect(EnhancedBotAI.maxEmergencyRiskTolerance, equals(6.0));
       });
     });

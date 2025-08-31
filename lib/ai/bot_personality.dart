@@ -68,7 +68,7 @@ class PersonalityConstants {
               50, // REDUCED further - much more aggressive pile taking
           handPileSizeThreshold: 7, // Reduced from 9 - lower threshold
           maxTurnsBeforeForcePlayDown:
-              8, // INCREASED - match human accumulation patience
+              4, // REDUCED - prevent catastrophic hand accumulation
           highValuePairBreakChance:
               0.25, // Increased from 0.15 - more willing to break pairs
           bookCompletionPriority: 200, // Keep high priority for books
@@ -115,7 +115,7 @@ class PersonalityConstants {
               60, // Reduced from 75 - more aggressive in hand for books
           handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
           maxTurnsBeforeForcePlayDown:
-              10, // INCREASED - allow extensive book building like humans
+              5, // REDUCED - prevent excessive accumulation even for books
           highValuePairBreakChance:
               0.4, // Increased from 0.3 - more willing to break for books
           bookCompletionPriority:
