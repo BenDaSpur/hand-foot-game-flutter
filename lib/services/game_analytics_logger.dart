@@ -394,8 +394,9 @@ class GameAnalyticsLogger {
     double? outcomeScore, // Positive/negative impact score
     Map<String, dynamic>? outcomeContext,
   }) async {
-    if (!_analyticsEnabled)
+    if (!_analyticsEnabled) {
       return; // Removed detailed logging requirement for decision outcomes
+    }
     if (_currentSessionId == null) return;
 
     try {
