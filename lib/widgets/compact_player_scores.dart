@@ -5,6 +5,15 @@ import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
 import '../ai/bot_personality.dart';
 
+/// Constants for personality icons
+class PersonalityIcons {
+  static const IconData defaultBot = Icons.smart_toy;
+  static const IconData conservative = Icons.shield;
+  static const IconData aggressive = Icons.flash_on;
+  static const IconData bookBuilder = Icons.auto_stories;
+  static const IconData adaptive = Icons.auto_mode;
+}
+
 class CompactPlayerScores extends StatelessWidget {
   final GameState gameState;
   final Player? viewingPlayerMelds;
@@ -234,20 +243,20 @@ class CompactPlayerScores extends StatelessWidget {
   /// Get personality-specific icon for bot players
   IconData _getBotPersonalityIcon(Player player) {
     if (player.type != PlayerType.bot || botPersonalityManager == null) {
-      return Icons.smart_toy; // Default bot icon
+      return PersonalityIcons.defaultBot;
     }
 
     final personality = botPersonalityManager!.getPersonality(player.id);
 
     switch (personality) {
       case BotPersonality.conservative:
-        return Icons.shield; // 🛡️ Conservative - defensive strategy
+        return PersonalityIcons.conservative;
       case BotPersonality.aggressive:
-        return Icons.flash_on; // ⚡ Aggressive - speed and intensity
+        return PersonalityIcons.aggressive;
       case BotPersonality.bookBuilder:
-        return Icons.auto_stories; // 📚 Book Builder - stories/book icon
+        return PersonalityIcons.bookBuilder;
       case BotPersonality.adaptive:
-        return Icons.auto_mode; // 🎯 Adaptive - auto mode icon
+        return PersonalityIcons.adaptive;
     }
   }
 }
