@@ -39,9 +39,19 @@ class BotEndGameManager {
       return null; // Not ready for end game decisions
     }
 
-    // Immediate go-out check
+    // Immediate go-out check - ENHANCED for small hands
     if (bot.currentHand.isEmpty && bot.canGoOut) {
       return BotDecision(action: 'goOut');
+    }
+
+    // CRITICAL: Go out immediately with 1-2 cards if we can
+    if (bot.currentHand.length <= 2 && controller.canPlayerGoOut()) {
+      final nonThreeCards = bot.currentHand
+          .where((card) => !card.isThree)
+          .toList();
+      if (nonThreeCards.isNotEmpty) {
+        return BotDecision(action: 'goOut', data: nonThreeCards.first);
+      }
     }
 
     // NEW: Aggressive go-out under competitive pressure

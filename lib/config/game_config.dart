@@ -240,6 +240,25 @@ class GameConfig {
   static const double modalHeightRatio = 0.8;
 
   // =============================================================================
+  // BOT AI STRATEGIC CONSTANTS
+  // =============================================================================
+
+  /// Hand size that triggers human accumulation threat detection
+  static const int humanAccumulationThreat = 25;
+
+  /// Hand size that signals opponent is close to going out
+  static const int dangerousOpponentHandSize = 8;
+
+  /// Aggression multiplier when competitive pressure is detected
+  static const double competitivePressureMultiplier = 1.5;
+
+  /// Large discard pile threshold for aggressive exploitation
+  static const int largeDiscardPileThreshold = 20;
+
+  /// Medium discard pile threshold for strategic consideration
+  static const int mediumDiscardPileThreshold = 10;
+
+  // =============================================================================
   // PERFORMANCE & TIMING
   // =============================================================================
 

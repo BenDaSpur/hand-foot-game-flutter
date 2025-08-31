@@ -308,11 +308,16 @@ class _GameScreenState extends State<GameScreen> {
               // Log the action for better visibility in UI
               _logBotActionForUser(botPlayer, decision);
 
-              // Log bot decision for analytics
+              // Log bot decision for analytics with actual strategic reasoning
+              final strategicReasoning = _generateBotReasoning(
+                botPlayer,
+                decision,
+                _gameController.gameState,
+              );
               _logBotDecision(
                 botId: botPlayer.id,
                 decision: decision.action,
-                reasoning: 'Bot decision executed successfully',
+                reasoning: strategicReasoning,
                 context: decision.data != null
                     ? {'data': decision.data.toString()}
                     : null,
@@ -3556,6 +3561,67 @@ class _GameScreenState extends State<GameScreen> {
       );
     } catch (e) {
       DebugLogger.warning('Failed to log human action: $e');
+    }
+  }
+
+  /// Generate strategic reasoning for bot decisions (for analytics)
+  String _generateBotReasoning(
+    Player bot,
+    BotDecision decision,
+    GameState gameState,
+  ) {
+    final personality = _botAI.personalityManager.getPersonality(bot.id);
+    final handSize = bot.currentHand.length;
+    final hasBooks = bot.melds.where((m) => m.cards.length >= 7).length;
+
+    switch (decision.action) {
+      case 'drawFromDeck':
+        if (!bot.hasPlayedDown) {
+          return '$personality bot drawing from deck to build hand for play-down ($handSize cards)';
+        } else if (!bot.hasPickedUpFoot) {
+          return '$personality bot drawing from deck while building toward foot transition';
+        } else {
+          return '$personality bot drawing from deck in foot phase ($handSize cards, $hasBooks books)';
+        }
+
+      case 'drawFromDiscard':
+        return '$personality bot taking discard pile (${gameState.discardPile.length} cards) for strategic advantage';
+
+      case 'createMeld':
+        if (!bot.hasPlayedDown) {
+          return '$personality bot creating initial meld to play down (Round ${gameState.round})';
+        } else {
+          return '$personality bot creating new meld to build toward books (${bot.melds.length + 1} total melds)';
+        }
+
+      case 'createMultipleMelds':
+        return '$personality bot creating multiple melds for explosive play-down (Round ${gameState.round})';
+
+      case 'addToMeld':
+        final data = decision.data as Map<String, dynamic>?;
+        final card = data?['card'];
+        return '$personality bot adding ${card?.toString() ?? 'card'} to existing meld (building toward book)';
+
+      case 'discard':
+        final card = decision.data;
+        if (handSize <= 3) {
+          return '$personality bot discarding ${card?.toString() ?? 'card'} while positioning for end-game';
+        } else {
+          return '$personality bot discarding ${card?.toString() ?? 'card'} (${handSize - 1} cards remaining)';
+        }
+
+      case 'goOut':
+        return '$personality bot going out with $hasBooks books to win the round!';
+
+      case 'noMeld':
+        if (!bot.hasPlayedDown) {
+          return '$personality bot waiting for better play-down opportunity ($handSize cards)';
+        } else {
+          return '$personality bot holding cards strategically ($handSize cards, $hasBooks books)';
+        }
+
+      default:
+        return '$personality bot executing ${decision.action} strategy';
     }
   }
 }
