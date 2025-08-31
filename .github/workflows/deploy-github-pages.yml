@@ -98,8 +98,27 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Web for GitHub Pages
-        run: flutter build web --release --base-href /${{ github.event.repository.name }}/
+      - name: Clean build cache
+        run: |
+          flutter clean
+          echo "Build cache cleared"
+
+      - name: Build Web for GitHub Pages with cache busting
+        run: |
+          # Build with unique version to prevent browser caching issues
+          export BUILD_NUMBER=$(date +%s)
+          flutter build web --release --base-href /${{ github.event.repository.name }}/ --dart-define=BUILD_NUMBER=$BUILD_NUMBER
+          echo "Built with BUILD_NUMBER: $BUILD_NUMBER"
+          
+      - name: Add cache-busting headers
+        run: |
+          # Add cache control meta tags to prevent browser caching of stale code
+          cd build/web
+          # Add cache-busting to index.html
+          sed -i.bak 's|<head>|<head>\n  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n  <meta http-equiv="Pragma" content="no-cache">\n  <meta http-equiv="Expires" content="0">|' index.html
+          # Add version comment for debugging
+          echo "<!-- Deployed: $(date) -->" >> index.html
+          echo "Cache-busting headers added"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

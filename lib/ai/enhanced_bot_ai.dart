@@ -136,7 +136,7 @@ class EnhancedBotAI {
       }
 
       if (handSize >= emergencyHandSizeThreshold) {
-        // EMERGENCY MODE: Override draw decisions to force melding
+        // EMERGENCY MODE: Override ALL decisions to force melding/play-down
         if (gameState.turnPhase == TurnPhase.meld) {
           final emergencyMelds = _meldAnalyzer.getPossibleMelds(
             bot,
@@ -148,6 +148,12 @@ class EnhancedBotAI {
               bot.name,
               'EMERGENCY: Hand size $handSize exceeds $emergencyHandSizeThreshold - forcing emergency meld',
             );
+
+            // If not played down, force emergency play-down
+            if (!bot.hasPlayedDown) {
+              return _handleEmergencyPlayDown(bot, controller);
+            }
+
             return BotDecision(
               action: 'createMeld',
               data: emergencyMelds.first,
