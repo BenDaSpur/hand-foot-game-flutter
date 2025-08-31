@@ -35,6 +35,10 @@ class EnhancedBotAI {
   List<List<PlayingCard>>? _plannedMelds;
   bool _inMultiMeldSequence = false;
 
+  // Performance optimization: Cache pressure analysis results
+  Map<String, DateTime>? _lastPressureAnalysis;
+  Map<String, BotDecision?>? _cachedPressureResponse;
+
   // Strategic constants - ENHANCED for human-level strategic play
   static const int maxTurnsBeforeForcePlayDown =
       8; // INCREASED - allow strategic accumulation like humans (35+ cards)
@@ -47,13 +51,7 @@ class EnhancedBotAI {
   static const double maxEmergencyRiskTolerance =
       6.0; // INCREASED - allow major strategic gambles
 
-  // NEW: Opponent pressure detection thresholds
-  static const int humanAccumulationThreat =
-      25; // Cards in hand that trigger pressure response
-  static const int dangerousOpponentHandSize =
-      8; // Hand size that signals going out threat
-  static const double competitivePressureMultiplier =
-      1.5; // Aggression boost under pressure
+  // Opponent pressure detection thresholds moved to GameConfig
 
   EnhancedBotAI({int? seed})
     : _personalityManager = BotPersonalityManager(),
@@ -90,8 +88,8 @@ class EnhancedBotAI {
         _meldAnalyzer.clearCache();
       }
 
-      // NEW: Opponent pressure detection and competitive response
-      final pressureResponse = _evaluateOpponentPressure(
+      // NEW: Opponent pressure detection and competitive response (with caching)
+      final pressureResponse = _evaluateOpponentPressureWithCaching(
         bot,
         controller,
         gameState,
@@ -608,10 +606,10 @@ class EnhancedBotAI {
     }
 
     // NEW: Exploit large discard piles (23-37 cards observed, but bots ignore them)
-    if (pileSize >= 20) {
+    if (pileSize >= GameConfig.largeDiscardPileThreshold) {
       adjustedValueThreshold *= 0.3; // Take huge piles aggressively
       adjustedSizeThreshold *= 0.4; // Almost always take large piles
-    } else if (pileSize >= 10) {
+    } else if (pileSize >= GameConfig.mediumDiscardPileThreshold) {
       adjustedValueThreshold *= 0.6; // Take medium-large piles
       adjustedSizeThreshold *= 0.7; // Lower threshold for medium piles
     }
@@ -1424,6 +1422,34 @@ class EnhancedBotAI {
     return maxThreat.clamp(0.0, 1.0);
   }
 
+  /// NEW: Cached opponent pressure evaluation for performance
+  BotDecision? _evaluateOpponentPressureWithCaching(
+    Player bot,
+    GameController controller,
+    GameState gameState,
+  ) {
+    // Cache pressure analysis for performance (check max every 2 seconds)
+    final now = DateTime.now();
+    final lastCheck = _lastPressureAnalysis?[bot.id];
+
+    if (lastCheck != null &&
+        now.difference(lastCheck).inSeconds < 2 &&
+        _cachedPressureResponse != null) {
+      return _cachedPressureResponse![bot.id];
+    }
+
+    // Perform fresh analysis
+    final result = _evaluateOpponentPressure(bot, controller, gameState);
+
+    // Cache the result
+    _lastPressureAnalysis ??= {};
+    _cachedPressureResponse ??= {};
+    _lastPressureAnalysis![bot.id] = now;
+    _cachedPressureResponse![bot.id] = result;
+
+    return result;
+  }
+
   /// NEW: Evaluate opponent pressure and return competitive counter-strategy
   BotDecision? _evaluateOpponentPressure(
     Player bot,
@@ -1436,14 +1462,14 @@ class EnhancedBotAI {
 
     for (final human in humanPlayers) {
       // THREAT 1: Human accumulation strategy (like the 35-card pattern we observed)
-      if (human.currentHand.length >= humanAccumulationThreat &&
+      if (human.currentHand.length >= GameConfig.humanAccumulationThreat &&
           !human.hasPlayedDown) {
         return _counterHumanAccumulation(bot, controller, gameState, human);
       }
 
       // THREAT 2: Human close to going out
       if (human.hasPickedUpFoot &&
-          human.currentHand.length <= dangerousOpponentHandSize) {
+          human.currentHand.length <= GameConfig.dangerousOpponentHandSize) {
         return _blockOpponentGoOut(bot, controller, gameState, human);
       }
 
