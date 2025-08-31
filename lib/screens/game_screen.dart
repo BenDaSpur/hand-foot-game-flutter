@@ -2337,6 +2337,7 @@ class _GameScreenState extends State<GameScreen> {
                   _viewingPlayerMelds = player;
                 });
               },
+              botPersonalityManager: _botAI.personalityManager,
             ),
 
             // Melds section
@@ -2994,14 +2995,14 @@ class _GameScreenState extends State<GameScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '🛡️ Conservative Bot:\n'
-                  'The cautious strategist who holds up to 18 cards, rarely takes risks with the discard pile, and prefers to accumulate before making moves. Patient and methodical, this bot worries less about time pressure and focuses on safe, calculated plays.\n\n'
-                  '⚡ Aggressive Bot:\n'
-                  'The bold risk-taker who transitions to foot quickly (14 card limit), frequently unlocks discard piles, and makes rapid decisions. This bot feels time pressure more acutely and prefers immediate action over long-term planning.\n\n'
-                  '📚 Book Builder Bot:\n'
-                  'The point maximizer who specializes in completing 7+ card books for massive bonuses (500 clean, 300 dirty). Holds cards strategically in later rounds to complete books defensively when opponents might go out.\n\n'
-                  '🎯 Adaptive Bot:\n'
-                  'The balanced strategist who changes tactics based on game state and opponent behavior. Uses standard holding limits (16 cards) and adjusts aggression based on what others are doing.\n\n'
+                  '🛡️ Conservative Bot (Shield Icon):\n'
+                  'The patient accumulator who builds large hands (25+ cards) like human players, takes calculated risks, and competes in long-term strategy wars. Now enhanced to match human-level strategic patience and accumulation.\n\n'
+                  '⚡ Aggressive Bot (Lightning Icon):\n'
+                  'The speed demon who counters human accumulation by ending games quickly (1-turn play-downs), takes discard piles aggressively, and rushes to go out before opponents can execute complex strategies.\n\n'
+                  '📚 Book Builder Bot (Book Icon):\n'
+                  'The extreme strategist who waits up to 10 turns for perfect book opportunities, specializes in completing multiple 7+ card books for massive bonuses, and outlasts opponents in patience wars.\n\n'
+                  '🎯 Adaptive Bot (Settings Icon):\n'
+                  'The dynamic counter-strategist who detects opponent patterns and switches tactics: speed mode vs human accumulation, book mode vs patient builders, defensive mode vs aggressive players.\n\n'
                   'Each bot has distinct decision-making patterns that create unique gameplay experiences!',
                   style: TextStyle(color: Colors.white70),
                 ),

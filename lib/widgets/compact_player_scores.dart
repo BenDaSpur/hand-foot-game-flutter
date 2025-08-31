@@ -3,12 +3,15 @@ import '../models/player.dart';
 import '../models/game_state.dart';
 import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
+import '../ai/bot_personality.dart';
 
 class CompactPlayerScores extends StatelessWidget {
   final GameState gameState;
   final Player? viewingPlayerMelds;
   final Function(Player) onPlayerTap;
   final String? currentUserId; // For multiplayer support
+  final BotPersonalityManager?
+  botPersonalityManager; // For bot personality icons
 
   const CompactPlayerScores({
     super.key,
@@ -16,6 +19,7 @@ class CompactPlayerScores extends StatelessWidget {
     required this.viewingPlayerMelds,
     required this.onPlayerTap,
     this.currentUserId, // Optional - for multiplayer
+    this.botPersonalityManager, // Optional - for bot personality icons
   });
 
   @override
@@ -93,9 +97,9 @@ class CompactPlayerScores extends StatelessWidget {
                               size: UIConstants.playerScoresIconSize,
                               color: Colors.white70,
                             )
-                          else // Single-player - bot
-                            const Icon(
-                              Icons.smart_toy,
+                          else // Single-player - bot with personality icon
+                            Icon(
+                              _getBotPersonalityIcon(player),
                               size: UIConstants.playerScoresIconSize,
                               color: Colors.white,
                             ),
@@ -225,5 +229,25 @@ class CompactPlayerScores extends StatelessWidget {
         }).toList(),
       ),
     );
+  }
+
+  /// Get personality-specific icon for bot players
+  IconData _getBotPersonalityIcon(Player player) {
+    if (player.type != PlayerType.bot || botPersonalityManager == null) {
+      return Icons.smart_toy; // Default bot icon
+    }
+
+    final personality = botPersonalityManager!.getPersonality(player.id);
+
+    switch (personality) {
+      case BotPersonality.conservative:
+        return Icons.shield; // 🛡️ Conservative - defensive strategy
+      case BotPersonality.aggressive:
+        return Icons.flash_on; // ⚡ Aggressive - speed and intensity
+      case BotPersonality.bookBuilder:
+        return Icons.menu_book; // 📚 Book Builder - knowledge and accumulation
+      case BotPersonality.adaptive:
+        return Icons.tune; // 🎯 Adaptive - adjustment and precision
+    }
   }
 }
