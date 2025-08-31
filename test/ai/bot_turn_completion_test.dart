@@ -135,8 +135,8 @@ void main() {
 
         final decision = botAI.makeDecision(botPlayer, gameController);
 
-        // Should return error since they can't go out without books
-        expect(decision.action, equals('error'));
+        // Should return safe fallback decision (enhanced error handling)
+        expect(decision.action, equals('noMeld'));
       });
 
       test('should never return invalid actions', () {

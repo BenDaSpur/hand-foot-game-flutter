@@ -108,12 +108,32 @@ class EnhancedBotAI {
         return _handlePanicMode(bot, controller, gameState);
       }
 
-      // Route to appropriate decision handler based on turn phase
-      final decision = switch (gameState.turnPhase) {
-        TurnPhase.draw => _makeDrawDecision(bot, controller),
-        TurnPhase.meld => _makeMeldDecision(bot, controller),
-        TurnPhase.discard => _makeDiscardDecision(bot, controller),
-      };
+      // Route to appropriate decision handler based on turn phase with enhanced error handling
+      BotDecision decision;
+      try {
+        decision = switch (gameState.turnPhase) {
+          TurnPhase.draw => _makeDrawDecision(bot, controller),
+          TurnPhase.meld => _makeMeldDecision(bot, controller),
+          TurnPhase.discard => _makeDiscardDecision(bot, controller),
+        };
+
+        // Validate decision before returning
+        if (!_isValidDecision(decision, bot, controller)) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'Invalid decision ${decision.action}, falling back to safe choice',
+          );
+          decision = _getSafeDecision(gameState.turnPhase, bot, controller);
+        }
+      } catch (e) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'Decision error: $e, using emergency fallback',
+        );
+        decision = _getSafeDecision(gameState.turnPhase, bot, controller);
+      }
 
       DebugLogger.botDebug(
         bot.id,
@@ -1873,6 +1893,82 @@ class EnhancedBotAI {
     // This would ideally modify the personality manager's constants for this bot
     // For now, we'll track the strategy and apply it in decision-making
     DebugLogger.botDebug(bot.id, bot.name, 'Adaptive strategy: $strategy');
+  }
+
+  /// Validate bot decision to prevent game-breaking moves
+  bool _isValidDecision(
+    BotDecision decision,
+    Player bot,
+    GameController controller,
+  ) {
+    try {
+      switch (decision.action) {
+        case 'goOut':
+          return controller.canPlayerGoOut() && bot.hasPickedUpFoot;
+        case 'createMeld':
+          return decision.data is List<PlayingCard> &&
+              (decision.data as List<PlayingCard>).isNotEmpty;
+        case 'createMultipleMelds':
+          return decision.data is List<List<PlayingCard>> &&
+              (decision.data as List<List<PlayingCard>>).isNotEmpty;
+        case 'addToMeld':
+          if (decision.data is! Map<String, dynamic>) return false;
+          final data = decision.data as Map<String, dynamic>;
+          final meldIndex = data['meldIndex'] as int?;
+          return meldIndex != null &&
+              meldIndex >= 0 &&
+              meldIndex < bot.melds.length;
+        case 'discard':
+          return decision.data is PlayingCard &&
+              bot.currentHand.contains(decision.data);
+        case 'drawFromDeck':
+        case 'drawFromDiscard':
+        case 'noMeld':
+          return true; // These are always safe
+        default:
+          return false;
+      }
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get safe fallback decision when normal logic fails
+  BotDecision _getSafeDecision(
+    TurnPhase turnPhase,
+    Player bot,
+    GameController controller,
+  ) {
+    switch (turnPhase) {
+      case TurnPhase.draw:
+        return BotDecision(action: 'drawFromDeck');
+      case TurnPhase.meld:
+        // Try simple meld if possible, otherwise skip
+        final possibleMelds = controller.findPossibleMelds(bot);
+        if (possibleMelds.isNotEmpty && bot.hasPlayedDown) {
+          return BotDecision(action: 'createMeld', data: possibleMelds.first);
+        }
+        return BotDecision(action: 'noMeld');
+      case TurnPhase.discard:
+        // Check if bot has any cards at all
+        if (bot.currentHand.isEmpty) {
+          // Bot has no cards - this should trigger going out or error
+          if (controller.canPlayerGoOut()) {
+            return BotDecision(action: 'goOut');
+          }
+          return BotDecision(action: 'noMeld'); // Can't discard with no cards
+        }
+
+        // Find any valid discard
+        final nonThreeCards = bot.currentHand
+            .where((card) => !card.isThree)
+            .toList();
+        if (nonThreeCards.isNotEmpty) {
+          return BotDecision(action: 'discard', data: nonThreeCards.first);
+        }
+        // Emergency: discard any card (even 3s if that's all we have)
+        return BotDecision(action: 'discard', data: bot.currentHand.first);
+    }
   }
 
   // Getters for testing and debugging

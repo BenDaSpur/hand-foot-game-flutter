@@ -2337,6 +2337,7 @@ class _GameScreenState extends State<GameScreen> {
                   _viewingPlayerMelds = player;
                 });
               },
+              botPersonalityManager: _botAI.personalityManager,
             ),
 
             // Melds section
@@ -2893,8 +2894,8 @@ class _GameScreenState extends State<GameScreen> {
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
+              children: [
+                const Text(
                   '🎯 OBJECTIVE',
                   style: TextStyle(
                     color: BalatroTheme.neonGreen,
@@ -2993,17 +2994,41 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
                 SizedBox(height: 8),
-                Text(
-                  '🛡️ Conservative Bot:\n'
-                  'The cautious strategist who holds up to 18 cards, rarely takes risks with the discard pile, and prefers to accumulate before making moves. Patient and methodical, this bot worries less about time pressure and focuses on safe, calculated plays.\n\n'
-                  '⚡ Aggressive Bot:\n'
-                  'The bold risk-taker who transitions to foot quickly (14 card limit), frequently unlocks discard piles, and makes rapid decisions. This bot feels time pressure more acutely and prefers immediate action over long-term planning.\n\n'
-                  '📚 Book Builder Bot:\n'
-                  'The point maximizer who specializes in completing 7+ card books for massive bonuses (500 clean, 300 dirty). Holds cards strategically in later rounds to complete books defensively when opponents might go out.\n\n'
-                  '🎯 Adaptive Bot:\n'
-                  'The balanced strategist who changes tactics based on game state and opponent behavior. Uses standard holding limits (16 cards) and adjusts aggression based on what others are doing.\n\n'
-                  'Each bot has distinct decision-making patterns that create unique gameplay experiences!',
-                  style: TextStyle(color: Colors.white70),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildPersonalityDescription(
+                      Icons.shield,
+                      'Conservative Bot',
+                      'The patient accumulator who builds large hands (25+ cards) like human players, takes calculated risks, and competes in long-term strategy wars. Now enhanced to match human-level strategic patience and accumulation.',
+                    ),
+                    SizedBox(height: 12),
+                    _buildPersonalityDescription(
+                      Icons.flash_on,
+                      'Aggressive Bot',
+                      'The speed demon who counters human accumulation by ending games quickly (1-turn play-downs), takes discard piles aggressively, and rushes to go out before opponents can execute complex strategies.',
+                    ),
+                    SizedBox(height: 12),
+                    _buildPersonalityDescription(
+                      Icons.auto_stories,
+                      'Book Builder Bot',
+                      'The extreme strategist who waits up to 10 turns for perfect book opportunities, specializes in completing multiple 7+ card books for massive bonuses, and outlasts opponents in patience wars.',
+                    ),
+                    SizedBox(height: 12),
+                    _buildPersonalityDescription(
+                      Icons.auto_mode,
+                      'Adaptive Bot',
+                      'The dynamic counter-strategist who detects opponent patterns and switches tactics: speed mode vs human accumulation, book mode vs patient builders, defensive mode vs aggressive players.',
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Each bot has distinct decision-making patterns that create unique gameplay experiences!',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -3570,58 +3595,94 @@ class _GameScreenState extends State<GameScreen> {
     BotDecision decision,
     GameState gameState,
   ) {
-    final personality = _botAI.personalityManager.getPersonality(bot.id);
-    final handSize = bot.currentHand.length;
-    final hasBooks = bot.melds.where((m) => m.cards.length >= 7).length;
+    try {
+      final personality = _botAI.personalityManager.getPersonality(bot.id);
+      final handSize = bot.currentHand.length;
+      final hasBooks = bot.melds.where((m) => m.cards.length >= 7).length;
 
-    switch (decision.action) {
-      case 'drawFromDeck':
-        if (!bot.hasPlayedDown) {
-          return '$personality bot drawing from deck to build hand for play-down ($handSize cards)';
-        } else if (!bot.hasPickedUpFoot) {
-          return '$personality bot drawing from deck while building toward foot transition';
-        } else {
-          return '$personality bot drawing from deck in foot phase ($handSize cards, $hasBooks books)';
-        }
+      switch (decision.action) {
+        case 'drawFromDeck':
+          if (!bot.hasPlayedDown) {
+            return '$personality bot drawing from deck to build hand for play-down ($handSize cards)';
+          } else if (!bot.hasPickedUpFoot) {
+            return '$personality bot drawing from deck while building toward foot transition';
+          } else {
+            return '$personality bot drawing from deck in foot phase ($handSize cards, $hasBooks books)';
+          }
 
-      case 'drawFromDiscard':
-        return '$personality bot taking discard pile (${gameState.discardPile.length} cards) for strategic advantage';
+        case 'drawFromDiscard':
+          return '$personality bot taking discard pile (${gameState.discardPile.length} cards) for strategic advantage';
 
-      case 'createMeld':
-        if (!bot.hasPlayedDown) {
-          return '$personality bot creating initial meld to play down (Round ${gameState.round})';
-        } else {
-          return '$personality bot creating new meld to build toward books (${bot.melds.length + 1} total melds)';
-        }
+        case 'createMeld':
+          if (!bot.hasPlayedDown) {
+            return '$personality bot creating initial meld to play down (Round ${gameState.round})';
+          } else {
+            return '$personality bot creating new meld to build toward books (${bot.melds.length + 1} total melds)';
+          }
 
-      case 'createMultipleMelds':
-        return '$personality bot creating multiple melds for explosive play-down (Round ${gameState.round})';
+        case 'createMultipleMelds':
+          return '$personality bot creating multiple melds for explosive play-down (Round ${gameState.round})';
 
-      case 'addToMeld':
-        final data = decision.data as Map<String, dynamic>?;
-        final card = data?['card'];
-        return '$personality bot adding ${card?.toString() ?? 'card'} to existing meld (building toward book)';
+        case 'addToMeld':
+          final data = decision.data as Map<String, dynamic>?;
+          final card = data?['card'];
+          return '$personality bot adding ${card?.toString() ?? 'card'} to existing meld (building toward book)';
 
-      case 'discard':
-        final card = decision.data;
-        if (handSize <= 3) {
-          return '$personality bot discarding ${card?.toString() ?? 'card'} while positioning for end-game';
-        } else {
-          return '$personality bot discarding ${card?.toString() ?? 'card'} (${handSize - 1} cards remaining)';
-        }
+        case 'discard':
+          final card = decision.data;
+          if (handSize <= 3) {
+            return '$personality bot discarding ${card?.toString() ?? 'card'} while positioning for end-game';
+          } else {
+            return '$personality bot discarding ${card?.toString() ?? 'card'} (${handSize - 1} cards remaining)';
+          }
 
-      case 'goOut':
-        return '$personality bot going out with $hasBooks books to win the round!';
+        case 'goOut':
+          return '$personality bot going out with $hasBooks books to win the round!';
 
-      case 'noMeld':
-        if (!bot.hasPlayedDown) {
-          return '$personality bot waiting for better play-down opportunity ($handSize cards)';
-        } else {
-          return '$personality bot holding cards strategically ($handSize cards, $hasBooks books)';
-        }
+        case 'noMeld':
+          if (!bot.hasPlayedDown) {
+            return '$personality bot waiting for better play-down opportunity ($handSize cards)';
+          } else {
+            return '$personality bot holding cards strategically ($handSize cards, $hasBooks books)';
+          }
 
-      default:
-        return '$personality bot executing ${decision.action} strategy';
+        default:
+          return '$personality bot executing ${decision.action} strategy';
+      }
+    } catch (e) {
+      return 'Bot ${bot.name} executed ${decision.action} (error in reasoning generation)';
     }
+  }
+
+  /// Build personality description with icon for how-to-play modal
+  Widget _buildPersonalityDescription(
+    IconData icon,
+    String title,
+    String description,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: TextStyle(color: Colors.white70),
+              children: [
+                TextSpan(
+                  text: '$title:\n',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                TextSpan(text: description),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

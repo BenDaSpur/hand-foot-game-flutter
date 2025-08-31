@@ -3,12 +3,24 @@ import '../models/player.dart';
 import '../models/game_state.dart';
 import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
+import '../ai/bot_personality.dart';
+
+/// Constants for personality icons
+class PersonalityIcons {
+  static const IconData defaultBot = Icons.smart_toy;
+  static const IconData conservative = Icons.shield;
+  static const IconData aggressive = Icons.flash_on;
+  static const IconData bookBuilder = Icons.auto_stories;
+  static const IconData adaptive = Icons.auto_mode;
+}
 
 class CompactPlayerScores extends StatelessWidget {
   final GameState gameState;
   final Player? viewingPlayerMelds;
   final Function(Player) onPlayerTap;
   final String? currentUserId; // For multiplayer support
+  final BotPersonalityManager?
+  botPersonalityManager; // For bot personality icons
 
   const CompactPlayerScores({
     super.key,
@@ -16,6 +28,7 @@ class CompactPlayerScores extends StatelessWidget {
     required this.viewingPlayerMelds,
     required this.onPlayerTap,
     this.currentUserId, // Optional - for multiplayer
+    this.botPersonalityManager, // Optional - for bot personality icons
   });
 
   @override
@@ -93,9 +106,9 @@ class CompactPlayerScores extends StatelessWidget {
                               size: UIConstants.playerScoresIconSize,
                               color: Colors.white70,
                             )
-                          else // Single-player - bot
-                            const Icon(
-                              Icons.smart_toy,
+                          else // Single-player - bot with personality icon
+                            Icon(
+                              _getBotPersonalityIcon(player),
                               size: UIConstants.playerScoresIconSize,
                               color: Colors.white,
                             ),
@@ -225,5 +238,25 @@ class CompactPlayerScores extends StatelessWidget {
         }).toList(),
       ),
     );
+  }
+
+  /// Get personality-specific icon for bot players
+  IconData _getBotPersonalityIcon(Player player) {
+    if (player.type != PlayerType.bot || botPersonalityManager == null) {
+      return PersonalityIcons.defaultBot;
+    }
+
+    final personality = botPersonalityManager!.getPersonality(player.id);
+
+    switch (personality) {
+      case BotPersonality.conservative:
+        return PersonalityIcons.conservative;
+      case BotPersonality.aggressive:
+        return PersonalityIcons.aggressive;
+      case BotPersonality.bookBuilder:
+        return PersonalityIcons.bookBuilder;
+      case BotPersonality.adaptive:
+        return PersonalityIcons.adaptive;
+    }
   }
 }
