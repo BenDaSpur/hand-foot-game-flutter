@@ -39,15 +39,23 @@ class EnhancedBotAI {
   Map<String, DateTime>? _lastPressureAnalysis;
   Map<String, BotDecision?>? _cachedPressureResponse;
 
-  // Strategic constants - ENHANCED for human-level strategic play
+  // Strategic constants - EMERGENCY FIXES for hand size management
   static const int maxTurnsBeforeForcePlayDown =
-      8; // INCREASED - allow strategic accumulation like humans (35+ cards)
+      6; // REDUCED - prevent catastrophic accumulation
   static const int strongPlayDownBuffer =
-      15; // INCREASED - wait for stronger strategic positions
+      10; // REDUCED - more aggressive play-downs
   static const int wildCardDiscardThreshold =
-      6; // REDUCED - hoard wilds more strategically
+      8; // INCREASED - discard wilds more readily
   static const double emergencyRiskTolerance =
-      2.5; // INCREASED - take bigger strategic risks
+      1.8; // REDUCED - more conservative in emergencies
+
+  // EMERGENCY HAND SIZE PROTOCOLS - Prevents catastrophic accumulation like 32+ cards
+  static const int emergencyHandSizeThreshold =
+      25; // CRITICAL: Force emergency actions (based on gameplay analysis)
+  static const int criticalHandSizeThreshold =
+      30; // PANIC: Any meld is better than none (absolute emergency)
+  static const int competitiveThreatHandSizeGap =
+      15; // When opponent is ahead by this much (competitive intelligence)
   static const double maxEmergencyRiskTolerance =
       6.0; // INCREASED - allow major strategic gambles
 
@@ -237,6 +245,44 @@ class EnhancedBotAI {
 
   /// Handle meld phase decisions
   BotDecision _makeMeldDecision(Player bot, GameController controller) {
+    // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
+    // These override ALL other logic to prevent 32+ card disasters
+    final handSize = bot.currentHand.length;
+    if (handSize >= criticalHandSizeThreshold) {
+      // PANIC MODE: Any meld is better than none
+      final anyPossibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+      if (anyPossibleMelds.isNotEmpty) {
+        final panicMeld = anyPossibleMelds.first; // Take ANY meld
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - forcing meld creation',
+        );
+        return BotDecision(
+          action: 'createMeld',
+          data: panicMeld,
+          skipPlayDownCheck: bot.hasPlayedDown, // Force if already played down
+        );
+      }
+      // Ultimate fallback: If somehow no melds possible even with 30+ cards,
+      // continue to emergency mode rather than crash
+    }
+
+    if (handSize >= emergencyHandSizeThreshold) {
+      // EMERGENCY MODE: Force aggressive meld creation
+      if (bot.hasPlayedDown) {
+        // Already played down - meld anything possible
+        final emergencyMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+        if (emergencyMelds.isNotEmpty) {
+          final urgentMeld = emergencyMelds.first;
+          return BotDecision(action: 'createMeld', data: urgentMeld);
+        }
+      } else {
+        // Force play-down even with suboptimal points
+        return _handleEmergencyPlayDown(bot, controller);
+      }
+    }
+
     // Multi-meld sequences should happen within a single turn, not across turns
     // Clear any stale multi-meld state that violates Hand & Foot rules
     if (_inMultiMeldSequence) {
@@ -244,7 +290,7 @@ class EnhancedBotAI {
       _inMultiMeldSequence = false;
     }
 
-    // Check for end game decisions first (highest priority)
+    // Check for end game decisions (after emergency protocols)
     final endGameDecision = _endGameManager.handleEndGame(bot, controller);
     if (endGameDecision != null) {
       return endGameDecision;
@@ -267,6 +313,16 @@ class EnhancedBotAI {
       return footTransitionDecision;
     }
 
+    // Check competitive positioning threat
+    if (_isCompetitivelyThreatened(bot, controller)) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'COMPETITIVE THREAT DETECTED: Switching to aggressive catch-up mode',
+      );
+      return _handleCompetitiveThreat(bot, controller);
+    }
+
     // Handle play-down if not yet played down
     if (!bot.hasPlayedDown) {
       return _handlePlayDownDecision(bot, controller);
@@ -274,9 +330,10 @@ class EnhancedBotAI {
 
     // Post-play-down strategy: Use accumulate-and-dump approach
     // Hold cards strategically for better discard pile unlocking opportunities
-    // ENHANCED: Be more aggressive about meld creation vs holding
-    if (_shouldHoldCardsStrategically(bot, controller)) {
-      // Only hold if we're not in a competitive situation
+    // EMERGENCY OVERRIDE: Never hold with dangerous hand sizes
+    if (handSize < emergencyHandSizeThreshold &&
+        _shouldHoldCardsStrategically(bot, controller)) {
+      // Only hold if we're not in a competitive situation AND hand size is safe
       final humanPlayers = controller.gameState.players.where(
         (p) => p.type == PlayerType.human,
       );
@@ -284,7 +341,8 @@ class EnhancedBotAI {
         (h) => h.hasPickedUpFoot && h.currentHand.length <= 8,
       );
 
-      if (!humanThreat && bot.currentHand.length > 10) {
+      if (!humanThreat && handSize <= 20) {
+        // REDUCED from 10 to prevent accumulation
         return BotDecision(action: 'noMeld');
       }
       // Otherwise, continue to meld building instead of holding
@@ -333,6 +391,91 @@ class EnhancedBotAI {
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
+  /// EMERGENCY: Handle emergency play-down when hand size is critical
+  BotDecision _handleEmergencyPlayDown(Player bot, GameController controller) {
+    final gameState = controller.gameState;
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    final playDownRequirement = gameState.playDownRequirement;
+
+    if (possibleMelds.isEmpty) {
+      return BotDecision(action: 'noMeld');
+    }
+
+    // EMERGENCY: Try any combination that gets close to requirement
+    final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
+      bot,
+      controller,
+      (playDownRequirement * 0.8)
+          .round(), // Accept 80% of requirement in emergency
+    );
+
+    if (bestCombination.isNotEmpty) {
+      if (bestCombination.length == 1) {
+        return BotDecision(
+          action: 'createMeld',
+          data: bestCombination.first,
+          skipPlayDownCheck: true, // Force play-down in emergency
+        );
+      } else {
+        return BotDecision(
+          action: 'createMultipleMelds',
+          data: bestCombination,
+          skipPlayDownCheck: false, // Multi-meld has proper validation
+        );
+      }
+    }
+
+    return BotDecision(action: 'noMeld');
+  }
+
+  /// Check if bot is competitively threatened by opponents
+  bool _isCompetitivelyThreatened(Player bot, GameController controller) {
+    final gameState = controller.gameState;
+    final botHandSize = bot.currentHand.length;
+
+    // Check all opponents
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) continue;
+
+      final handSizeGap = botHandSize - opponent.currentHand.length;
+      final meldGap = opponent.melds.length - bot.melds.length;
+
+      // Threatened if opponent has significant advantage
+      if (handSizeGap >= competitiveThreatHandSizeGap || meldGap >= 3) {
+        return true;
+      }
+
+      // Threatened if opponent is close to going out
+      if (opponent.hasPickedUpFoot && opponent.currentHand.length <= 5) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Handle competitive threat by switching to aggressive mode
+  BotDecision _handleCompetitiveThreat(Player bot, GameController controller) {
+    // Force meld creation if possible
+    final possibleMelds = _meldAnalyzer.getPossibleMelds(bot, controller);
+    if (possibleMelds.isNotEmpty) {
+      final urgentMeld = possibleMelds.first; // Take first available meld
+      return BotDecision(action: 'createMeld', data: urgentMeld);
+    }
+
+    // Try adding to existing melds
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    // Fall back to no meld if nothing possible
+    return BotDecision(action: 'noMeld');
+  }
+
   /// Handle play-down decision logic
   BotDecision _handlePlayDownDecision(Player bot, GameController controller) {
     final gameState = controller.gameState;
@@ -349,11 +492,25 @@ class EnhancedBotAI {
     final personalityTurnLimit =
         personalityConstants.maxTurnsBeforeForcePlayDown;
 
-    final roundUrgencyMultiplier = gameState.round >= 3
-        ? 0.5
-        : 1.0; // Very aggressive in Round 3+
+    // ROUND-SPECIFIC STRATEGY ADJUSTMENTS - Based on 3-round gameplay analysis
+    double roundUrgencyMultiplier;
+    switch (gameState.round) {
+      case 1:
+        roundUrgencyMultiplier = 1.0; // Normal patience - accumulation OK
+        break;
+      case 2:
+        roundUrgencyMultiplier = 0.8; // Slightly more urgent - build momentum
+        break;
+      case 3:
+      default:
+        roundUrgencyMultiplier =
+            0.3; // EXTREMELY aggressive - prevent Round 3 failures
+        break;
+    }
+
     final urgentTurnLimit = (personalityTurnLimit * roundUrgencyMultiplier)
-        .round();
+        .round()
+        .clamp(1, personalityTurnLimit); // At least 1 turn patience
 
     // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
     final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
@@ -377,17 +534,22 @@ class EnhancedBotAI {
             cards.fold<int>(0, (cardSum, card) => cardSum + card.pointValue),
       );
 
-      // Always play down if: 1) We meet requirement, OR 2) We've waited enough turns, OR 3) Late round
-      final meetsRequirement = combinationValue >= playDownRequirement;
+      // ROUND 3 EMERGENCY: Reduce requirement drastically to get into game quickly
+      final adjustedRequirement = gameState.round >= 3
+          ? (playDownRequirement * 0.8)
+                .round() // Accept 80% in Round 3+
+          : playDownRequirement;
+
+      final meetsRequirement = combinationValue >= adjustedRequirement;
       final hasModerateExcess =
-          combinationValue >= (playDownRequirement + 10); // Reasonable excess
+          combinationValue >= (adjustedRequirement + 10); // Reasonable excess
       final hasWaitedEnough = turnCount >= urgentTurnLimit;
       final lateRoundUrgency = gameState.round >= 3;
 
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $playDownRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency',
+        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency',
       );
 
       // Play down immediately if we meet basic requirement AND (have reasonable excess OR waited OR late round)
