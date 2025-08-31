@@ -245,9 +245,9 @@ class CompactPlayerScores extends StatelessWidget {
       case BotPersonality.aggressive:
         return Icons.flash_on; // ⚡ Aggressive - speed and intensity
       case BotPersonality.bookBuilder:
-        return Icons.menu_book; // 📚 Book Builder - knowledge and accumulation
+        return Icons.auto_stories; // 📚 Book Builder - stories/book icon
       case BotPersonality.adaptive:
-        return Icons.tune; // 🎯 Adaptive - adjustment and precision
+        return Icons.auto_mode; // 🎯 Adaptive - auto mode icon
     }
   }
 }
