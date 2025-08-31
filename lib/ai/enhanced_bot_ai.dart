@@ -256,8 +256,20 @@ class EnhancedBotAI {
 
     // Post-play-down strategy: Use accumulate-and-dump approach
     // Hold cards strategically for better discard pile unlocking opportunities
+    // ENHANCED: Be more aggressive about meld creation vs holding
     if (_shouldHoldCardsStrategically(bot, controller)) {
-      return BotDecision(action: 'noMeld');
+      // Only hold if we're not in a competitive situation
+      final humanPlayers = controller.gameState.players.where(
+        (p) => p.type == PlayerType.human,
+      );
+      final humanThreat = humanPlayers.any(
+        (h) => h.hasPickedUpFoot && h.currentHand.length <= 8,
+      );
+
+      if (!humanThreat && bot.currentHand.length > 10) {
+        return BotDecision(action: 'noMeld');
+      }
+      // Otherwise, continue to meld building instead of holding
     }
 
     // If ready to dump everything, execute all possible melds
@@ -590,9 +602,18 @@ class EnhancedBotAI {
     )) {
       // If human is accumulating and avoiding discard pile, we should take it
       adjustedValueThreshold *=
-          0.7; // 30% more willing to take piles humans ignore
+          0.5; // MUCH more willing to take piles humans ignore (was 0.7)
       adjustedSizeThreshold *=
-          0.8; // Take smaller piles to deny human resources
+          0.6; // Take smaller piles to deny human resources (was 0.8)
+    }
+
+    // NEW: Exploit large discard piles (23-37 cards observed, but bots ignore them)
+    if (pileSize >= 20) {
+      adjustedValueThreshold *= 0.3; // Take huge piles aggressively
+      adjustedSizeThreshold *= 0.4; // Almost always take large piles
+    } else if (pileSize >= 10) {
+      adjustedValueThreshold *= 0.6; // Take medium-large piles
+      adjustedSizeThreshold *= 0.7; // Lower threshold for medium piles
     }
 
     // NEW: Competitive pile denial - take piles that would benefit opponents
