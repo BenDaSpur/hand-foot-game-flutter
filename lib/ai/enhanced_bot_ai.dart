@@ -111,6 +111,60 @@ class EnhancedBotAI {
         return pressureResponse;
       }
 
+      // CRITICAL EMERGENCY: Hand size protocols override ALL other logic
+      final handSize = bot.currentHand.length;
+      if (handSize >= criticalHandSizeThreshold) {
+        // PANIC MODE: Force ANY meld creation regardless of phase
+        final anyPossibleMelds = _meldAnalyzer.getPossibleMelds(
+          bot,
+          controller,
+        );
+        if (anyPossibleMelds.isNotEmpty &&
+            gameState.turnPhase == TurnPhase.meld) {
+          final panicMeld = anyPossibleMelds.first;
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - forcing meld creation',
+          );
+          return BotDecision(
+            action: 'createMeld',
+            data: panicMeld,
+            skipPlayDownCheck: bot.hasPlayedDown,
+          );
+        }
+      }
+
+      if (handSize >= emergencyHandSizeThreshold) {
+        // EMERGENCY MODE: Override draw decisions to force melding
+        if (gameState.turnPhase == TurnPhase.meld) {
+          final emergencyMelds = _meldAnalyzer.getPossibleMelds(
+            bot,
+            controller,
+          );
+          if (emergencyMelds.isNotEmpty) {
+            DebugLogger.botDebug(
+              bot.id,
+              bot.name,
+              'EMERGENCY: Hand size $handSize exceeds $emergencyHandSizeThreshold - forcing emergency meld',
+            );
+            return BotDecision(
+              action: 'createMeld',
+              data: emergencyMelds.first,
+            );
+          }
+        }
+        // In draw phase with emergency hand size - still draw to get to meld phase
+        if (gameState.turnPhase == TurnPhase.draw) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'EMERGENCY: Hand size $handSize - forcing quick draw to reach meld phase',
+          );
+          return BotDecision(action: 'drawFromDeck');
+        }
+      }
+
       // PANIC MODE: Override normal logic for bots in terrible situations
       if (bot.score < -100 && !bot.hasPlayedDown) {
         return _handlePanicMode(bot, controller, gameState);
