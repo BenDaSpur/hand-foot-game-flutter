@@ -85,7 +85,7 @@ jobs:
             echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
             exit 1
           fi
-          
+
           # Verify it's production config (not stub) for multiplayer functionality
           if grep -q "stub-project" lib/firebase_options.dart; then
             echo "Error: Found stub configuration instead of production - multiplayer will not work"
@@ -98,8 +98,34 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Web for GitHub Pages
-        run: flutter build web --release --base-href /${{ github.event.repository.name }}/
+      - name: Clean build cache
+        run: |
+          flutter clean
+          echo "Build cache cleared"
+
+      - name: Build Web for GitHub Pages with cache busting
+        run: |
+          # Build with unique version to prevent browser caching issues
+          export BUILD_NUMBER=$(date +%s)
+          flutter build web --release --base-href /${{ github.event.repository.name }}/ --dart-define=BUILD_NUMBER=$BUILD_NUMBER
+          echo "Built with BUILD_NUMBER: $BUILD_NUMBER"
+
+      - name: Add cache-busting headers
+        run: |
+          cd build/web
+          # Backup original and apply changes safely
+          cp index.html index.html.orig
+          sed 's|<head>|<head>\n  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n  <meta http-equiv="Pragma" content="no-cache">\n  <meta http-equiv="Expires" content="0">|' index.html.orig > index.html
+          # Verify the changes were applied
+          if ! grep -q "Cache-Control" index.html; then
+            echo "Error: Cache control headers not added properly"
+            exit 1
+          fi
+          # Clean up backup file to avoid including in deployment
+          rm index.html.orig
+          # Add version comment for debugging
+          echo "<!-- Deployed: $(date) -->" >> index.html
+          echo "Cache-busting headers added and verified"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
