@@ -53,7 +53,8 @@ class PersonalityConstants {
     switch (personality) {
       case BotPersonality.conservative:
         return const PersonalityConstants(
-          strategicBufferPoints: 20, // Reduced from 30 - more competitive
+          strategicBufferPoints:
+              10, // REDUCED - more aggressive competitiveness
           minCardsForAggressiveUnlock:
               3, // Reduced from 4 - more willing to unlock
           valuablePileThreshold:
@@ -64,9 +65,10 @@ class PersonalityConstants {
           footPileSizeThreshold:
               5, // Reduced from 7 - more willing to take smaller piles
           handPileValueThreshold:
-              75, // Reduced from 105 - more aggressive in hand
+              50, // REDUCED further - much more aggressive pile taking
           handPileSizeThreshold: 7, // Reduced from 9 - lower threshold
-          maxTurnsBeforeForcePlayDown: 4, // Reduced from 6 - force faster play
+          maxTurnsBeforeForcePlayDown:
+              8, // INCREASED - match human accumulation patience
           highValuePairBreakChance:
               0.25, // Increased from 0.15 - more willing to break pairs
           bookCompletionPriority: 200, // Keep high priority for books
@@ -75,7 +77,8 @@ class PersonalityConstants {
         );
       case BotPersonality.aggressive:
         return const PersonalityConstants(
-          strategicBufferPoints: 5, // Reduced from 10 - even more aggressive
+          strategicBufferPoints:
+              5, // Keep low - but allow patience for bigger plays
           minCardsForAggressiveUnlock: 2, // Keep at 2 - very willing to unlock
           valuablePileThreshold:
               50, // Reduced from 70 - take even smaller piles
@@ -84,10 +87,10 @@ class PersonalityConstants {
               25, // Reduced from 35 - extremely aggressive in foot
           footPileSizeThreshold: 2, // Reduced from 3 - take almost any pile
           handPileValueThreshold:
-              35, // Reduced from 45 - more aggressive in hand
+              25, // REDUCED further - take almost any valuable pile
           handPileSizeThreshold: 3, // Reduced from 4 - very low threshold
           maxTurnsBeforeForcePlayDown:
-              2, // Reduced from 3 - force very fast play
+              1, // SUPER AGGRESSIVE - counter human accumulation with speed strikes
           highValuePairBreakChance:
               0.8, // Increased from 0.7 - almost always break pairs
           bookCompletionPriority:
@@ -112,7 +115,7 @@ class PersonalityConstants {
               60, // Reduced from 75 - more aggressive in hand for books
           handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
           maxTurnsBeforeForcePlayDown:
-              4, // Reduced from 6 - can't wait too long for perfect books
+              10, // INCREASED - allow extensive book building like humans
           highValuePairBreakChance:
               0.4, // Increased from 0.3 - more willing to break for books
           bookCompletionPriority:
@@ -134,7 +137,8 @@ class PersonalityConstants {
           handPileValueThreshold:
               60, // Reduced from 75 - more aggressive in hand
           handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
-          maxTurnsBeforeForcePlayDown: 3, // Reduced from 5 - adapt faster
+          maxTurnsBeforeForcePlayDown:
+              4, // MODERATE - situational speed (will be overridden by adaptive logic)
           highValuePairBreakChance:
               0.6, // Increased from 0.5 - more willing to break pairs
           bookCompletionPriority: 150, // Keep balanced priority
