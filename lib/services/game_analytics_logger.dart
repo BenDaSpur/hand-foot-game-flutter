@@ -192,7 +192,7 @@ class GameAnalyticsLogger {
     List<String>? alternativeActions,
     Map<String, double>? riskAssessment,
   }) async {
-    if (!_analyticsEnabled || !_detailedLoggingEnabled) return;
+    if (!_analyticsEnabled) return; // Removed detailed logging requirement
     if (_currentSessionId == null) return;
 
     try {
@@ -394,7 +394,8 @@ class GameAnalyticsLogger {
     double? outcomeScore, // Positive/negative impact score
     Map<String, dynamic>? outcomeContext,
   }) async {
-    if (!_analyticsEnabled || !_detailedLoggingEnabled) return;
+    if (!_analyticsEnabled)
+      return; // Removed detailed logging requirement for decision outcomes
     if (_currentSessionId == null) return;
 
     try {
