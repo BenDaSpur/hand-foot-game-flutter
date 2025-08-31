@@ -85,7 +85,7 @@ jobs:
             echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
             exit 1
           fi
-          
+
           # Verify it's production config (not stub) for multiplayer functionality
           if grep -q "stub-project" lib/firebase_options.dart; then
             echo "Error: Found stub configuration instead of production - multiplayer will not work"
@@ -109,7 +109,7 @@ jobs:
           export BUILD_NUMBER=$(date +%s)
           flutter build web --release --base-href /${{ github.event.repository.name }}/ --dart-define=BUILD_NUMBER=$BUILD_NUMBER
           echo "Built with BUILD_NUMBER: $BUILD_NUMBER"
-          
+
       - name: Add cache-busting headers
         run: |
           cd build/web
