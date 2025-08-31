@@ -1486,11 +1486,32 @@ class EnhancedBotAI {
     // Strategy: Play down immediately, rush to foot, go out ASAP to prevent human accumulation
 
     if (!bot.hasPlayedDown) {
-      // EMERGENCY: Play down with minimum points if human accumulating
+      // EMERGENCY: Play down with minimum points if human accumulating - but ensure rule compliance
       final possibleMelds = controller.findPossibleMelds(bot);
       if (possibleMelds.isNotEmpty) {
-        // Take the first viable meld to play down immediately
-        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+        // Find a meld that meets the minimum play-down requirement
+        final gameState = controller.gameState;
+        final playDownRequirement = gameState.playDownRequirement;
+
+        for (final meld in possibleMelds) {
+          final meldValue = meld.fold<int>(
+            0,
+            (sum, card) => sum + card.pointValue,
+          );
+          if (meldValue >= playDownRequirement) {
+            return BotDecision(action: 'createMeld', data: meld);
+          }
+        }
+
+        // If no single meld meets requirement, try multi-meld combination
+        final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
+          bot,
+          controller,
+          playDownRequirement,
+        );
+        if (bestCombination.isNotEmpty) {
+          return _executePlayDown(bestCombination);
+        }
       }
     }
 
@@ -1717,64 +1738,83 @@ class EnhancedBotAI {
 
   /// NEW: Dynamic adaptive personality adjustment based on opponent behavior
   void _applyAdaptivePersonalityAdjustment(Player bot, GameState gameState) {
-    // Only apply to adaptive personality bots
-    if (_personalityManager.getPersonality(bot.id) != BotPersonality.adaptive) {
-      return;
-    }
-
-    final humanPlayers = gameState.players.where(
-      (p) => p.type == PlayerType.human,
-    );
-
-    // Only apply adaptive adjustments when there are human players (not in tests)
-    if (humanPlayers.isEmpty) {
-      return;
-    }
-
-    for (final human in humanPlayers) {
-      // ADAPTATION 1: Counter human accumulation with speed
-      if (human.currentHand.length >= 20 &&
-          !human.hasPlayedDown &&
-          gameState.round <= 4) {
-        // Human is accumulating - switch to aggressive mode to end game quickly
-        _overrideAdaptiveConstants(bot, 'speed_counter', {
-          'maxTurnsBeforeForcePlayDown': 1, // Strike fast
-          'aggressivenessMultiplier': 1.8, // Be very aggressive
-          'handPileValueThreshold': 20, // Take any pile to speed up
-        });
+    try {
+      // Only apply to adaptive personality bots
+      if (_personalityManager.getPersonality(bot.id) !=
+          BotPersonality.adaptive) {
         return;
       }
 
-      // ADAPTATION 2: Match human book building with patience
-      if (human.melds.length >= 8 && human.hasPlayedDown) {
-        // Human is building many books - switch to book builder mode
-        _overrideAdaptiveConstants(bot, 'book_matcher', {
-          'maxTurnsBeforeForcePlayDown': 9, // Allow book building
-          'bookCompletionPriority': 300, // Prioritize books heavily
-          'aggressivenessMultiplier': 1.3, // Competitive book building
-        });
+      final humanPlayers = gameState.players.where(
+        (p) => p.type == PlayerType.human,
+      );
+
+      // Only apply adaptive adjustments when there are human players (not in tests)
+      if (humanPlayers.isEmpty) {
         return;
       }
 
-      // ADAPTATION 3: Outlast aggressive opponents
-      if (human.hasPickedUpFoot &&
-          human.currentHand.length <= 10 &&
-          gameState.round <= 3) {
-        // Human is playing aggressively - switch to defensive mode
-        _overrideAdaptiveConstants(bot, 'defensive_counter', {
-          'maxTurnsBeforeForcePlayDown': 6, // Be more patient
-          'strategicBufferPoints': 25, // Wait for stronger position
-          'aggressivenessMultiplier': 0.9, // Be more defensive
-        });
+      // Validate game state before making adaptations
+      if (gameState.round < 1 || gameState.round > 10) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'Invalid round ${gameState.round}, skipping adaptive adjustment',
+        );
         return;
       }
+
+      for (final human in humanPlayers) {
+        // ADAPTATION 1: Counter human accumulation with speed
+        if (human.currentHand.length >= 20 &&
+            !human.hasPlayedDown &&
+            gameState.round <= 4) {
+          // Human is accumulating - switch to aggressive mode to end game quickly
+          _overrideAdaptiveConstants(bot, 'speed_counter', {
+            'maxTurnsBeforeForcePlayDown': 1, // Strike fast
+            'aggressivenessMultiplier': 1.8, // Be very aggressive
+            'handPileValueThreshold': 20, // Take any pile to speed up
+          });
+          return;
+        }
+
+        // ADAPTATION 2: Match human book building with patience
+        if (human.melds.length >= 8 && human.hasPlayedDown) {
+          // Human is building many books - switch to book builder mode
+          _overrideAdaptiveConstants(bot, 'book_matcher', {
+            'maxTurnsBeforeForcePlayDown': 9, // Allow book building
+            'bookCompletionPriority': 300, // Prioritize books heavily
+            'aggressivenessMultiplier': 1.3, // Competitive book building
+          });
+          return;
+        }
+
+        // ADAPTATION 3: Outlast aggressive opponents
+        if (human.hasPickedUpFoot &&
+            human.currentHand.length <= 10 &&
+            gameState.round <= 3) {
+          // Human is playing aggressively - switch to defensive mode
+          _overrideAdaptiveConstants(bot, 'defensive_counter', {
+            'maxTurnsBeforeForcePlayDown': 6, // Be more patient
+            'strategicBufferPoints': 25, // Wait for stronger position
+            'aggressivenessMultiplier': 0.9, // Be more defensive
+          });
+          return;
+        }
+      }
+
+      // Default adaptive behavior if no specific pattern detected
+      _overrideAdaptiveConstants(bot, 'default_adaptive', {
+        'maxTurnsBeforeForcePlayDown': 4,
+        'aggressivenessMultiplier': 1.1,
+      });
+    } catch (e) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Error in adaptive personality adjustment: $e',
+      );
     }
-
-    // Default adaptive behavior if no specific pattern detected
-    _overrideAdaptiveConstants(bot, 'default_adaptive', {
-      'maxTurnsBeforeForcePlayDown': 4,
-      'aggressivenessMultiplier': 1.1,
-    });
   }
 
   /// Override adaptive bot constants for situational strategy
