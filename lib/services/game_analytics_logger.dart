@@ -312,6 +312,11 @@ class GameAnalyticsLogger {
     if (_currentSessionId == null) return;
 
     try {
+      // Sanitize eventData to prevent "Invalid double" Firebase errors
+      final sanitizedEventData = eventData != null
+          ? _sanitizeAnalyticsData(eventData)
+          : null;
+
       final eventLogData = {
         'sessionId': _currentSessionId,
         'timestamp': FieldValue.serverTimestamp(),
@@ -320,7 +325,7 @@ class GameAnalyticsLogger {
         'playerType': playerType?.name,
         'success': success,
         'errorMessage': errorMessage,
-        'eventData': eventData,
+        'eventData': sanitizedEventData,
       };
 
       // Use batching for game events (high frequency)
@@ -517,14 +522,29 @@ class GameAnalyticsLogger {
         totalDuration += (data['sessionDuration'] as num?)?.toInt() ?? 0;
       }
 
-      if (totalBots > 0) {
-        analytics['winRate'] = wins / totalBots;
-        analytics['averageScore'] = totalScore / totalBots;
-        analytics['averageRounds'] = totalRounds / sessions.docs.length;
-        analytics['averageGameDuration'] = totalDuration / sessions.docs.length;
-        analytics['playDownSuccessRate'] = playDowns / totalBots;
-        analytics['footTransitionRate'] = footTransitions / totalBots;
-        analytics['bookCompletionRate'] = booksCompleted / totalBots;
+      if (totalBots > 0 && sessions.docs.isNotEmpty) {
+        // Safe division with validation to prevent NaN/Infinity
+        analytics['winRate'] = totalBots > 0
+            ? (wins / totalBots * 100).round()
+            : 0;
+        analytics['averageScore'] = totalBots > 0
+            ? (totalScore / totalBots).round()
+            : 0;
+        analytics['averageRounds'] = sessions.docs.isNotEmpty
+            ? (totalRounds / sessions.docs.length).round()
+            : 0;
+        analytics['averageGameDuration'] = sessions.docs.isNotEmpty
+            ? (totalDuration / sessions.docs.length).round()
+            : 0;
+        analytics['playDownSuccessRate'] = totalBots > 0
+            ? (playDowns / totalBots * 100).round()
+            : 0;
+        analytics['footTransitionRate'] = totalBots > 0
+            ? (footTransitions / totalBots * 100).round()
+            : 0;
+        analytics['bookCompletionRate'] = totalBots > 0
+            ? (booksCompleted / totalBots * 100).round()
+            : 0;
         analytics['totalBotInstances'] = totalBots;
       }
 
@@ -669,23 +689,35 @@ class GameAnalyticsLogger {
     if (handSize == 0) return 1.0;
 
     // Normalize to 0-1 scale (15+ cards = 0, 0 cards = 1)
-    return (15 - handSize.clamp(0, 15)) / 15.0;
+    final efficiency = (15 - handSize.clamp(0, 15)) / 15.0;
+
+    // Validate result to prevent Firebase "Invalid double" errors
+    if (efficiency.isNaN || efficiency.isInfinite) return 0.0;
+    return efficiency;
   }
 
-  static double _calculateMeldEfficiency(Player player) {
-    if (player.melds.isEmpty) return 0.0;
+  static int _calculateMeldEfficiency(Player player) {
+    if (player.melds.isEmpty) return 0;
 
-    // Calculate average meld size and book ratio
+    // Calculate average meld size and book ratio with safety checks
     final totalCards = player.melds.fold(
       0,
       (total, meld) => total + meld.cards.length,
     );
+
+    // Prevent division by zero and validate inputs
+    if (player.melds.isEmpty || totalCards == 0) return 0;
+
     final averageMeldSize = totalCards / player.melds.length;
     final bookCount = player.melds.where((m) => m.cards.length >= 7).length;
     final bookRatio = bookCount / player.melds.length;
 
-    // Combine metrics (larger melds and more books = better efficiency)
-    return (averageMeldSize / 10.0 + bookRatio) / 2.0;
+    // Combine metrics with validation to prevent NaN/Infinity
+    final efficiency = (averageMeldSize / 10.0 + bookRatio) / 2.0 * 100;
+
+    // Validate result before returning to prevent Firebase "Invalid double" errors
+    if (efficiency.isNaN || efficiency.isInfinite || efficiency < 0) return 0;
+    return efficiency.round();
   }
 
   static double _calculateBookProgress(Player player) {
@@ -702,6 +734,45 @@ class GameAnalyticsLogger {
     if (cleanBooks > 0 && dirtyBooks > 0) return 1.0;
     if (cleanBooks > 0 || dirtyBooks > 0) return 0.5;
     return 0.0;
+  }
+
+  /// Sanitize analytics data to prevent Firebase "Invalid double" errors
+  static Map<String, dynamic> _sanitizeAnalyticsData(
+    Map<String, dynamic> data,
+  ) {
+    final sanitized = <String, dynamic>{};
+
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (value is double) {
+        // Check for invalid double values that cause Firebase errors
+        if (value.isNaN || value.isInfinite) {
+          sanitized[key] = 0; // Replace invalid doubles with 0
+        } else {
+          sanitized[key] = value;
+        }
+      } else if (value is Map<String, dynamic>) {
+        // Recursively sanitize nested maps
+        sanitized[key] = _sanitizeAnalyticsData(value);
+      } else if (value is List) {
+        // Sanitize lists
+        sanitized[key] = value.map((item) {
+          if (item is Map<String, dynamic>) {
+            return _sanitizeAnalyticsData(item);
+          } else if (item is double && (item.isNaN || item.isInfinite)) {
+            return 0;
+          }
+          return item;
+        }).toList();
+      } else {
+        // Keep other types as-is
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
   }
 
   // Privacy and configuration methods
