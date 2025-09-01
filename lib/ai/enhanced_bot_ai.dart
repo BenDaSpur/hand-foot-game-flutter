@@ -51,9 +51,11 @@ class EnhancedBotAI {
 
   // EMERGENCY HAND SIZE PROTOCOLS - Prevents catastrophic accumulation like 32+ cards
   static const int emergencyHandSizeThreshold =
-      25; // CRITICAL: Force emergency actions (based on gameplay analysis)
+      20; // CRITICAL: Force emergency actions (lowered after seeing 18-card failures)
   static const int criticalHandSizeThreshold =
-      30; // PANIC: Any meld is better than none (absolute emergency)
+      25; // PANIC: Any meld is better than none (lowered from 30)
+  static const int playDownEmergencyThreshold =
+      15; // Force play-down when accumulating without melding
   static const int competitiveThreatHandSizeGap =
       15; // When opponent is ahead by this much (competitive intelligence)
   static const double maxEmergencyRiskTolerance =
@@ -148,6 +150,12 @@ class EnhancedBotAI {
               bot.name,
               'EMERGENCY: Hand size $handSize exceeds $emergencyHandSizeThreshold - forcing emergency meld',
             );
+
+            // If not played down, force emergency play-down
+            if (!bot.hasPlayedDown) {
+              return _handleEmergencyPlayDown(bot, controller);
+            }
+
             return BotDecision(
               action: 'createMeld',
               data: emergencyMelds.first,
@@ -163,6 +171,23 @@ class EnhancedBotAI {
           );
           return BotDecision(action: 'drawFromDeck');
         }
+      }
+
+      // SPECIAL EMERGENCY: Bot with too many cards and no play-down
+      if (handSize >= playDownEmergencyThreshold &&
+          !bot.hasPlayedDown &&
+          gameState.turnPhase == TurnPhase.meld) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'PLAY-DOWN EMERGENCY: $handSize cards without play-down - forcing any viable meld',
+        );
+        final emergencyPlayDown = _handleEmergencyPlayDown(bot, controller);
+        // Safety check: if emergency play-down fails, fall back to normal logic
+        if (emergencyPlayDown.action != 'noMeld') {
+          return emergencyPlayDown;
+        }
+        // Continue to normal logic if emergency play-down couldn't find viable melds
       }
 
       // PANIC MODE: Override normal logic for bots in terrible situations
