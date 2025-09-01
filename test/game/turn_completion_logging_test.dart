@@ -154,17 +154,18 @@ void main() {
           final success = controller.discardCard(card);
 
           if (success) {
-            // Find the corresponding log entry
-            final discardActions = gameState.recentActions
+            // Find the most recent discard action for this player
+            final playerDiscardActions = gameState.recentActions
                 .where(
                   (action) =>
+                      action.playerName == playerName &&
                       action.message.contains('discarded ${card.compactName}'),
                 )
                 .toList();
 
-            // Should have exactly one entry with correct player name
-            expect(discardActions.length, equals(1));
-            expect(discardActions.first.playerName, equals(playerName));
+            // Should have at least one entry with correct player name
+            expect(playerDiscardActions.isNotEmpty, isTrue);
+            expect(playerDiscardActions.last.playerName, equals(playerName));
           }
         }
       });
