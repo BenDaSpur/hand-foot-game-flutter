@@ -1047,16 +1047,19 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Guaranteed ways to complete a bot turn (discard, foot pickup, or end round)
   void _guaranteedTurnCompletion(Player botPlayer) {
+    // Capture player name BEFORE any operations to avoid race conditions
+    final playerName = botPlayer.name;
+
     // Option 1: Try to discard ANY card (break up pairs/trios if needed)
     if (botPlayer.currentHand.isNotEmpty) {
       // Try each card until one works (some might fail due to game state)
       for (final card in [...botPlayer.currentHand]) {
         if (_gameController.discardCard(card)) {
-          // Use explicit bot name instead of currentPlayer to avoid race conditions
+          // Use captured player name to avoid race conditions after turn advancement
           _gameController.gameState.recentActions.add(
             GameAction(
               message: 'completed turn with discard',
-              playerName: botPlayer.name,
+              playerName: playerName,
             ),
           );
           return;
@@ -1067,7 +1070,7 @@ class _GameScreenState extends State<GameScreen> {
         GameAction(
           message:
               'all discard attempts failed - escalating to emergency completion',
-          playerName: botPlayer.name,
+          playerName: playerName,
         ),
       );
     }
@@ -1076,7 +1079,7 @@ class _GameScreenState extends State<GameScreen> {
     if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
       botPlayer.pickUpFoot();
       _gameController.gameState.recentActions.add(
-        GameAction(message: 'picked up foot pile', playerName: botPlayer.name),
+        GameAction(message: 'picked up foot pile', playerName: playerName),
       );
       // Now try to discard from foot - try every card
       if (botPlayer.currentHand.isNotEmpty) {
@@ -1093,7 +1096,7 @@ class _GameScreenState extends State<GameScreen> {
       _gameController.gameState.recentActions.add(
         GameAction(
           message: 'went out and ended the round!',
-          playerName: botPlayer.name,
+          playerName: playerName,
         ),
       );
       _gameController.gameState.endRound();

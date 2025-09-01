@@ -765,6 +765,11 @@ class GameState {
   }
 
   void endRound() {
+    // Prevent multiple endRound calls
+    if (phase == GamePhase.roundEnd) {
+      return;
+    }
+
     phase = GamePhase.roundEnd;
 
     // Find the player who went out (if any)
