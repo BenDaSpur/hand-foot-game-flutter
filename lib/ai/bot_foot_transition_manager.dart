@@ -13,19 +13,19 @@ import 'bot_decision.dart';
 class BotFootTransitionManager {
   // Transition thresholds - MADE MORE AGGRESSIVE
   static const int aggressiveFootTransitionThreshold =
-      6; // Increased from 4 - transition with more cards
+      10; // MUCH more aggressive - transition at 10 cards instead of 6
   static const int handSizePressureThreshold =
-      9; // Increased from 7 - transition earlier
+      12; // Start pressure at 12 cards instead of 9
   static const int lateRoundTransitionRound =
       2; // Reduced from 3 - earlier urgency
   static const int lateRoundHandSizeThreshold =
-      8; // Increased from 6 - transition with more cards
+      10; // Transition at 10 cards in late rounds instead of 8
   static const int postPlaydownTransitionThreshold =
-      7; // Increased from 5 - don't wait so long
+      8; // Transition at 8 cards after play-down instead of 7
   static const int emergencyTransitionThreshold =
-      4; // Increased from 3 - earlier emergency
+      6; // Earlier emergency at 6 cards instead of 4
   static const int largeHandEmergencyThreshold =
-      12; // Reduced from 15 - earlier emergency
+      10; // MUCH earlier emergency at 10 cards instead of 12
 
   // Hand quality thresholds
   static const int handQualityNegativeThreshold = -40;
@@ -121,6 +121,20 @@ class BotFootTransitionManager {
       }
     }
 
+    // PRIORITY 1: Try to add cards to existing melds (more efficient than discarding)
+    final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    // PRIORITY 2: Try to create new melds if possible
+    final possibleMelds = controller.findPossibleMelds(bot);
+    if (possibleMelds.isNotEmpty) {
+      final bestMeld = possibleMelds.first;
+      return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    // PRIORITY 3: Discard as last resort
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }

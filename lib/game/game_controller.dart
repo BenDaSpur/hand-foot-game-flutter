@@ -148,7 +148,7 @@ class GameController implements GameInterface {
   @override
   bool canPlayerGoOut() {
     final player = _gameState.currentPlayer;
-    return player.canGoOut && player.hasBook();
+    return player.canGoOut;
   }
 
   @override
