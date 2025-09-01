@@ -484,11 +484,10 @@ class EnhancedBotAI {
         return BotDecision(action: 'error');
       }
     }
-
-    if (bot.currentHand.isEmpty) {
+    final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
+    if (cardToDiscard == null) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
@@ -1022,10 +1021,12 @@ class EnhancedBotAI {
   }
 
   /// Choose the best card to discard
-  PlayingCard _chooseCardToDiscard(Player bot, GameState gameState) {
+  PlayingCard? _chooseCardToDiscard(Player bot, GameState gameState) {
     final hand = bot.currentHand;
-    // This method should only be called when hand is non-empty
-    assert(hand.isNotEmpty, 'Cannot discard from empty hand');
+    // Safe guard against empty hands - return null instead of crashing
+    if (hand.isEmpty) {
+      return null;
+    }
 
     // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
     final threes = hand.where((card) => card.rank == CardRank.three).toList();
