@@ -107,6 +107,56 @@ The game follows official Hand & Foot rules (documented in `docs/family_hand_and
 **Stuck Game Recovery**: Emergency skip turn function for edge cases
 **Comprehensive Validation**: Multi-step validation for complex moves like multiple meld creation
 
+## Critical Error Handling Principles
+
+**⚠️ NEVER THROW EXCEPTIONS IN GAME LOGIC ⚠️**
+
+**Rule**: Game logic should NEVER throw exceptions or call methods that throw exceptions, as this crashes the current game session and forces players to lose progress.
+
+**Instead of throwing exceptions:**
+- Return fallback/default values
+- Log warnings with `print()` statements
+- Use graceful degradation strategies
+- Provide user-friendly error recovery
+
+**Examples:**
+
+❌ **BAD - Crashes the game:**
+```dart
+static PlayingCard parseCard(String data) {
+  final parts = data.split(',');
+  final rank = CardRank.values[int.parse(parts[0])]; // Can throw!
+  throw ArgumentError('Invalid card data'); // Crashes game!
+}
+```
+
+✅ **GOOD - Graceful recovery:**
+```dart
+static PlayingCard parseCard(String data) {
+  try {
+    final parts = data.split(',');
+    final rankIndex = int.parse(parts[0]);
+    
+    // Validate bounds before array access
+    if (rankIndex < 0 || rankIndex >= CardRank.values.length) {
+      print('Warning: Invalid rank $rankIndex, using fallback');
+      return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
+    }
+    
+    return PlayingCard(rank: CardRank.values[rankIndex], suit: null);
+  } catch (e) {
+    print('Error parsing card "$data": $e, using fallback');
+    return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
+  }
+}
+```
+
+**When exceptions ARE acceptable:**
+- Unit tests (where crashing is desired to identify bugs)
+- Development/debugging code (marked with comments)
+- Initialization code before game starts
+- Non-game-critical features (analytics, logging services)
+
 ### Bot AI Sophistication
 
 **Strategic Depth**: 
