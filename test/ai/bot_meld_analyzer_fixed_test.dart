@@ -320,8 +320,8 @@ void main() {
 
     group('Error Handling', () {
       test('should handle empty meld lists', () {
-        expect(() => meldAnalyzer.chooseLargestMeld([]), throwsArgumentError);
-        expect(() => meldAnalyzer.findBestMeld([]), throwsArgumentError);
+        expect(meldAnalyzer.chooseLargestMeld([]), isNull);
+        expect(meldAnalyzer.findBestMeld([]), isEmpty);
       });
 
       test('should handle empty hands', () {

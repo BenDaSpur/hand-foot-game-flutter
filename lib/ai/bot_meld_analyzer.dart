@@ -48,9 +48,9 @@ class BotMeldAnalyzer {
   }
 
   /// Choose the largest meld from a list of possible melds
-  List<PlayingCard> chooseLargestMeld(List<List<PlayingCard>> possibleMelds) {
+  List<PlayingCard>? chooseLargestMeld(List<List<PlayingCard>> possibleMelds) {
     if (possibleMelds.isEmpty) {
-      throw ArgumentError('Cannot choose from empty meld list');
+      return null; // Return null instead of throwing
     }
 
     possibleMelds.sort((a, b) => b.length.compareTo(a.length));
@@ -67,7 +67,7 @@ class BotMeldAnalyzer {
     dynamic gameState,
   }) {
     if (possibleMelds.isEmpty) {
-      throw ArgumentError('Cannot choose from empty meld list');
+      return []; // Return empty list instead of throwing
     }
 
     // If bot is provided, check their book balance
