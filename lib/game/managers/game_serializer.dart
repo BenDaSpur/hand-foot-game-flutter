@@ -103,10 +103,20 @@ class GameSerializer {
     try {
       final parts = compactCard.split(',');
       if (parts.isEmpty) {
-        throw ArgumentError('Invalid compact card format: $compactCard');
+        // Fallback to a default card instead of crashing
+        print(
+          'Warning: Invalid compact card format: $compactCard, using fallback',
+        );
+        return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
       }
 
-      final rankIndex = int.parse(parts[0]);
+      int rankIndex;
+      try {
+        rankIndex = int.parse(parts[0]);
+      } catch (e) {
+        print('Warning: Invalid rank in card "$compactCard", using fallback');
+        return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
+      }
 
       // Handle suit parsing more robustly
       int? suitIndex;
@@ -119,12 +129,34 @@ class GameSerializer {
         }
       }
 
-      return PlayingCard(
-        rank: CardRank.values[rankIndex],
-        suit: suitIndex != null ? Suit.values[suitIndex] : null,
-      );
+      // Validate rank index bounds before array access
+      if (rankIndex < 0 || rankIndex >= CardRank.values.length) {
+        print(
+          'Warning: Rank index $rankIndex out of bounds in card "$compactCard", using fallback',
+        );
+        return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
+      }
+
+      // Validate suit index bounds if not null before array access
+      if (suitIndex != null &&
+          (suitIndex < 0 || suitIndex >= Suit.values.length)) {
+        print(
+          'Warning: Suit index $suitIndex out of bounds in card "$compactCard", treating as Joker',
+        );
+        suitIndex = null;
+      }
+
+      // Safe to access arrays now that bounds are validated
+      final cardRank = CardRank.values[rankIndex];
+      final cardSuit = suitIndex != null ? Suit.values[suitIndex] : null;
+
+      return PlayingCard(rank: cardRank, suit: cardSuit);
     } catch (e) {
-      throw ArgumentError('Failed to parse compact card "$compactCard": $e');
+      // Ultimate fallback - never crash the game
+      print(
+        'Error parsing compact card "$compactCard": $e, using fallback card',
+      );
+      return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
     }
   }
 
