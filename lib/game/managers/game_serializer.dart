@@ -100,14 +100,32 @@ class GameSerializer {
 
   /// Parses a compact card representation.
   static PlayingCard parseCompactCard(String compactCard) {
-    final parts = compactCard.split(',');
-    final rankIndex = int.parse(parts[0]);
-    final suitIndex = parts[1].isNotEmpty ? int.parse(parts[1]) : null;
+    try {
+      final parts = compactCard.split(',');
+      if (parts.isEmpty) {
+        throw ArgumentError('Invalid compact card format: $compactCard');
+      }
 
-    return PlayingCard(
-      rank: CardRank.values[rankIndex],
-      suit: suitIndex != null ? Suit.values[suitIndex] : null,
-    );
+      final rankIndex = int.parse(parts[0]);
+
+      // Handle suit parsing more robustly
+      int? suitIndex;
+      if (parts.length > 1 && parts[1].isNotEmpty) {
+        try {
+          suitIndex = int.parse(parts[1]);
+        } catch (e) {
+          // If suit parsing fails, treat as null (Joker card)
+          suitIndex = null;
+        }
+      }
+
+      return PlayingCard(
+        rank: CardRank.values[rankIndex],
+        suit: suitIndex != null ? Suit.values[suitIndex] : null,
+      );
+    } catch (e) {
+      throw ArgumentError('Failed to parse compact card "$compactCard": $e');
+    }
   }
 
   /// Serializes the game state metadata.
