@@ -379,6 +379,11 @@ class Player {
 
   /// Records the detailed score breakdown for a completed round
   void recordRoundScoreBreakdown({required int round, required bool wentOut}) {
+    // Prevent duplicate round entries
+    if (roundScoreHistory.any((breakdown) => breakdown.round == round)) {
+      return;
+    }
+
     final cardPoints =
         calculateMeldValue() - (cleanBookPoints + dirtyBookPoints);
     final penaltyPoints = calculateAllUnplayedCardsValue();
