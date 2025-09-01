@@ -322,11 +322,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           savedGameData,
         );
         if (gameController != null) {
-          // Log continue game event
-          await FirebaseService.logGameEvent(
-            'solo_game_continued',
-            parameters: {'game_type': 'solo_continue'},
-          );
+          // Log continue game event - completely optional, never crash singleplayer
+          try {
+            await FirebaseService.logGameEvent(
+              'solo_game_continued',
+              parameters: {'game_type': 'solo_continue'},
+            );
+          } catch (e) {
+            // Silently ignore Firebase errors in singleplayer mode
+            // Game must work completely offline
+          }
 
           if (mounted) {
             Navigator.of(context).pushReplacement(
@@ -364,7 +369,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   /// Rejoin an active multiplayer game after crash/disconnect
@@ -423,11 +430,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void _startSoloGame() async {
     setState(() => _isLoading = true);
 
-    // Log solo game start
-    await FirebaseService.logGameEvent(
-      'solo_game_started',
-      parameters: {'game_type': 'solo'},
-    );
+    // Log solo game start - completely optional, never crash singleplayer
+    try {
+      await FirebaseService.logGameEvent(
+        'solo_game_started',
+        parameters: {'game_type': 'solo'},
+      );
+    } catch (e) {
+      // Silently ignore Firebase errors in singleplayer mode
+      // Game must work completely offline
+    }
 
     if (mounted) {
       Navigator.of(context).pushReplacement(
@@ -435,7 +447,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       );
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _createMultiplayerGame() async {
@@ -457,7 +471,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _joinMultiplayerGame() async {
@@ -479,7 +495,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _showGameInfo() {

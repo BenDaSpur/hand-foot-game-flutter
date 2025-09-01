@@ -12,7 +12,24 @@ import 'analytics_batcher.dart';
 /// Comprehensive game analytics logging service for bot performance analysis
 class GameAnalyticsLogger {
   static final Logger _logger = Logger('GameAnalyticsLogger');
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Lazy initialization to prevent crashes if Firebase isn't available
+  static FirebaseFirestore? _firestore;
+  static bool _firestoreUnavailableLogged = false;
+
+  static FirebaseFirestore? get firestore {
+    try {
+      _firestore ??= FirebaseFirestore.instance;
+      return _firestore;
+    } catch (e) {
+      // Only log warning once to avoid spam
+      if (!_firestoreUnavailableLogged) {
+        _logger.warning('Firestore unavailable, analytics disabled: $e');
+        _firestoreUnavailableLogged = true;
+      }
+      return null;
+    }
+  }
 
   // Collections
   static const String gameSessionsCollection = 'game_sessions';
@@ -89,10 +106,13 @@ class GameAnalyticsLogger {
         'version': '1.0.0', // App version for tracking changes over time
       };
 
-      await _firestore
-          .collection(gameSessionsCollection)
-          .doc(sessionId)
-          .set(sessionData);
+      final fs = firestore;
+      if (fs != null) {
+        await fs
+            .collection(gameSessionsCollection)
+            .doc(sessionId)
+            .set(sessionData);
+      }
 
       _logger.info('📊 Started game analytics session: $sessionId');
       await FirebaseService.logGameEvent(
@@ -158,10 +178,13 @@ class GameAnalyticsLogger {
         'status': 'completed',
       };
 
-      await _firestore
-          .collection(gameSessionsCollection)
-          .doc(_currentSessionId!)
-          .update(sessionEndData);
+      final fs = firestore;
+      if (fs != null) {
+        await fs
+            .collection(gameSessionsCollection)
+            .doc(_currentSessionId!)
+            .update(sessionEndData);
+      }
 
       _logger.info('📊 Ended game analytics session: $_currentSessionId');
       await FirebaseService.logGameEvent(
@@ -448,7 +471,10 @@ class GameAnalyticsLogger {
           : DateTime.now().subtract(const Duration(days: 30));
 
       // Build query with filters
-      var query = _firestore
+      final fs = firestore;
+      if (fs == null) return null;
+
+      var query = fs
           .collection(gameSessionsCollection)
           .where('botPersonalities.${personality.name}', isGreaterThan: 0);
 
@@ -568,7 +594,10 @@ class GameAnalyticsLogger {
           ? DateTime.now().subtract(Duration(days: limitDays))
           : DateTime.now().subtract(const Duration(days: 30));
 
-      final sessions = await _firestore
+      final fs = firestore;
+      if (fs == null) return [];
+
+      final sessions = await fs
           .collection(gameSessionsCollection)
           .where('botPersonalities.${personality.name}', isGreaterThan: 0)
           .where('startTime', isGreaterThan: Timestamp.fromDate(cutoffDate))
@@ -749,7 +778,8 @@ class GameAnalyticsLogger {
       if (value is double) {
         // Check for invalid double values that cause Firebase errors
         if (value.isNaN || value.isInfinite) {
-          sanitized[key] = 0; // Replace invalid doubles with 0
+          sanitized[key] =
+              null; // Use null to preserve data meaning instead of 0
         } else {
           sanitized[key] = value;
         }
@@ -762,7 +792,7 @@ class GameAnalyticsLogger {
           if (item is Map<String, dynamic>) {
             return _sanitizeAnalyticsData(item);
           } else if (item is double && (item.isNaN || item.isInfinite)) {
-            return 0;
+            return null; // Use null to preserve data meaning
           }
           return item;
         }).toList();
@@ -838,7 +868,10 @@ class GameAnalyticsLogger {
       }
 
       // Calculate overall summary statistics
-      final allSessions = await _firestore
+      final fs = firestore;
+      if (fs == null) return exportData;
+
+      final allSessions = await fs
           .collection(gameSessionsCollection)
           .where('startTime', isGreaterThan: Timestamp.fromDate(cutoffDate))
           .limit(500)
