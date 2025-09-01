@@ -54,6 +54,8 @@ class EnhancedBotAI {
       20; // CRITICAL: Force emergency actions (lowered after seeing 18-card failures)
   static const int criticalHandSizeThreshold =
       25; // PANIC: Any meld is better than none (lowered from 30)
+  static const int playDownEmergencyThreshold =
+      15; // Force play-down when accumulating without melding
   static const int competitiveThreatHandSizeGap =
       15; // When opponent is ahead by this much (competitive intelligence)
   static const double maxEmergencyRiskTolerance =
@@ -172,7 +174,7 @@ class EnhancedBotAI {
       }
 
       // SPECIAL EMERGENCY: Bot with too many cards and no play-down
-      if (handSize >= 15 &&
+      if (handSize >= playDownEmergencyThreshold &&
           !bot.hasPlayedDown &&
           gameState.turnPhase == TurnPhase.meld) {
         DebugLogger.botDebug(
@@ -180,7 +182,12 @@ class EnhancedBotAI {
           bot.name,
           'PLAY-DOWN EMERGENCY: $handSize cards without play-down - forcing any viable meld',
         );
-        return _handleEmergencyPlayDown(bot, controller);
+        final emergencyPlayDown = _handleEmergencyPlayDown(bot, controller);
+        // Safety check: if emergency play-down fails, fall back to normal logic
+        if (emergencyPlayDown.action != 'noMeld') {
+          return emergencyPlayDown;
+        }
+        // Continue to normal logic if emergency play-down couldn't find viable melds
       }
 
       // PANIC MODE: Override normal logic for bots in terrible situations

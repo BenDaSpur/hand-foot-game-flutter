@@ -82,6 +82,7 @@ void main() {
         expect(EnhancedBotAI.maxEmergencyRiskTolerance, equals(6.0));
         expect(EnhancedBotAI.emergencyHandSizeThreshold, equals(20));
         expect(EnhancedBotAI.criticalHandSizeThreshold, equals(25));
+        expect(EnhancedBotAI.playDownEmergencyThreshold, equals(15));
       });
     });
 
