@@ -15,12 +15,18 @@ class GameAnalyticsLogger {
 
   // Lazy initialization to prevent crashes if Firebase isn't available
   static FirebaseFirestore? _firestore;
+  static bool _firestoreUnavailableLogged = false;
+
   static FirebaseFirestore? get firestore {
     try {
       _firestore ??= FirebaseFirestore.instance;
       return _firestore;
     } catch (e) {
-      _logger.warning('Firestore unavailable: $e');
+      // Only log warning once to avoid spam
+      if (!_firestoreUnavailableLogged) {
+        _logger.warning('Firestore unavailable, analytics disabled: $e');
+        _firestoreUnavailableLogged = true;
+      }
       return null;
     }
   }
@@ -772,7 +778,8 @@ class GameAnalyticsLogger {
       if (value is double) {
         // Check for invalid double values that cause Firebase errors
         if (value.isNaN || value.isInfinite) {
-          sanitized[key] = 0; // Replace invalid doubles with 0
+          sanitized[key] =
+              null; // Use null to preserve data meaning instead of 0
         } else {
           sanitized[key] = value;
         }
@@ -785,7 +792,7 @@ class GameAnalyticsLogger {
           if (item is Map<String, dynamic>) {
             return _sanitizeAnalyticsData(item);
           } else if (item is double && (item.isNaN || item.isInfinite)) {
-            return 0;
+            return null; // Use null to preserve data meaning
           }
           return item;
         }).toList();

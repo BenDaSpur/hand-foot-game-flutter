@@ -369,7 +369,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   /// Rejoin an active multiplayer game after crash/disconnect
@@ -445,7 +447,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       );
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _createMultiplayerGame() async {
@@ -467,7 +471,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _joinMultiplayerGame() async {
@@ -489,7 +495,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _showGameInfo() {
