@@ -13,19 +13,19 @@ import 'bot_decision.dart';
 class BotFootTransitionManager {
   // Transition thresholds - MADE MORE AGGRESSIVE
   static const int aggressiveFootTransitionThreshold =
-      6; // Increased from 4 - transition with more cards
+      10; // MUCH more aggressive - transition at 10 cards instead of 6
   static const int handSizePressureThreshold =
-      9; // Increased from 7 - transition earlier
+      12; // Start pressure at 12 cards instead of 9
   static const int lateRoundTransitionRound =
       2; // Reduced from 3 - earlier urgency
   static const int lateRoundHandSizeThreshold =
-      8; // Increased from 6 - transition with more cards
+      10; // Transition at 10 cards in late rounds instead of 8
   static const int postPlaydownTransitionThreshold =
-      7; // Increased from 5 - don't wait so long
+      8; // Transition at 8 cards after play-down instead of 7
   static const int emergencyTransitionThreshold =
-      4; // Increased from 3 - earlier emergency
+      6; // Earlier emergency at 6 cards instead of 4
   static const int largeHandEmergencyThreshold =
-      12; // Reduced from 15 - earlier emergency
+      10; // MUCH earlier emergency at 10 cards instead of 12
 
   // Hand quality thresholds
   static const int handQualityNegativeThreshold = -40;
@@ -121,6 +121,23 @@ class BotFootTransitionManager {
       }
     }
 
+    // PRIORITY 1: Try to add cards to existing melds (more efficient than discarding)
+    final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    // PRIORITY 2: Try to create new melds if possible
+    final possibleMelds = controller.findPossibleMelds(bot);
+    if (possibleMelds.isNotEmpty) {
+      final bestMeld = possibleMelds.first;
+      return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    // PRIORITY 3: Discard as last resort
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -142,8 +159,15 @@ class BotFootTransitionManager {
     );
     final competitivePressure = opponentOnFoot && bot.hasPlayedDown;
 
-    return (remainingCards <= aggressiveFootTransitionThreshold ||
-            (competitivePressure && remainingCards > 12)) &&
+    // Aggressive transition when: few cards OR competitive pressure with medium hand size
+    final shouldTransitionForSize =
+        remainingCards <= aggressiveFootTransitionThreshold;
+    final shouldTransitionForPressure =
+        competitivePressure &&
+        remainingCards <= 15 &&
+        remainingCards > aggressiveFootTransitionThreshold;
+
+    return (shouldTransitionForSize || shouldTransitionForPressure) &&
         !(stillOnHandPile && hasExcessiveWilds);
   }
 
@@ -163,10 +187,11 @@ class BotFootTransitionManager {
     );
     final competitivePressure = opponentOnFoot && bot.hasPlayedDown;
 
-    return (remainingCards >= handSizePressureThreshold ||
-            (competitivePressure && remainingCards > 12)) &&
-        bot.hasPlayedDown &&
-        !hasExcessiveWilds;
+    final hasHandSizePressure = remainingCards >= handSizePressureThreshold;
+    final hasCompetitivePressure = competitivePressure && remainingCards > 12;
+    final shouldTransition = hasHandSizePressure || hasCompetitivePressure;
+
+    return shouldTransition && bot.hasPlayedDown && !hasExcessiveWilds;
   }
 
   /// Check if bot should use late round transition strategy
@@ -241,6 +266,9 @@ class BotFootTransitionManager {
 
     // Emergency discard for extremely large hands
     if (handSize > largeHandEmergencyThreshold) {
+      if (bot.currentHand.isEmpty) {
+        return BotDecision(action: 'error');
+      }
       final cardToDiscard = _chooseCardToDiscard(bot);
       return BotDecision(action: 'discard', data: cardToDiscard);
     }
@@ -275,6 +303,9 @@ class BotFootTransitionManager {
     }
 
     // Discard strategically to get closer to foot
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -289,6 +320,9 @@ class BotFootTransitionManager {
 
     // Emergency discard for extremely large hands
     if (handSize > largeHandEmergencyThreshold) {
+      if (bot.currentHand.isEmpty) {
+        return BotDecision(action: 'error');
+      }
       final cardToDiscard = _chooseCardToDiscard(bot);
       return BotDecision(action: 'discard', data: cardToDiscard);
     }
@@ -318,6 +352,9 @@ class BotFootTransitionManager {
     }
 
     // Default: strategic discard
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -348,6 +385,9 @@ class BotFootTransitionManager {
     }
 
     // Default: strategic discard
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -375,6 +415,9 @@ class BotFootTransitionManager {
     }
 
     // Default: strategic discard
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -398,6 +441,9 @@ class BotFootTransitionManager {
     }
 
     // Strategic discard of worst cards
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -424,6 +470,9 @@ class BotFootTransitionManager {
     }
 
     // Hold cards and discard strategically
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'error');
+    }
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -577,12 +626,8 @@ class BotFootTransitionManager {
   /// Choose the best card to discard from bot's hand
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = bot.currentHand;
-    if (hand.isEmpty) {
-      // This should not happen due to check in _handleEmergencyTransition, but be defensive
-      throw Exception(
-        'Cannot discard from empty hand - bot should go out or error',
-      );
-    }
+    // This method should only be called when hand is non-empty
+    assert(hand.isNotEmpty, 'Cannot discard from empty hand');
 
     // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
     final threes = hand.where((card) => card.rank == CardRank.three).toList();

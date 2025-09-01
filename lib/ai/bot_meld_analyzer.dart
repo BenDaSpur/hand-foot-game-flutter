@@ -48,9 +48,9 @@ class BotMeldAnalyzer {
   }
 
   /// Choose the largest meld from a list of possible melds
-  List<PlayingCard> chooseLargestMeld(List<List<PlayingCard>> possibleMelds) {
+  List<PlayingCard>? chooseLargestMeld(List<List<PlayingCard>> possibleMelds) {
     if (possibleMelds.isEmpty) {
-      throw ArgumentError('Cannot choose from empty meld list');
+      return null; // Return null instead of throwing
     }
 
     possibleMelds.sort((a, b) => b.length.compareTo(a.length));
@@ -67,7 +67,7 @@ class BotMeldAnalyzer {
     dynamic gameState,
   }) {
     if (possibleMelds.isEmpty) {
-      throw ArgumentError('Cannot choose from empty meld list');
+      return []; // Return empty list instead of throwing
     }
 
     // If bot is provided, check their book balance
@@ -410,6 +410,7 @@ class BotMeldAnalyzer {
   }
 
   /// Find the best combination of melds for play-down
+  /// ENHANCED: Now supports 3, 4, 5+ meld combinations for aggressive hand emptying
   List<List<PlayingCard>> findBestPlayDownCombination(
     Player bot,
     GameController controller,
@@ -418,18 +419,81 @@ class BotMeldAnalyzer {
     final possibleMelds = getPossibleMelds(bot, controller);
     if (possibleMelds.isEmpty) return [];
 
-    // Try single meld first
-    for (final meld in possibleMelds) {
-      final meldValue = calculateTotalMeldValue([meld]);
-      if (meldValue >= requirement) {
-        return [meld];
+    // AGGRESSIVE MODE: If bot has large hand, try to use ALL melds for foot transition
+    final handSize = bot.currentHand.length;
+    if (handSize >= 12 && bot.hasPlayedDown) {
+      // Try to create ALL possible melds to aggressively empty hand
+      final allMeldsValue = calculateTotalMeldValue(possibleMelds);
+      if (allMeldsValue >= requirement && possibleMelds.length <= 6) {
+        // Limit to 6 melds max to avoid UI/performance issues
+        return possibleMelds;
       }
     }
 
-    // Try two-meld combinations
-    for (int i = 0; i < possibleMelds.length; i++) {
-      for (int j = i + 1; j < possibleMelds.length; j++) {
-        final combination = [possibleMelds[i], possibleMelds[j]];
+    // Try progressively larger combinations (1, 2, 3, 4, 5 melds)
+    for (
+      int combinationSize = 1;
+      combinationSize <= 5 && combinationSize <= possibleMelds.length;
+      combinationSize++
+    ) {
+      final bestCombination = _findBestCombinationOfSize(
+        possibleMelds,
+        requirement,
+        combinationSize,
+      );
+      if (bestCombination.isNotEmpty) {
+        return bestCombination;
+      }
+    }
+
+    return []; // No combination meets requirement
+  }
+
+  /// Find the best combination of exactly N melds that meets the requirement
+  List<List<PlayingCard>> _findBestCombinationOfSize(
+    List<List<PlayingCard>> possibleMelds,
+    int requirement,
+    int combinationSize,
+  ) {
+    if (combinationSize == 1) {
+      // Single meld - simple iteration
+      for (final meld in possibleMelds) {
+        final meldValue = calculateTotalMeldValue([meld]);
+        if (meldValue >= requirement) {
+          return [meld];
+        }
+      }
+      return [];
+    }
+
+    if (combinationSize == 2) {
+      // Two-meld combinations - nested loops
+      for (int i = 0; i < possibleMelds.length; i++) {
+        for (int j = i + 1; j < possibleMelds.length; j++) {
+          final combination = [possibleMelds[i], possibleMelds[j]];
+          final combinedValue = calculateTotalMeldValue(combination);
+          if (combinedValue >= requirement) {
+            return combination;
+          }
+        }
+      }
+      return [];
+    }
+
+    // For 3+ melds, use recursive combination generation (with performance limits)
+    if (possibleMelds.length >= combinationSize) {
+      final combinations = _generateCombinations(
+        possibleMelds,
+        combinationSize,
+      );
+
+      // Limit combinations checked to prevent performance issues
+      final maxCombinationsToCheck = (combinationSize <= 3) ? 50 : 20;
+      final limitedCombinations = combinations
+          .take(maxCombinationsToCheck)
+          .toList();
+
+      for (final combination in limitedCombinations) {
         final combinedValue = calculateTotalMeldValue(combination);
         if (combinedValue >= requirement) {
           return combination;
@@ -437,7 +501,119 @@ class BotMeldAnalyzer {
       }
     }
 
-    return []; // No combination meets requirement
+    return [];
+  }
+
+  /// Generate all combinations of specified size from the list of melds
+  List<List<List<PlayingCard>>> _generateCombinations(
+    List<List<PlayingCard>> melds,
+    int size,
+  ) {
+    final combinations = <List<List<PlayingCard>>>[];
+
+    void generateCombinationsRecursive(
+      List<List<PlayingCard>> current,
+      int startIndex,
+      int remainingSize,
+    ) {
+      if (remainingSize == 0) {
+        combinations.add(List.from(current));
+        return;
+      }
+
+      // Performance limit: stop if we have enough combinations
+      if (combinations.length >= 100) return;
+
+      for (int i = startIndex; i <= melds.length - remainingSize; i++) {
+        current.add(melds[i]);
+        generateCombinationsRecursive(current, i + 1, remainingSize - 1);
+        current.removeLast();
+      }
+    }
+
+    generateCombinationsRecursive([], 0, size);
+    return combinations;
+  }
+
+  /// NEW: Find the maximum number of melds that can be created for hand emptying
+  /// Used for aggressive foot transition - ignores point requirements
+  List<List<PlayingCard>> findMaximalMeldCombination(
+    Player bot,
+    GameController controller,
+  ) {
+    final possibleMelds = getPossibleMelds(bot, controller);
+    if (possibleMelds.isEmpty) return [];
+
+    final handSize = bot.currentHand.length;
+
+    // AGGRESSIVE FOOT TRANSITION: Try to use ALL melds if hand is large
+    if (handSize >= 10 && possibleMelds.length >= 3) {
+      // Check if we can avoid card overlap (simplified check)
+      final totalCardsinMelds = possibleMelds.fold<int>(
+        0,
+        (sum, meld) => sum + meld.length,
+      );
+
+      // If melds use most of our hand, return all of them
+      if (totalCardsinMelds >= (handSize * 0.7).round()) {
+        return possibleMelds
+            .take(5)
+            .toList(); // Limit to 5 melds for UI performance
+      }
+    }
+
+    // Otherwise, find the largest feasible combination
+    for (int size = possibleMelds.length; size >= 1; size--) {
+      if (size <= 5) {
+        // Performance limit
+        final combination = _findLargestValidCombination(possibleMelds, size);
+        if (combination.isNotEmpty) {
+          return combination;
+        }
+      }
+    }
+
+    return possibleMelds.take(1).toList(); // Fallback: at least one meld
+  }
+
+  /// Find the largest valid combination of melds without overlap
+  List<List<PlayingCard>> _findLargestValidCombination(
+    List<List<PlayingCard>> possibleMelds,
+    int targetSize,
+  ) {
+    if (targetSize == 1) {
+      return possibleMelds.isNotEmpty ? [possibleMelds.first] : [];
+    }
+
+    if (targetSize == 2 && possibleMelds.length >= 2) {
+      // Simple two-meld combination
+      return [possibleMelds[0], possibleMelds[1]];
+    }
+
+    // For 3+ melds, use combination generation with overlap checking
+    final combinations = _generateCombinations(possibleMelds, targetSize);
+
+    for (final combination in combinations.take(20)) {
+      // Performance limit
+      if (_hasMinimalCardOverlap(combination)) {
+        return combination;
+      }
+    }
+
+    return [];
+  }
+
+  /// Check if meld combination has minimal card overlap (simplified heuristic)
+  bool _hasMinimalCardOverlap(List<List<PlayingCard>> meldCombination) {
+    // Simplified check: assume minimal overlap if total cards < reasonable limit
+    final totalCards = meldCombination.fold<int>(
+      0,
+      (sum, meld) => sum + meld.length,
+    );
+
+    // If we're trying to meld more cards than we have, there's likely significant overlap
+    // This is a heuristic - exact overlap checking would be more complex
+    return totalCards <= 20; // Reasonable hand size limit
   }
 
   /// Analyze hand composition for meld potential
