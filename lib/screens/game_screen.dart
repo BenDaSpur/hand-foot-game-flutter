@@ -721,15 +721,15 @@ class _GameScreenState extends State<GameScreen> {
     await Future.delayed(const Duration(seconds: 2));
     if (_disposed || !mounted) return;
 
-    // Check if game should end (someone reached winning score)
-    final scores = _gameController.gameState.players
-        .map((p) => p.score)
-        .toList();
-    final highestScore = scores.isEmpty
-        ? 0
-        : scores.reduce((a, b) => a > b ? a : b);
+    // Check if game should end (phase set to gameEnd by endRound() logic)
+    if (_gameController.gameState.phase == GamePhase.gameEnd) {
+      final scores = _gameController.gameState.players
+          .map((p) => p.score)
+          .toList();
+      final highestScore = scores.isEmpty
+          ? 0
+          : scores.reduce((a, b) => a > b ? a : b);
 
-    if (highestScore >= 8500) {
       DebugLogger.debug(
         'Game end condition met - highest score: $highestScore',
       );
@@ -874,10 +874,149 @@ class _GameScreenState extends State<GameScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
+              _showScoreboard();
+            },
+            child: const Text(
+              'Scoreboard',
+              style: TextStyle(color: BalatroTheme.neonPink),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
               _returnToMainMenu();
             },
             child: const Text(
-              'Main Menu',
+              'Exit',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show detailed scoreboard with round-by-round breakdown
+  void _showScoreboard() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: BalatroTheme.glowColor, width: 2),
+        ),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.leaderboard,
+              color: BalatroTheme.neonPink,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Final Scoreboard',
+              style: TextStyle(
+                color: BalatroTheme.neonPink,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    color: BalatroTheme.neonPink.withValues(alpha: 0.6),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Final scores header
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: BalatroTheme.deepPurple.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: BalatroTheme.glowColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Final Scores',
+                        style: TextStyle(
+                          color: BalatroTheme.neonYellow,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._gameController.gameState.players.map((player) {
+                        final isWinner =
+                            _gameController.winner?.id == player.id;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                player.name,
+                                style: TextStyle(
+                                  color: isWinner
+                                      ? BalatroTheme.neonGreen
+                                      : Colors.white,
+                                  fontWeight: isWinner
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              Text(
+                                '${player.score}',
+                                style: TextStyle(
+                                  color: isWinner
+                                      ? BalatroTheme.neonGreen
+                                      : Colors.white70,
+                                  fontWeight: isWinner
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Round Details',
+                  style: TextStyle(
+                    color: BalatroTheme.neonBlue,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Completed ${_gameController.currentRound - 1} rounds',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Close',
               style: TextStyle(color: BalatroTheme.neonBlue),
             ),
           ),

@@ -102,7 +102,7 @@ class GameSerializer {
   static PlayingCard parseCompactCard(String compactCard) {
     try {
       final parts = compactCard.split(',');
-      if (parts.isEmpty) {
+      if (parts.isEmpty || parts.length > 2) {
         // Fallback to a default card instead of crashing
         print(
           'Warning: Invalid compact card format: $compactCard, using fallback',
@@ -124,7 +124,14 @@ class GameSerializer {
         try {
           suitIndex = int.parse(parts[1]);
         } catch (e) {
-          // If suit parsing fails, treat as null (Joker card)
+          // If suit parsing fails and rank is not Joker, use fallback
+          if (rankIndex != CardRank.joker.index) {
+            print(
+              'Warning: Invalid suit in card "$compactCard", using fallback',
+            );
+            return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
+          }
+          // For Joker cards, null suit is expected
           suitIndex = null;
         }
       }
@@ -141,9 +148,9 @@ class GameSerializer {
       if (suitIndex != null &&
           (suitIndex < 0 || suitIndex >= Suit.values.length)) {
         print(
-          'Warning: Suit index $suitIndex out of bounds in card "$compactCard", treating as Joker',
+          'Warning: Suit index $suitIndex out of bounds in card "$compactCard", using fallback',
         );
-        suitIndex = null;
+        return PlayingCard(rank: CardRank.ace, suit: Suit.spades);
       }
 
       // Safe to access arrays now that bounds are validated
