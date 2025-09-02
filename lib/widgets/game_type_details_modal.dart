@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/game_type_config.dart';
+import '../config/game_type_ui_helpers.dart';
 import '../theme/balatro_theme.dart';
 
 /// Detailed modal showing complete game type configuration and rules.
@@ -24,7 +25,10 @@ class GameTypeDetailsModal extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
         decoration: BoxDecoration(
           color: BalatroTheme.darkPurple,
           borderRadius: BorderRadius.circular(16),
@@ -44,7 +48,7 @@ class GameTypeDetailsModal extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: _getDifficultyColor(
+                color: GameTypeUIHelpers.getDifficultyColor(
                   config.difficultyLabel,
                 ).withValues(alpha: 0.1),
                 borderRadius: const BorderRadius.only(
@@ -55,8 +59,10 @@ class GameTypeDetailsModal extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    _getGameTypeIcon(gameType),
-                    color: _getDifficultyColor(config.difficultyLabel),
+                    GameTypeUIHelpers.getGameTypeIcon(gameType),
+                    color: GameTypeUIHelpers.getDifficultyColor(
+                      config.difficultyLabel,
+                    ),
                     size: 32,
                   ),
                   const SizedBox(width: 12),
@@ -88,19 +94,23 @@ class GameTypeDetailsModal extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: _getDifficultyColor(
+                      color: GameTypeUIHelpers.getDifficultyColor(
                         config.difficultyLabel,
                       ).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: _getDifficultyColor(config.difficultyLabel),
+                        color: GameTypeUIHelpers.getDifficultyColor(
+                          config.difficultyLabel,
+                        ),
                         width: 1,
                       ),
                     ),
                     child: Text(
                       config.difficultyLabel,
                       style: TextStyle(
-                        color: _getDifficultyColor(config.difficultyLabel),
+                        color: GameTypeUIHelpers.getDifficultyColor(
+                          config.difficultyLabel,
+                        ),
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -287,36 +297,6 @@ class GameTypeDetailsModal extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Color _getDifficultyColor(String difficulty) {
-    switch (difficulty.toLowerCase()) {
-      case 'easy':
-        return BalatroTheme.neonGreen;
-      case 'medium':
-        return BalatroTheme.neonYellow;
-      case 'hard':
-        return BalatroTheme.neonOrange;
-      case 'expert':
-        return BalatroTheme.neonPink;
-      default:
-        return BalatroTheme.glowColor;
-    }
-  }
-
-  IconData _getGameTypeIcon(GameType gameType) {
-    switch (gameType) {
-      case GameType.classic:
-        return Icons.casino;
-      case GameType.strict:
-        return Icons.rule;
-      case GameType.marathon:
-        return Icons.timeline;
-      case GameType.speed:
-        return Icons.speed;
-      case GameType.highStakes:
-        return Icons.trending_up;
-    }
   }
 
   /// Show the game type details modal.

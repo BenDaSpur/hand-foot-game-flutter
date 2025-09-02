@@ -65,7 +65,12 @@ class GameTypeConfig {
     required this.displayName,
     required this.description,
     required this.difficultyLabel,
-  });
+  }) : assert(basePlayDownRequirement > 0, 'Base requirement must be positive'),
+       assert(
+         cleanBookBonus >= dirtyBookBonus,
+         'Clean bonus should >= dirty bonus',
+       ),
+       assert(penaltyMultiplier >= 0, 'Penalty multiplier cannot be negative');
 
   /// Factory method to create configuration for Classic mode (current rules).
   static const GameTypeConfig classic = GameTypeConfig(
@@ -249,15 +254,24 @@ class GameTypeConfig {
   List<String> _getSpecialRules() {
     final rules = <String>[];
 
-    if (!allowMeldPhaseGoingOut) rules.add('Must discard to end turn');
-    if (requireDiscardForFootTransition)
+    if (!allowMeldPhaseGoingOut) {
+      rules.add('Must discard to end turn');
+    }
+    if (requireDiscardForFootTransition) {
       rules.add('Must discard to reach foot');
-    if (!requireBothBookTypes) rules.add('Only one book type required');
-    if (firstOutWins) rules.add('First out wins');
-    if (penaltyMultiplier != 1.0)
+    }
+    if (!requireBothBookTypes) {
+      rules.add('Only one book type required');
+    }
+    if (firstOutWins) {
+      rules.add('First out wins');
+    }
+    if (penaltyMultiplier != 1.0) {
       rules.add('$penaltyMultiplier× penalty cards');
-    if (turnTimeLimit != Duration.zero)
+    }
+    if (turnTimeLimit != Duration.zero) {
       rules.add('${turnTimeLimit.inSeconds}s turn limit');
+    }
 
     return rules;
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/game_type_config.dart';
+import '../config/game_type_ui_helpers.dart';
 import '../theme/balatro_theme.dart';
 
 /// Screen for selecting game type before starting a new game.
@@ -18,6 +19,9 @@ class GameTypeSelectionScreen extends StatefulWidget {
 
 class _GameTypeSelectionScreenState extends State<GameTypeSelectionScreen> {
   GameType? _selectedGameType;
+
+  static const double _cardAspectRatio = 2.5;
+  static const double _cardSpacing = 12.0;
 
   @override
   Widget build(BuildContext context) {
@@ -83,8 +87,8 @@ class _GameTypeSelectionScreenState extends State<GameTypeSelectionScreen> {
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 1,
-                          childAspectRatio: 2.5,
-                          mainAxisSpacing: 12,
+                          childAspectRatio: _cardAspectRatio,
+                          mainAxisSpacing: _cardSpacing,
                         ),
                     itemCount: GameType.values.length,
                     itemBuilder: (context, index) {
@@ -158,7 +162,9 @@ class _GameTypeSelectionScreenState extends State<GameTypeSelectionScreen> {
     required Map<String, dynamic> displayInfo,
     required bool isSelected,
   }) {
-    final difficultyColor = _getDifficultyColor(config.difficultyLabel);
+    final difficultyColor = GameTypeUIHelpers.getDifficultyColor(
+      config.difficultyLabel,
+    );
 
     return GestureDetector(
       onTap: () {
@@ -202,7 +208,7 @@ class _GameTypeSelectionScreenState extends State<GameTypeSelectionScreen> {
                 border: Border.all(color: difficultyColor, width: 2),
               ),
               child: Icon(
-                _getGameTypeIcon(gameType),
+                GameTypeUIHelpers.getGameTypeIcon(gameType),
                 color: difficultyColor,
                 size: 30,
               ),
@@ -339,35 +345,5 @@ class _GameTypeSelectionScreenState extends State<GameTypeSelectionScreen> {
         ],
       ),
     );
-  }
-
-  Color _getDifficultyColor(String difficulty) {
-    switch (difficulty.toLowerCase()) {
-      case 'easy':
-        return BalatroTheme.neonGreen;
-      case 'medium':
-        return BalatroTheme.neonYellow;
-      case 'hard':
-        return BalatroTheme.neonOrange;
-      case 'expert':
-        return BalatroTheme.neonPink;
-      default:
-        return BalatroTheme.glowColor;
-    }
-  }
-
-  IconData _getGameTypeIcon(GameType gameType) {
-    switch (gameType) {
-      case GameType.classic:
-        return Icons.casino;
-      case GameType.strict:
-        return Icons.rule;
-      case GameType.marathon:
-        return Icons.timeline;
-      case GameType.speed:
-        return Icons.speed;
-      case GameType.highStakes:
-        return Icons.trending_up;
-    }
   }
 }

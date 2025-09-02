@@ -220,3 +220,49 @@ Key constants defined in `GameConfig`:
 - Branch naming: `bs/feature-description` (developer-initials/description)
 - Always run `flutter analyze` before committing
 - Commit only lib/ changes unless specifically adding tests
+
+## Flutter Coding Style Guidelines
+
+**CRITICAL**: Always follow these Flutter-specific style rules to pass `flutter analyze`:
+
+### Control Flow Statements
+**ALWAYS use curly braces for ALL control flow statements**, even single-line statements:
+
+❌ **BAD - Will fail flutter analyze:**
+```dart
+if (condition) doSomething();
+if (user.isLoggedIn) return;
+for (int i = 0; i < 10; i++) print(i);
+```
+
+✅ **GOOD - Required style:**
+```dart
+if (condition) {
+  doSomething();
+}
+if (user.isLoggedIn) {
+  return;
+}
+for (int i = 0; i < 10; i++) {
+  print(i);
+}
+```
+
+**This applies to ALL control structures:**
+- `if` and `else` statements
+- `for`, `while`, `do-while` loops  
+- `switch` case statements
+- `try-catch` blocks
+
+### Other Flutter Style Requirements
+- **Prefer `const` constructors** when possible
+- **Use trailing commas** in parameter lists for better formatting
+- **Avoid `print()` in production** - use proper logging
+- **Extract magic numbers** to named constants
+- **Use descriptive variable names** - avoid abbreviations
+- **Prefer composition over inheritance** for widgets
+
+### Static Analysis Compliance
+- Run `flutter analyze` before every commit
+- Fix ALL warnings and errors - zero tolerance policy
+- Use `// ignore: rule_name` only for exceptional cases with clear comments explaining why
