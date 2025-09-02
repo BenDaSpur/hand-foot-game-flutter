@@ -253,10 +253,12 @@ class GameConfig {
   static const double competitivePressureMultiplier = 1.5;
 
   /// Large discard pile threshold for aggressive exploitation
-  static const int largeDiscardPileThreshold = 20;
+  static const int largeDiscardPileThreshold =
+      12; // Lowered from 20 after bot analysis
 
   /// Medium discard pile threshold for strategic consideration
-  static const int mediumDiscardPileThreshold = 10;
+  static const int mediumDiscardPileThreshold =
+      6; // Lowered from 10 after bot analysis
 
   // =============================================================================
   // PERFORMANCE & TIMING

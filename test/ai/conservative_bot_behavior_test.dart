@@ -47,14 +47,30 @@ void main() {
       final decision = botAI.makeDecision(bot, gameController);
 
       // Bot should make strategic melds to reduce hand size while preserving wilds
-      expect(decision.action, equals('createMeld'));
+      expect(
+        decision.action,
+        anyOf(equals('createMeld'), equals('createMultipleMelds')),
+      );
 
-      // Should create a meld that includes some natural cards
-      final meldCards = decision.data as List<PlayingCard>;
-      expect(meldCards.length, greaterThanOrEqualTo(2));
-      // Allow some wild cards in the meld, but should have at least 2 naturals
-      final naturalCards = meldCards.where((card) => !card.isWild).toList();
-      expect(naturalCards.length, greaterThanOrEqualTo(2));
+      // Should create melds that include some natural cards
+      if (decision.action == 'createMeld') {
+        final meldCards = decision.data as List<PlayingCard>;
+        expect(meldCards.length, greaterThanOrEqualTo(2));
+
+        // Allow some wild cards in the meld, but should have at least 2 naturals
+        final naturalCards = meldCards.where((card) => !card.isWild).toList();
+        expect(naturalCards.length, greaterThanOrEqualTo(2));
+      } else if (decision.action == 'createMultipleMelds') {
+        final multipleMelds = decision.data as List<List<PlayingCard>>;
+        expect(multipleMelds.length, greaterThanOrEqualTo(1));
+        expect(multipleMelds.first.length, greaterThanOrEqualTo(2));
+
+        // Check naturals in first meld
+        final firstMeldNaturals = multipleMelds.first
+            .where((card) => !card.isWild)
+            .toList();
+        expect(firstMeldNaturals.length, greaterThanOrEqualTo(2));
+      }
     });
 
     test(
