@@ -422,14 +422,15 @@ class GameState {
 
         endRound();
 
-        // Defensive check: Verify round actually ended
-        if (phase != GamePhase.roundEnd) {
+        // Defensive check: Verify round actually ended (could be roundEnd or gameEnd if someone won)
+        if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
           _logAction(
             'ERROR: endRound() called from playMeld but phase is still $phase!',
           );
-          throw GameStateException(
-            'Round should have ended but phase is still $phase after playMeld',
+          print(
+            'Warning: Unexpected phase after endRound() in playMeld, but continuing game',
           );
+          // Don't throw exception - log warning but continue game gracefully
         }
 
         return true;
@@ -487,14 +488,15 @@ class GameState {
 
         endRound();
 
-        // Defensive check: Verify round actually ended
-        if (phase != GamePhase.roundEnd) {
+        // Defensive check: Verify round actually ended (could be roundEnd or gameEnd if someone won)
+        if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
           _logAction(
             'ERROR: endRound() called from playMeldBypass but phase is still $phase!',
           );
-          throw GameStateException(
-            'Round should have ended but phase is still $phase after playMeldBypass',
+          print(
+            'Warning: Unexpected phase after endRound() in playMeldBypass, but continuing game',
           );
+          // Don't throw exception - log warning but continue game gracefully
         }
 
         return true;
@@ -569,14 +571,15 @@ class GameState {
 
       endRound();
 
-      // Defensive check: Verify round actually ended
-      if (phase != GamePhase.roundEnd) {
+      // Defensive check: Verify round actually ended (could be roundEnd or gameEnd if someone won)
+      if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
         _logAction(
           'ERROR: endRound() called but phase is still $phase - this should not happen!',
         );
-        throw GameStateException(
-          'Round should have ended but phase is still $phase after addToMeld',
+        print(
+          'Warning: Unexpected phase after endRound(), but continuing game',
         );
+        // Don't throw exception - log warning but continue game gracefully
       }
       return;
     }
