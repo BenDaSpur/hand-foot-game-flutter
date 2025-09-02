@@ -55,9 +55,9 @@ class EnhancedBotAI {
 
   // EMERGENCY HAND SIZE PROTOCOLS - Prevents catastrophic accumulation like 32+ cards
   static const int emergencyHandSizeThreshold =
-      12; // CRITICAL: Force emergency actions (lowered after seeing 17-19 card failures)
+      10; // CRITICAL: Force emergency actions (lowered after seeing 17-card failures)
   static const int criticalHandSizeThreshold =
-      16; // PANIC: Any meld is better than none (lowered from 25)
+      14; // PANIC: Any meld is better than none (lowered after data analysis)
   static const int playDownEmergencyThreshold =
       10; // Force play-down when accumulating without melding (lowered from 15)
   static const int competitiveThreatHandSizeGap =
@@ -390,6 +390,31 @@ class EnhancedBotAI {
       _inMultiMeldSequence = false;
     }
 
+    // ADAPTIVE PERSONALITY FIX: Force aggressive melding in foot phase with large hands
+    final personality = _personalityManager.getPersonality(bot.id);
+    if (personality == BotPersonality.adaptive &&
+        bot.hasPickedUpFoot &&
+        handSize >= 10) {
+      // Adaptive bots should never hold 10+ cards in foot phase
+      final possibleMelds = _getCachedPossibleMelds(bot, controller);
+      if (possibleMelds.isNotEmpty) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'ADAPTIVE FIX: Force melding in foot phase with $handSize cards',
+        );
+        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+      }
+
+      final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+        bot,
+        controller,
+      );
+      if (cardsToAdd.isNotEmpty) {
+        return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      }
+    }
+
     // Check for end game decisions (after emergency protocols)
     final endGameDecision = _endGameManager.handleEndGame(bot, controller);
     if (endGameDecision != null) {
@@ -430,7 +455,7 @@ class EnhancedBotAI {
 
     // AGGRESSIVE FIX: Dramatically reduce strategic holding to prevent accumulation
     // Only hold with very small hands and only briefly
-    if (handSize <= 8 && _shouldHoldCardsStrategically(bot, controller)) {
+    if (handSize <= 6 && _shouldHoldCardsStrategically(bot, controller)) {
       // Only hold if hand is small AND no human threat AND very selective conditions
       final humanPlayers = controller.gameState.players.where(
         (p) => p.type == PlayerType.human,
@@ -903,13 +928,16 @@ class EnhancedBotAI {
           0.6; // Take smaller piles to deny human resources (was 0.8)
     }
 
-    // NEW: Exploit large discard piles (23-37 cards observed, but bots ignore them)
+    // NEW: Exploit large discard piles (45+ cards observed, but bots ignore them)
     if (pileSize >= GameConfig.largeDiscardPileThreshold) {
-      adjustedValueThreshold *= 0.3; // Take huge piles aggressively
-      adjustedSizeThreshold *= 0.4; // Almost always take large piles
+      adjustedValueThreshold *=
+          0.2; // Take huge piles very aggressively (was 0.3)
+      adjustedSizeThreshold *= 0.3; // Almost always take large piles (was 0.4)
     } else if (pileSize >= GameConfig.mediumDiscardPileThreshold) {
-      adjustedValueThreshold *= 0.6; // Take medium-large piles
-      adjustedSizeThreshold *= 0.7; // Lower threshold for medium piles
+      adjustedValueThreshold *=
+          0.4; // Take medium-large piles more aggressively (was 0.6)
+      adjustedSizeThreshold *=
+          0.5; // Lower threshold for medium piles (was 0.7)
     }
 
     // NEW: Competitive pile denial - take piles that would benefit opponents
@@ -1145,6 +1173,13 @@ class EnhancedBotAI {
 
     // Don't hold if hand exceeds personality-based limit (adjusted for time pressure)
     if (handSize >= personalityHoldingLimit) return false;
+
+    // ADAPTIVE PERSONALITY FIX: Be much more aggressive in foot phase
+    if (personality == BotPersonality.adaptive &&
+        bot.hasPickedUpFoot &&
+        handSize >= 8) {
+      return false; // Never hold 8+ cards in foot phase for adaptive bots
+    }
 
     // Don't hold if opponents are close to going out (competitive pressure)
     _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
@@ -1597,7 +1632,7 @@ class EnhancedBotAI {
         baseLimit = 9; // Reduced from 12 - more aggressive
         break;
       case BotPersonality.adaptive:
-        baseLimit = 9; // Reduced from 12 - more aggressive
+        baseLimit = 7; // Reduced from 9 after seeing 17-card failures
         break;
     }
 
