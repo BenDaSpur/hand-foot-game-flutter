@@ -246,11 +246,10 @@ void main() {
       );
 
       // Test that import still works correctly
-      final importedController = GameController.fromExportJson(
-        compressedExport,
-      );
-      expect(importedController, isNotNull);
-      expect(importedController!.gameSeed, equals(98765));
+      final importResult = GameController.fromExportJson(compressedExport);
+      expect(importResult, isNotNull);
+      final importedController = importResult!.controller;
+      expect(importedController.gameSeed, equals(98765));
       expect(importedController.gameState.players, hasLength(4));
       expect(
         importedController.gameState.players[0].name,

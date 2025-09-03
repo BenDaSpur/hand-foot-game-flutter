@@ -34,10 +34,11 @@ void main() {
       expect(jsonData['players'], hasLength(2));
 
       // Test importing the base64 encoded data
-      final importedController = GameController.fromExportJson(exportedBase64);
+      final importResult = GameController.fromExportJson(exportedBase64);
 
-      expect(importedController, isNotNull);
-      expect(importedController!.gameSeed, equals(12345));
+      expect(importResult, isNotNull);
+      final importedController = importResult!.controller;
+      expect(importedController.gameSeed, equals(12345));
       expect(importedController.gameState.players, hasLength(2));
       expect(importedController.gameState.players[0].name, equals('Player 1'));
       expect(importedController.gameState.players[1].name, equals('Bot 1'));
@@ -83,10 +84,11 @@ void main() {
       });
 
       // Test importing legacy JSON format
-      final importedController = GameController.fromExportJson(legacyJson);
+      final importResult = GameController.fromExportJson(legacyJson);
 
-      expect(importedController, isNotNull);
-      expect(importedController!.gameSeed, equals(54321));
+      expect(importResult, isNotNull);
+      final importedController = importResult!.controller;
+      expect(importedController.gameSeed, equals(54321));
       expect(importedController.gameState.players, hasLength(1));
       expect(
         importedController.gameState.players[0].name,

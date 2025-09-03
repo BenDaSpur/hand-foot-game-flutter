@@ -17,7 +17,11 @@ class GameSerializer {
   static const int currentVersion = 3;
 
   /// Exports the game state to a compressed string format.
-  static String exportGameState(GameState gameState, int? gameSeed) {
+  static String exportGameState(
+    GameState gameState,
+    int? gameSeed, [
+    Map<String, String>? botPersonalities,
+  ]) {
     final export = {
       'v': kIsWeb ? currentVersion : 2, // Version 2 = gzip, 3 = web-optimized
       's': gameSeed ?? -1,
@@ -26,6 +30,9 @@ class GameSerializer {
       'deck': _serializeDeck(gameState.deck),
       'dp': gameState.discardPile.map(_compactCard).toList(),
       'ra': _serializeRecentActions(gameState.recentActions),
+      'bp':
+          botPersonalities ??
+          {}, // Bot personalities map (playerId -> personality)
     };
 
     final jsonString = jsonEncode(export);
@@ -250,6 +257,9 @@ class GameSerializer {
           .toList(),
       'deck': data['deck'],
       'recentActions': _parseRecentActions(data['ra']),
+      'botPersonalities':
+          (data['bp'] as Map<String, dynamic>?)?.cast<String, String>() ??
+          <String, String>{},
     };
   }
 
@@ -263,6 +273,8 @@ class GameSerializer {
       'discardPile': _parseLegacyCards(data['discardPile']),
       'deck': data['deck'],
       'recentActions': data['recentActions'],
+      'botPersonalities':
+          <String, String>{}, // Legacy formats don't have personalities
     };
   }
 

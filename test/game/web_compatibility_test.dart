@@ -31,10 +31,11 @@ void main() {
       expect(() => base64Decode(exportedData), returnsNormally);
 
       // Import should work on all platforms
-      final importedController = GameController.fromExportJson(exportedData);
+      final importResult = GameController.fromExportJson(exportedData);
 
-      expect(importedController, isNotNull);
-      expect(importedController!.gameSeed, equals(42));
+      expect(importResult, isNotNull);
+      final importedController = importResult!.controller;
+      expect(importedController.gameSeed, equals(42));
       expect(importedController.gameState.players, hasLength(2));
       expect(importedController.gameState.players[0].name, equals('Human'));
       expect(importedController.gameState.players[1].name, equals('Bot'));
@@ -78,10 +79,11 @@ void main() {
       final mobileBase64 = base64Encode(utf8.encode(mobileJson));
 
       // Should be able to import on any platform
-      final controller = GameController.fromExportJson(mobileBase64);
+      final importResult = GameController.fromExportJson(mobileBase64);
 
-      expect(controller, isNotNull);
-      expect(controller!.gameSeed, equals(12345));
+      expect(importResult, isNotNull);
+      final controller = importResult!.controller;
+      expect(controller.gameSeed, equals(12345));
       expect(controller.gameState.players, hasLength(1));
       expect(controller.gameState.players[0].name, equals('Test Player'));
       expect(controller.gameState.players[0].hand, hasLength(2));

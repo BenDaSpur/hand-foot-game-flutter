@@ -94,6 +94,45 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  /// Restore bot personalities from imported save data
+  void _restoreBotPersonalities(Map<String, String> savedPersonalities) {
+    // Clear any existing assignments
+    _botAI.personalityManager.clearPersonalityData();
+
+    final botPlayers = _gameController.gameState.players
+        .where((p) => p.type == PlayerType.bot)
+        .toList();
+
+    for (final bot in botPlayers) {
+      final savedPersonalityName = savedPersonalities[bot.id];
+      if (savedPersonalityName != null) {
+        // Parse saved personality name back to enum
+        final personality = BotPersonality.values.firstWhere(
+          (p) => p.toString() == savedPersonalityName,
+          orElse: () => BotPersonality.adaptive, // Fallback to adaptive
+        );
+        _botAI.assignPersonality(bot.id, personality);
+
+        if (kDebugMode) {
+          print(
+            'Bot ${bot.name} (${bot.id}) restored personality: $personality',
+          );
+        }
+      } else {
+        // If no saved personality for this bot, assign a random one
+        final randomPersonality = BotPersonality
+            .values[Random().nextInt(BotPersonality.values.length)];
+        _botAI.assignPersonality(bot.id, randomPersonality);
+
+        if (kDebugMode) {
+          print(
+            'Bot ${bot.name} (${bot.id}) assigned new personality: $randomPersonality (no saved data)',
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _initializeGame() async {
     // If a gameController was provided (continuing saved game), use it
     if (widget.gameController != null) {
@@ -2828,7 +2867,16 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _exportGameState() {
-    final gameStateBase64 = _gameController.exportGameState();
+    // Collect current bot personalities
+    final botPersonalities = <String, String>{};
+    for (final player in _gameController.gameState.players) {
+      if (player.type == PlayerType.bot) {
+        final personality = _botAI.personalityManager.getPersonality(player.id);
+        botPersonalities[player.id] = personality.toString();
+      }
+    }
+
+    final gameStateBase64 = _gameController.exportGameState(botPersonalities);
     Clipboard.setData(ClipboardData(text: gameStateBase64));
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -3202,8 +3250,8 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     try {
-      final newController = GameController.fromExportJson(inputText);
-      if (newController == null) {
+      final importResult = GameController.fromExportJson(inputText);
+      if (importResult == null) {
         _showErrorDialog(
           'Failed to load game save. The format may be invalid or corrupted.',
         );
@@ -3211,11 +3259,11 @@ class _GameScreenState extends State<GameScreen> {
       }
 
       setState(() {
-        _gameController = newController;
+        _gameController = importResult.controller;
         _botAI = EnhancedBotAI();
 
-        // Assign consistent bot personalities based on player IDs
-        _assignBotPersonalities();
+        // Restore saved bot personalities instead of assigning random ones
+        _restoreBotPersonalities(importResult.botPersonalities);
 
         _selectedCardIndices.clear();
         _viewingPlayerMelds = null;
@@ -3225,7 +3273,7 @@ class _GameScreenState extends State<GameScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Game loaded successfully! Seed: ${newController.gameSeed ?? "No seed"}',
+            'Game loaded successfully! Seed: ${importResult.controller.gameSeed ?? "No seed"}',
           ),
           backgroundColor: BalatroTheme.neonGreen,
           behavior: SnackBarBehavior.floating,
