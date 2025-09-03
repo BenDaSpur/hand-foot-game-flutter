@@ -207,11 +207,13 @@ void main() {
       // The exported state is base64 encoded, so we can't check for raw JSON strings
 
       // Create new controller from exported state
-      final newController = GameController.fromExportJson(exportedState);
-      expect(newController, isNotNull);
+      final importResult = GameController.fromExportJson(exportedState);
+      expect(importResult, isNotNull);
+
+      final newController = importResult!.controller;
 
       // Verify state was imported correctly
-      expect(newController!.gameSeed, equals(gameController.gameSeed));
+      expect(newController.gameSeed, equals(gameController.gameSeed));
       expect(
         newController.gameState.hasDrawnFromDeck,
         equals(gameController.gameState.hasDrawnFromDeck),

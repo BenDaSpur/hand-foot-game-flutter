@@ -42,7 +42,7 @@ abstract class GameInterface {
 
   // State management
   Map<String, dynamic> getGameStatus();
-  String? exportGameState();
+  String? exportGameState([Map<String, String>? botPersonalities]);
   void clearAllNewlyDrawnCards();
   int? get gameSeed;
 }

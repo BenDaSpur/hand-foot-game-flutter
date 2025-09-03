@@ -909,7 +909,8 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   int? get gameSeed => _gameController.gameSeed;
 
   @override
-  String? exportGameState() => _gameController.exportGameState();
+  String? exportGameState([Map<String, String>? botPersonalities]) =>
+      _gameController.exportGameState(botPersonalities);
 
   @override
   void clearAllNewlyDrawnCards() => _gameController.clearAllNewlyDrawnCards();

@@ -10,6 +10,14 @@ import 'game_interface.dart';
 import 'managers/meld_manager.dart';
 import 'managers/game_serializer.dart';
 
+/// Result class for importing game state with bot personalities
+class ImportResult {
+  final GameController controller;
+  final Map<String, String> botPersonalities;
+
+  ImportResult(this.controller, this.botPersonalities);
+}
+
 /// Game controller that delegates responsibilities to specialized managers.
 ///
 /// This controller maintains the core game flow and state management while
@@ -185,11 +193,15 @@ class GameController implements GameInterface {
   // ============= Serialization (Delegated) =============
 
   @override
-  String exportGameState() {
-    return GameSerializer.exportGameState(_gameState, gameSeed);
+  String exportGameState([Map<String, String>? botPersonalities]) {
+    return GameSerializer.exportGameState(
+      _gameState,
+      gameSeed,
+      botPersonalities,
+    );
   }
 
-  static GameController? fromExportJson(String input) {
+  static ImportResult? fromExportJson(String input) {
     try {
       final data = GameSerializer.importGameState(input);
       if (data == null) return null;
@@ -197,6 +209,9 @@ class GameController implements GameInterface {
       final gameSeed = data['gameSeed'] as int?;
       final gameStateData = data['gameState'] as Map<String, dynamic>;
       final playersData = data['players'] as List<dynamic>;
+      final botPersonalities =
+          data['botPersonalities'] as Map<String, String>? ??
+          <String, String>{};
 
       // Recreate players
       final players = <Player>[];
@@ -232,7 +247,7 @@ class GameController implements GameInterface {
       // Restore recent actions
       _restoreRecentActions(controller._gameState, data['recentActions']);
 
-      return controller;
+      return ImportResult(controller, botPersonalities);
     } catch (e) {
       print('[GameController] Import error: $e');
       return null;
