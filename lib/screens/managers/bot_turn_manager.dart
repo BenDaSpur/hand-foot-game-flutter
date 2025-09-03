@@ -95,15 +95,15 @@ class BotTurnManager {
   }
 
   /// Process bot turn with user-friendly delays between actions
-  void processBotTurnWithDelays(Player botPlayer) {
-    // Use Future to handle async processing without blocking main method
-    Future(() async {
+  Future<void> processBotTurnWithDelays(Player botPlayer) async {
+    try {
       await processBotTurn(botPlayer);
-    }).catchError((error) {
+    } catch (error) {
       DebugLogger.error('Error in bot turn processing: $error');
       // Reset processing flag on error
       _isProcessingBotTurn = false;
-    });
+      rethrow;
+    }
   }
 
   /// SIMPLIFIED: Process bot turn iteratively to prevent stack overflow
@@ -293,6 +293,10 @@ class BotTurnManager {
 
         case 'endTurn':
           // Force turn completion if bot requests it
+          DebugLogger.debug(
+            'Bot ${botPlayer.name} requesting emergency turn end',
+          );
+          gameState.nextPlayer();
           success = true;
           break;
 

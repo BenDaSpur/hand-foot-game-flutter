@@ -985,8 +985,18 @@ class EnhancedBotAI {
         return BotDecision(action: 'noMeld');
 
       case TurnPhase.discard:
-        // Discard highest penalty cards immediately
+        // CRITICAL FIX: Always ensure bot can discard to prevent infinite loops
         final hand = bot.currentHand;
+
+        // If bot has no cards, they're stuck - emergency completion needed
+        if (hand.isEmpty) {
+          DebugLogger.warning(
+            'Bot ${bot.name} has no cards in discard phase - emergency completion',
+          );
+          return BotDecision(action: 'endTurn');
+        }
+
+        // Discard highest penalty cards immediately
         final penaltyCards = hand.where((card) => card.pointValue < 0).toList();
         if (penaltyCards.isNotEmpty) {
           penaltyCards.sort(
