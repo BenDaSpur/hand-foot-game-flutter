@@ -116,11 +116,9 @@ class LLMService {
 
     try {
       if (kIsWeb) {
-        return _webLLMService?.generateIntelligentFallback(
-          gameState,
-          botPlayer,
-          personality,
-          context,
+        // Web now uses true Phi-3 inference - no fallback
+        throw Exception(
+          'Web LLM should not use fallback - use generateStrategicDecision instead',
         );
       } else {
         return _mobileLLMService?.generateIntelligentFallback(
@@ -160,12 +158,8 @@ class LLMService {
     }
 
     if (kIsWeb) {
-      return _webLLMService?.shouldUseLLMForDecision(
-            gameState: gameState,
-            botPlayer: botPlayer,
-            context: context,
-          ) ??
-          false;
+      // Web always uses true LLM - no decision needed
+      return _webLLMService?.isAvailable ?? false;
     } else {
       return _mobileLLMService?.shouldUseLLMForDecision(
             gameState: gameState,

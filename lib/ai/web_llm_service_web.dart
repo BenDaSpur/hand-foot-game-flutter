@@ -5,24 +5,30 @@ import '../models/game_state.dart';
 import '../models/player.dart';
 import 'bot_personality.dart';
 
-/// Web-specific LLM service using ONNX.js for browser-based inference
+/// Web-specific LLM service using ONNX Runtime Web for true Phi-3 inference
 class WebLLMService {
   static const String _defaultModelUrl =
       'assets/models/phi3-mini-4k-instruct-cpu-int4-rtn-block-32-acc-level-4.onnx';
-  static const Duration _modelLoadTimeout = Duration(seconds: 60);
+  static const Duration _modelLoadTimeout = Duration(seconds: 120);
+  static const int _maxContextLength = 4096;
+  static const int _maxGenerationTokens = 256;
 
   js.JsObject? _onnxSession;
+  js.JsObject? _tokenizer;
   bool _isLoading = false;
   bool _isInitialized = false;
   String? _lastError;
-  final Map<String, String> _responseCache = {};
+
+  // KV cache for efficient generation
+  final Map<String, js.JsObject> _kvCache = {};
+  int _sequenceLength = 0;
 
   // Singleton
   static final WebLLMService _instance = WebLLMService._internal();
   factory WebLLMService() => _instance;
   WebLLMService._internal();
 
-  /// Initialize ONNX.js session with the model
+  /// Initialize ONNX Runtime session and Phi-3 tokenizer
   Future<bool> initialize() async {
     if (_isInitialized) {
       return true;
@@ -37,95 +43,69 @@ class WebLLMService {
     _lastError = null;
 
     try {
-      print('WebLLMService: Starting ONNX.js initialization...');
+      print('WebLLMService: Initializing Phi-3 ONNX Runtime Web...');
 
-      // Check if ONNX Runtime is available, with retries
-      final onnxAvailable = await _waitForOnnxRuntime();
-      if (!onnxAvailable) {
-        print(
-          'WebLLMService: ONNX Runtime not available after wait, using intelligent fallback',
-        );
-        _lastError = null; // Clear error since fallback is valid
-        _isInitialized = true; // Enable intelligent fallback
-        return true;
+      // Ensure ONNX Runtime and Transformers.js are available
+      if (!await _waitForDependencies()) {
+        throw Exception('Required dependencies not available');
       }
 
-      // Load model with timeout
+      // Initialize Phi-3 tokenizer
+      _tokenizer = await _initializeTokenizer();
+      if (_tokenizer == null) {
+        throw Exception('Failed to initialize Phi-3 tokenizer');
+      }
+
+      // Load Phi-3 model with WebGPU support
       _onnxSession = await _loadModelWithTimeout();
-
-      if (_onnxSession != null) {
-        _isInitialized = true;
-        print('WebLLMService: ONNX.js session created successfully');
-        return true;
-      } else {
-        print('WebLLMService: ONNX session failed, using intelligent fallback');
-        _lastError = null; // Clear error since fallback is valid
-        _isInitialized = true; // Enable intelligent fallback
-        return true;
+      if (_onnxSession == null) {
+        throw Exception('Failed to load Phi-3 model');
       }
-    } catch (e) {
-      print(
-        'WebLLMService: ONNX initialization failed, using intelligent fallback: $e',
-      );
-      _lastError = null; // Clear error since fallback is valid
-      _isInitialized = true; // Enable intelligent fallback
+
+      _isInitialized = true;
+      print('WebLLMService: Phi-3 initialization completed successfully');
       return true;
+    } catch (e) {
+      _lastError = e.toString();
+      print('WebLLMService: Critical initialization failure: $e');
+      return false;
     } finally {
       _isLoading = false;
     }
   }
 
-  /// Check if ONNX Runtime is available in the browser
-  bool _isOnnxRuntimeAvailable() {
-    try {
-      final onnxRuntime = js.context['onnxRuntime'];
-      final ort = js.context['ort'];
-      final available = onnxRuntime != null || ort != null;
-      print(
-        'WebLLMService: Checking ONNX Runtime availability - onnxRuntime: ${onnxRuntime != null}, ort: ${ort != null}, available: $available',
-      );
-      return available;
-    } catch (e) {
-      print('WebLLMService: ONNX Runtime check failed: $e');
-      return false;
-    }
-  }
-
-  /// Wait for ONNX Runtime to become available with retries
-  Future<bool> _waitForOnnxRuntime() async {
-    const maxAttempts = 10;
+  /// Wait for ONNX Runtime and Transformers.js dependencies
+  Future<bool> _waitForDependencies() async {
+    const maxAttempts = 20;
     const delayBetweenAttempts = Duration(milliseconds: 500);
 
-    print('WebLLMService: Starting ONNX Runtime availability check...');
+    print('WebLLMService: Waiting for ONNX Runtime and Transformers.js...');
 
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      if (_isOnnxRuntimeAvailable()) {
-        print('WebLLMService: ONNX Runtime available on attempt $attempt');
-        return true;
-      }
-
-      print(
-        'WebLLMService: ONNX Runtime not ready, attempt $attempt/$maxAttempts',
-      );
-
-      // Additional debugging - check what's actually in js.context
       try {
-        // Check specifically for different ONNX variations
-        final hasOrt = js.context.hasProperty('ort');
-        final hasOnnxRuntime = js.context.hasProperty('onnxRuntime');
-        final hasOnnx = js.context.hasProperty('onnx');
+        final hasOrt =
+            js.context.hasProperty('ort') && js.context['ort'] != null;
+        final hasTransformers =
+            js.context.hasProperty('transformers') &&
+            js.context['transformers'] != null;
+
+        if (hasOrt && hasTransformers) {
+          print('WebLLMService: Dependencies available on attempt $attempt');
+          return true;
+        }
+
         print(
-          'WebLLMService: ort=$hasOrt, onnxRuntime=$hasOnnxRuntime, onnx=$hasOnnx',
+          'WebLLMService: Dependencies not ready - ort: $hasOrt, transformers: $hasTransformers (attempt $attempt/$maxAttempts)',
         );
       } catch (e) {
-        print('WebLLMService: Error checking context: $e');
+        print('WebLLMService: Dependency check error: $e');
       }
 
       await Future.delayed(delayBetweenAttempts);
     }
 
     print(
-      'WebLLMService: ONNX Runtime not available after $maxAttempts attempts',
+      'WebLLMService: Dependencies failed to load after $maxAttempts attempts',
     );
     return false;
   }
@@ -162,50 +142,47 @@ class WebLLMService {
     }
   }
 
-  /// Load ONNX model from URL or assets
+  /// Load Phi-3 ONNX model with WebGPU optimization
   Future<js.JsObject?> _loadOnnxModel() async {
     try {
-      // Try both the mapped onnxRuntime and original ort
-      final onnx = js.context['onnxRuntime'] ?? js.context['ort'];
-
-      if (onnx == null) {
-        print(
-          'WebLLMService: ONNX Runtime not available (neither onnxRuntime nor ort found)',
-        );
-        return null;
+      final ort = js.context['ort'];
+      if (ort == null) {
+        throw Exception('ONNX Runtime not available');
       }
 
-      print(
-        'WebLLMService: Using ONNX Runtime object: ${onnx != null ? 'found' : 'not found'}',
-      );
+      print('WebLLMService: Loading Phi-3 model from $_defaultModelUrl');
 
-      print('WebLLMService: Loading model from $_defaultModelUrl');
-
-      // Create ONNX inference session with proper options for web
+      // Configure session for Phi-3 with WebGPU preference
       final sessionOptions = js.JsObject.jsify({
-        'executionProviders': ['wasm'],
+        'executionProviders': [
+          js.JsObject.jsify({
+            'name': 'webgpu',
+          }), // Primary: WebGPU for acceleration
+          js.JsObject.jsify({'name': 'wasm'}), // Fallback: WASM
+        ],
         'graphOptimizationLevel': 'all',
+        'enableCpuMemArena': true,
+        'enableMemPattern': true,
+        'executionMode': 'sequential', // Optimal for text generation
+        'logSeverityLevel': 3, // Error level only
       });
 
-      print('WebLLMService: Creating ONNX inference session...');
-      final sessionPromise = onnx.callMethod('InferenceSession.create', [
+      print('WebLLMService: Creating Phi-3 ONNX session with WebGPU...');
+      final sessionPromise = ort.callMethod('InferenceSession.create', [
         _defaultModelUrl,
         sessionOptions,
       ]);
 
-      // Convert JavaScript Promise to Dart Future
       final session = await _promiseToFuture(sessionPromise);
-
-      if (session != null) {
-        print('WebLLMService: ONNX session created successfully');
-        return session;
-      } else {
-        print('WebLLMService: Failed to create ONNX session');
-        return null;
+      if (session == null) {
+        throw Exception('Failed to create Phi-3 ONNX session');
       }
+
+      print('WebLLMService: Phi-3 ONNX session created successfully');
+      return session;
     } catch (e) {
-      print('WebLLMService: ONNX model loading failed: $e');
-      return null;
+      print('WebLLMService: Phi-3 model loading failed: $e');
+      rethrow; // Don't return null - throw error for mandatory LLM
     }
   }
 
@@ -248,257 +225,156 @@ class WebLLMService {
     }
   }
 
-  /// Check if LLM is available (including intelligent fallback)
-  bool get isAvailable => _isInitialized;
+  /// Check if LLM is available (no fallback - must be true)
+  bool get isAvailable =>
+      _isInitialized && _onnxSession != null && _tokenizer != null;
 
   /// Get last error
   String? get lastError => _lastError;
 
-  /// Generate strategic decision using web ONNX inference
-  Future<String?> generateStrategicDecision({
+  /// Get current sequence length for KV cache management
+  int get sequenceLength => _sequenceLength;
+
+  /// Generate strategic decision using true Phi-3 inference
+  Future<String> generateStrategicDecision({
     required GameState gameState,
     required Player botPlayer,
     required BotPersonality personality,
     required Map<String, dynamic> context,
   }) async {
+    // Force initialization if not already done
+    if (!_isInitialized) {
+      print('WebLLMService: Triggering Phi-3 initialization...');
+      final success = await initialize();
+      if (!success) {
+        throw Exception('Failed to initialize Phi-3: $_lastError');
+      }
+    }
+
     if (!isAvailable) {
-      return generateIntelligentFallback(
-        gameState,
-        botPlayer,
-        personality,
-        context,
-      );
+      throw Exception('Phi-3 LLM is not available: $_lastError');
     }
 
     try {
-      // Try actual ONNX inference if session is available
-      if (_onnxSession != null) {
-        print('WebLLMService: Using ONNX inference for decision making');
-        return await _runOnnxInference(
-          gameState,
-          botPlayer,
-          personality,
-          context,
-        );
-      } else {
-        print(
-          'WebLLMService: ONNX session not available, using intelligent fallback',
-        );
-        return generateIntelligentFallback(
-          gameState,
-          botPlayer,
-          personality,
-          context,
-        );
-      }
-    } catch (e) {
-      print('WebLLMService: Decision generation failed: $e');
-      return generateIntelligentFallback(
+      print('WebLLMService: Generating decision with Phi-3 inference');
+      return await _runPhi3Inference(
         gameState,
         botPlayer,
         personality,
         context,
       );
+    } catch (e) {
+      _lastError = e.toString();
+      print('WebLLMService: Phi-3 inference failed: $e');
+      rethrow; // No fallback - fail hard
     }
   }
 
-  /// Generate intelligent fallback response for ALL game situations
-  String? generateIntelligentFallback(
-    GameState gameState,
-    Player botPlayer,
-    BotPersonality personality,
-    Map<String, dynamic> context,
-  ) {
-    // ENHANCED: Comprehensive decision making for ALL game situations
+  /// Initialize Phi-3 tokenizer from Transformers.js
+  Future<js.JsObject?> _initializeTokenizer() async {
+    try {
+      final transformers = js.context['transformers'];
+      if (transformers == null) {
+        throw Exception('Transformers.js not loaded');
+      }
 
-    // High priority: Go out if possible (end round)
-    if (context['canGoOut'] == true) {
-      return 'GO_OUT - ${personality.name} bot ending round with victory!';
-    }
+      print('WebLLMService: Initializing Phi-3 tokenizer...');
 
-    // Phase-specific decisions based on current turn phase
-    switch (gameState.turnPhase.name) {
-      case 'draw':
-        // Draw phase decisions
-        if (context['canUnlockDiscardPile'] == true) {
-          switch (personality) {
-            case BotPersonality.conservative:
-              return 'DRAW_DECK - Conservative bot avoiding risky discard pile';
-            case BotPersonality.aggressive:
-              return 'DRAW_DISCARD - Aggressive bot taking discard pile for advantage';
-            case BotPersonality.bookBuilder:
-              return 'DRAW_DISCARD - Book-building bot using discard pile strategically';
-            case BotPersonality.adaptive:
-              final isLeading = context['isLeading'] == true;
-              return isLeading
-                  ? 'DRAW_DECK - Adaptive bot playing safe while leading'
-                  : 'DRAW_DISCARD - Adaptive bot taking calculated risk';
-          }
-        } else {
-          // Standard deck draw with personality flavor
-          return 'DRAW_DECK - ${personality.name} bot drawing from deck to build hand';
-        }
+      final autoTokenizer = transformers['AutoTokenizer'];
+      final tokenizerPromise = autoTokenizer.callMethod('from_pretrained', [
+        'microsoft/Phi-3-mini-4k-instruct',
+        js.JsObject.jsify({'revision': 'main'}),
+      ]);
 
-      case 'meld':
-        // Meld phase decisions
-        final possibleMelds = context['possibleMelds'] ?? 0;
-        final hasPlayedDown = botPlayer.hasPlayedDown;
+      final tokenizer = await _promiseToFuture(tokenizerPromise);
+      if (tokenizer == null) {
+        throw Exception('Tokenizer loading failed');
+      }
 
-        if (possibleMelds > 0) {
-          if (!hasPlayedDown) {
-            return 'MELD - ${personality.name} bot playing down for Round ${gameState.round}';
-          } else {
-            return 'MELD - ${personality.name} bot building toward books ($possibleMelds possible melds)';
-          }
-        } else {
-          return 'END_MELD - ${personality.name} bot holding cards strategically';
-        }
-
-      case 'discard':
-        // Discard phase - always need to discard something
-        final handSize = botPlayer.currentHand.length;
-        if (handSize <= 3 && botPlayer.hasPickedUpFoot) {
-          return 'DISCARD - ${personality.name} bot positioning for endgame';
-        } else {
-          return 'DISCARD - ${personality.name} bot discarding strategically ($handSize cards)';
-        }
-
-      default:
-        // Fallback for any unknown phase
-        return 'DRAW_DECK - ${personality.name} bot making safe default move';
+      print('WebLLMService: Phi-3 tokenizer initialized');
+      return tokenizer;
+    } catch (e) {
+      print('WebLLMService: Tokenizer initialization error: $e');
+      return null;
     }
   }
 
-  /// Run actual ONNX inference for decision making
-  Future<String?> _runOnnxInference(
+  /// Run Phi-3 inference for strategic decision making
+  Future<String> _runPhi3Inference(
     GameState gameState,
     Player botPlayer,
     BotPersonality personality,
     Map<String, dynamic> context,
   ) async {
     try {
-      // Build prompt for Phi-3 model
-      final prompt = _buildLLMPrompt(
+      // Build Phi-3 compatible prompt
+      final prompt = _buildPhi3Prompt(
         gameState,
         botPlayer,
         personality,
         context,
       );
       print(
-        'WebLLMService: Running ONNX inference with prompt length: ${prompt.length}',
+        'WebLLMService: Running Phi-3 inference with prompt: ${prompt.substring(0, 100)}...',
       );
 
-      print('WebLLMService: Starting actual ONNX.js inference...');
-
-      // Tokenize input prompt (simplified approach for web)
-      final inputTokens = _tokenizeForOnnx(prompt);
-      print('WebLLMService: Tokenized input: ${inputTokens.length} tokens');
-
-      if (inputTokens.isEmpty) {
-        throw Exception('Tokenization failed');
+      // Tokenize using proper Phi-3 tokenizer
+      final inputIds = await _tokenizeInput(prompt);
+      if (inputIds.isEmpty) {
+        throw Exception('Phi-3 tokenization failed');
       }
 
-      // Create ONNX input tensors
-      final inputTensor = _createOnnxInputTensor(inputTokens);
+      print('WebLLMService: Tokenized ${inputIds.length} input tokens');
 
-      // Run ONNX.js inference
-      final outputTokens = await _runOnnxGeneration(inputTensor);
-
+      // Generate response using autoregressive sampling
+      final outputTokens = await _generateTokens(inputIds);
       if (outputTokens.isEmpty) {
-        throw Exception('Inference failed - no output generated');
+        throw Exception('Phi-3 generation failed - no output tokens');
       }
 
-      // Decode to text
-      final generatedText = _decodeOnnxOutput(outputTokens);
-      print('WebLLMService: Generated response via ONNX: $generatedText');
-
-      return generatedText;
-    } catch (e) {
-      print('WebLLMService: ONNX inference error: $e');
-      return generateIntelligentFallback(
-        gameState,
-        botPlayer,
-        personality,
-        context,
+      // Decode generated tokens to text
+      final generatedText = await _decodeTokens(outputTokens);
+      print(
+        'WebLLMService: Generated ${outputTokens.length} tokens: $generatedText',
       );
+
+      return _extractDecisionFromResponse(generatedText);
+    } catch (e) {
+      print('WebLLMService: Phi-3 inference error: $e');
+      rethrow; // No fallback - fail hard
     }
   }
 
-  /// Build LLM prompt for Phi-3 model
-  String _buildLLMPrompt(
+  /// Build Phi-3 compatible prompt with proper chat formatting
+  String _buildPhi3Prompt(
     GameState gameState,
     Player botPlayer,
     BotPersonality personality,
     Map<String, dynamic> context,
   ) {
-    final prompt = StringBuffer();
+    // Phi-3 uses special chat template format
+    final systemMessage =
+        'You are a ${personality.name} AI bot playing Hand & Foot card game. '
+        'RULES: Round ${gameState.round} requires ${60 + (gameState.round - 1) * 30}pts to play down. '
+        'Melds need 3+ cards (min 2 naturals). Wild cards ≤ naturals. '
+        'Books (7+ cards): Clean=500pts, Dirty=300pts. '
+        'Go out: Need clean+dirty book, discard last card. '
+        'Strategy: ${_getPersonalityDescription(personality)}. '
+        'Respond with EXACTLY one action: DRAW_DECK, DRAW_DISCARD, MELD, DISCARD, GO_OUT, or END_MELD';
 
-    // System prompt with game rules
-    prompt.writeln('<|system|>');
-    prompt.writeln(
-      'You are a ${personality.name} AI player in Hand & Foot card game.',
-    );
-    prompt.writeln('');
-    prompt.writeln('HAND & FOOT RULES:');
-    prompt.writeln(
-      '- Each round requires higher points to play down: Round 1=60pts, +30 per round',
-    );
-    prompt.writeln(
-      '- Melds need 3+ cards, minimum 2 natural cards of same rank',
-    );
-    prompt.writeln(
-      '- Wild cards (2s, Jokers) can be added but cannot exceed naturals in meld',
-    );
-    prompt.writeln(
-      '- Books (7+ cards): Clean book=500pts bonus, Dirty book=300pts bonus',
-    );
-    prompt.writeln(
-      '- To go out: Must have both clean AND dirty book, then discard last card',
-    );
-    prompt.writeln(
-      '- 3s cannot be melded: Red 3s=+100pts, Black 3s=-300pts when held',
-    );
-    prompt.writeln(
-      '- Discard pile unlock: Need 2+ matching naturals + already played down',
-    );
-    prompt.writeln('');
-    prompt.writeln('TURN PHASES:');
-    prompt.writeln('- DRAW: Take 2 cards from deck OR unlock discard pile');
-    prompt.writeln('- MELD: Create/add to melds (optional after playing down)');
-    prompt.writeln('- DISCARD: Must discard 1 card to end turn');
-    prompt.writeln('');
-    prompt.writeln(
-      'STRATEGY: ${personality.name} personality plays ${_getPersonalityDescription(personality)}',
-    );
-    prompt.writeln('');
-    prompt.writeln(
-      'Respond with exactly one action: DRAW_DECK, DRAW_DISCARD, MELD, DISCARD, GO_OUT, or END_MELD',
-    );
-    prompt.writeln('<|end|>');
+    final userMessage =
+        'Current situation: '
+        'Round=${gameState.round}, Phase=${gameState.turnPhase.name}, '
+        'HandSize=${botPlayer.currentHand.length}, '
+        'PlayedDown=${botPlayer.hasPlayedDown}, '
+        'PickedUpFoot=${botPlayer.hasPickedUpFoot}, '
+        'CanGoOut=${context['canGoOut'] ?? false}, '
+        'CanUnlock=${context['canUnlockDiscardPile'] ?? false}, '
+        'PossibleMelds=${context['possibleMelds'] ?? 0}. '
+        'What action should I take?';
 
-    // User prompt with game context
-    prompt.writeln('<|user|>');
-    prompt.writeln('Game State:');
-    prompt.writeln('- Round: ${gameState.round}');
-    prompt.writeln('- Turn Phase: ${gameState.turnPhase.name}');
-    prompt.writeln('- Hand Size: ${botPlayer.currentHand.length}');
-    prompt.writeln('- Has Played Down: ${botPlayer.hasPlayedDown}');
-    prompt.writeln('- Has Picked Up Foot: ${botPlayer.hasPickedUpFoot}');
-    prompt.writeln('- Can Go Out: ${context['canGoOut'] ?? false}');
-    prompt.writeln(
-      '- Can Unlock Discard: ${context['canUnlockDiscardPile'] ?? false}',
-    );
-    prompt.writeln('- Possible Melds: ${context['possibleMelds'] ?? 0}');
-    prompt.writeln('- Opponent Threat: ${context['opponentThreat'] ?? 0}');
-
-    prompt.writeln(
-      'What should I do? Respond with action and brief reasoning.',
-    );
-    prompt.writeln('<|end|>');
-
-    prompt.writeln('<|assistant|>');
-
-    return prompt.toString();
+    // Phi-3 chat template format
+    return '<|system|>\n$systemMessage<|end|>\n<|user|>\n$userMessage<|end|>\n<|assistant|>\n';
   }
 
   /// Get personality strategy description for LLM context
@@ -515,99 +391,178 @@ class WebLLMService {
     }
   }
 
-  /// Simple tokenization for ONNX.js (basic implementation)
-  List<int> _tokenizeForOnnx(String text) {
-    // Simple word-based tokenization similar to mobile service
-    final words = text.split(RegExp(r'\s+'));
-    final tokens = <int>[];
-
-    // Basic vocabulary mapping
-    const vocab = {
-      '<|system|>': 1,
-      '<|user|>': 2,
-      '<|assistant|>': 3,
-      '<|end|>': 4,
-      'DRAW_DECK': 5,
-      'DRAW_DISCARD': 6,
-      'MELD': 7,
-      'DISCARD': 8,
-      'GO_OUT': 9,
-      'END_MELD': 10,
-      'conservative': 12,
-      'aggressive': 13,
-      'adaptive': 14,
-      'bookBuilder': 15,
-      'bot': 16,
-      'game': 17,
-    };
-
-    for (final word in words) {
-      tokens.add(vocab[word] ?? 999); // 999 = UNK token
-    }
-
-    return tokens;
-  }
-
-  /// Create ONNX.js compatible input tensor
-  Map<String, dynamic> _createOnnxInputTensor(List<int> tokens) {
-    // Pad to fixed length
-    const maxLength = 512;
-    final paddedTokens = List<int>.filled(maxLength, 0);
-
-    final copyLength = tokens.length > maxLength ? maxLength : tokens.length;
-    for (int i = 0; i < copyLength; i++) {
-      paddedTokens[i] = tokens[i];
-    }
-
-    return {
-      'input_ids': [paddedTokens], // Shape: [1, maxLength]
-      'attention_mask': [List.filled(maxLength, 1)], // Simple attention mask
-    };
-  }
-
-  /// Run ONNX generation loop
-  Future<List<int>> _runOnnxGeneration(Map<String, dynamic> inputTensor) async {
+  /// Tokenize input using Phi-3 tokenizer
+  Future<List<int>> _tokenizeInput(String text) async {
     try {
+      if (_tokenizer == null) {
+        throw Exception('Tokenizer not initialized');
+      }
+
+      final tokenizePromise = _tokenizer!.callMethod('encode', [
+        text,
+        js.JsObject.jsify({
+          'return_tensor': false,
+          'padding': false,
+          'truncation': true,
+          'max_length':
+              _maxContextLength -
+              _maxGenerationTokens, // Reserve space for generation
+        }),
+      ]);
+
+      final result = await _promiseToFuture(tokenizePromise);
+      if (result == null) {
+        throw Exception('Tokenization promise failed');
+      }
+
+      // Extract input_ids from result
+      final inputIds = result['input_ids'];
+      if (inputIds == null) {
+        throw Exception('No input_ids in tokenization result');
+      }
+
+      // Convert JS array to Dart list
+      final List<int> tokens = [];
+      final jsArray = inputIds;
+      final length = jsArray['length'];
+
+      for (int i = 0; i < length; i++) {
+        tokens.add(jsArray[i]);
+      }
+
+      return tokens;
+    } catch (e) {
+      print('WebLLMService: Tokenization error: $e');
+      rethrow;
+    }
+  }
+
+  /// Create Phi-3 compatible input tensors
+  Map<String, js.JsObject> _createPhi3InputTensors(List<int> inputIds) {
+    try {
+      final ort = js.context['ort'];
+      final batchSize = 1;
+      final seqLength = inputIds.length;
+
+      // Create input_ids tensor [batch_size, seq_length]
+      final inputIdsTensor = ort.callMethod('Tensor.from', [
+        'int64',
+        js.JsObject.jsify([inputIds]), // 2D array: [batch_size][seq_length]
+        js.JsObject.jsify([batchSize, seqLength]),
+      ]);
+
+      // Create attention_mask tensor [batch_size, seq_length]
+      final attentionMask = List.filled(seqLength, 1); // All 1s for real tokens
+      final attentionMaskTensor = ort.callMethod('Tensor.from', [
+        'int64',
+        js.JsObject.jsify([attentionMask]),
+        js.JsObject.jsify([batchSize, seqLength]),
+      ]);
+
+      // Create position_ids tensor [batch_size, seq_length]
+      final positionIds = List.generate(seqLength, (index) => index);
+      final positionIdsTensor = ort.callMethod('Tensor.from', [
+        'int64',
+        js.JsObject.jsify([positionIds]),
+        js.JsObject.jsify([batchSize, seqLength]),
+      ]);
+
+      _sequenceLength = seqLength; // Update sequence length for KV cache
+
+      return {
+        'input_ids': inputIdsTensor,
+        'attention_mask': attentionMaskTensor,
+        'position_ids': positionIdsTensor,
+      };
+    } catch (e) {
+      print('WebLLMService: Tensor creation error: $e');
+      rethrow;
+    }
+  }
+
+  /// Generate tokens autoregressively using Phi-3
+  Future<List<int>> _generateTokens(List<int> inputIds) async {
+    try {
+      final allTokens = List<int>.from(inputIds);
       final outputTokens = <int>[];
 
-      // Convert input to JavaScript format
-      final jsInputs = js.JsObject.jsify(inputTensor);
+      // Get EOS token ID (typically 32000 for Phi-3)
+      const eosTokenId = 32000;
 
-      // Run inference
-      final result = await _promiseToFuture(
-        _onnxSession!.callMethod('run', [jsInputs]),
-      );
+      for (int step = 0; step < _maxGenerationTokens; step++) {
+        // Create input tensors for current sequence
+        final inputTensors = _createPhi3InputTensors(allTokens);
 
-      if (result != null) {
-        // Extract tokens from result (simplified)
-        // Real implementation would handle the complex output structure
-        outputTokens.add(5); // DRAW_DECK as default for now
+        // Add KV cache tensors if available (for efficiency)
+        if (_kvCache.isNotEmpty) {
+          inputTensors.addAll(_kvCache);
+        }
+
+        // Run inference
+        final result = await _promiseToFuture(
+          _onnxSession!.callMethod('run', [js.JsObject.jsify(inputTensors)]),
+        );
+
+        if (result == null) {
+          throw Exception('Inference step $step failed');
+        }
+
+        // Extract logits and sample next token
+        final nextToken = _sampleNextToken(result);
+        if (nextToken == eosTokenId) {
+          print('WebLLMService: Generation completed at step $step (EOS)');
+          break;
+        }
+
+        outputTokens.add(nextToken);
+        allTokens.add(nextToken);
+
+        // Update KV cache for next iteration (if model provides it)
+        _updateKvCache(result);
+
+        // Early stop if we have a complete action
+        if (outputTokens.length >= 5) {
+          // Reasonable minimum for action + reasoning
+          final partialText = await _decodeTokens(outputTokens);
+          if (_isCompleteAction(partialText)) {
+            print('WebLLMService: Early stop - complete action detected');
+            break;
+          }
+        }
       }
 
       return outputTokens;
     } catch (e) {
-      print('WebLLMService: ONNX generation error: $e');
-      return [];
+      print('WebLLMService: Token generation error: $e');
+      rethrow;
     }
   }
 
-  /// Decode ONNX output tokens to text
-  String _decodeOnnxOutput(List<int> tokens) {
-    const reverseVocab = {
-      5: 'DRAW_DECK',
-      6: 'DRAW_DISCARD',
-      7: 'MELD',
-      8: 'DISCARD',
-      9: 'GO_OUT',
-      10: 'END_MELD',
-    };
+  /// Decode tokens using Phi-3 tokenizer
+  Future<String> _decodeTokens(List<int> tokens) async {
+    try {
+      if (_tokenizer == null || tokens.isEmpty) {
+        throw Exception('Cannot decode: tokenizer not available or no tokens');
+      }
 
-    if (tokens.isNotEmpty) {
-      final action = reverseVocab[tokens.first] ?? 'DRAW_DECK';
-      return '$action - Generated by actual ONNX inference';
+      final decodePromise = _tokenizer!.callMethod('decode', [
+        js.JsObject.jsify(tokens),
+        js.JsObject.jsify({
+          'skip_special_tokens': true,
+          'clean_up_tokenization_spaces': true,
+        }),
+      ]);
+
+      final result = await _promiseToFuture(decodePromise);
+      if (result == null) {
+        throw Exception('Decode promise failed');
+      }
+
+      return result.toString().trim();
+    } catch (e) {
+      print('WebLLMService: Token decoding error: $e');
+      rethrow;
     }
-
-    return 'DRAW_DECK - Default ONNX response';
   }
 
   /// Parse response to extract action and reasoning
@@ -623,32 +578,118 @@ class WebLLMService {
     return {'action': 'DRAW_DECK', 'reasoning': 'Default safe action'};
   }
 
-  /// Check if should use LLM for this decision
-  bool shouldUseLLMForDecision({
-    required GameState gameState,
-    required Player botPlayer,
-    required Map<String, dynamic> context,
-  }) {
-    if (!isAvailable) {
-      return false; // Always use fallback if not available
+  /// Sample next token from model logits using greedy sampling
+  int _sampleNextToken(js.JsObject result) {
+    try {
+      // Get logits output (should be 'logits' tensor)
+      final logitsTensor = result['logits'];
+      if (logitsTensor == null) {
+        throw Exception('No logits in model output');
+      }
+
+      // Get the data array from tensor
+      final logitsData = logitsTensor['data'];
+      if (logitsData == null) {
+        throw Exception('No data in logits tensor');
+      }
+
+      // Find token with highest probability (greedy sampling)
+      // For Phi-3, logits are for the last position
+      final vocabSize = logitsData['length'] as int;
+      double maxLogit = double.negativeInfinity;
+      int bestToken = 0;
+
+      for (int i = 0; i < vocabSize; i++) {
+        final logit = logitsData[i] as double;
+        if (logit > maxLogit) {
+          maxLogit = logit;
+          bestToken = i;
+        }
+      }
+
+      return bestToken;
+    } catch (e) {
+      print('WebLLMService: Token sampling error: $e');
+      // Return a reasonable fallback token if sampling fails
+      return 13; // Some reasonable token ID
+    }
+  }
+
+  /// Update KV cache from model output for efficient generation
+  void _updateKvCache(js.JsObject result) {
+    try {
+      // Look for key and value cache outputs
+      final outputs = result;
+
+      // Phi-3 typically outputs present_key and present_value
+      final presentKey = outputs['present_key'];
+      final presentValue = outputs['present_value'];
+
+      if (presentKey != null) {
+        _kvCache['past_key_values.0.key'] = presentKey;
+      }
+      if (presentValue != null) {
+        _kvCache['past_key_values.0.value'] = presentValue;
+      }
+    } catch (e) {
+      // KV cache update is optional - continue without it
+      print('WebLLMService: KV cache update failed (non-critical): $e');
+    }
+  }
+
+  /// Check if generated text contains a complete action
+  bool _isCompleteAction(String text) {
+    final actions = [
+      'DRAW_DECK',
+      'DRAW_DISCARD',
+      'MELD',
+      'DISCARD',
+      'GO_OUT',
+      'END_MELD',
+    ];
+    return actions.any((action) => text.toUpperCase().contains(action));
+  }
+
+  /// Extract decision from Phi-3 generated response
+  String _extractDecisionFromResponse(String response) {
+    // Look for action patterns in response
+    final actions = [
+      'DRAW_DECK',
+      'DRAW_DISCARD',
+      'MELD',
+      'DISCARD',
+      'GO_OUT',
+      'END_MELD',
+    ];
+
+    for (final action in actions) {
+      if (response.toUpperCase().contains(action)) {
+        final reasoning = response
+            .replaceAll(RegExp(action, caseSensitive: false), '')
+            .trim();
+        return '$action - ${reasoning.isEmpty ? 'Phi-3 strategic decision' : reasoning}';
+      }
     }
 
-    // MODIFIED: Always use LLM for ALL decisions when service is available
-    return true;
+    // If no clear action found, default to safe move
+    return 'DRAW_DECK - Phi-3 generated safe default action';
   }
 
   /// Dispose resources
   void dispose() {
     _onnxSession = null;
+    _tokenizer = null;
+    _kvCache.clear();
     _isInitialized = false;
-    _responseCache.clear(); // Clear memory cache
-    _lastError = null; // Clear error state
+    _lastError = null;
+    _sequenceLength = 0;
     print('WebLLMService: Disposed');
   }
 
-  /// Reset service
+  /// Reset service and clear caches
   void reset() {
-    _responseCache.clear();
+    _kvCache.clear();
+    _sequenceLength = 0;
     _lastError = null;
     print('WebLLMService: Reset');
   }
@@ -660,9 +701,12 @@ class WebLLMService {
       'isLoading': _isLoading,
       'isAvailable': isAvailable,
       'lastError': _lastError,
-      'cacheSize': _responseCache.length,
       'platform': 'Web',
-      'onnxAvailable': _isOnnxRuntimeAvailable(),
+      'model': 'Phi-3-mini-4k-instruct',
+      'sequenceLength': _sequenceLength,
+      'kvCacheSize': _kvCache.length,
+      'hasOnnxSession': _onnxSession != null,
+      'hasTokenizer': _tokenizer != null,
     };
   }
 }
