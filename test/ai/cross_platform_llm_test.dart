@@ -131,5 +131,28 @@ void main() {
         expect(decision.action, isA<String>());
       }
     });
+
+    test('Should handle LLM service gracefully when unavailable', () {
+      final botAI = LLMEnhancedBotAI(
+        enableLLM: false,
+      ); // Disable LLM explicitly
+
+      final players = [
+        Player(id: '1', name: 'Human', type: PlayerType.human),
+        Player(id: '2', name: 'Bot', type: PlayerType.bot),
+      ];
+
+      final controller = GameController(players: players);
+      controller.initializeGame();
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.draw;
+
+      // Should fall back to rule-based AI gracefully
+      final decision = botAI.makeDecision(players[1], controller);
+      expect(decision.action, isA<String>());
+
+      // Should work without errors even when LLM is disabled
+      expect(decision.action, isNotNull);
+    });
   });
 }

@@ -19,7 +19,7 @@ dependencies:
   uuid: ^4.5.1
   connectivity_plus: ^6.1.5
   # LLM dependencies
-  tflite_flutter: ^0.11.0
+  # tflite_flutter: ^0.11.0 # Removed - using intelligent fallback instead
 
 dev_dependencies:
   flutter_test:

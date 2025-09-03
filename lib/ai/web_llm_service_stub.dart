@@ -35,6 +35,16 @@ class WebLLMService {
     return null;
   }
 
+  /// Generate intelligent fallback response (not supported on non-web)
+  String? generateIntelligentFallback(
+    GameState gameState,
+    Player botPlayer,
+    BotPersonality personality,
+    Map<String, dynamic> context,
+  ) {
+    return null; // Not supported on non-web platforms
+  }
+
   /// Parse response (stub)
   Map<String, String> parseResponse(String response) {
     return {'action': 'DRAW_DECK', 'reasoning': 'Stub implementation'};
@@ -67,7 +77,7 @@ class WebLLMService {
       'isAvailable': false,
       'lastError': 'Web LLM not supported on this platform',
       'cacheSize': 0,
-      'platform': 'non-web-stub',
+      'platform': 'Mobile/Desktop',
       'onnxAvailable': false,
     };
   }

@@ -30,6 +30,16 @@ class MobileLLMService {
     return null;
   }
 
+  /// Generate intelligent fallback response (not supported on web)
+  String? generateIntelligentFallback(
+    GameState gameState,
+    Player botPlayer,
+    BotPersonality personality,
+    Map<String, dynamic> context,
+  ) {
+    return null; // Not supported on web platform
+  }
+
   /// Parse response (stub)
   Map<String, String> parseResponse(String response) {
     return {'action': 'DRAW_DECK', 'reasoning': 'Web stub implementation'};

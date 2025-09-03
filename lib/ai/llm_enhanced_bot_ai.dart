@@ -34,19 +34,21 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     }
 
     try {
-      print('LLMEnhancedBotAI: Initializing cross-platform LLM service...');
+      DebugLogger.debug(
+        'LLMEnhancedBotAI: Initializing cross-platform LLM service...',
+      );
       final success = await _llmService.initialize();
 
       if (success) {
-        print('LLMEnhancedBotAI: LLM service ready');
+        DebugLogger.debug('LLMEnhancedBotAI: LLM service ready');
       } else {
-        print(
+        DebugLogger.warning(
           'LLMEnhancedBotAI: LLM initialization failed, using rule-based only',
         );
-        print('Error: ${_llmService.lastError}');
+        DebugLogger.warning('Error: ${_llmService.lastError}');
       }
     } catch (e) {
-      print('LLMEnhancedBotAI: LLM initialization error: $e');
+      DebugLogger.error('LLMEnhancedBotAI: LLM initialization error: $e');
     }
   }
 
@@ -57,7 +59,9 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     if (_isLLMEnabled && !_llmService.isAvailable) {
       // Trigger async initialization in background
       initializeLLM().catchError((e) {
-        print('LLMEnhancedBotAI: Background initialization failed: $e');
+        DebugLogger.warning(
+          'LLMEnhancedBotAI: Background initialization failed: $e',
+        );
       });
     }
 
@@ -78,7 +82,33 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
         'LLMEnhancedBotAI sync decision - LLM enabled: $_isLLMEnabled, available: ${_llmService.isAvailable}',
       );
 
-      // For sync mode, always use rule-based (LLM requires async)
+      // If LLM is available, use intelligent fallback instead of pure rule-based
+      if (_isLLMEnabled &&
+          _llmService.isAvailable &&
+          _shouldUseLLMForDecision(bot, controller.gameState, controller)) {
+        try {
+          // Use synchronous LLM-like decision making
+          final decision = _makeSynchronousLLMDecision(bot, controller);
+          _llmDecisions++;
+
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'Sync LLM-enhanced decision: ${decision.action}',
+          );
+
+          return decision;
+        } catch (e) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'Sync LLM fallback failed, using rule-based: $e',
+          );
+          _llmFailures++;
+        }
+      }
+
+      // Fallback to rule-based decision
       final decision = super.makeDecision(bot, controller);
       _ruleBasedDecisions++;
 
@@ -90,12 +120,56 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
 
       return decision;
     } catch (e) {
-      print('LLMEnhancedBotAI: Error in sync decision making: $e');
+      DebugLogger.error('LLMEnhancedBotAI: Error in sync decision making: $e');
       _llmFailures++;
 
       // Fallback to parent logic
       return super.makeDecision(bot, controller);
     }
+  }
+
+  /// Make synchronous LLM-like decision using intelligent fallback
+  BotDecision _makeSynchronousLLMDecision(
+    Player bot,
+    GameController controller,
+  ) {
+    final gameState = controller.gameState;
+    final context = _buildDecisionContext(bot, gameState, controller);
+    final personality = personalityManager.getPersonality(bot.id);
+
+    // Generate synchronous LLM-like response using intelligent fallback
+    final llmResponse =
+        _llmService.shouldUseLLMForDecision(
+          gameState: gameState,
+          botPlayer: bot,
+          context: context,
+        )
+        ? _generateSynchronousLLMResponse(gameState, bot, personality, context)
+        : null;
+
+    if (llmResponse != null && llmResponse.isNotEmpty) {
+      // Parse LLM response to decision
+      return _parseLLMResponseToDecision(llmResponse, bot, controller);
+    } else {
+      // Fallback to rule-based if no LLM response
+      return super.makeDecision(bot, controller);
+    }
+  }
+
+  /// Generate synchronous LLM-like response using service's intelligent fallback
+  String? _generateSynchronousLLMResponse(
+    GameState gameState,
+    Player botPlayer,
+    BotPersonality personality,
+    Map<String, dynamic> context,
+  ) {
+    // Use the LLM service's public synchronous decision method
+    return _llmService.generateSynchronousDecision(
+      gameState: gameState,
+      botPlayer: botPlayer,
+      personality: personality,
+      context: context,
+    );
   }
 
   /// Async decision making - the real implementation for LLM inference
@@ -111,7 +185,9 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
         try {
           await initializeLLM();
         } catch (e) {
-          print('LLMEnhancedBotAI: Async initialization failed: $e');
+          DebugLogger.warning(
+            'LLMEnhancedBotAI: Async initialization failed: $e',
+          );
         }
       }
 
@@ -141,7 +217,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
         return decision;
       }
     } catch (e) {
-      print('LLMEnhancedBotAI: Error in async decision making: $e');
+      DebugLogger.error('LLMEnhancedBotAI: Error in async decision making: $e');
       _llmFailures++;
 
       // Fallback to parent logic
@@ -242,7 +318,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
       // Run LLM inference with proper async handling
       return await _runLLMDecisionWithTimeoutAsync(bot, controller);
     } catch (e) {
-      print('LLMEnhancedBotAI: LLM decision failed: $e');
+      DebugLogger.error('LLMEnhancedBotAI: LLM decision failed: $e');
       _llmFailures++;
 
       // Fallback to rule-based decision
@@ -311,7 +387,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
         return decision;
       }
     } catch (e) {
-      print('LLMEnhancedBotAI: LLM inference error: $e');
+      DebugLogger.error('LLMEnhancedBotAI: LLM inference error: $e');
       _llmFailures++;
 
       // Fallback to rule-based
@@ -456,7 +532,9 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     if (enabled) {
       initializeLLM();
     }
-    print('LLMEnhancedBotAI: LLM ${enabled ? 'enabled' : 'disabled'}');
+    DebugLogger.debug(
+      'LLMEnhancedBotAI: LLM ${enabled ? 'enabled' : 'disabled'}',
+    );
   }
 
   /// Get LLM usage statistics
@@ -500,7 +578,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     super.assignPersonality(playerId, personality);
 
     if (kDebugMode) {
-      print(
+      DebugLogger.debug(
         'LLMEnhancedBotAI: Assigned ${personality.name} personality to $playerId',
       );
     }
@@ -512,12 +590,12 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     super.assignRandomPersonalities(botPlayers);
 
     if (kDebugMode) {
-      print(
+      DebugLogger.debug(
         'LLMEnhancedBotAI: Auto-assigned personalities to ${botPlayers.length} bots',
       );
       for (final bot in botPlayers.where((p) => p.type == PlayerType.bot)) {
         final personality = personalityManager.getPersonality(bot.id);
-        print('  ${bot.name}: ${personality.name}');
+        DebugLogger.debug('  ${bot.name}: ${personality.name}');
       }
     }
   }

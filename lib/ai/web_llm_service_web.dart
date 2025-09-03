@@ -188,7 +188,7 @@ class WebLLMService {
       });
 
       print('WebLLMService: Creating ONNX inference session...');
-      final sessionPromise = onnx['InferenceSession'].callMethod('create', [
+      final sessionPromise = onnx.callMethod('InferenceSession.create', [
         _defaultModelUrl,
         sessionOptions,
       ]);
@@ -262,7 +262,7 @@ class WebLLMService {
     required Map<String, dynamic> context,
   }) async {
     if (!isAvailable) {
-      return _generateIntelligentFallback(
+      return generateIntelligentFallback(
         gameState,
         botPlayer,
         personality,
@@ -284,7 +284,7 @@ class WebLLMService {
         print(
           'WebLLMService: ONNX session not available, using intelligent fallback',
         );
-        return _generateIntelligentFallback(
+        return generateIntelligentFallback(
           gameState,
           botPlayer,
           personality,
@@ -293,7 +293,7 @@ class WebLLMService {
       }
     } catch (e) {
       print('WebLLMService: Decision generation failed: $e');
-      return _generateIntelligentFallback(
+      return generateIntelligentFallback(
         gameState,
         botPlayer,
         personality,
@@ -303,7 +303,7 @@ class WebLLMService {
   }
 
   /// Generate intelligent fallback response for ALL game situations
-  String? _generateIntelligentFallback(
+  String? generateIntelligentFallback(
     GameState gameState,
     Player botPlayer,
     BotPersonality personality,
@@ -401,7 +401,7 @@ class WebLLMService {
       // 3. Model inference
       // 4. Output decoding
 
-      return _generateIntelligentFallback(
+      return generateIntelligentFallback(
         gameState,
         botPlayer,
         personality,
@@ -409,7 +409,7 @@ class WebLLMService {
       );
     } catch (e) {
       print('WebLLMService: ONNX inference error: $e');
-      return _generateIntelligentFallback(
+      return generateIntelligentFallback(
         gameState,
         botPlayer,
         personality,
@@ -494,7 +494,8 @@ class WebLLMService {
   void dispose() {
     _onnxSession = null;
     _isInitialized = false;
-    _responseCache.clear();
+    _responseCache.clear(); // Clear memory cache
+    _lastError = null; // Clear error state
     print('WebLLMService: Disposed');
   }
 

@@ -3,9 +3,11 @@ import 'package:flutter/foundation.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import 'bot_personality.dart';
-import 'web_llm_service.dart';
+import 'web_llm_service_stub.dart'
+    if (dart.library.js) 'web_llm_service_web.dart';
 import 'mobile_llm_service_stub.dart'
     if (dart.library.io) 'mobile_llm_service.dart';
+import '../utils/debug_logger.dart';
 
 /// Universal LLM service that works across all platforms (web, mobile, macOS)
 class LLMService {
@@ -25,7 +27,9 @@ class LLMService {
     }
 
     try {
-      print('LLMService: Initializing for platform: ${_getPlatformName()}');
+      DebugLogger.debug(
+        'LLMService: Initializing for platform: ${_getPlatformName()}',
+      );
 
       if (kIsWeb) {
         // Web platform - use ONNX.js
@@ -37,12 +41,12 @@ class LLMService {
         _isInitialized = await _mobileLLMService!.initialize();
       }
 
-      print(
+      DebugLogger.debug(
         'LLMService: Initialization ${_isInitialized ? 'successful' : 'failed'} for ${_getPlatformName()}',
       );
       return _isInitialized;
     } catch (e) {
-      print('LLMService: Initialization error: $e');
+      DebugLogger.error('LLMService: Initialization error: $e');
       _isInitialized = false;
       return false;
     }
@@ -94,8 +98,43 @@ class LLMService {
         );
       }
     } catch (e) {
-      print('LLMService: Decision generation failed: $e');
+      DebugLogger.error('LLMService: Decision generation failed: $e');
       return null; // Trigger fallback
+    }
+  }
+
+  /// Generate synchronous strategic decision using intelligent fallback
+  String? generateSynchronousDecision({
+    required GameState gameState,
+    required Player botPlayer,
+    required BotPersonality personality,
+    required Map<String, dynamic> context,
+  }) {
+    if (!isAvailable) {
+      return null; // Service not available
+    }
+
+    try {
+      if (kIsWeb) {
+        return _webLLMService?.generateIntelligentFallback(
+          gameState,
+          botPlayer,
+          personality,
+          context,
+        );
+      } else {
+        return _mobileLLMService?.generateIntelligentFallback(
+          gameState,
+          botPlayer,
+          personality,
+          context,
+        );
+      }
+    } catch (e) {
+      DebugLogger.error(
+        'LLMService: Synchronous decision generation failed: $e',
+      );
+      return null;
     }
   }
 
@@ -163,7 +202,7 @@ class LLMService {
     } else {
       _mobileLLMService?.reset();
     }
-    print('LLMService: Reset for ${_getPlatformName()}');
+    DebugLogger.debug('LLMService: Reset for ${_getPlatformName()}');
   }
 
   /// Dispose resources
@@ -176,7 +215,7 @@ class LLMService {
       _mobileLLMService = null;
     }
     _isInitialized = false;
-    print('LLMService: Disposed for ${_getPlatformName()}');
+    DebugLogger.debug('LLMService: Disposed for ${_getPlatformName()}');
   }
 
   /// Get human-readable platform name
