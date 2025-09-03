@@ -18,8 +18,9 @@ dependencies:
   device_info_plus: ^11.5.0
   uuid: ^4.5.1
   connectivity_plus: ^6.1.5
-  # LLM dependencies
-  # tflite_flutter: ^0.11.0 # Removed - using intelligent fallback instead
+  # LLM dependencies  
+  http: ^1.1.0  # For Hugging Face API calls on mobile platforms
+  # tflite_flutter: ^0.10.1  # Temporarily removed due to compatibility issues - using web API approach for mobile
 
 dev_dependencies:
   flutter_test:
