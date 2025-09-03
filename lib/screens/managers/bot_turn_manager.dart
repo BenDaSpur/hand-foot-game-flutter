@@ -4,7 +4,7 @@ import '../../models/player.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../game/game_controller.dart';
-import '../../ai/enhanced_bot_ai.dart';
+import '../../ai/llm_enhanced_bot_ai.dart';
 import '../../ai/bot_decision.dart';
 import '../../ai/bot_personality.dart';
 import '../../utils/debug_logger.dart';
@@ -18,7 +18,7 @@ import '../../services/analytics_batcher.dart';
 /// Extracted from GameScreen to improve code organization and testability.
 class BotTurnManager {
   final GameController gameController;
-  final EnhancedBotAI botAI;
+  final LLMEnhancedBotAI botAI;
   final Function() onStateChanged;
   final Function(String) logHumanAction;
   final Function({
@@ -30,6 +30,8 @@ class BotTurnManager {
   logBotDecision;
 
   bool _isProcessingBotTurn = false;
+  bool _isLLMThinking = false;
+  String? _currentThinkingBot;
 
   BotTurnManager({
     required this.gameController,
@@ -132,7 +134,17 @@ class BotTurnManager {
         // Try bot decision with retry mechanism
         for (int attempt = 0; attempt < 3 && !actionSucceeded; attempt++) {
           try {
-            final decision = botAI.makeDecision(botPlayer, gameController);
+            // Show thinking state for LLM decisions
+            _setThinkingState(botPlayer, true);
+
+            final decision = await botAI.makeDecisionAsync(
+              botPlayer,
+              gameController,
+            );
+
+            // Clear thinking state
+            _setThinkingState(botPlayer, false);
+
             actionSucceeded = executeBotDecision(decision, botPlayer);
 
             if (actionSucceeded) {
@@ -206,7 +218,42 @@ class BotTurnManager {
       }
     } finally {
       _isProcessingBotTurn = false;
+      _setThinkingState(null, false);
     }
+  }
+
+  /// Set thinking state for UI indicators
+  void _setThinkingState(Player? bot, bool thinking) {
+    _isLLMThinking = thinking;
+    _currentThinkingBot = thinking ? bot?.id : null;
+    onStateChanged(); // Notify UI to update
+  }
+
+  /// Check if LLM is currently thinking
+  bool get isLLMThinking => _isLLMThinking;
+
+  /// Get ID of bot currently thinking with LLM
+  String? get currentThinkingBotId => _currentThinkingBot;
+
+  /// Get name of bot currently thinking
+  String? get currentThinkingBotName {
+    if (_currentThinkingBot == null) return null;
+
+    final bot = gameController.gameState.players
+        .where((p) => p.id == _currentThinkingBot)
+        .firstOrNull;
+
+    return bot?.name;
+  }
+
+  /// Get personality of bot currently thinking
+  String? get currentThinkingBotPersonality {
+    if (_currentThinkingBot == null) return null;
+
+    final personality = botAI.personalityManager.getPersonality(
+      _currentThinkingBot!,
+    );
+    return personality.name;
   }
 
   /// Execute bot decision with comprehensive validation and state management

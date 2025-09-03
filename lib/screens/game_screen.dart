@@ -8,7 +8,7 @@ import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../game/game_controller_factory.dart';
-import '../ai/enhanced_bot_ai.dart';
+import '../ai/llm_enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/meld_widget.dart';
@@ -44,7 +44,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late GameController _gameController;
-  late EnhancedBotAI _botAI;
+  late LLMEnhancedBotAI _botAI;
 
   final List<int> _selectedCardIndices =
       []; // Track card indices instead of card objects
@@ -79,6 +79,22 @@ class _GameScreenState extends State<GameScreen> {
   void dispose() {
     _disposed = true;
     super.dispose();
+  }
+
+  /// Initialize LLM service
+  Future<void> _initializeLLM() async {
+    try {
+      // Initialize web LLM service
+      await _botAI.initializeLLM();
+
+      if (kDebugMode) {
+        final status = _botAI.getLLMStats();
+        print('Web LLM initialization complete. Status: $status');
+      }
+    } catch (e) {
+      print('Web LLM initialization failed: $e');
+      // Continue without LLM - graceful degradation
+    }
   }
 
   /// Helper method to assign bot personalities consistently
@@ -151,7 +167,10 @@ class _GameScreenState extends State<GameScreen> {
       onGameLoaded: (newController, botPersonalities) {
         setState(() {
           _gameController = newController;
-          _botAI = EnhancedBotAI();
+          _botAI = LLMEnhancedBotAI();
+
+          // Initialize LLM asynchronously
+          _botAI.initializeLLM();
 
           // Restore saved bot personalities or assign new ones
           if (botPersonalities.isNotEmpty) {
@@ -175,7 +194,8 @@ class _GameScreenState extends State<GameScreen> {
     // If a gameController was provided (continuing saved game), use it
     if (widget.gameController != null) {
       _gameController = widget.gameController!;
-      _botAI = EnhancedBotAI();
+      _botAI = LLMEnhancedBotAI();
+      await _initializeLLM();
       _initializeManagers();
 
       setState(() {
@@ -246,7 +266,7 @@ class _GameScreenState extends State<GameScreen> {
     return botOptions.take(2).toList();
   }
 
-  void _startFreshGame() {
+  Future<void> _startFreshGame() async {
     // Randomize bot personalities and names each game for variety
     final botConfigs = _generateRandomBotConfigurations();
 
@@ -270,7 +290,8 @@ class _GameScreenState extends State<GameScreen> {
     );
 
     // Create bot AI and assign the randomized personalities
-    _botAI = EnhancedBotAI();
+    _botAI = LLMEnhancedBotAI();
+    await _initializeLLM();
     _botAI.assignPersonality('2', botConfigs[0].personality);
     _botAI.assignPersonality('3', botConfigs[1].personality);
 
@@ -633,7 +654,8 @@ class _GameScreenState extends State<GameScreen> {
 
       if (savedController != null) {
         _gameController = savedController;
-        _botAI = EnhancedBotAI();
+        _botAI = LLMEnhancedBotAI();
+        await _initializeLLM();
 
         // Assign consistent bot personalities based on player IDs
         _assignBotPersonalities();
