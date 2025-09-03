@@ -545,25 +545,22 @@ class EnhancedBotAI {
     final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
       bot,
       controller,
-      (playDownRequirement * 0.8)
-          .round(), // Accept 80% of requirement in emergency
+      playDownRequirement, // Use full requirement, no bypasses
     );
 
     if (bestCombination.isNotEmpty) {
       if (bestCombination.length == 1) {
-        // Emergency play-down but still validate minimum requirements
+        // Emergency play-down must still meet full requirements
         final emergencyValue = bestCombination.first.fold<int>(
           0,
           (sum, card) => sum + card.pointValue,
         );
-        final minAcceptableValue = (gameState.playDownRequirement * 0.7)
-            .round(); // 70% minimum
 
-        if (emergencyValue >= minAcceptableValue) {
+        if (emergencyValue >= playDownRequirement) {
           return BotDecision(action: 'createMeld', data: bestCombination.first);
         } else {
           DebugLogger.warning(
-            '${bot.name}: Emergency play-down rejected - insufficient value ($emergencyValue < $minAcceptableValue)',
+            '${bot.name}: Emergency play-down rejected - insufficient value ($emergencyValue < $playDownRequirement)',
           );
           return BotDecision(action: 'noMeld');
         }
@@ -606,19 +603,17 @@ class EnhancedBotAI {
         return BotDecision(action: 'noMeld');
       }
 
-      // Ultra emergency but still validate basic requirements
+      // Ultra emergency must still meet full requirements
       final emergencyValue = bestSingleMeld.fold<int>(
         0,
         (sum, card) => sum + card.pointValue,
       );
-      final minEmergencyValue = (gameState.playDownRequirement * 0.5)
-          .round(); // 50% absolute minimum
 
-      if (emergencyValue >= minEmergencyValue) {
+      if (emergencyValue >= gameState.playDownRequirement) {
         return BotDecision(action: 'createMeld', data: bestSingleMeld);
       } else {
         DebugLogger.warning(
-          '${bot.name}: Ultra emergency play-down rejected - value too low ($emergencyValue < $minEmergencyValue)',
+          '${bot.name}: Ultra emergency play-down rejected - insufficient value ($emergencyValue < ${gameState.playDownRequirement})',
         );
         return BotDecision(action: 'noMeld');
       }
