@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:js' as js;
 import '../models/game_state.dart';
 import '../models/player.dart';
+import '../utils/debug_logger.dart';
 import 'bot_personality.dart';
 
 /// Web-specific LLM service using ONNX Runtime Web for true Phi-3 inference
@@ -43,7 +44,9 @@ class WebLLMService {
     _lastError = null;
 
     try {
-      print('WebLLMService: Initializing Phi-3 ONNX Runtime Web...');
+      DebugLogger.debug(
+        'WebLLMService: Initializing Phi-3 ONNX Runtime Web...',
+      );
 
       // Ensure ONNX Runtime and Transformers.js are available
       if (!await _waitForDependencies()) {
@@ -63,11 +66,13 @@ class WebLLMService {
       }
 
       _isInitialized = true;
-      print('WebLLMService: Phi-3 initialization completed successfully');
+      DebugLogger.debug(
+        'WebLLMService: Phi-3 initialization completed successfully',
+      );
       return true;
     } catch (e) {
       _lastError = e.toString();
-      print('WebLLMService: Critical initialization failure: $e');
+      DebugLogger.error('WebLLMService: Critical initialization failure: $e');
       return false;
     } finally {
       _isLoading = false;
@@ -79,7 +84,9 @@ class WebLLMService {
     const maxAttempts = 20;
     const delayBetweenAttempts = Duration(milliseconds: 500);
 
-    print('WebLLMService: Waiting for ONNX Runtime and Transformers.js...');
+    DebugLogger.debug(
+      'WebLLMService: Waiting for ONNX Runtime and Transformers.js...',
+    );
 
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -90,21 +97,23 @@ class WebLLMService {
             js.context['transformers'] != null;
 
         if (hasOrt && hasTransformers) {
-          print('WebLLMService: Dependencies available on attempt $attempt');
+          DebugLogger.debug(
+            'WebLLMService: Dependencies available on attempt $attempt',
+          );
           return true;
         }
 
-        print(
+        DebugLogger.debug(
           'WebLLMService: Dependencies not ready - ort: $hasOrt, transformers: $hasTransformers (attempt $attempt/$maxAttempts)',
         );
       } catch (e) {
-        print('WebLLMService: Dependency check error: $e');
+        DebugLogger.warning('WebLLMService: Dependency check error: $e');
       }
 
       await Future.delayed(delayBetweenAttempts);
     }
 
-    print(
+    DebugLogger.error(
       'WebLLMService: Dependencies failed to load after $maxAttempts attempts',
     );
     return false;
@@ -117,7 +126,7 @@ class WebLLMService {
 
       Timer(_modelLoadTimeout, () {
         if (!completer.isCompleted) {
-          print('WebLLMService: Model loading timeout');
+          DebugLogger.warning('WebLLMService: Model loading timeout');
           completer.complete(null);
         }
       });
@@ -130,14 +139,14 @@ class WebLLMService {
           })
           .catchError((error) {
             if (!completer.isCompleted) {
-              print('WebLLMService: Model loading error: $error');
+              DebugLogger.warning('WebLLMService: Model loading error: $error');
               completer.complete(null);
             }
           });
 
       return await completer.future;
     } catch (e) {
-      print('WebLLMService: Model load timeout wrapper error: $e');
+      DebugLogger.error('WebLLMService: Model load timeout wrapper error: $e');
       return null;
     }
   }
@@ -150,7 +159,9 @@ class WebLLMService {
         throw Exception('ONNX Runtime not available');
       }
 
-      print('WebLLMService: Loading Phi-3 model from $_defaultModelUrl');
+      DebugLogger.debug(
+        'WebLLMService: Loading Phi-3 model from $_defaultModelUrl',
+      );
 
       // Configure session for Phi-3 with WebGPU preference
       final sessionOptions = js.JsObject.jsify({
@@ -167,7 +178,9 @@ class WebLLMService {
         'logSeverityLevel': 3, // Error level only
       });
 
-      print('WebLLMService: Creating Phi-3 ONNX session with WebGPU...');
+      DebugLogger.debug(
+        'WebLLMService: Creating Phi-3 ONNX session with WebGPU...',
+      );
       final sessionPromise = ort.callMethod('InferenceSession.create', [
         _defaultModelUrl,
         sessionOptions,
@@ -178,10 +191,12 @@ class WebLLMService {
         throw Exception('Failed to create Phi-3 ONNX session');
       }
 
-      print('WebLLMService: Phi-3 ONNX session created successfully');
+      DebugLogger.debug(
+        'WebLLMService: Phi-3 ONNX session created successfully',
+      );
       return session;
     } catch (e) {
-      print('WebLLMService: Phi-3 model loading failed: $e');
+      DebugLogger.error('WebLLMService: Phi-3 model loading failed: $e');
       rethrow; // Don't return null - throw error for mandatory LLM
     }
   }
@@ -202,7 +217,7 @@ class WebLLMService {
       promise.callMethod('catch', [
         js.allowInterop((error) {
           if (!completer.isCompleted) {
-            print('WebLLMService: Promise rejected: $error');
+            DebugLogger.warning('WebLLMService: Promise rejected: $error');
             completer.complete(null);
           }
         }),
@@ -213,7 +228,7 @@ class WebLLMService {
         onTimeout: () => null,
       );
     } catch (e) {
-      print('WebLLMService: Promise conversion failed: $e');
+      DebugLogger.error('WebLLMService: Promise conversion failed: $e');
       return null;
     }
   }
@@ -244,7 +259,7 @@ class WebLLMService {
   }) async {
     // Force initialization if not already done
     if (!_isInitialized) {
-      print('WebLLMService: Triggering Phi-3 initialization...');
+      DebugLogger.debug('WebLLMService: Triggering Phi-3 initialization...');
       final success = await initialize();
       if (!success) {
         throw Exception('Failed to initialize Phi-3: $_lastError');
@@ -256,7 +271,9 @@ class WebLLMService {
     }
 
     try {
-      print('WebLLMService: Generating decision with Phi-3 inference');
+      DebugLogger.debug(
+        'WebLLMService: Generating decision with Phi-3 inference',
+      );
       return await _runPhi3Inference(
         gameState,
         botPlayer,
@@ -265,7 +282,7 @@ class WebLLMService {
       );
     } catch (e) {
       _lastError = e.toString();
-      print('WebLLMService: Phi-3 inference failed: $e');
+      DebugLogger.error('WebLLMService: Phi-3 inference failed: $e');
       rethrow; // No fallback - fail hard
     }
   }
@@ -278,7 +295,7 @@ class WebLLMService {
         throw Exception('Transformers.js not loaded');
       }
 
-      print('WebLLMService: Initializing Phi-3 tokenizer...');
+      DebugLogger.debug('WebLLMService: Initializing Phi-3 tokenizer...');
 
       final autoTokenizer = transformers['AutoTokenizer'];
       final tokenizerPromise = autoTokenizer.callMethod('from_pretrained', [
@@ -291,10 +308,10 @@ class WebLLMService {
         throw Exception('Tokenizer loading failed');
       }
 
-      print('WebLLMService: Phi-3 tokenizer initialized');
+      DebugLogger.debug('WebLLMService: Phi-3 tokenizer initialized');
       return tokenizer;
     } catch (e) {
-      print('WebLLMService: Tokenizer initialization error: $e');
+      DebugLogger.error('WebLLMService: Tokenizer initialization error: $e');
       return null;
     }
   }
@@ -314,7 +331,7 @@ class WebLLMService {
         personality,
         context,
       );
-      print(
+      DebugLogger.debug(
         'WebLLMService: Running Phi-3 inference with prompt: ${prompt.substring(0, 100)}...',
       );
 
@@ -324,7 +341,9 @@ class WebLLMService {
         throw Exception('Phi-3 tokenization failed');
       }
 
-      print('WebLLMService: Tokenized ${inputIds.length} input tokens');
+      DebugLogger.debug(
+        'WebLLMService: Tokenized ${inputIds.length} input tokens',
+      );
 
       // Generate response using autoregressive sampling
       final outputTokens = await _generateTokens(inputIds);
@@ -334,13 +353,13 @@ class WebLLMService {
 
       // Decode generated tokens to text
       final generatedText = await _decodeTokens(outputTokens);
-      print(
+      DebugLogger.debug(
         'WebLLMService: Generated ${outputTokens.length} tokens: $generatedText',
       );
 
       return _extractDecisionFromResponse(generatedText);
     } catch (e) {
-      print('WebLLMService: Phi-3 inference error: $e');
+      DebugLogger.error('WebLLMService: Phi-3 inference error: $e');
       rethrow; // No fallback - fail hard
     }
   }
@@ -432,7 +451,7 @@ class WebLLMService {
 
       return tokens;
     } catch (e) {
-      print('WebLLMService: Tokenization error: $e');
+      DebugLogger.error('WebLLMService: Tokenization error: $e');
       rethrow;
     }
   }
@@ -475,7 +494,7 @@ class WebLLMService {
         'position_ids': positionIdsTensor,
       };
     } catch (e) {
-      print('WebLLMService: Tensor creation error: $e');
+      DebugLogger.error('WebLLMService: Tensor creation error: $e');
       rethrow;
     }
   }
@@ -510,7 +529,9 @@ class WebLLMService {
         // Extract logits and sample next token
         final nextToken = _sampleNextToken(result);
         if (nextToken == eosTokenId) {
-          print('WebLLMService: Generation completed at step $step (EOS)');
+          DebugLogger.debug(
+            'WebLLMService: Generation completed at step $step (EOS)',
+          );
           break;
         }
 
@@ -525,7 +546,9 @@ class WebLLMService {
           // Reasonable minimum for action + reasoning
           final partialText = await _decodeTokens(outputTokens);
           if (_isCompleteAction(partialText)) {
-            print('WebLLMService: Early stop - complete action detected');
+            DebugLogger.debug(
+              'WebLLMService: Early stop - complete action detected',
+            );
             break;
           }
         }
@@ -533,7 +556,7 @@ class WebLLMService {
 
       return outputTokens;
     } catch (e) {
-      print('WebLLMService: Token generation error: $e');
+      DebugLogger.error('WebLLMService: Token generation error: $e');
       rethrow;
     }
   }
@@ -560,7 +583,7 @@ class WebLLMService {
 
       return result.toString().trim();
     } catch (e) {
-      print('WebLLMService: Token decoding error: $e');
+      DebugLogger.error('WebLLMService: Token decoding error: $e');
       rethrow;
     }
   }
@@ -609,7 +632,7 @@ class WebLLMService {
 
       return bestToken;
     } catch (e) {
-      print('WebLLMService: Token sampling error: $e');
+      DebugLogger.error('WebLLMService: Token sampling error: $e');
       // Return a reasonable fallback token if sampling fails
       return 13; // Some reasonable token ID
     }
@@ -633,7 +656,9 @@ class WebLLMService {
       }
     } catch (e) {
       // KV cache update is optional - continue without it
-      print('WebLLMService: KV cache update failed (non-critical): $e');
+      DebugLogger.debug(
+        'WebLLMService: KV cache update failed (non-critical): $e',
+      );
     }
   }
 
@@ -683,7 +708,7 @@ class WebLLMService {
     _isInitialized = false;
     _lastError = null;
     _sequenceLength = 0;
-    print('WebLLMService: Disposed');
+    DebugLogger.debug('WebLLMService: Disposed');
   }
 
   /// Reset service and clear caches
@@ -691,7 +716,7 @@ class WebLLMService {
     _kvCache.clear();
     _sequenceLength = 0;
     _lastError = null;
-    print('WebLLMService: Reset');
+    DebugLogger.debug('WebLLMService: Reset');
   }
 
   /// Get service status
