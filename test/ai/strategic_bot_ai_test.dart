@@ -60,13 +60,8 @@ void main() {
 
         expect(decision.action, anyOf(['createMeld', 'createMultipleMelds']));
         if (decision.action == 'createMultipleMelds') {
-          expect(
-            decision.skipPlayDownCheck,
-            isFalse,
-          ); // Multi-meld uses proper validation
           expect(decision.data, isA<List<List<PlayingCard>>>());
         } else {
-          expect(decision.skipPlayDownCheck, isTrue);
           expect(decision.data, isA<List<PlayingCard>>());
         }
       },

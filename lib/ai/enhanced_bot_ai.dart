@@ -551,38 +551,77 @@ class EnhancedBotAI {
 
     if (bestCombination.isNotEmpty) {
       if (bestCombination.length == 1) {
-        return BotDecision(
-          action: 'createMeld',
-          data: bestCombination.first,
-          skipPlayDownCheck: true, // Force play-down in emergency
+        // Emergency play-down but still validate minimum requirements
+        final emergencyValue = bestCombination.first.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
         );
+        final minAcceptableValue = (gameState.playDownRequirement * 0.7)
+            .round(); // 70% minimum
+
+        if (emergencyValue >= minAcceptableValue) {
+          return BotDecision(action: 'createMeld', data: bestCombination.first);
+        } else {
+          DebugLogger.warning(
+            '${bot.name}: Emergency play-down rejected - insufficient value ($emergencyValue < $minAcceptableValue)',
+          );
+          return BotDecision(action: 'noMeld');
+        }
       } else {
         return BotDecision(
           action: 'createMultipleMelds',
           data: bestCombination,
-          skipPlayDownCheck: false, // Multi-meld has proper validation
         );
       }
     }
 
-    // ULTRA EMERGENCY: If even 80% requirement fails, try ANY valid meld to get unstuck
+    // ULTRA EMERGENCY: If even 80% requirement fails, validate we have valid melds before proceeding
     if (possibleMelds.isNotEmpty) {
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'ULTRA EMERGENCY: Using any valid meld (${possibleMelds.length} available)',
+        'ULTRA EMERGENCY: Evaluating ${possibleMelds.length} available melds',
       );
 
+      // Safety check: Ensure we have valid meld data
+      final validMelds = possibleMelds
+          .where((meld) => meld.isNotEmpty && meld.length >= 3)
+          .toList();
+
+      if (validMelds.isEmpty) {
+        DebugLogger.warning(
+          '${bot.name}: Ultra emergency - no valid melds found',
+        );
+        return BotDecision(action: 'noMeld');
+      }
+
       // Try to find the best single meld as last resort
-      final bestSingleMeld = _meldAnalyzer.findBestMeld(
-        possibleMelds,
-        bot: bot,
+      final bestSingleMeld = _meldAnalyzer.findBestMeld(validMelds, bot: bot);
+
+      // Validate the selected meld has minimum requirements
+      if (bestSingleMeld.isEmpty || bestSingleMeld.length < 3) {
+        DebugLogger.warning(
+          '${bot.name}: Best meld is invalid (${bestSingleMeld.length} cards)',
+        );
+        return BotDecision(action: 'noMeld');
+      }
+
+      // Ultra emergency but still validate basic requirements
+      final emergencyValue = bestSingleMeld.fold<int>(
+        0,
+        (sum, card) => sum + card.pointValue,
       );
-      return BotDecision(
-        action: 'createMeld',
-        data: bestSingleMeld,
-        skipPlayDownCheck: true, // Force in ultra emergency
-      );
+      final minEmergencyValue = (gameState.playDownRequirement * 0.5)
+          .round(); // 50% absolute minimum
+
+      if (emergencyValue >= minEmergencyValue) {
+        return BotDecision(action: 'createMeld', data: bestSingleMeld);
+      } else {
+        DebugLogger.warning(
+          '${bot.name}: Ultra emergency play-down rejected - value too low ($emergencyValue < $minEmergencyValue)',
+        );
+        return BotDecision(action: 'noMeld');
+      }
     }
 
     return BotDecision(action: 'noMeld');
@@ -819,7 +858,7 @@ class EnhancedBotAI {
       if (meetsRequirement || shouldForcePlayDown) {
         if (shouldForcePlayDown && !meetsRequirement) {
           DebugLogger.debug(
-            '${bot.name}: EMERGENCY play-down despite not meeting full requirement (${combinationValue}/${adjustedRequirement})',
+            '${bot.name}: EMERGENCY play-down despite not meeting full requirement ($combinationValue/$adjustedRequirement)',
           );
         }
         return _executePlayDown(bestCombination);
@@ -1242,9 +1281,20 @@ class EnhancedBotAI {
       }
     }
 
-    // COMPETITIVE URGENCY: If under severe pressure, prioritize discarding high-value cards
+    // COMPETITIVE URGENCY: Under severe pressure, still prioritize 3s but be more aggressive with singletons
     if (isUnderSeverePressure && safeSingletons.isNotEmpty) {
-      // Sort by point value DESCENDING when under pressure (discard highest value first)
+      // Even under pressure, prioritize penalty cards first if any exist in safe singletons
+      final penaltyCards = safeSingletons
+          .where((card) => card.rank == CardRank.three)
+          .toList();
+      if (penaltyCards.isNotEmpty) {
+        DebugLogger.debug(
+          '${bot.name}: Under severe pressure but still prioritizing 3s',
+        );
+        return penaltyCards.first;
+      }
+
+      // If no 3s in safe singletons, then discard highest value
       safeSingletons.sort((a, b) => b.pointValue.compareTo(a.pointValue));
       DebugLogger.debug(
         '${bot.name}: Under severe pressure - discarding high-value card ${safeSingletons.first.displayName}',

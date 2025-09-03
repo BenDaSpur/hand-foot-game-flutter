@@ -66,6 +66,9 @@ class _GameScreenState extends State<GameScreen> {
   late GameStateManager _gameStateManager;
   late PersistenceManager _persistenceManager;
 
+  // Prevent multiple game end dialogs
+  bool _gameEndDialogShown = false;
+
   @override
   void initState() {
     super.initState();
@@ -123,7 +126,8 @@ class _GameScreenState extends State<GameScreen> {
         if (mounted) setState(() {});
       },
       onGameEnd: () {
-        if (_gameController.gameState.winner != null) {
+        if (_gameController.gameState.winner != null && !_gameEndDialogShown) {
+          _gameEndDialogShown = true;
           _dialogManager.showGameEndDialog(
             _gameController.gameState.winner!,
             _gameController.gameState.players,
@@ -304,7 +308,8 @@ class _GameScreenState extends State<GameScreen> {
       // CRITICAL: Check if game has ended before processing any turns
       if (_gameController.gameState.phase == GamePhase.gameEnd) {
         DebugLogger.debug('Game has ended - stopping turn processing');
-        if (_gameController.gameState.winner != null) {
+        if (_gameController.gameState.winner != null && !_gameEndDialogShown) {
+          _gameEndDialogShown = true;
           _dialogManager.showGameEndDialog(
             _gameController.gameState.winner!,
             _gameController.gameState.players,
@@ -1805,16 +1810,12 @@ class _GameScreenState extends State<GameScreen> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.emoji_events,
-                          color: Colors.black,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 12),
+                      children: const [
+                        Icon(Icons.emoji_events, color: Colors.black, size: 32),
+                        SizedBox(width: 12),
                         Text(
                           'GAME OVER!',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.black,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
