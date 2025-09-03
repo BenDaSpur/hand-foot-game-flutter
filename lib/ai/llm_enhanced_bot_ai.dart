@@ -7,7 +7,7 @@ import '../config/game_config.dart';
 import 'enhanced_bot_ai.dart';
 import 'bot_decision.dart';
 import 'bot_personality.dart';
-import 'web_llm_service.dart';
+import 'llm_service.dart';
 import '../utils/debug_logger.dart';
 
 /// Enhanced bot AI that combines LLM strategic reasoning with rule-based tactical execution.
@@ -15,7 +15,7 @@ import '../utils/debug_logger.dart';
 /// This class extends the existing EnhancedBotAI to add LLM capabilities while preserving
 /// all existing personality traits, strategic logic, and emergency handling.
 class LLMEnhancedBotAI extends EnhancedBotAI {
-  final WebLLMService _webLLMService;
+  final LLMService _llmService;
   bool _isLLMEnabled;
 
   // Performance tracking
@@ -24,7 +24,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
   int _llmFailures = 0;
 
   LLMEnhancedBotAI({super.seed, bool enableLLM = true})
-    : _webLLMService = WebLLMService(),
+    : _llmService = LLMService.instance,
       _isLLMEnabled = enableLLM;
 
   /// Initialize LLM service if enabled
@@ -34,16 +34,16 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     }
 
     try {
-      print('LLMEnhancedBotAI: Initializing web LLM service...');
-      final success = await _webLLMService.initialize();
+      print('LLMEnhancedBotAI: Initializing cross-platform LLM service...');
+      final success = await _llmService.initialize();
 
       if (success) {
-        print('LLMEnhancedBotAI: Web LLM service ready');
+        print('LLMEnhancedBotAI: LLM service ready');
       } else {
         print(
           'LLMEnhancedBotAI: LLM initialization failed, using rule-based only',
         );
-        print('Error: ${_webLLMService.lastError}');
+        print('Error: ${_llmService.lastError}');
       }
     } catch (e) {
       print('LLMEnhancedBotAI: LLM initialization error: $e');
@@ -53,6 +53,14 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
   /// Enhanced decision making that combines LLM strategy with rule-based execution
   @override
   BotDecision makeDecision(Player bot, GameController controller) {
+    // Ensure LLM service is initialized (lazy initialization)
+    if (_isLLMEnabled && !_llmService.isAvailable) {
+      // Trigger async initialization in background
+      initializeLLM().catchError((e) {
+        print('LLMEnhancedBotAI: Background initialization failed: $e');
+      });
+    }
+
     // Synchronous wrapper for async decision making
     // This maintains compatibility with existing synchronous interface
     return _makeDecisionSync(bot, controller);
@@ -67,7 +75,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'LLMEnhancedBotAI sync decision - LLM enabled: $_isLLMEnabled, available: ${_webLLMService.isAvailable}',
+        'LLMEnhancedBotAI sync decision - LLM enabled: $_isLLMEnabled, available: ${_llmService.isAvailable}',
       );
 
       // For sync mode, always use rule-based (LLM requires async)
@@ -98,13 +106,22 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     final gameState = controller.gameState;
 
     try {
+      // Ensure LLM service is initialized (lazy initialization)
+      if (_isLLMEnabled && !_llmService.isAvailable) {
+        try {
+          await initializeLLM();
+        } catch (e) {
+          print('LLMEnhancedBotAI: Async initialization failed: $e');
+        }
+      }
+
       // Set personality context (inherited from parent)
       personalityManager.setCurrentPlayerContext(bot.id);
 
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'LLMEnhancedBotAI async decision - LLM enabled: $_isLLMEnabled, available: ${_webLLMService.isAvailable}',
+        'LLMEnhancedBotAI async decision - LLM enabled: $_isLLMEnabled, available: ${_llmService.isAvailable}',
       );
 
       // Check if we should use LLM for this decision
@@ -139,47 +156,30 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     GameController controller,
   ) {
     // Don't use LLM if not available or disabled
-    if (!_isLLMEnabled || !_webLLMService.isAvailable) {
+    if (!_isLLMEnabled || !_llmService.isAvailable) {
       return false;
     }
 
-    // Always use rule-based for emergency situations (keeps existing emergency logic intact)
-    if (_isEmergencyState(bot, gameState)) {
+    // MODIFIED: Always use LLM for ALL decisions when available
+    // Only skip LLM for critical emergency situations to prevent game crashes
+    if (_isCriticalEmergencyState(bot, gameState)) {
       return false;
     }
 
-    // Build context for decision
-    final context = _buildDecisionContext(bot, gameState, controller);
-
-    // Use web LLM service's logic to determine if this warrants strategic analysis
-    return _webLLMService.shouldUseLLMForDecision(
-      gameState: gameState,
-      botPlayer: bot,
-      context: context,
-    );
+    // Use LLM for every other decision
+    return true;
   }
 
-  /// Check if this is an emergency state that requires fast rule-based response
-  bool _isEmergencyState(Player bot, GameState gameState) {
-    // Hand size emergencies (use existing thresholds)
-    if (bot.currentHand.length >= 14) {
+  /// Check if this is a critical emergency state that requires fast rule-based response
+  bool _isCriticalEmergencyState(Player bot, GameState gameState) {
+    // Only the most critical situations that need immediate response
+    // Deck is completely empty - must end round immediately
+    if (gameState.deck.isEmpty) {
       return true;
     }
 
-    // Opponent about to go out
-    final dangerousOpponents = gameState.players
-        .where(
-          (p) =>
-              p.id != bot.id && p.hasPickedUpFoot && p.currentHand.length <= 3,
-        )
-        .length;
-
-    if (dangerousOpponents > 0) {
-      return true;
-    }
-
-    // Deck running low
-    if (gameState.deck.size <= 10) {
+    // Bot has no cards and no foot (corrupted game state)
+    if (bot.currentHand.isEmpty && bot.foot.isEmpty && !bot.hasPickedUpFoot) {
       return true;
     }
 
@@ -274,7 +274,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
       );
 
       // Generate LLM response with timeout
-      final llmResponse = await _webLLMService.generateStrategicDecision(
+      final llmResponse = await _llmService.generateStrategicDecision(
         gameState: gameState,
         botPlayer: bot,
         personality: personality,
@@ -327,7 +327,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     Player bot,
     GameController controller,
   ) {
-    final parsed = _webLLMService.parseResponse(llmResponse);
+    final parsed = _llmService.parseResponse(llmResponse);
     final action = parsed['action'] ?? 'DRAW_DECK';
 
     DebugLogger.botDebug(bot.id, bot.name, 'Parsing LLM action: $action');
@@ -348,7 +348,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
       case 'GO_OUT':
         return BotDecision(action: 'goOut');
       case 'END_MELD':
-        return BotDecision(action: 'endMeld');
+        return BotDecision(action: 'noMeld');
       default:
         // Fallback for unrecognized actions
         DebugLogger.botDebug(
@@ -469,8 +469,8 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
       'llmUsagePercent': total > 0
           ? (_llmDecisions / total * 100).toStringAsFixed(1)
           : '0.0',
-      'isLLMAvailable': _webLLMService.isAvailable,
-      'llmServiceStatus': _webLLMService.getStatus(),
+      'isLLMAvailable': _llmService.isAvailable,
+      'llmServiceStatus': _llmService.getStatus(),
     };
   }
 
@@ -479,12 +479,12 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
     _llmDecisions = 0;
     _ruleBasedDecisions = 0;
     _llmFailures = 0;
-    _webLLMService.reset();
+    _llmService.reset();
   }
 
   /// Dispose resources
   void dispose() {
-    _webLLMService.dispose();
+    _llmService.dispose();
     // Note: EnhancedBotAI doesn't have dispose method
   }
 
@@ -547,7 +547,7 @@ class LLMEnhancedBotAI extends EnhancedBotAI {
   /// Get current decision making mode for logging
   String getDecisionMode() {
     if (!_isLLMEnabled) return 'rule-based-only';
-    if (!_webLLMService.isAvailable) return 'rule-based-fallback';
+    if (!_llmService.isAvailable) return 'rule-based-fallback';
     return 'web-llm-enhanced';
   }
 }

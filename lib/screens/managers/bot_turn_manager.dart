@@ -28,6 +28,7 @@ class BotTurnManager {
     Map<String, dynamic>? context,
   })
   logBotDecision;
+  final Function()? onBotTurnCompleted;
 
   bool _isProcessingBotTurn = false;
   bool _isLLMThinking = false;
@@ -39,6 +40,7 @@ class BotTurnManager {
     required this.onStateChanged,
     required this.logHumanAction,
     required this.logBotDecision,
+    this.onBotTurnCompleted,
   });
 
   /// Helper method to assign bot personalities consistently
@@ -184,7 +186,18 @@ class BotTurnManager {
           DebugLogger.error(
             'Bot ${botPlayer.name} failed all attempts - forcing completion',
           );
+
+          // Clean up state before forced completion
+          _isProcessingBotTurn = false;
+          _setThinkingState(null, false);
+
           forceCompleteBotTurn(botPlayer);
+
+          // Trigger callback to continue turn processing
+          if (onBotTurnCompleted != null) {
+            onBotTurnCompleted!();
+          }
+
           break;
         }
 
@@ -200,12 +213,27 @@ class BotTurnManager {
             newCurrentPlayer.type != PlayerType.bot) {
           // Turn has ended - bot completed their turn
           DebugLogger.debug('Bot ${botPlayer.name} completed turn');
+
+          // Clean up state before triggering callback
+          _isProcessingBotTurn = false;
+          _setThinkingState(null, false);
+
+          // Trigger next player's turn processing
+          if (onBotTurnCompleted != null) {
+            onBotTurnCompleted!();
+          }
+
           break;
         }
 
         // Check for round end
         if (gameController.gameState.phase == GamePhase.roundEnd) {
           DebugLogger.debug('Round ended during bot turn');
+
+          // Clean up state before ending
+          _isProcessingBotTurn = false;
+          _setThinkingState(null, false);
+
           break;
         }
       }
@@ -214,11 +242,24 @@ class BotTurnManager {
         DebugLogger.error(
           'Bot ${botPlayer.name} exceeded max iterations - forcing completion',
         );
+
+        // Clean up state before forced completion
+        _isProcessingBotTurn = false;
+        _setThinkingState(null, false);
+
         forceCompleteBotTurn(botPlayer);
+
+        // Trigger callback to continue turn processing
+        if (onBotTurnCompleted != null) {
+          onBotTurnCompleted!();
+        }
       }
     } finally {
-      _isProcessingBotTurn = false;
-      _setThinkingState(null, false);
+      // Only reset if not already reset (to avoid race condition with callback)
+      if (_isProcessingBotTurn) {
+        _isProcessingBotTurn = false;
+        _setThinkingState(null, false);
+      }
     }
   }
 

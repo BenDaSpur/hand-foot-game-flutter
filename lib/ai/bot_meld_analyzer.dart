@@ -586,8 +586,16 @@ class BotMeldAnalyzer {
     }
 
     if (targetSize == 2 && possibleMelds.length >= 2) {
-      // Simple two-meld combination
-      return [possibleMelds[0], possibleMelds[1]];
+      // Simple two-meld combination - check for overlap first
+      for (int i = 0; i < possibleMelds.length; i++) {
+        for (int j = i + 1; j < possibleMelds.length; j++) {
+          final combination = [possibleMelds[i], possibleMelds[j]];
+          if (_hasMinimalCardOverlap(combination)) {
+            return combination;
+          }
+        }
+      }
+      return []; // No valid 2-meld combination found
     }
 
     // For 3+ melds, use combination generation with overlap checking
@@ -603,17 +611,31 @@ class BotMeldAnalyzer {
     return [];
   }
 
-  /// Check if meld combination has minimal card overlap (simplified heuristic)
+  /// Check if meld combination has minimal card overlap and is valid
   bool _hasMinimalCardOverlap(List<List<PlayingCard>> meldCombination) {
-    // Simplified check: assume minimal overlap if total cards < reasonable limit
-    final totalCards = meldCombination.fold<int>(
-      0,
-      (sum, meld) => sum + meld.length,
-    );
+    // First, validate each meld has minimum 3 cards
+    for (final meld in meldCombination) {
+      if (meld.length < 3) {
+        return false; // Invalid meld with less than 3 cards
+      }
+    }
 
-    // If we're trying to meld more cards than we have, there's likely significant overlap
-    // This is a heuristic - exact overlap checking would be more complex
-    return totalCards <= 20; // Reasonable hand size limit
+    // Collect all cards from all melds
+    final allCards = <String>[];
+    for (final meld in meldCombination) {
+      for (final card in meld) {
+        allCards.add('${card.rank.name}_${card.suit?.name ?? 'joker'}');
+      }
+    }
+
+    // Check if any card appears more than once (indicating overlap)
+    final cardCounts = <String, int>{};
+    for (final cardId in allCards) {
+      cardCounts[cardId] = (cardCounts[cardId] ?? 0) + 1;
+    }
+
+    // No overlap if no card appears more than once
+    return !cardCounts.values.any((count) => count > 1);
   }
 
   /// Analyze hand composition for meld potential

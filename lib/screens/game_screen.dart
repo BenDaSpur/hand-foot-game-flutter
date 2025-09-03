@@ -124,6 +124,12 @@ class _GameScreenState extends State<GameScreen> {
       logHumanAction: (action) =>
           _logHumanAction(action: action, reasoning: 'Bot turn processing'),
       logBotDecision: _logBotDecision,
+      onBotTurnCompleted: () {
+        if (mounted) {
+          // Continue processing turns after bot completes
+          processCurrentPlayerTurn();
+        }
+      },
     );
 
     _dialogManager = DialogManager(
