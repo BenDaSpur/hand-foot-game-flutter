@@ -807,8 +807,12 @@ class GameState {
     if (highestScore >= 8500) {
       phase = GamePhase.gameEnd;
       winner = players.where((p) => p.score == highestScore).first;
+      _logAction(
+        '🏆 GAME END: ${winner!.name} wins with $highestScore points!',
+      );
     } else {
       round++;
+      _logAction('📊 Round $round starting (highest score: $highestScore)');
     }
   }
 
