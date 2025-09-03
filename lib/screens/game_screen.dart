@@ -301,6 +301,18 @@ class _GameScreenState extends State<GameScreen> {
     if (!_isInitialized || _disposed || !mounted) return;
 
     try {
+      // CRITICAL: Check if game has ended before processing any turns
+      if (_gameController.gameState.phase == GamePhase.gameEnd) {
+        DebugLogger.debug('Game has ended - stopping turn processing');
+        if (_gameController.gameState.winner != null) {
+          _dialogManager.showGameEndDialog(
+            _gameController.gameState.winner!,
+            _gameController.gameState.players,
+          );
+        }
+        return;
+      }
+
       // Validate game state before processing
       if (!_gameStateManager.validateGameState()) {
         DebugLogger.error('Game state invalid - attempting recovery');
@@ -1543,8 +1555,9 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            // Action buttons (only show when it's human's turn)
-            if (currentPlayer.type == PlayerType.human) ...[
+            // Action buttons (only show when it's human's turn AND game hasn't ended)
+            if (currentPlayer.type == PlayerType.human &&
+                gameState.phase != GamePhase.gameEnd) ...[
               // Emergency recovery for stuck game
               if (_isGameStuck())
                 Container(
@@ -1635,9 +1648,13 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ],
 
-            // Hand (always visible, but only interactive during human turn)
+            // Hand (always visible, but only interactive during human turn and game not ended)
             Opacity(
-              opacity: currentPlayer.type == PlayerType.human ? 1.0 : 0.7,
+              opacity:
+                  currentPlayer.type == PlayerType.human &&
+                      gameState.phase != GamePhase.gameEnd
+                  ? 1.0
+                  : 0.7,
               child: Container(
                 height:
                     155, // Increased to accommodate selected cards with padding
@@ -1720,12 +1737,16 @@ class _GameScreenState extends State<GameScreen> {
                                       child: GestureDetector(
                                         onTap:
                                             currentPlayer.type ==
-                                                PlayerType.human
+                                                    PlayerType.human &&
+                                                gameState.phase !=
+                                                    GamePhase.gameEnd
                                             ? () => _onCardTap(index)
                                             : null,
                                         onDoubleTap:
                                             currentPlayer.type ==
-                                                PlayerType.human
+                                                    PlayerType.human &&
+                                                gameState.phase !=
+                                                    GamePhase.gameEnd
                                             ? () => _onCardDoubleTap(index)
                                             : null,
                                         child: PlayingCardWidget(
@@ -1754,6 +1775,75 @@ class _GameScreenState extends State<GameScreen> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 16),
+
+            // Game end overlay when game has finished
+            if (gameState.phase == GamePhase.gameEnd &&
+                gameState.winner != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      BalatroTheme.neonYellow.withValues(alpha: 0.9),
+                      BalatroTheme.neonGreen.withValues(alpha: 0.9),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: BalatroTheme.glowColor, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: BalatroTheme.neonYellow.withValues(alpha: 0.6),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.emoji_events,
+                          color: Colors.black,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'GAME OVER!',
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${gameState.winner!.name} WINS with ${gameState.winner!.score} points!',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Use the menu button to view final scores or start a new game',
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
 
             const SizedBox(height: 16),
           ],

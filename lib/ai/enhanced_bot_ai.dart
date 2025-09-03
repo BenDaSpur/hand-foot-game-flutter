@@ -80,15 +80,23 @@ class EnhancedBotAI {
     final gameState = controller.gameState;
 
     try {
+      // Set context for personality-based decisions
+      _personalityManager.setCurrentPlayerContext(bot.id);
+
+      // CRITICAL: Check if bot can go out BEFORE any other decisions
+      if (_shouldGoOutImmediately(bot, gameState)) {
+        DebugLogger.debug(
+          '${bot.name}: CRITICAL - Going out immediately to prevent opponent victory!',
+        );
+        return BotDecision(action: 'goOut');
+      }
+
       // DEBUG: Log decision context (removed in release builds)
       DebugLogger.botDebug(
         bot.id,
         bot.name,
         'makeDecision in phase ${gameState.turnPhase}',
       );
-
-      // Set context for personality-based decisions
-      _personalityManager.setCurrentPlayerContext(bot.id);
 
       // NEW: Dynamic adaptive personality adjustment
       _applyAdaptivePersonalityAdjustment(bot, gameState);
@@ -345,6 +353,13 @@ class EnhancedBotAI {
 
   /// Handle meld phase decisions
   BotDecision _makeMeldDecision(Player bot, GameController controller) {
+    // PRIORITY 0: Check if bot should rush to go out instead of melding
+    if (_shouldRushToGoOut(bot, controller.gameState)) {
+      // Skip melding - go straight to discard to empty hand quickly
+      DebugLogger.debug('${bot.name}: Skipping meld phase - rushing to go out');
+      return BotDecision(action: 'noMeld');
+    }
+
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
     // These override ALL other logic to prevent 32+ card disasters
     final handSize = bot.currentHand.length;
@@ -573,6 +588,77 @@ class EnhancedBotAI {
     return BotDecision(action: 'noMeld');
   }
 
+  /// CRITICAL: Check if bot should prioritize going out over other actions
+  /// This addresses the major strategic flaw where bots miss going out opportunities
+  bool _shouldGoOutImmediately(Player bot, GameState gameState) {
+    // Must have picked up foot and have both required books
+    if (!bot.hasPickedUpFoot || !bot.canGoOutWithBooks) {
+      return false;
+    }
+
+    // Check for critical going out scenarios - only return true if bot can ACTUALLY go out right now
+
+    // Scenario 1: Bot has no cards and can go out immediately
+    if (bot.currentHand.isEmpty && bot.canGoOut) {
+      DebugLogger.debug(
+        '${bot.name}: Immediate going out - hand empty and can go out',
+      );
+      return true;
+    }
+
+    return false; // For other scenarios, we'll modify behavior in specific turn phases
+  }
+
+  /// Check if bot should rush to go out (affects discard and meld priorities)
+  bool _shouldRushToGoOut(Player bot, GameState gameState) {
+    // Must have picked up foot and have both required books
+    if (!bot.hasPickedUpFoot || !bot.canGoOutWithBooks) {
+      return false;
+    }
+
+    // Scenario 1: Bot has very few cards left (1-3)
+    if (bot.currentHand.length <= 3) {
+      DebugLogger.debug(
+        '${bot.name}: Rushing to go out - very few cards left (${bot.currentHand.length})',
+      );
+      return true;
+    }
+
+    // Scenario 2: COMPETITIVE URGENCY - Opponent is close to winning (7000+ points)
+    final maxOpponentScore = gameState.players
+        .where((p) => p.id != bot.id)
+        .map((p) => p.score)
+        .fold(0, (max, score) => score > max ? score : max);
+
+    if (maxOpponentScore >= 7000) {
+      DebugLogger.debug(
+        '${bot.name}: PANIC MODE - Opponent has $maxOpponentScore points, rushing to go out!',
+      );
+      return true;
+    }
+
+    // Scenario 3: Round 3+ and opponent is far ahead - end round to limit their scoring
+    if (gameState.round >= 3 && maxOpponentScore > bot.score + 1500) {
+      DebugLogger.debug(
+        '${bot.name}: DEFENSIVE RUSH - Opponent ahead by ${maxOpponentScore - bot.score}, rushing to end round',
+      );
+      return true;
+    }
+
+    // Scenario 4: BookBuilder specific - if they have 2+ books, rush to go out instead of over-accumulating
+    final personality = _personalityManager.getPersonality(bot.id);
+    if (personality == BotPersonality.bookBuilder &&
+        bot.melds.where((m) => m.isBook).length >= 2 &&
+        bot.currentHand.length <= 8) {
+      DebugLogger.debug(
+        '${bot.name}: BookBuilder rushing to end with ${bot.melds.where((m) => m.isBook).length} books',
+      );
+      return true;
+    }
+
+    return false;
+  }
+
   /// Check if bot is competitively threatened by opponents
   bool _isCompetitivelyThreatened(Player bot, GameController controller) {
     final gameState = controller.gameState;
@@ -637,25 +723,56 @@ class EnhancedBotAI {
     final personalityTurnLimit =
         personalityConstants.maxTurnsBeforeForcePlayDown;
 
+    // CRITICAL COMPETITIVE URGENCY: Check if opponents are close to winning
+    final maxOpponentScore = gameState.players
+        .where((p) => p.id != bot.id)
+        .map((p) => p.score)
+        .fold(0, (max, score) => score > max ? score : max);
+
+    final isUnderCompetitivePressure =
+        maxOpponentScore >= 6500; // Opponent close to 8500 win condition
+    final isUnderSeverePressure =
+        maxOpponentScore >= 7500; // Opponent very close to winning
+
     // ROUND-SPECIFIC STRATEGY ADJUSTMENTS - Based on 3-round gameplay analysis
     double roundUrgencyMultiplier;
     switch (gameState.round) {
       case 1:
-        roundUrgencyMultiplier = 1.0; // Normal patience - accumulation OK
+        roundUrgencyMultiplier = isUnderSeverePressure
+            ? 0.1
+            : (isUnderCompetitivePressure ? 0.5 : 1.0);
         break;
       case 2:
-        roundUrgencyMultiplier = 0.8; // Slightly more urgent - build momentum
+        roundUrgencyMultiplier = isUnderSeverePressure
+            ? 0.1
+            : (isUnderCompetitivePressure ? 0.3 : 0.8);
         break;
       case 3:
       default:
-        roundUrgencyMultiplier =
-            0.3; // EXTREMELY aggressive - prevent Round 3 failures
+        roundUrgencyMultiplier = isUnderSeverePressure
+            ? 0.05
+            : (isUnderCompetitivePressure ? 0.1 : 0.3);
         break;
     }
 
     final urgentTurnLimit = (personalityTurnLimit * roundUrgencyMultiplier)
         .round()
         .clamp(1, personalityTurnLimit); // At least 1 turn patience
+
+    // CRITICAL: Force play-down if hand size is dangerously large (prevents 26-card accumulation)
+    final personality = _personalityManager.getPersonality(bot.id);
+    final handSize = bot.currentHand.length;
+    final shouldForcePlayDown =
+        (personality == BotPersonality.bookBuilder && handSize >= 22) ||
+        (isUnderCompetitivePressure && handSize >= 18) ||
+        (isUnderSeverePressure && handSize >= 15) ||
+        (handSize >= 25); // Universal emergency threshold
+
+    if (shouldForcePlayDown) {
+      DebugLogger.debug(
+        '${bot.name}: FORCING play-down due to large hand size ($handSize) or competitive pressure',
+      );
+    }
 
     // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
     final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
@@ -697,9 +814,14 @@ class EnhancedBotAI {
         'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency',
       );
 
-      // AGGRESSIVE FIX: Play down immediately if we meet basic requirement
+      // AGGRESSIVE FIX: Play down immediately if we meet basic requirement OR under pressure
       // No need to wait for excess points - this was causing bots to accumulate cards
-      if (meetsRequirement) {
+      if (meetsRequirement || shouldForcePlayDown) {
+        if (shouldForcePlayDown && !meetsRequirement) {
+          DebugLogger.debug(
+            '${bot.name}: EMERGENCY play-down despite not meeting full requirement (${combinationValue}/${adjustedRequirement})',
+          );
+        }
         return _executePlayDown(bestCombination);
       }
 
@@ -1056,6 +1178,13 @@ class EnhancedBotAI {
       return null;
     }
 
+    // COMPETITIVE URGENCY: Check if opponents are close to winning
+    final maxOpponentScore = gameState.players
+        .where((p) => p.id != bot.id)
+        .map((p) => p.score)
+        .fold(0, (max, score) => score > max ? score : max);
+    final isUnderSeverePressure = maxOpponentScore >= 7500;
+
     // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
     final threes = hand.where((card) => card.rank == CardRank.three).toList();
     if (threes.isNotEmpty) {
@@ -1113,7 +1242,17 @@ class EnhancedBotAI {
       }
     }
 
-    // Prefer safe singletons first
+    // COMPETITIVE URGENCY: If under severe pressure, prioritize discarding high-value cards
+    if (isUnderSeverePressure && safeSingletons.isNotEmpty) {
+      // Sort by point value DESCENDING when under pressure (discard highest value first)
+      safeSingletons.sort((a, b) => b.pointValue.compareTo(a.pointValue));
+      DebugLogger.debug(
+        '${bot.name}: Under severe pressure - discarding high-value card ${safeSingletons.first.displayName}',
+      );
+      return safeSingletons.first;
+    }
+
+    // Normal case: Prefer safe singletons with lowest point value
     if (safeSingletons.isNotEmpty) {
       safeSingletons.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       final bestValue = safeSingletons.first.pointValue;
@@ -1242,15 +1381,33 @@ class EnhancedBotAI {
       return false; // Keep accumulating if we can't meet the requirement
     }
 
+    // CRITICAL: If can go out, prioritize going out over accumulation
+    if (bot.canGoOut && handSize <= 8) {
+      DebugLogger.debug(
+        '${bot.name}: Should prioritize going out over more accumulation',
+      );
+      return false; // Don't hold - prioritize discarding to go out
+    }
+
     // Post-play-down: Execute if we can dump a good portion of our hand
     final dumpPotential = _calculateDumpPotential(bot, controller);
     if (dumpPotential >= 0.6 && handSize >= 4) {
       return true; // Reduced from 80% to 60%
     }
 
+    // ENHANCED: Under competitive pressure, dump much more aggressively
+    final maxOpponentScore = gameState.players
+        .where((p) => p.id != bot.id)
+        .map((p) => p.score)
+        .fold(0, (max, score) => score > max ? score : max);
+
+    final competitivePressureThreshold = maxOpponentScore >= 6500
+        ? 6
+        : 9; // Much more aggressive when under pressure
+
     // AGGRESSIVE FIX: Execute dump strategy much earlier to prevent accumulation
-    if (handSize >= 9) {
-      return true; // Reduced from 12 to 9 - dump much earlier
+    if (handSize >= competitivePressureThreshold) {
+      return true; // Dump much earlier when under competitive pressure
     }
 
     // NEW: Be more aggressive if on hand pile with wilds and close to foot
