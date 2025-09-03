@@ -2012,6 +2012,9 @@ class _GameScreenState extends State<GameScreen> {
               },
             );
 
+            // Handle post-discard state updates (same as bot players)
+            _handlePostDiscardState(humanPlayer);
+
             setState(() {});
             _selectedCardIndices.clear();
             await _checkAndHandleRoundEnd();
@@ -2061,6 +2064,9 @@ class _GameScreenState extends State<GameScreen> {
             'goingOut': willBeEmpty,
           },
         );
+
+        // Handle post-discard state updates (same as bot players)
+        _handlePostDiscardState(humanPlayer);
 
         setState(() {});
         _selectedCardIndices.clear();
