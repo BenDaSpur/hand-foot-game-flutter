@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../models/card.dart';
 import '../../models/player.dart';
 import '../../models/meld.dart';
@@ -312,6 +313,22 @@ class MeldManager {
       );
     } else {
       _gameState.logAction('created melds: ${cardNamesCreated.join('; ')}');
+    }
+
+    // CRITICAL FIX: Check if player has gone out after melding (same logic as GameState.playMeld)
+    if (player.canGoOut) {
+      _gameState.logAction('went out and ended the round!');
+
+      // Debug logging to match GameState.playMeld behavior
+      if (kDebugMode) {
+        _gameState.logAction(
+          'GOING OUT DEBUG (MeldManager): footSize=${player.foot.length}, '
+          'hasCleanBook=${player.hasCleanBook}, '
+          'hasDirtyBook=${player.hasDirtyBook}',
+        );
+      }
+
+      _gameState.endRound();
     }
   }
 
