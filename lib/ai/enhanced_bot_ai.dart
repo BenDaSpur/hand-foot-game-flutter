@@ -112,9 +112,7 @@ class EnhancedBotAI {
 
       // Calculate early game status to prevent emergency panic on normal starting hands
       final handSize = bot.currentHand.length;
-      final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
-      final isEarlyGame =
-          botTurnCount <= 3; // Allow 3 turns before panicking about hand size
+      final isEarlyGame = _isEarlyGamePhase(bot);
 
       // NEW: Opponent pressure detection and competitive response (with caching)
       final pressureResponse = _evaluateOpponentPressureWithCaching(
@@ -382,10 +380,11 @@ class EnhancedBotAI {
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
     // BUT: Give bots grace period early in round when large hands are normal
     final handSize = bot.currentHand.length;
-    final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
-    final isEarlyGame = botTurnCount <= 3; // Allow 3 turns before panicking
+    final isEarlyGame = _isEarlyGamePhase(bot);
 
     // Check if competitive pressure should override early game grace
+    // Note: This method is called from makeDecision, so we don't have access to pressureResponse
+    // We need to check pressure here, but this should be cached from the earlier call
     final hasCompetitivePressure =
         _evaluateOpponentPressureWithCaching(
           bot,
@@ -2594,6 +2593,12 @@ class EnhancedBotAI {
     _lastMeldCacheKey = cacheKey;
 
     return result;
+  }
+
+  /// Helper method to check if bot is in early game phase where large hands are normal
+  bool _isEarlyGamePhase(Player bot) {
+    final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
+    return botTurnCount <= GameConfig.earlyGameTurnThreshold;
   }
 
   // Getters for testing and debugging

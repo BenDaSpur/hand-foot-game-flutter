@@ -285,6 +285,9 @@ class GameConfig {
   /// Bot processing delay for realistic gameplay pacing
   static const Duration botProcessingDelay = Duration(seconds: 1);
 
+  /// Number of turns considered "early game" where bots don't panic about large hands
+  static const int earlyGameTurnThreshold = 3;
+
   // =============================================================================
   // VALIDATION & HELPERS
   // =============================================================================
