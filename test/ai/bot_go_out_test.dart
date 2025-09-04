@@ -65,8 +65,8 @@ void main() {
           ),
         );
 
-        // Set game state to meld phase
-        gameController.gameState.turnPhase = TurnPhase.meld;
+        // Set game state to discard phase (proper phase for going out)
+        gameController.gameState.turnPhase = TurnPhase.discard;
         gameController.gameState.currentPlayerIndex = 1; // Bot's turn
 
         // Verify bot can go out

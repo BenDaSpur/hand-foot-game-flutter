@@ -656,7 +656,28 @@ class GameState {
     // Check if deck is running low
     final deckLow = deck.size < GameConfig.stalemateDeckThreshold;
 
-    if (onlyThreesInPile && deckLow) {
+    // Enhanced stalemate detection: also check if recent actions show repeated 3s discarding
+    // even if discard pile was reshuffled
+    final recentThreeDiscards = recentActions
+        .where(
+          (action) =>
+              action.message.contains('discarded') &&
+              action.message.contains('3 '),
+        )
+        .length;
+    final recentReshuffles = recentActions
+        .where((action) => action.message.contains('force reshuffled'))
+        .length;
+
+    // Detect 3s stalemate even after reshuffles if:
+    // 1. Deck is low AND
+    // 2. Either discard pile has only 3s OR recent actions show repeated 3s with reshuffles
+    final stalemateCondition =
+        deckLow &&
+        (onlyThreesInPile ||
+            (recentThreeDiscards >= 4 && recentReshuffles >= 1));
+
+    if (stalemateCondition) {
       if (_stalemateStartPlayer == null) {
         // First detection - start tracking
         _stalemateStartPlayer = currentPlayerIndex;
