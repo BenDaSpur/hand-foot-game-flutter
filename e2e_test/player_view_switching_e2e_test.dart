@@ -118,25 +118,16 @@ void main() {
 
         print('✅ Currently viewing bot\'s melds');
 
-        // Now tap on our own player card ("You")
+        // Tap on our own player card ("You") - use .last to get the player score element
         await E2ETestUtils.safeTap(
           tester,
-          find.textContaining('You').first,
+          find.textContaining('You').last,
           debugLabel: 'Switch back to own view by clicking You',
         );
         await E2ETestUtils.stabilize(tester);
 
-        // Add extra stabilization and debug info
+        // Add extra stabilization
         await tester.pumpAndSettle(const Duration(milliseconds: 500));
-
-        // Debug: Print what we can find
-        print('DEBUG: Looking for melds header text after clicking You');
-        print(
-          'DEBUG: Found "Your Melds:": ${find.text('Your Melds:').evaluate().length}',
-        );
-        print(
-          'DEBUG: Found "Back to yours": ${find.text('Back to yours').evaluate().length}',
-        );
 
         // Verify we're back to our own view
         expect(find.text('Your Melds:'), findsOneWidget);

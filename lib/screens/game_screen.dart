@@ -29,8 +29,20 @@ class BotConfig {
   final String name;
   final BotPersonality personality;
 
-  BotConfig(this.name, this.personality);
+  const BotConfig(this.name, this.personality);
 }
+
+/// Shared bot configurations with predefined personality mappings
+const List<BotConfig> kBotConfigurations = [
+  BotConfig('Clara', BotPersonality.conservative),
+  BotConfig('Carl', BotPersonality.conservative),
+  BotConfig('Bob', BotPersonality.aggressive),
+  BotConfig('Rita', BotPersonality.aggressive),
+  BotConfig('Ben', BotPersonality.bookBuilder),
+  BotConfig('Penny', BotPersonality.bookBuilder),
+  BotConfig('Alex', BotPersonality.adaptive),
+  BotConfig('Sue', BotPersonality.adaptive),
+];
 
 class GameScreen extends StatefulWidget {
   final int? testSeed; // For deterministic testing
@@ -90,7 +102,26 @@ class _GameScreenState extends State<GameScreen> {
     final botPlayers = _gameController.gameState.players
         .where((p) => p.type == PlayerType.bot)
         .toList();
-    _botAI.assignRandomPersonalities(botPlayers);
+
+    // Create personality mapping from predefined bot configurations
+    final personalityMap = <String, BotPersonality>{};
+    for (final config in kBotConfigurations) {
+      personalityMap[config.name] = config.personality;
+    }
+
+    // Assign personalities based on bot names, with fallback to random
+    for (final bot in botPlayers) {
+      final predefinedPersonality = personalityMap[bot.name];
+      if (predefinedPersonality != null) {
+        _botAI.assignPersonality(bot.id, predefinedPersonality);
+      } else {
+        // Fallback to random assignment for unknown bot names
+        final personalities = BotPersonality.values;
+        final randomPersonality =
+            personalities[(bot.id.hashCode % personalities.length)];
+        _botAI.assignPersonality(bot.id, randomPersonality);
+      }
+    }
 
     // Log personality assignments in debug mode
     if (kDebugMode) {
@@ -233,17 +264,8 @@ class _GameScreenState extends State<GameScreen> {
   List<BotConfig> _generateRandomBotConfigurations() {
     final Random random = Random();
 
-    // Available bot personalities and their associated names
-    final botOptions = [
-      BotConfig('Clara', BotPersonality.conservative),
-      BotConfig('Carl', BotPersonality.conservative),
-      BotConfig('Bob', BotPersonality.aggressive),
-      BotConfig('Rita', BotPersonality.aggressive),
-      BotConfig('Ben', BotPersonality.bookBuilder),
-      BotConfig('Penny', BotPersonality.bookBuilder),
-      BotConfig('Alex', BotPersonality.adaptive),
-      BotConfig('Sue', BotPersonality.adaptive),
-    ];
+    // Use shared bot configurations
+    final botOptions = List<BotConfig>.from(kBotConfigurations);
 
     // Shuffle and take first two to ensure no duplicates
     botOptions.shuffle(random);
@@ -1504,7 +1526,9 @@ class _GameScreenState extends State<GameScreen> {
                   final humanPlayer = gameState.players.firstWhere(
                     (p) => p.type == PlayerType.human,
                   );
-                  _viewingPlayerMelds = player == humanPlayer ? null : player;
+                  _viewingPlayerMelds = player.id == humanPlayer.id
+                      ? null
+                      : player;
                 });
               },
               botPersonalityManager: _botAI.personalityManager,

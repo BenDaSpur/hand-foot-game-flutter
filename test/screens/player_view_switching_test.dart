@@ -37,7 +37,7 @@ void main() {
           (p) => p.type == PlayerType.human,
         );
 
-        viewingPlayerMelds = tappedPlayer == foundHumanPlayer
+        viewingPlayerMelds = tappedPlayer.id == foundHumanPlayer.id
             ? null
             : tappedPlayer;
 
@@ -54,7 +54,7 @@ void main() {
           (p) => p.type == PlayerType.human,
         );
 
-        viewingPlayerMelds = tappedPlayer == foundHumanPlayer
+        viewingPlayerMelds = tappedPlayer.id == foundHumanPlayer.id
             ? null
             : tappedPlayer;
 
@@ -215,7 +215,7 @@ void main() {
           (p) => p.type == PlayerType.human,
         );
 
-        viewingPlayerMelds = tappedPlayer == foundHumanPlayer
+        viewingPlayerMelds = tappedPlayer.id == foundHumanPlayer.id
             ? null
             : tappedPlayer;
         expect(viewingPlayerMelds, isNull);

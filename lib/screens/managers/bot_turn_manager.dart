@@ -11,6 +11,26 @@ import '../../utils/debug_logger.dart';
 import '../../config/game_config.dart';
 import '../../services/analytics_batcher.dart';
 
+/// Bot configuration for personality assignment
+class BotConfig {
+  final String name;
+  final BotPersonality personality;
+
+  const BotConfig(this.name, this.personality);
+}
+
+/// Shared bot configurations with predefined personality mappings
+const List<BotConfig> kBotConfigurations = [
+  BotConfig('Clara', BotPersonality.conservative),
+  BotConfig('Carl', BotPersonality.conservative),
+  BotConfig('Bob', BotPersonality.aggressive),
+  BotConfig('Rita', BotPersonality.aggressive),
+  BotConfig('Ben', BotPersonality.bookBuilder),
+  BotConfig('Penny', BotPersonality.bookBuilder),
+  BotConfig('Alex', BotPersonality.adaptive),
+  BotConfig('Sue', BotPersonality.adaptive),
+];
+
 /// Manages all bot-related functionality for the game screen.
 ///
 /// This class handles bot turn processing, personality management,
@@ -44,7 +64,26 @@ class BotTurnManager {
     final botPlayers = gameController.gameState.players
         .where((p) => p.type == PlayerType.bot)
         .toList();
-    botAI.assignRandomPersonalities(botPlayers);
+
+    // Create personality mapping from predefined bot configurations
+    final personalityMap = <String, BotPersonality>{};
+    for (final config in kBotConfigurations) {
+      personalityMap[config.name] = config.personality;
+    }
+
+    // Assign personalities based on bot names, with fallback to random
+    for (final bot in botPlayers) {
+      final predefinedPersonality = personalityMap[bot.name];
+      if (predefinedPersonality != null) {
+        botAI.assignPersonality(bot.id, predefinedPersonality);
+      } else {
+        // Fallback to random assignment for unknown bot names
+        final personalities = BotPersonality.values;
+        final randomPersonality =
+            personalities[(bot.id.hashCode % personalities.length)];
+        botAI.assignPersonality(bot.id, randomPersonality);
+      }
+    }
 
     // Log personality assignments in debug mode
     if (kDebugMode) {
