@@ -452,8 +452,15 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                 CompactPlayerScores(
                   gameState: gameState,
                   viewingPlayerMelds: _viewingPlayerMelds,
-                  onPlayerTap: (player) =>
-                      setState(() => _viewingPlayerMelds = player),
+                  onPlayerTap: (player) {
+                    setState(() {
+                      // If tapping on the current user's player, set to null (view own melds)
+                      // Otherwise, set to the specific player to view their melds
+                      _viewingPlayerMelds = player.id == _gameController.userId
+                          ? null
+                          : player;
+                    });
+                  },
                   currentUserId:
                       _gameController.userId, // Enable multiplayer mode
                 ),

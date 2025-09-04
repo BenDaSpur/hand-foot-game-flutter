@@ -1499,7 +1499,12 @@ class _GameScreenState extends State<GameScreen> {
               viewingPlayerMelds: _viewingPlayerMelds,
               onPlayerTap: (player) {
                 setState(() {
-                  _viewingPlayerMelds = player;
+                  // If tapping on the human player, set to null (view own melds)
+                  // Otherwise, set to the specific player to view their melds
+                  final humanPlayer = gameState.players.firstWhere(
+                    (p) => p.type == PlayerType.human,
+                  );
+                  _viewingPlayerMelds = player == humanPlayer ? null : player;
                 });
               },
               botPersonalityManager: _botAI.personalityManager,
