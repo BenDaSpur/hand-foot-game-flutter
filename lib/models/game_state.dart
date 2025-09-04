@@ -579,9 +579,14 @@ class GameState {
         print(
           'Warning: Unexpected phase after endRound(), but continuing game',
         );
-        // Don't throw exception - log warning but continue game gracefully
       }
-      return;
+    } else {
+      // Debug: Log why player can't go out when they have empty hands
+      if (currentPlayer.currentHand.isEmpty && kDebugMode) {
+        _logAction(
+          'DEBUG: Hand empty but canGoOut=false - hasPickedUpFoot=${currentPlayer.hasPickedUpFoot}, canGoOutWithBooks=${currentPlayer.canGoOutWithBooks}, hasCleanBook=${currentPlayer.hasCleanBook}, hasDirtyBook=${currentPlayer.hasDirtyBook}',
+        );
+      }
     }
 
     // Defensive check: If player meets going out conditions but canGoOut is false, log it
