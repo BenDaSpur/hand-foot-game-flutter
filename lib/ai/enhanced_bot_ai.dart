@@ -84,7 +84,10 @@ class EnhancedBotAI {
       _personalityManager.setCurrentPlayerContext(bot.id);
 
       // CRITICAL: Check if bot can go out BEFORE any other decisions
-      if (_shouldGoOutImmediately(bot, gameState)) {
+      // Valid in both discard phase (discard last card) and meld phase (play last card into meld)
+      if ((gameState.turnPhase == TurnPhase.discard ||
+              gameState.turnPhase == TurnPhase.meld) &&
+          _shouldGoOutImmediately(bot, gameState)) {
         DebugLogger.debug(
           '${bot.name}: CRITICAL - Going out immediately to prevent opponent victory!',
         );
@@ -294,6 +297,8 @@ class EnhancedBotAI {
       bot.name,
       '_makeDrawDecision - hasPlayedDown=${bot.hasPlayedDown}, melds=${bot.melds.length}, inMultiMeld=$_inMultiMeldSequence',
     );
+
+    // Note: In Hand & Foot, bots must always draw in draw phase to advance turn
 
     // If continuing multi-meld sequence, draw from deck to proceed to meld phase
     // Multi-meld sequence should continue in meld phase, not skip drawing
@@ -546,20 +551,28 @@ class EnhancedBotAI {
 
   /// Handle discard phase decisions
   BotDecision _makeDiscardDecision(Player bot, GameController controller) {
-    // Check if bot has no cards left - they should go out if they can
+    // CORE RULE: Bots MUST always discard a card in discard phase
+    // The ONLY exception is if they have no cards and can go out (end round/game)
+
+    // Exception: Bot has no cards and can go out (ends round)
     if (bot.currentHand.isEmpty) {
-      // Check if bot can go out (has required books)
       if (bot.canGoOutWithBooks) {
-        return BotDecision(action: 'goOut');
+        return BotDecision(action: 'goOut'); // Ends round - no discard needed
       } else {
-        // Bot is stuck - shouldn't happen, but handle gracefully
-        return BotDecision(action: 'error');
+        return BotDecision(action: 'error'); // Invalid state
       }
     }
+
+    // RULE ENFORCEMENT: Bot must discard a card to follow Hand & Foot rules
     final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
     if (cardToDiscard == null) {
       return BotDecision(action: 'error');
     }
+
+    // COMPETITIVE STRATEGY: Enhanced card selection for discarding
+    // Note: The actual go-out will happen AFTER the discard if bot ends up with 0 cards
+    // and meets the going out requirements. This is handled by the game controller.
+
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
@@ -672,6 +685,45 @@ class EnhancedBotAI {
       return true;
     }
 
+    // Scenario 2: EMERGENCY - Bot has 1 card and can discard to go out
+    if (bot.currentHand.length == 1 && bot.canGoOutWithBooks) {
+      DebugLogger.debug(
+        '${bot.name}: Emergency going out - 1 card left and can go out',
+      );
+      return true;
+    }
+
+    // Scenario 3: COMPETITIVE EMERGENCY - Opponent has massive book advantage and small hand
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) continue;
+
+      final opponentBooks = opponent.melds.where((m) => m.isBook).length;
+      final opponentHasGoingOutBooks = opponent.canGoOutWithBooks;
+
+      // If opponent has 6+ books and small hand, and bot can go out with 2-3 cards
+      if (opponentBooks >= 6 &&
+          opponentHasGoingOutBooks &&
+          opponent.currentHand.length <= 4 &&
+          bot.currentHand.length <= 3 &&
+          bot.canGoOutWithBooks) {
+        DebugLogger.debug(
+          '${bot.name}: COMPETITIVE EMERGENCY - Opponent has $opponentBooks books and ${opponent.currentHand.length} cards, going out NOW!',
+        );
+        return true;
+      }
+    }
+
+    // Scenario 4: CATASTROPHIC 3s MANAGEMENT - Bot has mostly 3s and must go out to avoid penalty spiral
+    final threeCount = bot.currentHand.where((card) => card.isThree).length;
+    if (bot.currentHand.length >= 8 &&
+        threeCount >= bot.currentHand.length - 2 && // Almost all 3s
+        bot.canGoOut) {
+      DebugLogger.debug(
+        '${bot.name}: 3s CATASTROPHE - $threeCount 3s out of ${bot.currentHand.length} cards, emergency go out!',
+      );
+      return true;
+    }
+
     return false; // For other scenarios, we'll modify behavior in specific turn phases
   }
 
@@ -703,7 +755,25 @@ class EnhancedBotAI {
       return true;
     }
 
-    // Scenario 3: Round 3+ and opponent is far ahead - end round to limit their scoring
+    // Scenario 3: IMMEDIATE BOOK THREAT - Opponent has massive books and small hand (any round)
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) continue;
+
+      final opponentBooks = opponent.melds.where((m) => m.isBook).length;
+      final opponentHasGoingOutBooks = opponent.canGoOutWithBooks;
+
+      // EMERGENCY: Opponent has 6+ books and very small hand - they can go out soon!
+      if (opponentBooks >= 6 &&
+          opponentHasGoingOutBooks &&
+          opponent.currentHand.length <= 5) {
+        DebugLogger.debug(
+          '${bot.name}: BOOK THREAT PANIC - Opponent has $opponentBooks books and ${opponent.currentHand.length} cards, must rush!',
+        );
+        return true;
+      }
+    }
+
+    // Scenario 4: Round 3+ and opponent is far ahead - end round to limit their scoring
     if (gameState.round >= 3 && maxOpponentScore > bot.score + 1500) {
       DebugLogger.debug(
         '${bot.name}: DEFENSIVE RUSH - Opponent ahead by ${maxOpponentScore - bot.score}, rushing to end round',
@@ -711,7 +781,18 @@ class EnhancedBotAI {
       return true;
     }
 
-    // Scenario 4: BookBuilder specific - if they have 2+ books, rush to go out instead of over-accumulating
+    // Scenario 5: EMERGENCY 3s MANAGEMENT - Bot has 8+ cards mostly 3s, needs to rush out
+    final threeCount = bot.currentHand.where((card) => card.isThree).length;
+    if (bot.currentHand.length >= 8 &&
+        threeCount >= 6 &&
+        bot.currentHand.length <= 12) {
+      DebugLogger.debug(
+        '${bot.name}: 3s EMERGENCY - $threeCount 3s in ${bot.currentHand.length} cards, rushing to go out',
+      );
+      return true;
+    }
+
+    // Scenario 6: BookBuilder specific - if they have 2+ books, rush to go out instead of over-accumulating
     final personality = _personalityManager.getPersonality(bot.id);
     if (personality == BotPersonality.bookBuilder &&
         bot.melds.where((m) => m.isBook).length >= 2 &&
@@ -1269,6 +1350,9 @@ class EnhancedBotAI {
       return null;
     }
 
+    // COMPETITIVE ENHANCEMENT: Check if bot should rush to go out
+    final shouldRush = _shouldRushToGoOut(bot, gameState);
+
     // COMPETITIVE URGENCY: Check if opponents are close to winning
     final maxOpponentScore = gameState.players
         .where((p) => p.id != bot.id)
@@ -1276,12 +1360,18 @@ class EnhancedBotAI {
         .fold(0, (max, score) => score > max ? score : max);
     final isUnderSeverePressure = maxOpponentScore >= 7500;
 
-    // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
+    // Enhanced Priority 1: Discard 3s aggressively when rushing or under pressure
     final threes = hand.where((card) => card.rank == CardRank.three).toList();
     if (threes.isNotEmpty) {
-      // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
+      // When rushing to go out or under severe pressure, prioritize getting rid of 3s quickly
+      if (shouldRush || isUnderSeverePressure) {
+        // Sort by point value (most negative first) - red 3s are worse penalties
+        threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+        return threes.first; // Always take worst 3 first when rushing
+      }
+
+      // Normal 3s discard logic
       threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      // Add variability: if there are multiple 3s of the same point value, randomly pick one
       final bestValue = threes.first.pointValue;
       final bestThrees = threes
           .where((card) => card.pointValue == bestValue)

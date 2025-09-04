@@ -51,12 +51,12 @@ void main() {
         // Act: Bot makes decision
         final decision = botAI.makeDecision(botPlayer, gameController);
 
-        // Assert: Bot should go out immediately due to competitive pressure
+        // Assert: Bot should go out immediately when opponent is close to winning and bot has no cards
         expect(
           decision.action,
           equals('goOut'),
           reason:
-              'Bot should go out immediately when opponent is close to winning (7800 points)',
+              'Bot should go out immediately when opponent is close to winning (7800 points) and bot has empty hand',
         );
       },
     );
@@ -169,12 +169,12 @@ void main() {
       // Act: Bot makes decision
       final decision = botAI.makeDecision(botPlayer, gameController);
 
-      // Assert: Should skip melding (noMeld) to rush to discard for going out
+      // Assert: Should go out immediately when possible (improved competitive behavior)
       expect(
         decision.action,
-        equals('noMeld'),
+        equals('goOut'),
         reason:
-            'Bot should skip meld actions and rush to go out when they have 1 card and required books',
+            'Bot should go out immediately when they have 1 card and required books (can end round by playing last card into meld)',
       );
     });
 
