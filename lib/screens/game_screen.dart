@@ -341,14 +341,25 @@ class _GameScreenState extends State<GameScreen> {
         .processBotTurnWithDelays(botPlayer)
         .then((_) {
           _isBotTurnInProgress = false;
-          // Process next bot in queue if any
-          _processNextBotInQueue();
+          DebugLogger.debug('Bot ${botPlayer.name} completed turn');
+          // Check if next player is also a bot
+          if (mounted) {
+            final nextPlayer = _gameController.gameState.currentPlayer;
+            if (nextPlayer.type == PlayerType.bot) {
+              DebugLogger.debug(
+                'Next player ${nextPlayer.name} is also a bot - processing immediately',
+              );
+              processCurrentPlayerTurn();
+            }
+          }
         })
         .catchError((error) {
           _isBotTurnInProgress = false;
           DebugLogger.error('Bot turn error: $error');
           // Continue processing queue even on error
-          _processNextBotInQueue();
+          if (mounted) {
+            processCurrentPlayerTurn();
+          }
         });
   }
 

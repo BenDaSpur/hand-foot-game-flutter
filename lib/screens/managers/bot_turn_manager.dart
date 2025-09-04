@@ -740,9 +740,9 @@ class BotTurnManager {
     }
   }
 
-  /// Log bot action for better user visibility
+  /// Log bot action for better user visibility (only for actions not logged by game state)
   void logBotActionForUser(Player botPlayer, BotDecision decision) {
-    String actionDescription;
+    String? actionDescription;
     switch (decision.action) {
       case 'drawFromDeck':
         actionDescription = '🎴 drew 2 cards from deck';
@@ -764,24 +764,21 @@ class BotTurnManager {
         final card = data['card'] as PlayingCard;
         actionDescription = '➕ added ${card.compactName} to meld';
         break;
-      case 'discard':
-        final card = decision.data as PlayingCard;
-        actionDescription = '🗑️ discarded ${card.compactName}';
-        break;
       case 'noMeld':
         actionDescription = '⏭️ chose not to meld';
         break;
       case 'goOut':
         actionDescription = '🎉 went out and ended the round!';
         break;
+      // Skip 'discard' - already logged by game state to prevent duplicates
+      case 'discard':
+        return; // Don't log duplicate discard actions
       default:
         actionDescription = decision.action;
         break;
     }
 
     // Log to game state for UI display with explicit bot player name
-    // Note: Can't use the direct logAction because it uses currentPlayer.name
-    // and currentPlayer might have changed to the next player by now
     final gameState = gameController.gameState;
     gameState.recentActions.add(
       GameAction(message: actionDescription, playerName: botPlayer.name),
