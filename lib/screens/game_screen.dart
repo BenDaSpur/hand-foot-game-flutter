@@ -69,6 +69,10 @@ class _GameScreenState extends State<GameScreen> {
   // Prevent multiple game end dialogs
   bool _gameEndDialogShown = false;
 
+  // Queue for bot turn processing to ensure one at a time
+  bool _isBotTurnInProgress = false;
+  final List<Player> _botTurnQueue = [];
+
   @override
   void initState() {
     super.initState();
@@ -300,6 +304,65 @@ class _GameScreenState extends State<GameScreen> {
     processCurrentPlayerTurn();
   }
 
+  /// Queue bot turn to process one at a time
+  void _queueBotTurn(Player botPlayer) {
+    // Add to queue if not already queued
+    if (!_botTurnQueue.any((p) => p.id == botPlayer.id)) {
+      _botTurnQueue.add(botPlayer);
+    }
+
+    // Process queue if nothing is currently processing
+    if (!_isBotTurnInProgress) {
+      _processNextBotInQueue();
+    }
+  }
+
+  /// Process the next bot in the queue
+  void _processNextBotInQueue() {
+    if (_botTurnQueue.isEmpty || _isBotTurnInProgress) return;
+
+    _isBotTurnInProgress = true;
+    final botPlayer = _botTurnQueue.removeAt(0);
+
+    // Verify this bot is still the current player
+    final currentPlayer = _gameController.gameState.currentPlayer;
+    if (currentPlayer.id != botPlayer.id ||
+        currentPlayer.type != PlayerType.bot) {
+      DebugLogger.debug(
+        'Skipping queued bot ${botPlayer.name} - no longer current player',
+      );
+      _isBotTurnInProgress = false;
+      _processNextBotInQueue(); // Try next in queue
+      return;
+    }
+
+    DebugLogger.debug('Processing queued bot turn for ${botPlayer.name}');
+    _botTurnManager
+        .processBotTurnWithDelays(botPlayer)
+        .then((_) {
+          _isBotTurnInProgress = false;
+          DebugLogger.debug('Bot ${botPlayer.name} completed turn');
+          // Check if next player is also a bot
+          if (mounted) {
+            final nextPlayer = _gameController.gameState.currentPlayer;
+            if (nextPlayer.type == PlayerType.bot) {
+              DebugLogger.debug(
+                'Next player ${nextPlayer.name} is also a bot - processing immediately',
+              );
+              processCurrentPlayerTurn();
+            }
+          }
+        })
+        .catchError((error) {
+          _isBotTurnInProgress = false;
+          DebugLogger.error('Bot turn error: $error');
+          // Continue processing queue even on error
+          if (mounted) {
+            processCurrentPlayerTurn();
+          }
+        });
+  }
+
   /// SIMPLIFIED: Single entry point for turn processing with error recovery
   void processCurrentPlayerTurn() {
     if (!_isInitialized || _disposed || !mounted) return;
@@ -371,21 +434,10 @@ class _GameScreenState extends State<GameScreen> {
         return;
       }
 
-      // Bot turn: Process with safety checks and delays
-      if (!_botTurnManager.isProcessingBotTurn) {
-        // DOUBLE CHECK: Make absolutely sure this is a bot before processing
-        if (currentPlayer.type != PlayerType.bot) {
-          DebugLogger.error(
-            'CRITICAL: Attempted to process non-bot player ${currentPlayer.name} as bot',
-          );
-          return;
-        }
-        DebugLogger.debug('Starting bot turn for ${currentPlayer.name}');
-        _botTurnManager.processBotTurnWithDelays(currentPlayer);
-      } else {
-        DebugLogger.warning(
-          'Bot processing already in progress - skipping duplicate call',
-        );
+      // Bot turn: Queue for sequential processing
+      if (currentPlayer.type == PlayerType.bot) {
+        DebugLogger.debug('Queueing bot turn for ${currentPlayer.name}');
+        _queueBotTurn(currentPlayer);
       }
     } catch (e) {
       DebugLogger.error('Error in processCurrentPlayerTurn: $e');
