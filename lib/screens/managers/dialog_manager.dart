@@ -373,7 +373,10 @@ class DialogManager {
         onCancel: () {
           Navigator.of(context).pop();
         },
-        onConfirm: onMeldsCreated,
+        onConfirm: (meldIndices) {
+          Navigator.of(context).pop();
+          onMeldsCreated(meldIndices);
+        },
       ),
     );
   }
