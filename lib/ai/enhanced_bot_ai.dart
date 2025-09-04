@@ -110,13 +110,28 @@ class EnhancedBotAI {
         _meldAnalyzer.clearCache();
       }
 
+      // Calculate early game status to prevent emergency panic on normal starting hands
+      final handSize = bot.currentHand.length;
+      final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
+      final isEarlyGame =
+          botTurnCount <= 3; // Allow 3 turns before panicking about hand size
+
       // NEW: Opponent pressure detection and competitive response (with caching)
       final pressureResponse = _evaluateOpponentPressureWithCaching(
         bot,
         controller,
         gameState,
       );
-      if (pressureResponse != null) {
+
+      // If under pressure AND have large hand, bypass early game grace
+      if (pressureResponse != null && handSize >= criticalHandSizeThreshold) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'Competitive pressure with large hand - forcing emergency meld instead of pressure response',
+        );
+        // Continue to emergency logic below instead of returning pressure response
+      } else if (pressureResponse != null) {
         DebugLogger.botDebug(
           bot.id,
           bot.name,
@@ -126,8 +141,11 @@ class EnhancedBotAI {
       }
 
       // CRITICAL EMERGENCY: Hand size protocols override ALL other logic
-      final handSize = bot.currentHand.length;
-      if (handSize >= criticalHandSizeThreshold) {
+      // Exception: Skip early game grace if under competitive pressure
+      final hasCompetitivePressure = pressureResponse != null;
+      final shouldBypassEarlyGame = !isEarlyGame || hasCompetitivePressure;
+
+      if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
         // PANIC MODE: Use new maximal meld combination for aggressive hand emptying
         if (gameState.turnPhase == TurnPhase.meld) {
           final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
@@ -158,7 +176,7 @@ class EnhancedBotAI {
         }
       }
 
-      if (handSize >= emergencyHandSizeThreshold) {
+      if (handSize >= emergencyHandSizeThreshold && shouldBypassEarlyGame) {
         // EMERGENCY MODE: Use maximal meld combination for aggressive melding
         if (gameState.turnPhase == TurnPhase.meld) {
           // If not played down, force emergency play-down with enhanced combination
@@ -205,6 +223,7 @@ class EnhancedBotAI {
       // SPECIAL EMERGENCY: Bot with too many cards and no play-down
       if (handSize >= playDownEmergencyThreshold &&
           !bot.hasPlayedDown &&
+          shouldBypassEarlyGame &&
           gameState.turnPhase == TurnPhase.meld) {
         DebugLogger.botDebug(
           bot.id,
@@ -361,9 +380,22 @@ class EnhancedBotAI {
     }
 
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
-    // These override ALL other logic to prevent 32+ card disasters
+    // BUT: Give bots grace period early in round when large hands are normal
     final handSize = bot.currentHand.length;
-    if (handSize >= criticalHandSizeThreshold) {
+    final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
+    final isEarlyGame = botTurnCount <= 3; // Allow 3 turns before panicking
+
+    // Check if competitive pressure should override early game grace
+    final hasCompetitivePressure =
+        _evaluateOpponentPressureWithCaching(
+          bot,
+          controller,
+          controller.gameState,
+        ) !=
+        null;
+    final shouldBypassEarlyGame = !isEarlyGame || hasCompetitivePressure;
+
+    if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
       // PANIC MODE: Any meld is better than none
       final anyPossibleMelds = _getCachedPossibleMelds(bot, controller);
       if (anyPossibleMelds.isNotEmpty) {
@@ -376,14 +408,15 @@ class EnhancedBotAI {
         return BotDecision(
           action: 'createMeld',
           data: panicMeld,
-          skipPlayDownCheck: bot.hasPlayedDown, // Force if already played down
+          skipPlayDownCheck:
+              true, // Force creation regardless of play-down requirements
         );
       }
       // Ultimate fallback: If somehow no melds possible even with 30+ cards,
       // continue to emergency mode rather than crash
     }
 
-    if (handSize >= emergencyHandSizeThreshold) {
+    if (handSize >= emergencyHandSizeThreshold && !isEarlyGame) {
       // EMERGENCY MODE: Force aggressive meld creation
       if (bot.hasPlayedDown) {
         // Already played down - meld anything possible
@@ -860,6 +893,21 @@ class EnhancedBotAI {
       }
 
       // Redundant aggressive bot logic removed - all bots now play down immediately when meeting requirements
+    }
+
+    // FALLBACK: If forced to play-down but no valid combinations found, create any meld possible
+    if (shouldForcePlayDown && bestCombination.isEmpty) {
+      DebugLogger.debug(
+        '${bot.name}: Forced play-down but no valid combinations - attempting any meld',
+      );
+      final anyPossibleMelds = _getCachedPossibleMelds(bot, controller);
+      if (anyPossibleMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: anyPossibleMelds.first,
+          skipPlayDownCheck: true, // Bypass point requirements due to pressure
+        );
+      }
     }
 
     // Check for strategic play-down opportunity
