@@ -25,7 +25,7 @@ void main() {
       // Look for and tap draw button
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Draw from Deck'),
+        find.text('Draw Deck'),
         debugLabel: 'Draw button tap',
       );
 
