@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
+import '../config/game_config.dart';
 
 class GameActionButtons extends StatelessWidget {
   final GameState gameState;
@@ -171,7 +172,7 @@ class GameActionButtons extends StatelessWidget {
     Color? backgroundColor,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
+    final isSmallScreen = screenWidth < GameConfig.tabletPortraitBreakpoint;
 
     return ElevatedButton(
       onPressed: onPressed,

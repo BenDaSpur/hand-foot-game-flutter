@@ -59,7 +59,7 @@ class GameState {
   int _stalemateDiscardCount = 0;
 
   // Multiplayer privacy controls
-  bool _isMultiplayer;
+  bool _isMultiplayer = false;
   String? _viewerId;
 
   GameState({
@@ -86,12 +86,20 @@ class GameState {
 
   PlayingCard? get topDiscard => discardPile.isEmpty ? null : discardPile.last;
 
-  // Multiplayer privacy methods
+  /// Sets the game to multiplayer mode with optional viewer ID for privacy controls
+  ///
+  /// When [isMultiplayer] is true, action logging will respect multiplayer privacy rules,
+  /// only showing card details for the viewer's own actions or public actions.
+  /// The [viewerId] should match a player's ID to enable proper privacy filtering.
   void setMultiplayerMode(bool isMultiplayer, [String? viewerId]) {
     _isMultiplayer = isMultiplayer;
     _viewerId = viewerId;
   }
 
+  /// Updates the viewer ID for multiplayer privacy controls
+  ///
+  /// This allows changing which player's perspective is being shown
+  /// without recreating the entire GameState object.
   void setViewerId(String? viewerId) {
     _viewerId = viewerId;
   }
