@@ -15,6 +15,7 @@ import '../widgets/meld_widget.dart';
 import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
+import '../widgets/game_action_buttons.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
 import 'main_menu_screen.dart';
@@ -1641,98 +1642,52 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            // Action buttons (only show when it's human's turn AND game hasn't ended)
-            if (currentPlayer.type == PlayerType.human &&
-                gameState.phase != GamePhase.gameEnd) ...[
-              // Emergency recovery for stuck game
-              if (_isGameStuck())
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.red[100],
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Game is stuck! You went out without meeting book requirements.',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _forceNextTurn,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                        ),
-                        child: const Text('Skip Turn (Emergency Recovery)'),
-                      ),
-                    ],
-                  ),
-                ),
+            // Emergency recovery for stuck game (only show when necessary)
+            if (_isGameStuck() &&
+                currentPlayer.type == PlayerType.human &&
+                gameState.phase != GamePhase.gameEnd)
               Container(
                 padding: const EdgeInsets.all(16),
-                child: Wrap(
-                  spacing: 8,
+                color: Colors.red[100],
+                child: Column(
                   children: [
-                    if (gameState.turnPhase == TurnPhase.draw) ...[
-                      ElevatedButton(
-                        onPressed: _onDrawFromDeck,
-                        child: const Text('Draw from Deck'),
+                    const Text(
+                      'Game is stuck! You went out without meeting book requirements.',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
                       ),
-                      if (_gameController.canUnlockDiscard())
-                        ElevatedButton(
-                          onPressed: _onUnlockDiscard,
-                          child: const Text('Take Discard Pile'),
-                        ),
-                    ],
-                    if (gameState.turnPhase == TurnPhase.meld) ...[
-                      ElevatedButton(
-                        onPressed: () =>
-                            _dialogManager.showAdvancedMeldSelector(
-                              onMeldsCreated: _executeAdvancedMeldCreation,
-                            ),
-                        child: const Text('Play Cards'),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: _forceNextTurn,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
                       ),
-                      ElevatedButton(
-                        onPressed: _selectedCards.length == 1
-                            ? _onDiscard
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              _selectedCards.length == 1 &&
-                                  humanPlayer.currentHand.length == 1
-                              ? (humanPlayer.hasPickedUpFoot
-                                    ? Colors.orange
-                                    : Colors.blue)
-                              : null,
-                        ),
-                        child: Text(
-                          _selectedCards.length == 1 &&
-                                  humanPlayer.currentHand.length == 1
-                              ? (humanPlayer.hasPickedUpFoot
-                                    ? 'Go Out'
-                                    : 'Go to Foot')
-                              : 'Discard',
-                        ),
-                      ),
-                      if (_selectedCardIndices.isNotEmpty)
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _selectedCardIndices.clear();
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey,
-                          ),
-                          child: const Text('Clear Selection'),
-                        ),
-                    ],
+                      child: const Text('Skip Turn (Emergency Recovery)'),
+                    ),
                   ],
                 ),
               ),
-            ],
+
+            // Use the shared GameActionButtons widget for consistency
+            GameActionButtons(
+              gameState: gameState,
+              humanPlayer: humanPlayer,
+              selectedCardIndices: _selectedCardIndices,
+              onDrawFromDeck: _onDrawFromDeck,
+              onUnlockDiscard: _gameController.canUnlockDiscard()
+                  ? _onUnlockDiscard
+                  : null,
+              onShowAdvancedMeldSelector: () =>
+                  _dialogManager.showAdvancedMeldSelector(
+                    onMeldsCreated: _executeAdvancedMeldCreation,
+                  ),
+              onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
+              onClearSelection: () =>
+                  setState(() => _selectedCardIndices.clear()),
+            ),
 
             // Hand (always visible, but only interactive during human turn and game not ended)
             Opacity(
@@ -1742,14 +1697,13 @@ class _GameScreenState extends State<GameScreen> {
                   ? 1.0
                   : 0.7,
               child: Container(
-                height:
-                    155, // Increased to accommodate selected cards with padding
+                height: 135, // Reduced height to minimize bottom space
                 padding: const EdgeInsets.fromLTRB(
                   8,
-                  10,
                   8,
-                  10,
-                ), // More generous padding
+                  8,
+                  4,
+                ), // Reduced bottom padding
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1862,8 +1816,6 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
-
             // Game end overlay when game has finished
             if (gameState.phase == GamePhase.gameEnd &&
                 gameState.winner != null)
@@ -1926,8 +1878,6 @@ class _GameScreenState extends State<GameScreen> {
                   ],
                 ),
               ),
-
-            const SizedBox(height: 16),
           ],
         ),
       ),

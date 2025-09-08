@@ -400,6 +400,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     localGameState.hasDrawnFromDeck = newGameState.hasDrawnFromDeck;
     localGameState.hasMelded = newGameState.hasMelded;
 
+    // Set multiplayer privacy controls
+    localGameState.setMultiplayerMode(true, currentUserId);
+
     // Atomic collection updates
     _replaceCollectionAtomically(localGameState.players, newGameState.players);
     _replaceCollectionAtomically(

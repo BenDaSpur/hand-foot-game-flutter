@@ -1464,16 +1464,13 @@ class EnhancedBotAI {
       return _selectRandomly(bestProtected);
     }
 
-    // Fallback: Discard lowest value card (avoiding wilds if still on hand pile)
-    List<PlayingCard> sortedHand;
-    if (stillOnHandPile && wildCards.length < 8) {
-      // Exclude wild cards from discard options when still on hand pile
-      sortedHand = List<PlayingCard>.from(hand.where((card) => !card.isWild));
-      if (sortedHand.isEmpty) {
-        // If only wilds left, must discard one
-        sortedHand = List<PlayingCard>.from(hand);
-      }
-    } else {
+    // Fallback: Discard lowest value card (ALWAYS avoid wilds unless no choice)
+    List<PlayingCard> sortedHand = List<PlayingCard>.from(
+      hand.where((card) => !card.isWild),
+    );
+
+    if (sortedHand.isEmpty) {
+      // Emergency: Only wilds left, must discard lowest value wild
       sortedHand = List<PlayingCard>.from(hand);
     }
 

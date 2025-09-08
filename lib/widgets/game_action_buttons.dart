@@ -53,6 +53,18 @@ class GameActionButtons extends StatelessWidget {
     }
   }
 
+  /// Get user-friendly description of current turn phase
+  String _getTurnPhaseDescription() {
+    switch (gameState.turnPhase) {
+      case TurnPhase.draw:
+        return 'draw cards';
+      case TurnPhase.meld:
+        return 'play cards or discard';
+      case TurnPhase.discard:
+        return 'discard a card';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isCurrentUserTurn) {
@@ -65,54 +77,121 @@ class GameActionButtons extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Waiting for ${gameState.currentPlayer.name} to play...',
+              'Waiting for ${gameState.currentPlayer.name} to ${_getTurnPhaseDescription()}...',
               style: const TextStyle(
                 fontSize: 16,
                 color: Colors.amber,
                 fontWeight: FontWeight.bold,
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
       );
     }
 
+    // Build buttons based on turn phase with compact sizing for mobile
+    final buttons = <Widget>[];
+
+    if (gameState.turnPhase == TurnPhase.draw) {
+      buttons.add(
+        _buildCompactButton(
+          onPressed: onDrawFromDeck,
+          text: 'Draw Deck',
+          context: context,
+        ),
+      );
+      if (onUnlockDiscard != null) {
+        buttons.add(
+          _buildCompactButton(
+            onPressed: onUnlockDiscard,
+            text: 'Take Discard',
+            context: context,
+          ),
+        );
+      }
+    }
+
+    if (gameState.turnPhase == TurnPhase.meld) {
+      buttons.add(
+        _buildCompactButton(
+          onPressed: onShowAdvancedMeldSelector,
+          text: 'Play Cards',
+          backgroundColor: const Color(
+            0xFF16c79a,
+          ), // Neon green for meld action
+          context: context,
+        ),
+      );
+      buttons.add(
+        _buildCompactButton(
+          onPressed: _hasSelectedCard ? onDiscard : null,
+          text: _discardButtonText,
+          backgroundColor:
+              _discardButtonColor ??
+              const Color(0xFFe94560), // Neon pink for discard
+          context: context,
+        ),
+      );
+      if (selectedCardIndices.isNotEmpty) {
+        buttons.add(
+          _buildCompactButton(
+            onPressed: onClearSelection,
+            text: 'Clear',
+            backgroundColor: Colors.grey,
+            context: context,
+          ),
+        );
+      }
+    }
+
     return Container(
-      padding: const EdgeInsets.all(16),
-      child: Wrap(
-        spacing: 8,
-        children: [
-          if (gameState.turnPhase == TurnPhase.draw) ...[
-            ElevatedButton(
-              onPressed: onDrawFromDeck,
-              child: const Text('Draw from Deck'),
-            ),
-            if (onUnlockDiscard != null)
-              ElevatedButton(
-                onPressed: onUnlockDiscard,
-                child: const Text('Take Discard Pile'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: buttons
+            .map(
+              (button) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: button,
+                ),
               ),
-          ],
-          if (gameState.turnPhase == TurnPhase.meld) ...[
-            ElevatedButton(
-              onPressed: onShowAdvancedMeldSelector,
-              child: const Text('Play Cards'),
-            ),
-            ElevatedButton(
-              onPressed: _hasSelectedCard ? onDiscard : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _discardButtonColor,
-              ),
-              child: Text(_discardButtonText),
-            ),
-            if (selectedCardIndices.isNotEmpty)
-              ElevatedButton(
-                onPressed: onClearSelection,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                child: const Text('Clear Selection'),
-              ),
-          ],
-        ],
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  /// Build a compact button sized appropriately for mobile screens
+  Widget _buildCompactButton({
+    required VoidCallback? onPressed,
+    required String text,
+    required BuildContext context,
+    Color? backgroundColor,
+  }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: backgroundColor,
+        padding: EdgeInsets.symmetric(
+          vertical: isSmallScreen ? 8 : 12,
+          horizontal: isSmallScreen ? 8 : 16,
+        ),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: isSmallScreen ? 12 : 14,
+          fontWeight: FontWeight.bold,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

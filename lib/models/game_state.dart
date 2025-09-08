@@ -58,6 +58,10 @@ class GameState {
   /// Count of consecutive 3 discards in stalemate situation
   int _stalemateDiscardCount = 0;
 
+  // Multiplayer privacy controls
+  bool _isMultiplayer;
+  String? _viewerId;
+
   GameState({
     required this.players,
     required this.deck,
@@ -71,12 +75,26 @@ class GameState {
     this.discardPileFrozen = false,
     this.hasDrawnFromDeck = false,
     this.hasMelded = false,
+    bool isMultiplayer = false,
+    String? viewerId,
   }) : discardPile = discardPile ?? [],
-       recentActions = recentActions ?? [];
+       recentActions = recentActions ?? [],
+       _isMultiplayer = isMultiplayer,
+       _viewerId = viewerId;
 
   Player get currentPlayer => players[currentPlayerIndex];
 
   PlayingCard? get topDiscard => discardPile.isEmpty ? null : discardPile.last;
+
+  // Multiplayer privacy methods
+  void setMultiplayerMode(bool isMultiplayer, [String? viewerId]) {
+    _isMultiplayer = isMultiplayer;
+    _viewerId = viewerId;
+  }
+
+  void setViewerId(String? viewerId) {
+    _viewerId = viewerId;
+  }
 
   void _logAction(String message, {bool showCardDetails = true}) {
     // Determine if card details should be shown based on player type and action visibility
@@ -88,7 +106,18 @@ class GameState {
         message.contains('picked up foot') ||
         message.contains('went out');
 
-    final shouldShowDetails = showCardDetails && (isHuman || isPublicAction);
+    // In multiplayer, only show card details for the viewer's own actions or public actions
+    // In single player, show details for human actions or public actions
+    bool shouldShowDetails;
+    if (_isMultiplayer && _viewerId != null) {
+      // Multiplayer mode: only show details if this is the viewer's turn or public action
+      final isViewersTurn = currentPlayer.id == _viewerId;
+      shouldShowDetails = showCardDetails && (isViewersTurn || isPublicAction);
+    } else {
+      // Single player mode: show details for human players or public actions
+      shouldShowDetails = showCardDetails && (isHuman || isPublicAction);
+    }
+
     final finalMessage = shouldShowDetails
         ? message
         : _sanitizeMessage(message);
