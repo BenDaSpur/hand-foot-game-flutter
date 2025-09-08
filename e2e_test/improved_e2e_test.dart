@@ -17,7 +17,7 @@ void main() {
       expect(find.text('HAND & FOOT'), findsOneWidget);
       expect(find.text('ROUND 1'), findsOneWidget);
       expect(find.text('Your Hand (11 cards)'), findsOneWidget);
-      expect(find.text('Draw from Deck'), findsOneWidget);
+      expect(find.text('Draw Deck'), findsOneWidget);
 
       // Verify player information exists (may be multiple instances)
       // Bots now have actual names like Clara, Carl, Bob, Rita, etc.
@@ -56,12 +56,12 @@ void main() {
 
       // Verify starting state
       expect(find.text('Your Hand (11 cards)'), findsOneWidget);
-      expect(find.text('Draw from Deck'), findsOneWidget);
+      expect(find.text('Draw Deck'), findsOneWidget);
 
       // Draw from deck
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Draw from Deck'),
+        find.text('Draw Deck'),
         debugLabel: 'Draw from deck',
       );
       await E2ETestUtils.stabilize(tester);
@@ -70,7 +70,7 @@ void main() {
       expect(find.text('Your Hand (13 cards)'), findsOneWidget);
       expect(find.text('Play Cards'), findsOneWidget);
       expect(find.text('Discard'), findsOneWidget);
-      expect(find.text('Draw from Deck'), findsNothing);
+      expect(find.text('Draw Deck'), findsNothing);
 
       print('✅ Draw and phase transition complete');
       await E2ETestUtils.cleanShutdown(tester);
@@ -187,7 +187,7 @@ void main() {
       // Draw cards first
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Draw from Deck'),
+        find.text('Draw Deck'),
         debugLabel: 'Draw cards',
       );
       await E2ETestUtils.stabilize(tester);
@@ -230,7 +230,7 @@ void main() {
       // Draw cards to enable meld phase
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Draw from Deck'),
+        find.text('Draw Deck'),
         debugLabel: 'Draw cards',
       );
       await E2ETestUtils.stabilize(tester);
@@ -309,10 +309,10 @@ void main() {
         print('🎮 Stability test iteration ${i + 1}');
 
         // Draw if available
-        if (find.text('Draw from Deck').evaluate().isNotEmpty) {
+        if (find.text('Draw Deck').evaluate().isNotEmpty) {
           await E2ETestUtils.safeTap(
             tester,
-            find.text('Draw from Deck'),
+            find.text('Draw Deck'),
             debugLabel: 'Draw iteration $i',
           );
           await E2ETestUtils.stabilize(tester);

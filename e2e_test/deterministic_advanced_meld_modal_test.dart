@@ -37,7 +37,7 @@ void main() {
       await E2ETestUtils.startAppWithCleanState(tester);
 
       // Look for draw button
-      final drawButton = find.text('Draw from Deck');
+      final drawButton = find.text('Draw Deck');
       if (drawButton.evaluate().isNotEmpty) {
         await E2ETestUtils.safeTap(
           tester,
@@ -59,7 +59,7 @@ void main() {
       await E2ETestUtils.startAppWithCleanState(tester);
 
       // First try to draw cards to enable play cards
-      final drawButton = find.text('Draw from Deck');
+      final drawButton = find.text('Draw Deck');
       if (drawButton.evaluate().isNotEmpty) {
         await E2ETestUtils.safeTap(
           tester,
@@ -156,7 +156,7 @@ void main() {
       expect(initialScaffoldCount, greaterThan(0));
 
       // Perform some interactions
-      final drawButton = find.text('Draw from Deck');
+      final drawButton = find.text('Draw Deck');
       if (drawButton.evaluate().isNotEmpty) {
         await E2ETestUtils.safeTap(
           tester,

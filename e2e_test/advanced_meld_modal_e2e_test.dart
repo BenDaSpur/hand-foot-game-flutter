@@ -15,7 +15,7 @@ void main() {
       await E2ETestUtils.startAppWithCleanState(tester);
 
       // Try to draw cards to enter meld phase
-      final drawButton = find.text('Draw from Deck');
+      final drawButton = find.text('Draw Deck');
       if (drawButton.evaluate().isNotEmpty) {
         await E2ETestUtils.safeTap(
           tester,
@@ -198,7 +198,7 @@ void main() {
 
 /// Helper to set up game state for modal testing
 Future<void> _setupGameForModal(WidgetTester tester) async {
-  final drawButton = find.text('Draw from Deck');
+  final drawButton = find.text('Draw Deck');
   if (drawButton.evaluate().isNotEmpty) {
     await E2ETestUtils.safeTap(
       tester,
