@@ -141,13 +141,15 @@ class _GameScreenState extends State<GameScreen> {
       onStateChanged: () {
         if (mounted) {
           setState(() {});
-          // After bot state changes, ensure turn processing continues
-          // Use WidgetsBinding to avoid recursive calls during bot processing
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              processCurrentPlayerTurn();
-            }
-          });
+          // Only trigger turn processing if no bot turn is currently in progress
+          // This prevents infinite loops during active bot processing
+          if (!_isBotTurnInProgress) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_isBotTurnInProgress) {
+                processCurrentPlayerTurn();
+              }
+            });
+          }
         }
       },
       logHumanAction: (action) =>
