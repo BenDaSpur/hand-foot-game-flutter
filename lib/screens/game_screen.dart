@@ -212,6 +212,15 @@ class _GameScreenState extends State<GameScreen> {
           // Reinitialize managers with new controller
           _initializeManagers();
         });
+
+        // CRITICAL: Resume game flow after import
+        // Use post-frame callback to ensure UI is updated first
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            DebugLogger.debug('Resuming game flow after import');
+            processCurrentPlayerTurn();
+          }
+        });
       },
     );
   }
