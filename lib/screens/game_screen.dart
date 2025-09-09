@@ -139,7 +139,18 @@ class _GameScreenState extends State<GameScreen> {
       gameController: _gameController,
       botAI: _botAI,
       onStateChanged: () {
-        if (mounted) setState(() {});
+        if (mounted) {
+          setState(() {});
+          // Only trigger turn processing if no bot turn is currently in progress
+          // This prevents infinite loops during active bot processing
+          if (!_isBotTurnInProgress) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_isBotTurnInProgress) {
+                processCurrentPlayerTurn();
+              }
+            });
+          }
+        }
       },
       logHumanAction: (action) =>
           _logHumanAction(action: action, reasoning: 'Bot turn processing'),
@@ -202,6 +213,15 @@ class _GameScreenState extends State<GameScreen> {
 
           // Reinitialize managers with new controller
           _initializeManagers();
+        });
+
+        // CRITICAL: Resume game flow after import
+        // Use post-frame callback to ensure UI is updated first
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            DebugLogger.debug('Resuming game flow after import');
+            processCurrentPlayerTurn();
+          }
         });
       },
     );
@@ -412,6 +432,20 @@ class _GameScreenState extends State<GameScreen> {
       }
 
       final currentPlayer = _gameController.gameState.currentPlayer;
+
+      // CRITICAL: Detect and recover from stuck bot turns
+      if (currentPlayer.type == PlayerType.bot && !_isBotTurnInProgress) {
+        // Bot turn should be processing but isn't - this indicates a stuck state
+        DebugLogger.debug(
+          'Detected stuck bot turn for ${currentPlayer.name} - initiating recovery',
+        );
+        _botTurnManager.resetProcessingState();
+        // Clear any stale bot queue
+        _botTurnQueue.clear();
+        // Force bot turn processing to restart
+        _queueBotTurn(currentPlayer);
+        return;
+      }
 
       // CRITICAL: Defend against turn corruption from multiplayer sync or other sources
       final humanPlayer = _gameController.gameState.players.firstWhere(
