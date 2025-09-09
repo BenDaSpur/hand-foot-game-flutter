@@ -139,7 +139,16 @@ class _GameScreenState extends State<GameScreen> {
       gameController: _gameController,
       botAI: _botAI,
       onStateChanged: () {
-        if (mounted) setState(() {});
+        if (mounted) {
+          setState(() {});
+          // After bot state changes, ensure turn processing continues
+          // Use WidgetsBinding to avoid recursive calls during bot processing
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              processCurrentPlayerTurn();
+            }
+          });
+        }
       },
       logHumanAction: (action) =>
           _logHumanAction(action: action, reasoning: 'Bot turn processing'),
@@ -412,6 +421,20 @@ class _GameScreenState extends State<GameScreen> {
       }
 
       final currentPlayer = _gameController.gameState.currentPlayer;
+
+      // CRITICAL: Detect and recover from stuck bot turns
+      if (currentPlayer.type == PlayerType.bot && !_isBotTurnInProgress) {
+        // Bot turn should be processing but isn't - this indicates a stuck state
+        DebugLogger.debug(
+          'Detected stuck bot turn for ${currentPlayer.name} - initiating recovery',
+        );
+        _botTurnManager.resetProcessingState();
+        // Clear any stale bot queue
+        _botTurnQueue.clear();
+        // Force bot turn processing to restart
+        _queueBotTurn(currentPlayer);
+        return;
+      }
 
       // CRITICAL: Defend against turn corruption from multiplayer sync or other sources
       final humanPlayer = _gameController.gameState.players.firstWhere(
