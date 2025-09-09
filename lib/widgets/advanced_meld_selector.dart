@@ -8,8 +8,26 @@ import '../config/game_config.dart';
 
 // Helper class for responsive UI calculations
 class _ResponsiveHelper {
+  static bool isMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width <=
+        GameConfig.tabletPortraitBreakpoint;
+  }
+
+  static bool isSmallMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width <= 400.0;
+  }
+
   static int getGridCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+
+    // Special handling for very small phones
+    if (screenWidth <= 360.0) {
+      return 4; // Minimum for very small phones
+    }
+    if (screenWidth <= 400.0) {
+      return 5; // Small phones
+    }
+
     if (screenWidth > GameConfig.ultraWideBreakpoint) {
       return GameConfig.gridCrossAxisCounts['ultra_wide']!;
     }
@@ -28,15 +46,22 @@ class _ResponsiveHelper {
   static double getCardWidth(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = getGridCrossAxisCount(context);
-    final availableWidth = screenWidth * GameConfig.modalWidthRatio - 40;
+
+    // Use mobile-optimized modal width for small screens
+    final modalWidthRatio = isMobile(context)
+        ? GameConfig.mobileModalWidthRatio
+        : GameConfig.modalWidthRatio;
+
+    final availableWidth =
+        screenWidth * modalWidthRatio - (isMobile(context) ? 20 : 40);
     final totalSpacing = GameConfig.cardSpacing * (crossAxisCount - 1);
     final cardWidthFromGrid = (availableWidth - totalSpacing) / crossAxisCount;
 
-    // Use a smaller max width to fit more cards, and be more flexible with sizing
-    return cardWidthFromGrid.clamp(
-      GameConfig.minCardWidth,
-      100.0, // Reduced from GameConfig.maxCardWidth (120) to 100
-    );
+    // More aggressive sizing for mobile devices
+    final maxWidth = isSmallMobile(context) ? 80.0 : 100.0;
+    final minWidth = isSmallMobile(context) ? 45.0 : GameConfig.minCardWidth;
+
+    return cardWidthFromGrid.clamp(minWidth, maxWidth);
   }
 
   static double getCardHeight(BuildContext context) {
@@ -49,6 +74,18 @@ class _ResponsiveHelper {
     final cardWidth = getCardWidth(context);
     final cardHeight = getCardHeight(context);
     return cardWidth / cardHeight;
+  }
+
+  static EdgeInsets getModalPadding(BuildContext context) {
+    return EdgeInsets.all(isMobile(context) ? 12.0 : 20.0);
+  }
+
+  static double getModalBorderRadius(BuildContext context) {
+    return isMobile(context) ? 16.0 : 20.0;
+  }
+
+  static double getFontSize(BuildContext context, double baseSize) {
+    return isSmallMobile(context) ? baseSize - 2 : baseSize;
   }
 }
 
@@ -134,12 +171,20 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
         widget.player.hasPlayedDown ||
         totalPoints >= widget.playDownRequirement;
 
+    final isMobile = _ResponsiveHelper.isMobile(context);
+    final modalWidthRatio = isMobile
+        ? GameConfig.mobileModalWidthRatio
+        : GameConfig.modalWidthRatio;
+    final modalHeightRatio = isMobile
+        ? GameConfig.mobileModalHeightRatio
+        : GameConfig.modalHeightRatio;
+
     return Dialog(
       backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.all(isMobile ? 8.0 : 16.0),
       child: Container(
-        width: MediaQuery.of(context).size.width * GameConfig.modalWidthRatio,
-        height:
-            MediaQuery.of(context).size.height * GameConfig.modalHeightRatio,
+        width: MediaQuery.of(context).size.width * modalWidthRatio,
+        height: MediaQuery.of(context).size.height * modalHeightRatio,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -149,7 +194,9 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
               const Color(0xFF16213E).withValues(alpha: 0.95),
             ],
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(
+            _ResponsiveHelper.getModalBorderRadius(context),
+          ),
           border: Border.all(
             color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
             width: 2,
@@ -162,14 +209,13 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             ),
           ],
         ),
-        padding: const EdgeInsets.all(20),
+        padding: _ResponsiveHelper.getModalPadding(context),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: SizedBox(
             height:
-                MediaQuery.of(context).size.height *
-                    GameConfig.modalHeightRatio -
-                40,
+                MediaQuery.of(context).size.height * modalHeightRatio -
+                (isMobile ? 24 : 40),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -205,7 +251,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 ? 'Multi-Meld Manager'
                 : 'Multi-Meld Play-Down',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: _ResponsiveHelper.getFontSize(context, 22),
               fontWeight: FontWeight.bold,
               color: Colors.white,
               shadows: [
@@ -272,26 +318,49 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             children: [
               Text(
                 'Proposed Melds (${proposedMeldIndices.length})',
-                style: const TextStyle(
-                  fontSize: 18,
+                style: TextStyle(
+                  fontSize: _ResponsiveHelper.getFontSize(context, 18),
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: _canCreateNewMeld() ? _createNewMeld : null,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('New Meld'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  elevation: 4,
-                  shadowColor: const Color(0xFF10B981).withValues(alpha: 0.4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
+              _ResponsiveHelper.isSmallMobile(context)
+                  ? ElevatedButton(
+                      onPressed: _canCreateNewMeld() ? _createNewMeld : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                        shadowColor: const Color(
+                          0xFF10B981,
+                        ).withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(60, 32),
+                      ),
+                      child: const Text('New', style: TextStyle(fontSize: 12)),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _canCreateNewMeld() ? _createNewMeld : null,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('New Meld'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                        shadowColor: const Color(
+                          0xFF10B981,
+                        ).withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
             ],
           ),
           const SizedBox(height: 8),
@@ -325,19 +394,20 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
 
   Widget _buildMeldCard(int meldIndex) {
     final meldData = _getMeldData(meldIndex);
+    final isMobile = _ResponsiveHelper.isMobile(context);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: isMobile ? 8 : 12),
       color: const Color(0xFF1F2937).withValues(alpha: 0.8),
       elevation: 4,
       shape: _getMeldCardShape(meldData.isValid),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildMeldHeader(meldIndex, meldData),
-            const SizedBox(height: 8),
+            SizedBox(height: isMobile ? 6 : 8),
             _buildMeldCardChips(meldIndex, meldData.meldIndices),
           ],
         ),
@@ -394,18 +464,18 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
       children: [
         Text(
           'Meld ${meldIndex + 1} (${meldData.meldCards.length} cards)',
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            fontSize: 16,
+            fontSize: _ResponsiveHelper.getFontSize(context, 16),
           ),
         ),
         if (meldData.willAddToExisting)
           Text(
             'Will add to existing ${meldData.meldCards.isNotEmpty ? meldData.meldCards.first.rank.name : ''} meld',
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.blue,
-              fontSize: 12,
+              fontSize: _ResponsiveHelper.getFontSize(context, 12),
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -439,7 +509,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
               ? const Color(0xFF10B981)
               : const Color(0xFFEF4444),
           fontWeight: FontWeight.bold,
-          fontSize: 12,
+          fontSize: _ResponsiveHelper.getFontSize(context, 12),
         ),
       ),
     );
@@ -467,15 +537,22 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   Widget _buildMeldCardChip(int meldIndex, int cardIndex, PlayingCard card) {
+    final isMobile = _ResponsiveHelper.isMobile(context);
+    final cardSize = isMobile ? 32.0 : 40.0;
+    final cardHeight = isMobile ? 44.8 : 56.0;
+
     return Container(
-      margin: const EdgeInsets.only(right: 6, bottom: 6),
+      margin: EdgeInsets.only(
+        right: isMobile ? 4 : 6,
+        bottom: isMobile ? 4 : 6,
+      ),
       child: Stack(
         children: [
           PlayingCardWidget(
             key: ValueKey('preview-$meldIndex-$cardIndex'),
             card: card,
-            width: 40,
-            height: 56,
+            width: cardSize,
+            height: cardHeight,
             isSelected: false,
             isInMeld: true,
           ),
@@ -485,8 +562,8 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             child: GestureDetector(
               onTap: () => _removeCardFromMeld(meldIndex, cardIndex),
               child: Container(
-                width: 20,
-                height: 20,
+                width: isMobile ? 18 : 20,
+                height: isMobile ? 18 : 20,
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.error,
                   shape: BoxShape.circle,
@@ -498,7 +575,11 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                child: Icon(
+                  Icons.close,
+                  size: isMobile ? 10 : 12,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -515,8 +596,8 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
         children: [
           Text(
             'Available Cards (${availableCardIndices.length})',
-            style: const TextStyle(
-              fontSize: 18,
+            style: TextStyle(
+              fontSize: _ResponsiveHelper.getFontSize(context, 18),
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
@@ -568,6 +649,77 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   Widget _buildActionButtons(bool meetsRequirement) {
+    final isMobile = _ResponsiveHelper.isMobile(context);
+    final isSmallMobile = _ResponsiveHelper.isSmallMobile(context);
+
+    if (isMobile) {
+      // Stack buttons vertically on mobile for better touch targets
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: isSmallMobile ? 44 : 48,
+            child: ElevatedButton(
+              onPressed: meetsRequirement ? _confirmMelds : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: meetsRequirement
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFF6B7280),
+                foregroundColor: Colors.white,
+                elevation: 4,
+                shadowColor:
+                    (meetsRequirement
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF6B7280))
+                        .withValues(alpha: 0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  meetsRequirement
+                      ? (widget.player.hasPlayedDown
+                            ? 'Confirm Melds'
+                            : 'Confirm Play-Down')
+                      : (widget.player.hasPlayedDown
+                            ? 'Select Cards'
+                            : 'Need ${widget.playDownRequirement - _calculateTotalPoints()} more'),
+                  style: TextStyle(
+                    fontSize: _ResponsiveHelper.getFontSize(context, 16),
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: isSmallMobile ? 40 : 44,
+            child: TextButton(
+              onPressed: widget.onCancel,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+              ),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  fontSize: _ResponsiveHelper.getFontSize(context, 16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Original horizontal layout for larger screens
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [

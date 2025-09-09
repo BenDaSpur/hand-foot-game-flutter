@@ -228,16 +228,23 @@ class GameConfig {
     'desktop': 8, // Increased from 6 to 8
     'tablet_landscape': 7, // Increased from 5 to 7
     'tablet_portrait': 5, // Increased from 4 to 5
-    'mobile': 4, // Increased from 3 to 4
+    'mobile': 5, // Increased from 4 to 5 for better mobile utilization
   };
 
   /// Card sizing constraints
-  static const double minCardWidth = 60.0;
+  static const double minCardWidth = 50.0; // Reduced from 60 for small phones
   static const double maxCardWidth = 120.0;
+  static const double mobileCardWidth = 55.0; // Optimized for mobile
 
   /// Modal dialog size ratios
-  static const double modalWidthRatio = 0.9;
-  static const double modalHeightRatio = 0.8;
+  static const double modalWidthRatio =
+      0.95; // Increased for better mobile utilization
+  static const double modalHeightRatio =
+      0.9; // Increased for better mobile utilization
+  static const double mobileModalWidthRatio =
+      0.98; // Maximum utilization on mobile
+  static const double mobileModalHeightRatio =
+      0.95; // Maximum utilization on mobile
 
   // =============================================================================
   // BOT AI STRATEGIC CONSTANTS
