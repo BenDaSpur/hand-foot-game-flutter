@@ -48,6 +48,14 @@ class EnhancedBotAI {
       4; // REDUCED FURTHER - prevent accumulation
   static const int strongPlayDownBuffer =
       5; // REDUCED FURTHER - much more aggressive play-downs
+
+  // NEW: Discard pile evaluation constants - extracted magic numbers
+  static const double aggressiveDiscardMultiplier = 0.8;
+  static const double competitiveDiscardMultiplier = 0.6;
+  static const double defensiveDiscardMultiplier = 0.7;
+  static const int minimumDiscardPileSize = 2;
+  static const int footPhaseUrgencyThreshold = 5;
+
   static const int wildCardDiscardThreshold =
       8; // INCREASED - discard wilds more readily
   static const double emergencyRiskTolerance =
@@ -278,8 +286,8 @@ class EnhancedBotAI {
       );
       return decision;
     } catch (e, stackTrace) {
-      print('ERROR: Bot decision failed for ${bot.id}: $e');
-      print('Stack trace: $stackTrace');
+      DebugLogger.error('Bot decision failed for ${bot.id}: $e');
+      DebugLogger.error('Stack trace: $stackTrace');
       // Emergency fallback
       return gameState.turnPhase == TurnPhase.draw
           ? BotDecision(action: 'drawFromDeck')
@@ -1214,8 +1222,10 @@ class EnhancedBotAI {
 
     // Book completion urgency - take piles if they help complete books
     if (bookStatus['needsBookBalance'] == true) {
-      adjustedValueThreshold *= 0.7; // 30% more willing to take pile for books
-      adjustedSizeThreshold *= 0.8; // Lower size threshold for book completion
+      adjustedValueThreshold *=
+          defensiveDiscardMultiplier; // More willing to take pile for books
+      adjustedSizeThreshold *=
+          aggressiveDiscardMultiplier; // Lower size threshold for book completion
     }
 
     // Opponent threat adjustment - be more aggressive when opponents are dangerous
@@ -1262,7 +1272,8 @@ class EnhancedBotAI {
     // NEW: Competitive pile denial - take piles that would benefit opponents
     if (pileSize >= 5 &&
         _pileWouldBenefitOpponents(discardPile, gameState, bot)) {
-      adjustedValueThreshold *= 0.6; // Take piles to deny opponents
+      adjustedValueThreshold *=
+          competitiveDiscardMultiplier; // Take piles to deny opponents
     }
 
     // ENHANCED pre-play-down logic - MUCH more aggressive
@@ -1284,7 +1295,8 @@ class EnhancedBotAI {
           0.4; // Extremely aggressive for all personalities
 
       return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
-          pileSize >= 2; // Take any pile with 2+ cards if not played down
+          pileSize >=
+              minimumDiscardPileSize; // Take any pile with minimum cards if not played down
     }
 
     // Enhanced post-play-down logic - consider hand management and foot transition
@@ -1292,13 +1304,14 @@ class EnhancedBotAI {
     final handSize = bot.currentHand.length;
 
     // NEW: FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
-    if (isInFoot && handSize <= 5) {
+    if (isInFoot && handSize <= footPhaseUrgencyThreshold) {
       // Check if we should be rushing to go out instead of taking discard pile
       if (handSize <= 2 && bot.canGoOutWithBooks) {
         return false; // Don't take pile, focus on going out
       }
       return pileValue >
-          adjustedValueThreshold * 0.8; // Actually MORE aggressive in foot
+          adjustedValueThreshold *
+              aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
     }
 
     // If hand is getting large, prioritize pile taking to prevent getting stuck
@@ -1418,7 +1431,8 @@ class EnhancedBotAI {
       final bestThrees = threes
           .where((card) => card.pointValue == bestValue)
           .toList();
-      return _selectRandomly(bestThrees);
+      return _selectRandomly(bestThrees) ??
+          threes.first; // Fallback to first 3 if selection fails
     }
 
     // Priority 2: Check if we should hold wild cards strategically
@@ -1493,7 +1507,8 @@ class EnhancedBotAI {
       final bestSingletons = safeSingletons
           .where((card) => card.pointValue == bestValue)
           .toList();
-      return _selectRandomly(bestSingletons);
+      return _selectRandomly(bestSingletons) ??
+          safeSingletons.first; // Fallback to first safe singleton
     }
 
     // If no safe singletons, use protected ones only if absolutely necessary
@@ -1503,7 +1518,8 @@ class EnhancedBotAI {
       final bestProtected = protectedSingletons
           .where((card) => card.pointValue == bestValue)
           .toList();
-      return _selectRandomly(bestProtected);
+      return _selectRandomly(bestProtected) ??
+          protectedSingletons.first; // Fallback to first protected
     }
 
     // Fallback: Discard lowest value card (ALWAYS avoid wilds unless no choice)
@@ -1522,7 +1538,8 @@ class EnhancedBotAI {
     final bestCards = sortedHand
         .where((card) => card.pointValue == bestValue)
         .toList();
-    return _selectRandomly(bestCards);
+    return _selectRandomly(bestCards) ??
+        sortedHand.first; // Fallback to first card
   }
 
   /// Strategic holding decision: Should bot hold cards instead of melding immediately?
@@ -1970,9 +1987,12 @@ class EnhancedBotAI {
 
   /// Helper method to randomly select from a list of equally good options
   /// Adds decision variability to make bot behavior less predictable
-  T _selectRandomly<T>(List<T> options) {
+  T? _selectRandomly<T>(List<T> options) {
     if (options.isEmpty) {
-      throw BotDecisionException('Cannot select from empty options list');
+      DebugLogger.warning(
+        '_selectRandomly called with empty options list, returning null',
+      );
+      return null; // Graceful fallback instead of throwing exception
     }
     if (options.length == 1) {
       return options.first;

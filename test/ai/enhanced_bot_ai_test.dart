@@ -108,5 +108,45 @@ void main() {
         expect(decision, isA<BotDecision>());
       });
     });
+
+    group('Foot Phase Urgency Logic', () {
+      test('should validate foot phase urgency constants', () {
+        expect(EnhancedBotAI.footPhaseUrgencyThreshold, equals(5));
+        expect(EnhancedBotAI.minimumDiscardPileSize, equals(2));
+        expect(EnhancedBotAI.aggressiveDiscardMultiplier, equals(0.8));
+        expect(EnhancedBotAI.competitiveDiscardMultiplier, equals(0.6));
+        expect(EnhancedBotAI.defensiveDiscardMultiplier, equals(0.7));
+      });
+
+      test('should handle foot phase with few cards without crashing', () {
+        // Setup bot in foot phase with few cards
+        botPlayer.hasPickedUpFoot = true;
+        botPlayer.hand.clear();
+        // Add exactly the threshold number of cards
+        for (int i = 0; i < EnhancedBotAI.footPhaseUrgencyThreshold; i++) {
+          botPlayer.addCardToHand(
+            PlayingCard(rank: CardRank.values[i % 13], suit: Suit.hearts),
+          );
+        }
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final decision = botAI.makeDecision(botPlayer, gameController);
+        // Should make some decision (not crash with exception)
+        expect(decision, isA<BotDecision>());
+        // Action should be valid
+        expect(
+          [
+            'createMeld',
+            'addToMeld',
+            'noMeld',
+            'discard',
+            'endTurn',
+          ].contains(decision.action),
+          isTrue,
+        );
+      });
+    });
   });
 }
