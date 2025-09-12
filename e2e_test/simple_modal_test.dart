@@ -66,7 +66,7 @@ void main() {
       await E2ETestUtils.startAppWithCleanState(tester);
 
       // Look for specific game buttons
-      await _tryInteraction(tester, 'Draw Deck');
+      await _tryInteraction(tester, 'Draw from deck');
       await _tryInteraction(tester, 'Play Cards');
 
       // If a dialog appeared, try to close it

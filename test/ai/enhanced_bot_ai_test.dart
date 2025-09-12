@@ -74,9 +74,12 @@ void main() {
       test('should have appropriate strategic constants', () {
         expect(
           EnhancedBotAI.maxTurnsBeforeForcePlayDown,
-          equals(6),
-        ); // EMERGENCY FIX - reduced to prevent catastrophic accumulation
-        expect(EnhancedBotAI.strongPlayDownBuffer, equals(10));
+          equals(4),
+        ); // EMERGENCY FIX - reduced further to prevent catastrophic accumulation
+        expect(
+          EnhancedBotAI.strongPlayDownBuffer,
+          equals(5),
+        ); // Reduced further for more aggressive play-downs
         expect(EnhancedBotAI.wildCardDiscardThreshold, equals(8));
         expect(EnhancedBotAI.emergencyRiskTolerance, equals(1.8));
         expect(EnhancedBotAI.maxEmergencyRiskTolerance, equals(6.0));
@@ -103,6 +106,46 @@ void main() {
 
         final decision = botAI.makeDecision(botPlayer, gameController);
         expect(decision, isA<BotDecision>());
+      });
+    });
+
+    group('Foot Phase Urgency Logic', () {
+      test('should validate foot phase urgency constants', () {
+        expect(EnhancedBotAI.footPhaseUrgencyThreshold, equals(5));
+        expect(EnhancedBotAI.minimumDiscardPileSize, equals(2));
+        expect(EnhancedBotAI.aggressiveDiscardMultiplier, equals(0.8));
+        expect(EnhancedBotAI.competitiveDiscardMultiplier, equals(0.6));
+        expect(EnhancedBotAI.defensiveDiscardMultiplier, equals(0.7));
+      });
+
+      test('should handle foot phase with few cards without crashing', () {
+        // Setup bot in foot phase with few cards
+        botPlayer.hasPickedUpFoot = true;
+        botPlayer.hand.clear();
+        // Add exactly the threshold number of cards
+        for (int i = 0; i < EnhancedBotAI.footPhaseUrgencyThreshold; i++) {
+          botPlayer.addCardToHand(
+            PlayingCard(rank: CardRank.values[i % 13], suit: Suit.hearts),
+          );
+        }
+
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+
+        final decision = botAI.makeDecision(botPlayer, gameController);
+        // Should make some decision (not crash with exception)
+        expect(decision, isA<BotDecision>());
+        // Action should be valid
+        expect(
+          [
+            'createMeld',
+            'addToMeld',
+            'noMeld',
+            'discard',
+            'endTurn',
+          ].contains(decision.action),
+          isTrue,
+        );
       });
     });
   });

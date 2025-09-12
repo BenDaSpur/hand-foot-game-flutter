@@ -6,6 +6,7 @@ import '../models/game_state.dart';
 import '../models/meld.dart';
 import '../models/round_score_breakdown.dart';
 import '../services/game_save_service.dart';
+import '../utils/debug_logger.dart';
 import 'game_interface.dart';
 import 'managers/meld_manager.dart';
 import 'managers/game_serializer.dart';
@@ -60,21 +61,26 @@ class GameController implements GameInterface {
     _gameState.deck.shuffle();
     _gameState.startRound();
     _gameState.dealCards();
+    // Auto-save after new game initialization
+    saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
   }
 
   @override
   bool drawFromDeck() {
-    return _gameState.drawFromDeck();
+    final result = _gameState.drawFromDeck();
+    return result;
   }
 
   @override
   bool drawFromDiscardPile() {
-    return _gameState.drawFromDiscard();
+    final result = _gameState.drawFromDiscard();
+    return result;
   }
 
   @override
   bool unlockDiscardPile() {
-    return _gameState.unlockDiscard();
+    final result = _gameState.unlockDiscard();
+    return result;
   }
 
   @override
@@ -86,6 +92,12 @@ class GameController implements GameInterface {
   bool discardCard(PlayingCard card) {
     final result = _gameState.discard(card);
     _gameState.validateGameState();
+
+    // Auto-save only after human player discards in single player games
+    if (result && _gameState.currentPlayer.type == PlayerType.human) {
+      saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+    }
+
     return result;
   }
 
@@ -93,6 +105,8 @@ class GameController implements GameInterface {
   void nextRound() {
     if (_gameState.phase == GamePhase.roundEnd) {
       _gameState.resetForNewRound();
+      // Auto-save after round transition
+      saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
     }
   }
 

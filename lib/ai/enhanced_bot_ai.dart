@@ -45,9 +45,17 @@ class EnhancedBotAI {
 
   // Strategic constants - EMERGENCY FIXES for hand size management
   static const int maxTurnsBeforeForcePlayDown =
-      6; // REDUCED - prevent catastrophic accumulation
+      4; // REDUCED FURTHER - prevent accumulation
   static const int strongPlayDownBuffer =
-      10; // REDUCED - more aggressive play-downs
+      5; // REDUCED FURTHER - much more aggressive play-downs
+
+  // NEW: Discard pile evaluation constants - extracted magic numbers
+  static const double aggressiveDiscardMultiplier = 0.8;
+  static const double competitiveDiscardMultiplier = 0.6;
+  static const double defensiveDiscardMultiplier = 0.7;
+  static const int minimumDiscardPileSize = 2;
+  static const int footPhaseUrgencyThreshold = 5;
+
   static const int wildCardDiscardThreshold =
       8; // INCREASED - discard wilds more readily
   static const double emergencyRiskTolerance =
@@ -278,8 +286,8 @@ class EnhancedBotAI {
       );
       return decision;
     } catch (e, stackTrace) {
-      print('ERROR: Bot decision failed for ${bot.id}: $e');
-      print('Stack trace: $stackTrace');
+      DebugLogger.error('Bot decision failed for ${bot.id}: $e');
+      DebugLogger.error('Stack trace: $stackTrace');
       // Emergency fallback
       return gameState.turnPhase == TurnPhase.draw
           ? BotDecision(action: 'drawFromDeck')
@@ -311,8 +319,8 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
-    // Evaluate discard pile opportunity - more aggressive evaluation
-    if (gameState.discardPile.isNotEmpty && bot.hasPlayedDown) {
+    // Evaluate discard pile opportunity - ALLOW PRE-PLAY-DOWN for valuable piles
+    if (gameState.discardPile.isNotEmpty) {
       try {
         final riskTolerance = _personalityManager.calculateRiskTolerance(
           gameState,
@@ -334,6 +342,18 @@ class EnhancedBotAI {
             'Returning drawFromDiscard (discard pile opportunity)',
           );
           return BotDecision(action: 'drawFromDiscard');
+        }
+        // NEW: Also try unlocking pile manually if game doesn't allow it but we want it
+        if (shouldTake && !canUnlock && !bot.hasPlayedDown) {
+          // Check if we could unlock it if we had played down
+          if (_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
+            DebugLogger.botDebug(
+              bot.id,
+              bot.name,
+              'Returning unlockDiscardPile (pre-play-down opportunity)',
+            );
+            return BotDecision(action: 'unlockDiscardPile');
+          }
         }
       } catch (e) {
         DebugLogger.warning(
@@ -365,6 +385,19 @@ class EnhancedBotAI {
         }
       } catch (e) {
         // Continue to default if error
+      }
+    }
+
+    // NEW: FOOT PHASE URGENCY - Avoid drawing from deck if in foot with few cards
+    if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      // Check if we can go out after melding - if so, consider NOT drawing
+      if (bot.canGoOutWithBooks && bot.currentHand.length <= 3) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'FOOT URGENCY: Avoiding deck draw, should focus on going out (${bot.currentHand.length} cards)',
+        );
+        // Still draw, but this signals the meld phase should prioritize going out
       }
     }
 
@@ -529,10 +562,11 @@ class EnhancedBotAI {
     }
 
     // Look for meld opportunities (fallback for conservative play)
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+    final rawCardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
     );
+    final cardsToAdd = _filterWildCardAdditions(rawCardsToAdd, bot);
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
@@ -734,10 +768,10 @@ class EnhancedBotAI {
       return false;
     }
 
-    // Scenario 1: Bot has very few cards left (1-3)
-    if (bot.currentHand.length <= 3) {
+    // Scenario 1: Bot has few cards left (1-6) - MORE AGGRESSIVE
+    if (bot.currentHand.length <= 6) {
       DebugLogger.debug(
-        '${bot.name}: Rushing to go out - very few cards left (${bot.currentHand.length})',
+        '${bot.name}: Rushing to go out - few cards left (${bot.currentHand.length})',
       );
       return true;
     }
@@ -1189,8 +1223,10 @@ class EnhancedBotAI {
 
     // Book completion urgency - take piles if they help complete books
     if (bookStatus['needsBookBalance'] == true) {
-      adjustedValueThreshold *= 0.7; // 30% more willing to take pile for books
-      adjustedSizeThreshold *= 0.8; // Lower size threshold for book completion
+      adjustedValueThreshold *=
+          defensiveDiscardMultiplier; // More willing to take pile for books
+      adjustedSizeThreshold *=
+          aggressiveDiscardMultiplier; // Lower size threshold for book completion
     }
 
     // Opponent threat adjustment - be more aggressive when opponents are dangerous
@@ -1237,10 +1273,11 @@ class EnhancedBotAI {
     // NEW: Competitive pile denial - take piles that would benefit opponents
     if (pileSize >= 5 &&
         _pileWouldBenefitOpponents(discardPile, gameState, bot)) {
-      adjustedValueThreshold *= 0.6; // Take piles to deny opponents
+      adjustedValueThreshold *=
+          competitiveDiscardMultiplier; // Take piles to deny opponents
     }
 
-    // Enhanced pre-play-down logic
+    // ENHANCED pre-play-down logic - MUCH more aggressive
     if (!bot.hasPlayedDown) {
       final playDownRequirement = gameState.playDownRequirement;
       final currentMeldPotential = _calculateCurrentMeldPotential(
@@ -1248,29 +1285,34 @@ class EnhancedBotAI {
         controller,
       );
 
-      // If pile helps meet play-down requirement, be much more aggressive
-      if (currentMeldPotential + (pileValue * 0.6) >= playDownRequirement) {
+      // If pile helps meet play-down requirement, be EXTREMELY aggressive
+      if (currentMeldPotential + (pileValue * 0.4) >= playDownRequirement) {
         adjustedValueThreshold *=
-            0.5; // Very aggressive for play-down opportunities
+            0.2; // EXTREMELY aggressive for play-down opportunities
       }
 
+      // OVERRIDE: Make all personalities much more aggressive about discard pile
       final aggressiveMultiplier =
-          _personalityManager.shouldBeMoreConservativeWithDiscardPile(bot.id)
-          ? 0.9 // Much more aggressive (was 1.1)
-          : 0.7; // Very aggressive (was 0.9)
+          0.4; // Extremely aggressive for all personalities
+
       return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
           pileSize >=
-              (adjustedSizeThreshold - 1).clamp(2, adjustedSizeThreshold);
+              minimumDiscardPileSize; // Take any pile with minimum cards if not played down
     }
 
     // Enhanced post-play-down logic - consider hand management and foot transition
     final isInFoot = bot.hasPickedUpFoot;
     final handSize = bot.currentHand.length;
 
-    // If close to foot transition or in foot with few cards, be selective
-    if (isInFoot && handSize <= 4) {
+    // NEW: FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
+    if (isInFoot && handSize <= footPhaseUrgencyThreshold) {
+      // Check if we should be rushing to go out instead of taking discard pile
+      if (handSize <= 2 && bot.canGoOutWithBooks) {
+        return false; // Don't take pile, focus on going out
+      }
       return pileValue >
-          adjustedValueThreshold * 1.2; // More selective in endgame
+          adjustedValueThreshold *
+              aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
     }
 
     // If hand is getting large, prioritize pile taking to prevent getting stuck
@@ -1287,6 +1329,20 @@ class EnhancedBotAI {
               2,
               adjustedSizeThreshold,
             ); // Even lower size threshold
+  }
+
+  /// Check if bot could unlock discard pile if they had already played down
+  bool _couldUnlockDiscardPileIfPlayedDown(Player bot, GameState gameState) {
+    if (gameState.discardPile.isEmpty) return false;
+    final topCard = gameState.topDiscard;
+    if (topCard == null || topCard.isWild || topCard.isThree) return false;
+
+    // Check if player has at least 2 matching natural cards
+    final matchingCards = bot.currentHand
+        .where((card) => card.rank == topCard.rank && !card.isWild)
+        .toList();
+
+    return matchingCards.length >= 2;
   }
 
   /// Find best natural meld combination for play-down
@@ -1376,7 +1432,8 @@ class EnhancedBotAI {
       final bestThrees = threes
           .where((card) => card.pointValue == bestValue)
           .toList();
-      return _selectRandomly(bestThrees);
+      return _selectRandomly(bestThrees) ??
+          threes.first; // Fallback to first 3 if selection fails
     }
 
     // Priority 2: Check if we should hold wild cards strategically
@@ -1451,7 +1508,8 @@ class EnhancedBotAI {
       final bestSingletons = safeSingletons
           .where((card) => card.pointValue == bestValue)
           .toList();
-      return _selectRandomly(bestSingletons);
+      return _selectRandomly(bestSingletons) ??
+          safeSingletons.first; // Fallback to first safe singleton
     }
 
     // If no safe singletons, use protected ones only if absolutely necessary
@@ -1461,7 +1519,8 @@ class EnhancedBotAI {
       final bestProtected = protectedSingletons
           .where((card) => card.pointValue == bestValue)
           .toList();
-      return _selectRandomly(bestProtected);
+      return _selectRandomly(bestProtected) ??
+          protectedSingletons.first; // Fallback to first protected
     }
 
     // Fallback: Discard lowest value card (ALWAYS avoid wilds unless no choice)
@@ -1480,7 +1539,8 @@ class EnhancedBotAI {
     final bestCards = sortedHand
         .where((card) => card.pointValue == bestValue)
         .toList();
-    return _selectRandomly(bestCards);
+    return _selectRandomly(bestCards) ??
+        sortedHand.first; // Fallback to first card
   }
 
   /// Strategic holding decision: Should bot hold cards instead of melding immediately?
@@ -1632,10 +1692,11 @@ class EnhancedBotAI {
     final hasRequiredBooks = bookStatus['hasRequiredBooks'] as bool;
 
     // Priority 1: Add to existing melds with strategic book balance
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+    final rawCardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
     );
+    final cardsToAdd = _filterWildCardAdditions(rawCardsToAdd, bot);
     if (cardsToAdd.isNotEmpty) {
       // Strategic addition based on book requirements
       for (final addition in cardsToAdd) {
@@ -1926,11 +1987,70 @@ class EnhancedBotAI {
     _cachedPressureResponse = null;
   }
 
+  /// Filter out wild cards from add-to-meld opportunities unless in critical situations
+  List<Map<String, dynamic>> _filterWildCardAdditions(
+    List<Map<String, dynamic>> cardsToAdd,
+    Player bot,
+  ) {
+    // In critical situations, allow wild card usage
+    bool criticalSituation = false;
+
+    // 1. Need to play down and have no other option
+    if (!bot.hasPlayedDown) {
+      final rankCounts = <CardRank, int>{};
+      for (final card in bot.currentHand) {
+        if (!card.isWild && !card.isThree) {
+          rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+        }
+      }
+      final naturalMeldCount = rankCounts.entries
+          .where((e) => e.value >= 2)
+          .length;
+      if (naturalMeldCount == 0) {
+        criticalSituation = true; // Must use wilds to play down
+      }
+    }
+    // 2. Trying to get into foot (hand almost empty)
+    else if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      criticalSituation = true;
+    }
+    // 3. End game - need to complete books to go out
+    else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      final hasCleanBook = bot.melds.any(
+        (m) => m.isClean && m.cards.length >= 7,
+      );
+      final hasDirtyBook = bot.melds.any(
+        (m) => !m.isClean && m.cards.length >= 7,
+      );
+
+      if (!hasCleanBook || !hasDirtyBook) {
+        // Check if any meld is close to book completion (6 cards)
+        final hasNearBooks = bot.melds.any((m) => m.cards.length >= 6);
+        if (hasNearBooks) {
+          criticalSituation = true;
+        }
+      }
+    }
+
+    // If not critical, filter out wild cards
+    if (!criticalSituation) {
+      return cardsToAdd.where((addition) {
+        final card = addition['card'] as PlayingCard;
+        return !card.isWild; // Remove wild card additions
+      }).toList();
+    }
+
+    return cardsToAdd; // Return all options in critical situations
+  }
+
   /// Helper method to randomly select from a list of equally good options
   /// Adds decision variability to make bot behavior less predictable
-  T _selectRandomly<T>(List<T> options) {
+  T? _selectRandomly<T>(List<T> options) {
     if (options.isEmpty) {
-      throw BotDecisionException('Cannot select from empty options list');
+      DebugLogger.warning(
+        '_selectRandomly called with empty options list, returning null',
+      );
+      return null; // Graceful fallback instead of throwing exception
     }
     if (options.length == 1) {
       return options.first;
