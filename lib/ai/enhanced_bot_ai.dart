@@ -562,10 +562,11 @@ class EnhancedBotAI {
     }
 
     // Look for meld opportunities (fallback for conservative play)
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+    final rawCardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
     );
+    final cardsToAdd = _filterWildCardAdditions(rawCardsToAdd, bot);
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
@@ -1691,10 +1692,11 @@ class EnhancedBotAI {
     final hasRequiredBooks = bookStatus['hasRequiredBooks'] as bool;
 
     // Priority 1: Add to existing melds with strategic book balance
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+    final rawCardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
     );
+    final cardsToAdd = _filterWildCardAdditions(rawCardsToAdd, bot);
     if (cardsToAdd.isNotEmpty) {
       // Strategic addition based on book requirements
       for (final addition in cardsToAdd) {
@@ -1983,6 +1985,62 @@ class EnhancedBotAI {
     _cachedPressureResponse?.clear();
     _lastPressureAnalysis = null;
     _cachedPressureResponse = null;
+  }
+
+  /// Filter out wild cards from add-to-meld opportunities unless in critical situations
+  List<Map<String, dynamic>> _filterWildCardAdditions(
+    List<Map<String, dynamic>> cardsToAdd,
+    Player bot,
+  ) {
+    // In critical situations, allow wild card usage
+    bool criticalSituation = false;
+
+    // 1. Need to play down and have no other option
+    if (!bot.hasPlayedDown) {
+      final rankCounts = <CardRank, int>{};
+      for (final card in bot.currentHand) {
+        if (!card.isWild && !card.isThree) {
+          rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+        }
+      }
+      final naturalMeldCount = rankCounts.entries
+          .where((e) => e.value >= 2)
+          .length;
+      if (naturalMeldCount == 0) {
+        criticalSituation = true; // Must use wilds to play down
+      }
+    }
+    // 2. Trying to get into foot (hand almost empty)
+    else if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      criticalSituation = true;
+    }
+    // 3. End game - need to complete books to go out
+    else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      final hasCleanBook = bot.melds.any(
+        (m) => m.isClean && m.cards.length >= 7,
+      );
+      final hasDirtyBook = bot.melds.any(
+        (m) => !m.isClean && m.cards.length >= 7,
+      );
+
+      if (!hasCleanBook || !hasDirtyBook) {
+        // Check if any meld is close to book completion (6 cards)
+        final hasNearBooks = bot.melds.any((m) => m.cards.length >= 6);
+        if (hasNearBooks) {
+          criticalSituation = true;
+        }
+      }
+    }
+
+    // If not critical, filter out wild cards
+    if (!criticalSituation) {
+      return cardsToAdd.where((addition) {
+        final card = addition['card'] as PlayingCard;
+        return !card.isWild; // Remove wild card additions
+      }).toList();
+    }
+
+    return cardsToAdd; // Return all options in critical situations
   }
 
   /// Helper method to randomly select from a list of equally good options

@@ -121,6 +121,7 @@ class BotMeldAnalyzer {
         preferLarger,
         needsCleanBookMore: needsCleanBookMore,
         needsDirtyBookMore: needsDirtyBookMore,
+        bot: bot,
       );
       int scoreB = _calculateMeldScore(
         b,
@@ -128,6 +129,7 @@ class BotMeldAnalyzer {
         preferLarger,
         needsCleanBookMore: needsCleanBookMore,
         needsDirtyBookMore: needsDirtyBookMore,
+        bot: bot,
       );
       return scoreB.compareTo(scoreA);
     });
@@ -142,6 +144,7 @@ class BotMeldAnalyzer {
     bool preferLarger, {
     bool needsCleanBookMore = false,
     bool needsDirtyBookMore = false,
+    Player? bot,
   }) {
     int score = 0;
 
@@ -188,6 +191,23 @@ class BotMeldAnalyzer {
       }
     }
 
+    // NEW: MASSIVE PENALTY for creating new melds with wild cards
+    final wildCount = meld.where((card) => card.isWild).length;
+    if (wildCount > 0) {
+      score -= wildCount * 2000; // Huge penalty per wild card in new meld
+
+      // EVEN BIGGER penalty if we're creating a mostly-wild meld
+      final naturalCount = meld.length - wildCount;
+      if (wildCount >= naturalCount) {
+        score -= 1000; // Don't create meld with more wilds than naturals
+      }
+
+      // STRATEGIC WILD DUMPING: If we're in critical situation and must use wilds, be smart
+      if (bot != null && _isInCriticalWildDumpingSituation(bot)) {
+        score += _calculateNewMeldWildDumpingBonus(meld, bot);
+      }
+    }
+
     return score;
   }
 
@@ -226,6 +246,71 @@ class BotMeldAnalyzer {
     Player? bot,
   }) {
     int priority = card.pointValue;
+
+    // NEW: ULTRA-AGGRESSIVE WILD CARD HOARDING STRATEGY
+    if (card.isWild && bot != null) {
+      // Count how many 2-card rank combinations we have (potential melds)
+      final rankCounts = <CardRank, int>{};
+      for (final handCard in bot.currentHand) {
+        if (!handCard.isWild && !handCard.isThree) {
+          rankCounts[handCard.rank] = (rankCounts[handCard.rank] ?? 0) + 1;
+        }
+      }
+
+      final twoCardRanks = rankCounts.entries.where((e) => e.value >= 2).length;
+
+      // MASSIVE penalty for using wilds unless absolutely necessary
+      priority -= 3000; // Start with huge penalty
+
+      // Only consider using wilds in these critical situations:
+      bool criticalSituation = false;
+
+      // 1. Need to play down and this is the ONLY way
+      if (!bot.hasPlayedDown) {
+        // Check if we have NO natural melds possible
+        final naturalMeldCount = twoCardRanks;
+        if (naturalMeldCount == 0) {
+          criticalSituation = true; // Must use wilds to play down
+        }
+      }
+      // 2. Trying to get into foot (hand almost empty)
+      else if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+        criticalSituation = true; // Dump strategy to reach foot
+      }
+      // 3. End game - must complete required books
+      else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+        final hasCleanBook = bot.melds.any(
+          (m) => m.isClean && m.cards.length >= 7,
+        );
+        final hasDirtyBook = bot.melds.any(
+          (m) => !m.isClean && m.cards.length >= 7,
+        );
+
+        // Only if we need to complete books for going out
+        if (!hasCleanBook || !hasDirtyBook) {
+          if (meld.cards.length >= 5) {
+            // Close to book completion
+            criticalSituation = true;
+          }
+        }
+      }
+
+      // 4. Unlocking valuable discard pile (future enhancement)
+      // This would require access to game state and discard pile value
+
+      if (criticalSituation) {
+        priority +=
+            2500; // Reduce penalty significantly but still prefer natural cards
+
+        // STRATEGIC WILD DUMPING: When we must use wilds, be smart about it
+        priority += _calculateStrategicWildDumpingBonus(card, meld, bot);
+      }
+
+      // Extra penalty if we have many unused 2-card combinations
+      if (twoCardRanks >= 2) {
+        priority -= 1000; // You have natural melds available, use those first!
+      }
+    }
 
     // Check if bot has clean books (for enhanced protection)
     bool hasCleanBook = false;
@@ -275,6 +360,138 @@ class BotMeldAnalyzer {
     }
 
     return priority;
+  }
+
+  /// Calculate strategic wild card dumping bonus when in critical situations
+  int _calculateStrategicWildDumpingBonus(
+    PlayingCard card,
+    Meld meld,
+    Player bot,
+  ) {
+    int bonus = 0;
+    // Strategy 1: HAND PHASE - Prioritize smallest melds to concentrate wilds
+    if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      // Bonus for adding to smallest melds (concentrate wilds on fewer melds)
+      if (meld.cards.length <= 3) {
+        bonus += 800; // Big bonus for tiny melds
+      } else if (meld.cards.length <= 5) {
+        bonus += 400; // Medium bonus for small melds
+      }
+      // Penalty for adding to large melds (spread wilds out less)
+      else if (meld.cards.length >= 7) {
+        bonus -= 300; // Don't waste wilds on completed books
+      }
+    }
+    // Strategy 2: FOOT PHASE - Prioritize near-book melds (6 cards) to create more books
+    else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      // MASSIVE bonus for completing books (6 -> 7 cards)
+      if (meld.cards.length == 6) {
+        bonus += 1500; // Huge bonus for book completion
+      }
+      // Good bonus for near-book melds (5 -> 6 cards)
+      else if (meld.cards.length == 5) {
+        bonus += 800; // Getting close to book
+      }
+      // Medium bonus for growing medium melds (4 -> 5 cards)
+      else if (meld.cards.length == 4) {
+        bonus += 400; // Building toward book
+      }
+      // Small penalty for tiny melds (concentrate on bigger ones)
+      else if (meld.cards.length <= 3) {
+        bonus -= 200; // Focus on near-books instead
+      }
+    }
+
+    // Strategy 3: Count existing wilds in meld - prefer melds that already have wilds
+    final existingWilds = meld.cards.where((c) => c.isWild).length;
+    if (existingWilds > 0) {
+      bonus +=
+          existingWilds *
+          300; // Concentrate wilds on melds that already have them
+    }
+
+    return bonus;
+  }
+
+  /// Check if bot is in a critical situation where wild dumping strategy applies
+  bool _isInCriticalWildDumpingSituation(Player bot) {
+    // Same logic as in _calculateAdditionPriority but extracted for reuse
+
+    // 1. Need to play down and have no natural options
+    if (!bot.hasPlayedDown) {
+      final rankCounts = <CardRank, int>{};
+      for (final card in bot.currentHand) {
+        if (!card.isWild && !card.isThree) {
+          rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+        }
+      }
+      final naturalMeldCount = rankCounts.entries
+          .where((e) => e.value >= 2)
+          .length;
+      if (naturalMeldCount == 0) return true;
+    }
+    // 2. Trying to get into foot (hand dumping)
+    else if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      return true;
+    }
+    // 3. End game - need to complete books
+    else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      final hasCleanBook = bot.melds.any(
+        (m) => m.isClean && m.cards.length >= 7,
+      );
+      final hasDirtyBook = bot.melds.any(
+        (m) => !m.isClean && m.cards.length >= 7,
+      );
+
+      if (!hasCleanBook || !hasDirtyBook) {
+        return true; // Need books to go out
+      }
+    }
+
+    return false;
+  }
+
+  /// Calculate bonus for creating new melds with wilds in critical situations
+  int _calculateNewMeldWildDumpingBonus(List<PlayingCard> meld, Player bot) {
+    int bonus = 0;
+    final wildCount = meld.where((c) => c.isWild).length;
+
+    // Hand phase dumping: Prefer to create smaller concentrated wild melds
+    if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      // Bonus for concentrated wild usage (more wilds in fewer melds)
+      if (wildCount >= 2) {
+        bonus += wildCount * 400; // Bonus for concentrating wilds
+      }
+
+      // Prefer minimum viable melds (3 cards) to use fewer total cards
+      if (meld.length == 3) {
+        bonus += 300; // Efficient meld size
+      }
+    }
+    // Foot phase dumping: Focus on book creation potential
+    else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      // Bonus for melds that could become books
+      if (meld.length >= 4) {
+        bonus += (meld.length - 3) * 200; // Larger melds closer to book status
+      }
+
+      // Extra bonus if this creates meld type we need
+      final hasCleanBook = bot.melds.any(
+        (m) => m.isClean && m.cards.length >= 7,
+      );
+      final hasDirtyBook = bot.melds.any(
+        (m) => !m.isClean && m.cards.length >= 7,
+      );
+      final isClean = wildCount == 0;
+
+      if (!hasCleanBook && isClean) {
+        bonus += 600; // Need clean book
+      } else if (!hasDirtyBook && !isClean) {
+        bonus += 400; // Need dirty book
+      }
+    }
+
+    return bonus;
   }
 
   /// Check if a card can be added to a specific meld

@@ -98,7 +98,7 @@ class GameActionButtons extends StatelessWidget {
       buttons.add(
         _buildCompactButton(
           onPressed: onDrawFromDeck,
-          text: 'Draw Deck',
+          text: 'Draw from deck',
           context: context,
         ),
       );
