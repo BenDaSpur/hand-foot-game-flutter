@@ -185,20 +185,13 @@ void main() {
           ),
         );
 
-        // Hearts should be displayed with hearts color via CustomPaint
-        final customPaints = tester.widgetList<CustomPaint>(
-          find.byType(CustomPaint),
-        );
-        expect(
-          customPaints.any((paint) => paint.painter is HeartPainter),
-          isTrue,
-        );
-        final heartPainter =
-            customPaints
-                    .firstWhere((paint) => paint.painter is HeartPainter)
-                    .painter
-                as HeartPainter;
-        expect(heartPainter.color, equals(const Color(0xFFe91e63)));
+        // Hearts should be displayed with Unicode symbol and correct color
+        final heartSymbol = find.text('♥');
+        expect(heartSymbol, findsOneWidget);
+
+        // Check the text color is correct for hearts (red)
+        final textWidget = tester.widget<Text>(heartSymbol);
+        expect(textWidget.style?.color, equals(const Color(0xFFe91e63)));
       });
 
       testWidgets('should use correct color for spades', (
@@ -212,20 +205,13 @@ void main() {
           ),
         );
 
-        // Spades should be displayed with spades color via CustomPaint
-        final customPaints = tester.widgetList<CustomPaint>(
-          find.byType(CustomPaint),
-        );
-        expect(
-          customPaints.any((paint) => paint.painter is SpadePainter),
-          isTrue,
-        );
-        final spadePainter =
-            customPaints
-                    .firstWhere((paint) => paint.painter is SpadePainter)
-                    .painter
-                as SpadePainter;
-        expect(spadePainter.color, equals(const Color(0xFF90caf9)));
+        // Spades should be displayed with Unicode symbol and correct color
+        final spadeSymbol = find.text('♠');
+        expect(spadeSymbol, findsOneWidget);
+
+        // Check the text color is correct for spades (blue)
+        final textWidget = tester.widget<Text>(spadeSymbol);
+        expect(textWidget.style?.color, equals(const Color(0xFF90caf9)));
       });
     });
   });

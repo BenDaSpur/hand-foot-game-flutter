@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -587,9 +588,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                       vertical: 12,
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Start Next Round',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
+                    style: GoogleFonts.arimo(fontSize: 18, color: Colors.white),
                   ),
                 )
               else
@@ -646,7 +647,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
               const SizedBox(height: 8),
               Text(
                 'Final Score: ${gameState.winner?.score ?? 0} points',
-                style: const TextStyle(color: Colors.white, fontSize: 18),
+                style: GoogleFonts.arimo(color: Colors.white, fontSize: 18),
               ),
               const SizedBox(height: 32),
 

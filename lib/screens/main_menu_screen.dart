@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
@@ -99,7 +100,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       children: [
                         Text(
                           'HAND & FOOT',
-                          style: TextStyle(
+                          style: GoogleFonts.arimo(
                             fontSize: 48,
                             fontWeight: FontWeight.bold,
                             color: BalatroTheme.neonBlue,
@@ -116,7 +117,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'CARD GAME',
-                          style: TextStyle(
+                          style: GoogleFonts.arimo(
                             fontSize: 24,
                             fontWeight: FontWeight.w300,
                             color: BalatroTheme.neonPink,
@@ -514,7 +515,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
         title: Text(
           'Hand & Foot Rules',
-          style: TextStyle(
+          style: GoogleFonts.arimo(
             color: BalatroTheme.neonBlue,
             fontSize: 20,
             fontWeight: FontWeight.bold,

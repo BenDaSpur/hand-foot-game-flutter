@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
@@ -1382,9 +1383,9 @@ class _GameScreenState extends State<GameScreen> {
             shaderCallback: (bounds) => const LinearGradient(
               colors: [BalatroTheme.neonPink, BalatroTheme.glowColor],
             ).createShader(bounds),
-            child: const Text(
+            child: Text(
               'HAND & FOOT',
-              style: TextStyle(
+              style: GoogleFonts.arimo(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -1414,7 +1415,7 @@ class _GameScreenState extends State<GameScreen> {
               ),
               child: Text(
                 'ROUND ${gameState.round}',
-                style: const TextStyle(
+                style: GoogleFonts.arimo(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: BalatroTheme.neonGreen,
@@ -1597,7 +1598,7 @@ class _GameScreenState extends State<GameScreen> {
                                 return '$playerName\'s Melds:';
                               }
                             }(),
-                            style: const TextStyle(
+                            style: GoogleFonts.arimo(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1877,12 +1878,16 @@ class _GameScreenState extends State<GameScreen> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.emoji_events, color: Colors.black, size: 32),
-                        SizedBox(width: 12),
+                      children: [
+                        const Icon(
+                          Icons.emoji_events,
+                          color: Colors.black,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 12),
                         Text(
                           'GAME OVER!',
-                          style: TextStyle(
+                          style: GoogleFonts.arimo(
                             color: Colors.black,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -1893,7 +1898,7 @@ class _GameScreenState extends State<GameScreen> {
                     const SizedBox(height: 8),
                     Text(
                       '${gameState.winner!.name} WINS with ${gameState.winner!.score} points!',
-                      style: const TextStyle(
+                      style: GoogleFonts.arimo(
                         color: Colors.black,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

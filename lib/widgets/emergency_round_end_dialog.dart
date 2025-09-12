@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Shared dialog for emergency round end scenarios
 class EmergencyRoundEndDialog {
@@ -11,9 +12,12 @@ class EmergencyRoundEndDialog {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text(
+        title: Text(
           'Round Ended',
-          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+          style: GoogleFonts.arimo(
+            color: Colors.orange,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         content: Text(
           'The round has ended early due to insufficient cards in the deck.\n\n'

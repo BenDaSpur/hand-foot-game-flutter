@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class BalatroTheme {
   // Core Balatro-inspired color palette
@@ -79,8 +80,8 @@ class BalatroTheme {
         ),
         contentTextStyle: const TextStyle(color: secondaryText, fontSize: 14),
       ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
+      textTheme: GoogleFonts.arimoTextTheme().copyWith(
+        displayLarge: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
         ),

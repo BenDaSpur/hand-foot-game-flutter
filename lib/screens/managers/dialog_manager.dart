@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../models/player.dart';
 import '../../models/card.dart';
 import '../../game/game_controller.dart';
@@ -47,7 +48,7 @@ class DialogManager {
             const SizedBox(width: 12),
             Text(
               'Error',
-              style: TextStyle(
+              style: GoogleFonts.arimo(
                 color: BalatroTheme.heartsColor,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -99,7 +100,7 @@ class DialogManager {
             const SizedBox(width: 12),
             Text(
               'CRITICAL ERROR',
-              style: TextStyle(
+              style: GoogleFonts.arimo(
                 color: BalatroTheme.heartsColor,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -188,7 +189,7 @@ class DialogManager {
             const SizedBox(width: 12),
             Text(
               'New Game',
-              style: TextStyle(
+              style: GoogleFonts.arimo(
                 color: BalatroTheme.neonYellow,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,

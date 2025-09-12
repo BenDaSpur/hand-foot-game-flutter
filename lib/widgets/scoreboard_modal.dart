@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/round_score_breakdown.dart';
@@ -123,7 +124,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                         children: [
                           Text(
                             'Player ${playerIndex + 1}',
-                            style: TextStyle(
+                            style: GoogleFonts.arimo(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -159,7 +160,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                       ),
                       Text(
                         'Total: ${breakdown['gameTotal']}',
-                        style: TextStyle(
+                        style: GoogleFonts.arimo(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: _getScoreColor(breakdown['gameTotal']),
@@ -420,7 +421,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                     Flexible(
                       child: Text(
                         '🏆 Scoreboard - Round ${widget.gameState.round}',
-                        style: const TextStyle(
+                        style: GoogleFonts.arimo(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
