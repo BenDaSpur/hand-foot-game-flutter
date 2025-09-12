@@ -74,9 +74,12 @@ void main() {
       test('should have appropriate strategic constants', () {
         expect(
           EnhancedBotAI.maxTurnsBeforeForcePlayDown,
-          equals(6),
-        ); // EMERGENCY FIX - reduced to prevent catastrophic accumulation
-        expect(EnhancedBotAI.strongPlayDownBuffer, equals(10));
+          equals(4),
+        ); // EMERGENCY FIX - reduced further to prevent catastrophic accumulation
+        expect(
+          EnhancedBotAI.strongPlayDownBuffer,
+          equals(5),
+        ); // Reduced further for more aggressive play-downs
         expect(EnhancedBotAI.wildCardDiscardThreshold, equals(8));
         expect(EnhancedBotAI.emergencyRiskTolerance, equals(1.8));
         expect(EnhancedBotAI.maxEmergencyRiskTolerance, equals(6.0));

@@ -45,9 +45,9 @@ class EnhancedBotAI {
 
   // Strategic constants - EMERGENCY FIXES for hand size management
   static const int maxTurnsBeforeForcePlayDown =
-      6; // REDUCED - prevent catastrophic accumulation
+      4; // REDUCED FURTHER - prevent accumulation
   static const int strongPlayDownBuffer =
-      10; // REDUCED - more aggressive play-downs
+      5; // REDUCED FURTHER - much more aggressive play-downs
   static const int wildCardDiscardThreshold =
       8; // INCREASED - discard wilds more readily
   static const double emergencyRiskTolerance =
@@ -311,8 +311,8 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
-    // Evaluate discard pile opportunity - more aggressive evaluation
-    if (gameState.discardPile.isNotEmpty && bot.hasPlayedDown) {
+    // Evaluate discard pile opportunity - ALLOW PRE-PLAY-DOWN for valuable piles
+    if (gameState.discardPile.isNotEmpty) {
       try {
         final riskTolerance = _personalityManager.calculateRiskTolerance(
           gameState,
@@ -334,6 +334,18 @@ class EnhancedBotAI {
             'Returning drawFromDiscard (discard pile opportunity)',
           );
           return BotDecision(action: 'drawFromDiscard');
+        }
+        // NEW: Also try unlocking pile manually if game doesn't allow it but we want it
+        if (shouldTake && !canUnlock && !bot.hasPlayedDown) {
+          // Check if we could unlock it if we had played down
+          if (_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
+            DebugLogger.botDebug(
+              bot.id,
+              bot.name,
+              'Returning unlockDiscardPile (pre-play-down opportunity)',
+            );
+            return BotDecision(action: 'unlockDiscardPile');
+          }
         }
       } catch (e) {
         DebugLogger.warning(
@@ -365,6 +377,19 @@ class EnhancedBotAI {
         }
       } catch (e) {
         // Continue to default if error
+      }
+    }
+
+    // NEW: FOOT PHASE URGENCY - Avoid drawing from deck if in foot with few cards
+    if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      // Check if we can go out after melding - if so, consider NOT drawing
+      if (bot.canGoOutWithBooks && bot.currentHand.length <= 3) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'FOOT URGENCY: Avoiding deck draw, should focus on going out (${bot.currentHand.length} cards)',
+        );
+        // Still draw, but this signals the meld phase should prioritize going out
       }
     }
 
@@ -734,10 +759,10 @@ class EnhancedBotAI {
       return false;
     }
 
-    // Scenario 1: Bot has very few cards left (1-3)
-    if (bot.currentHand.length <= 3) {
+    // Scenario 1: Bot has few cards left (1-6) - MORE AGGRESSIVE
+    if (bot.currentHand.length <= 6) {
       DebugLogger.debug(
-        '${bot.name}: Rushing to go out - very few cards left (${bot.currentHand.length})',
+        '${bot.name}: Rushing to go out - few cards left (${bot.currentHand.length})',
       );
       return true;
     }
@@ -1240,7 +1265,7 @@ class EnhancedBotAI {
       adjustedValueThreshold *= 0.6; // Take piles to deny opponents
     }
 
-    // Enhanced pre-play-down logic
+    // ENHANCED pre-play-down logic - MUCH more aggressive
     if (!bot.hasPlayedDown) {
       final playDownRequirement = gameState.playDownRequirement;
       final currentMeldPotential = _calculateCurrentMeldPotential(
@@ -1248,29 +1273,32 @@ class EnhancedBotAI {
         controller,
       );
 
-      // If pile helps meet play-down requirement, be much more aggressive
-      if (currentMeldPotential + (pileValue * 0.6) >= playDownRequirement) {
+      // If pile helps meet play-down requirement, be EXTREMELY aggressive
+      if (currentMeldPotential + (pileValue * 0.4) >= playDownRequirement) {
         adjustedValueThreshold *=
-            0.5; // Very aggressive for play-down opportunities
+            0.2; // EXTREMELY aggressive for play-down opportunities
       }
 
+      // OVERRIDE: Make all personalities much more aggressive about discard pile
       final aggressiveMultiplier =
-          _personalityManager.shouldBeMoreConservativeWithDiscardPile(bot.id)
-          ? 0.9 // Much more aggressive (was 1.1)
-          : 0.7; // Very aggressive (was 0.9)
+          0.4; // Extremely aggressive for all personalities
+
       return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
-          pileSize >=
-              (adjustedSizeThreshold - 1).clamp(2, adjustedSizeThreshold);
+          pileSize >= 2; // Take any pile with 2+ cards if not played down
     }
 
     // Enhanced post-play-down logic - consider hand management and foot transition
     final isInFoot = bot.hasPickedUpFoot;
     final handSize = bot.currentHand.length;
 
-    // If close to foot transition or in foot with few cards, be selective
-    if (isInFoot && handSize <= 4) {
+    // NEW: FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
+    if (isInFoot && handSize <= 5) {
+      // Check if we should be rushing to go out instead of taking discard pile
+      if (handSize <= 2 && bot.canGoOutWithBooks) {
+        return false; // Don't take pile, focus on going out
+      }
       return pileValue >
-          adjustedValueThreshold * 1.2; // More selective in endgame
+          adjustedValueThreshold * 0.8; // Actually MORE aggressive in foot
     }
 
     // If hand is getting large, prioritize pile taking to prevent getting stuck
@@ -1287,6 +1315,20 @@ class EnhancedBotAI {
               2,
               adjustedSizeThreshold,
             ); // Even lower size threshold
+  }
+
+  /// Check if bot could unlock discard pile if they had already played down
+  bool _couldUnlockDiscardPileIfPlayedDown(Player bot, GameState gameState) {
+    if (gameState.discardPile.isEmpty) return false;
+    final topCard = gameState.topDiscard;
+    if (topCard == null || topCard.isWild || topCard.isThree) return false;
+
+    // Check if player has at least 2 matching natural cards
+    final matchingCards = bot.currentHand
+        .where((card) => card.rank == topCard.rank && !card.isWild)
+        .toList();
+
+    return matchingCards.length >= 2;
   }
 
   /// Find best natural meld combination for play-down
