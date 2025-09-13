@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'screens/main_menu_screen.dart';
 import 'services/firebase_service.dart';
 import 'services/analytics_config_service.dart';
@@ -7,6 +8,19 @@ import 'theme/balatro_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Preload critical font variants to prevent FOUT (Flash of Unstyled Text)
+  try {
+    await GoogleFonts.pendingFonts([
+      GoogleFonts.arimo(),
+      GoogleFonts.arimo(fontWeight: FontWeight.bold),
+      GoogleFonts.arimo(fontWeight: FontWeight.w600),
+      GoogleFonts.arimo(fontWeight: FontWeight.w300),
+    ]);
+  } catch (e) {
+    // Font preloading failed - continue with system fonts as fallback
+    debugPrint('Font preloading failed: $e');
+  }
 
   // Try to initialize Firebase and analytics, but continue gracefully if they fail
   try {

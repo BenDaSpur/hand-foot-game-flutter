@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
@@ -100,29 +99,27 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       children: [
                         Text(
                           'HAND & FOOT',
-                          style: GoogleFonts.arimo(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: BalatroTheme.neonBlue,
-                            shadows: [
-                              Shadow(
-                                color: BalatroTheme.neonBlue.withValues(
-                                  alpha: 0.5,
-                                ),
-                                blurRadius: 20,
+                          style: Theme.of(context).textTheme.displayLarge
+                              ?.copyWith(
+                                color: BalatroTheme.neonBlue,
+                                shadows: [
+                                  Shadow(
+                                    color: BalatroTheme.neonBlue.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                    blurRadius: 20,
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'CARD GAME',
-                          style: GoogleFonts.arimo(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w300,
-                            color: BalatroTheme.neonPink,
-                            letterSpacing: 4,
-                          ),
+                          style: Theme.of(context).textTheme.displaySmall
+                              ?.copyWith(
+                                color: BalatroTheme.neonPink,
+                                letterSpacing: 4,
+                              ),
                         ),
                       ],
                     ),
@@ -515,11 +512,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
         title: Text(
           'Hand & Foot Rules',
-          style: GoogleFonts.arimo(
-            color: BalatroTheme.neonBlue,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineLarge?.copyWith(color: BalatroTheme.neonBlue),
         ),
         content: SizedBox(
           width: 300,

@@ -408,10 +408,46 @@ class EnhancedBotAI {
 
   /// Handle meld phase decisions
   BotDecision _makeMeldDecision(Player bot, GameController controller) {
-    // PRIORITY 0: Check if bot should rush to go out instead of melding
+    // PRIORITY 0: Check if bot should rush to go out
     if (_shouldRushToGoOut(bot, controller.gameState)) {
-      // Skip melding - go straight to discard to empty hand quickly
-      DebugLogger.debug('${bot.name}: Skipping meld phase - rushing to go out');
+      final handSize = bot.currentHand.length;
+
+      // If very few cards (≤3), skip melding entirely to go out fastest
+      if (handSize <= 3) {
+        DebugLogger.debug(
+          '${bot.name}: ULTRA RUSH - skipping meld with $handSize cards to go out immediately',
+        );
+        return BotDecision(action: 'noMeld');
+      }
+
+      // If moderate cards (4+), meld everything possible to minimize hand size
+      DebugLogger.debug(
+        '${bot.name}: RUSHING TO GO OUT - melding everything possible ($handSize cards)',
+      );
+
+      // Try to meld all remaining cards to minimize hand size for going out
+      final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+        bot,
+        controller,
+      );
+      if (cardsToAdd.isNotEmpty) {
+        DebugLogger.debug(
+          '${bot.name}: Adding to existing meld to reduce hand size',
+        );
+        return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      }
+
+      // Try to create new melds to reduce hand size
+      final possibleMelds = _getCachedPossibleMelds(bot, controller);
+      if (possibleMelds.isNotEmpty) {
+        DebugLogger.debug('${bot.name}: Creating new meld to reduce hand size');
+        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+      }
+
+      // If no melds possible, proceed to discard phase
+      DebugLogger.debug(
+        '${bot.name}: No melds possible - ready to discard and go out',
+      );
       return BotDecision(action: 'noMeld');
     }
 
@@ -768,7 +804,26 @@ class EnhancedBotAI {
       return false;
     }
 
-    // Scenario 1: Bot has few cards left (1-6) - MORE AGGRESSIVE
+    // Scenario 1: Bot should go out based on book count and hand size
+    final bookCount = bot.melds.where((m) => m.isBook).length;
+
+    // ULTRA-AGGRESSIVE: If bot has 4+ books, go out with even more cards
+    if (bookCount >= 4 && bot.currentHand.length <= 12) {
+      DebugLogger.debug(
+        '${bot.name}: EMERGENCY GO OUT - has $bookCount books with ${bot.currentHand.length} cards',
+      );
+      return true;
+    }
+
+    // AGGRESSIVE: If bot has 3+ books, go out with fewer cards
+    if (bookCount >= 3 && bot.currentHand.length <= 8) {
+      DebugLogger.debug(
+        '${bot.name}: PRIORITY GO OUT - has $bookCount books with ${bot.currentHand.length} cards',
+      );
+      return true;
+    }
+
+    // STANDARD: Original threshold for 2 books
     if (bot.currentHand.length <= 6) {
       DebugLogger.debug(
         '${bot.name}: Rushing to go out - few cards left (${bot.currentHand.length})',
@@ -1698,6 +1753,15 @@ class EnhancedBotAI {
     );
     final cardsToAdd = _filterWildCardAdditions(rawCardsToAdd, bot);
     if (cardsToAdd.isNotEmpty) {
+      // NEW: If bot has sufficient books (4+), prioritize any addition for going out
+      final totalBooks = bot.melds.where((m) => m.isBook).length;
+      if (hasRequiredBooks && totalBooks >= 4) {
+        DebugLogger.debug(
+          '${bot.name}: Has $totalBooks books - adding any card to reduce hand size',
+        );
+        return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      }
+
       // Strategic addition based on book requirements
       for (final addition in cardsToAdd) {
         final meld = addition['meld'] as Meld;
@@ -1745,6 +1809,15 @@ class EnhancedBotAI {
 
     final possibleMelds = _getCachedPossibleMelds(bot, controller);
     if (possibleMelds.isNotEmpty) {
+      // NEW: If bot has sufficient books (4+), create any meld to reduce hand size
+      final totalBooks = bot.melds.where((m) => m.isBook).length;
+      if (hasRequiredBooks && totalBooks >= 4) {
+        DebugLogger.debug(
+          '${bot.name}: Has $totalBooks books - creating any meld to reduce hand size',
+        );
+        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+      }
+
       // Select meld type based on book requirements for competitive advantage
       List<PlayingCard>? strategicMeld;
 
@@ -2202,6 +2275,13 @@ class EnhancedBotAI {
         (dirtyBooks == 0 && cleanBooks > 0);
     analysis['canGoOut'] = cleanBooks > 0 && dirtyBooks > 0;
     analysis['bookCompletionPotential'] = nearCompleteBooks;
+
+    // NEW: Detect when bot has TOO MANY books and should focus on going out
+    final totalBooks = cleanBooks + dirtyBooks;
+    final hasRequiredBooks = cleanBooks > 0 && dirtyBooks > 0;
+    analysis['hasExcessBooks'] = totalBooks >= 4; // Should prioritize going out
+    analysis['shouldFocusOnGoingOut'] =
+        hasRequiredBooks && totalBooks >= 3; // Switch to going out mode
 
     return analysis;
   }

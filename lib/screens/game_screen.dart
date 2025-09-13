@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
@@ -1385,11 +1384,9 @@ class _GameScreenState extends State<GameScreen> {
             ).createShader(bounds),
             child: Text(
               'HAND & FOOT',
-              style: GoogleFonts.arimo(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.displayMedium?.copyWith(color: Colors.white),
             ),
           ),
           backgroundColor: Colors.transparent,
@@ -1415,11 +1412,9 @@ class _GameScreenState extends State<GameScreen> {
               ),
               child: Text(
                 'ROUND ${gameState.round}',
-                style: GoogleFonts.arimo(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: BalatroTheme.neonGreen,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(color: BalatroTheme.neonGreen),
               ),
             ),
             PopupMenuButton<String>(
@@ -1581,28 +1576,22 @@ class _GameScreenState extends State<GameScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          Text(
-                            () {
-                              final player = _viewingPlayerMelds ?? humanPlayer;
-                              final playerName = player.name;
-                              // Minimal debug logging - only when there's a mismatch
-                              if (_viewingPlayerMelds != null &&
-                                  _viewingPlayerMelds != humanPlayer) {
-                                DebugLogger.debug(
-                                  'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
-                                );
-                              }
-                              if (playerName == 'You') {
-                                return 'Your Melds:';
-                              } else {
-                                return '$playerName\'s Melds:';
-                              }
-                            }(),
-                            style: GoogleFonts.arimo(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text(() {
+                            final player = _viewingPlayerMelds ?? humanPlayer;
+                            final playerName = player.name;
+                            // Minimal debug logging - only when there's a mismatch
+                            if (_viewingPlayerMelds != null &&
+                                _viewingPlayerMelds != humanPlayer) {
+                              DebugLogger.debug(
+                                'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
+                              );
+                            }
+                            if (playerName == 'You') {
+                              return 'Your Melds:';
+                            } else {
+                              return '$playerName\'s Melds:';
+                            }
+                          }(), style: Theme.of(context).textTheme.headlineMedium),
                           if (_viewingPlayerMelds != null)
                             Padding(
                               padding: const EdgeInsets.only(left: 8),
@@ -1887,22 +1876,17 @@ class _GameScreenState extends State<GameScreen> {
                         const SizedBox(width: 12),
                         Text(
                           'GAME OVER!',
-                          style: GoogleFonts.arimo(
-                            color: Colors.black,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(color: Colors.black),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '${gameState.winner!.name} WINS with ${gameState.winner!.score} points!',
-                      style: GoogleFonts.arimo(
-                        color: Colors.black,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(color: Colors.black),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),

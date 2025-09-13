@@ -84,29 +84,43 @@ class BalatroTheme {
         displayLarge: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
+          fontSize: 48, // Game title size
         ),
-        displayMedium: TextStyle(
+        displayMedium: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
+          fontSize: 24, // Dialog titles, subtitles
         ),
-        displaySmall: TextStyle(
+        displaySmall: const TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.w300,
+          fontSize: 24, // Card game subtitle
+        ),
+        headlineLarge: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
+          fontSize: 20, // Section headers, dialog headers
         ),
-        headlineLarge: TextStyle(
+        headlineMedium: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
+          fontSize: 18, // Large buttons, melds headers
         ),
-        headlineMedium: TextStyle(
+        headlineSmall: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
+          fontSize: 16, // Action buttons, status text
         ),
-        headlineSmall: TextStyle(
+        titleLarge: const TextStyle(
           color: primaryText,
           fontWeight: FontWeight.bold,
+          fontSize: 14, // Small buttons, round indicators
         ),
-        titleLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        titleMedium: TextStyle(color: primaryText, fontWeight: FontWeight.w600),
+        titleMedium: const TextStyle(
+          color: primaryText,
+          fontWeight: FontWeight.w600,
+          fontSize: 18, // Scoreboard totals
+        ),
         titleSmall: TextStyle(
           color: secondaryText,
           fontWeight: FontWeight.w600,

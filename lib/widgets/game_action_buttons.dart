@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../config/game_config.dart';
@@ -80,11 +79,9 @@ class GameActionButtons extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Waiting for ${gameState.currentPlayer.name} to ${_getTurnPhaseDescription()}...',
-              style: GoogleFonts.arimo(
-                fontSize: 16,
-                color: Colors.amber,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(color: Colors.amber),
               textAlign: TextAlign.center,
             ),
           ],
@@ -188,10 +185,9 @@ class GameActionButtons extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: GoogleFonts.arimo(
-          fontSize: isSmallScreen ? 12 : 14,
-          fontWeight: FontWeight.bold,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontSize: isSmallScreen ? 12 : 14),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
