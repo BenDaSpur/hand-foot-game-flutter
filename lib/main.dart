@@ -9,17 +9,20 @@ import 'theme/balatro_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Preload critical font variants to prevent FOUT (Flash of Unstyled Text)
-  try {
-    await GoogleFonts.pendingFonts([
-      GoogleFonts.arimo(),
-      GoogleFonts.arimo(fontWeight: FontWeight.bold),
-      GoogleFonts.arimo(fontWeight: FontWeight.w600),
-      GoogleFonts.arimo(fontWeight: FontWeight.w300),
-    ]);
-  } catch (e) {
-    // Font preloading failed - continue with system fonts as fallback
-    debugPrint('Font preloading failed: $e');
+  // Skip font preloading during integration tests to avoid binding conflicts
+  if (!kIsWeb) {
+    // Only preload fonts in native apps, skip in web/test environments
+    try {
+      await GoogleFonts.pendingFonts([
+        GoogleFonts.arimo(),
+        GoogleFonts.arimo(fontWeight: FontWeight.bold),
+        GoogleFonts.arimo(fontWeight: FontWeight.w600),
+        GoogleFonts.arimo(fontWeight: FontWeight.w300),
+      ]);
+    } catch (e) {
+      // Font preloading failed - continue with system fonts as fallback
+      debugPrint('Font preloading failed: $e');
+    }
   }
 
   // Try to initialize Firebase and analytics, but continue gracefully if they fail

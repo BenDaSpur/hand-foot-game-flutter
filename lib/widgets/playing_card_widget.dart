@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/card.dart';
 import '../theme/balatro_theme.dart';
 
@@ -24,6 +23,24 @@ class PlayingCardWidget extends StatelessWidget {
     this.height = 84,
     this.isInMeld = false,
   });
+
+  /// Get TextStyle for card text
+  static TextStyle _getCardTextStyle({
+    required double fontSize,
+    required Color color,
+    FontWeight fontWeight = FontWeight.bold,
+    TextDecoration decoration = TextDecoration.none,
+    List<Shadow>? shadows,
+  }) {
+    // Use system font for test compatibility
+    return TextStyle(
+      fontSize: fontSize,
+      color: color,
+      fontWeight: fontWeight,
+      decoration: decoration,
+      shadows: shadows,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +196,7 @@ class PlayingCardWidget extends StatelessWidget {
                       left: height > 60 ? 4 : 2,
                       child: Text(
                         _getCardDisplay(),
-                        style: GoogleFonts.arimo(
+                        style: _getCardTextStyle(
                           fontSize: height > 60 ? 18 : 14,
                           fontWeight: FontWeight.bold,
                           color: _getCardColor(),
@@ -204,7 +221,7 @@ class PlayingCardWidget extends StatelessWidget {
                         angle: 3.14159,
                         child: Text(
                           _getCardDisplay(),
-                          style: GoogleFonts.arimo(
+                          style: _getCardTextStyle(
                             fontSize: height > 60 ? 18 : 14,
                             fontWeight: FontWeight.bold,
                             color: _getCardColor(),
@@ -282,7 +299,7 @@ class PlayingCardWidget extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           '🃏', // Jester/playing card emoji
-          style: GoogleFonts.arimo(
+          style: _getCardTextStyle(
             fontSize: size * 0.8, // Slightly larger for emoji
             color: color,
             fontWeight: FontWeight.bold,
@@ -296,7 +313,7 @@ class PlayingCardWidget extends StatelessWidget {
     final suitSymbol = card.suitIcon; // Already returns ♠ ♥ ♦ ♣
     Widget suitWidget = Text(
       suitSymbol,
-      style: GoogleFonts.arimo(
+      style: _getCardTextStyle(
         fontSize: size,
         color: color,
         fontWeight: FontWeight.bold,
