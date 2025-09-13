@@ -675,6 +675,27 @@ class GameState {
         return true;
       }
 
+      // Log helpful feedback when someone tries to go out but can't
+      if (currentPlayer.hasPickedUpFoot && currentPlayer.currentHand.isEmpty) {
+        _logAction('❌ Cannot go out - missing required books!');
+        _logAction(
+          'Need: Clean book (7+ no wilds) AND Dirty book (7+ with wilds)',
+        );
+        _logAction(
+          'You have: Clean books: ${currentPlayer.hasCleanBook ? 'YES' : 'NO'}, Dirty books: ${currentPlayer.hasDirtyBook ? 'YES' : 'NO'}',
+        );
+        if (!currentPlayer.hasCleanBook) {
+          _logAction(
+            'Missing: Clean book - build a meld to 7+ cards with NO wild cards (2s/Jokers)',
+          );
+        }
+        if (!currentPlayer.hasDirtyBook) {
+          _logAction(
+            'Missing: Dirty book - build a meld to 7+ cards WITH wild cards (2s/Jokers)',
+          );
+        }
+      }
+
       nextPlayer();
       return true;
     }
