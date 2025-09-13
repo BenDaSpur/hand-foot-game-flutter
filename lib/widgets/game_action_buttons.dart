@@ -31,14 +31,37 @@ class GameActionButtons extends StatelessWidget {
 
   String get _discardButtonText {
     if (_hasSelectedCard && humanPlayer.currentHand.length == 1) {
-      return humanPlayer.hasPickedUpFoot ? 'Go Out' : 'Go to Foot';
+      if (humanPlayer.hasPickedUpFoot) {
+        // Check if player can actually go out
+        if (humanPlayer.canGoOut) {
+          return 'Go Out';
+        } else {
+          // Show specific requirement that's missing
+          if (!humanPlayer.hasCleanBook && !humanPlayer.hasDirtyBook) {
+            return 'Need Books';
+          } else if (!humanPlayer.hasCleanBook) {
+            return 'Need Clean Book';
+          } else if (!humanPlayer.hasDirtyBook) {
+            return 'Need Dirty Book';
+          } else {
+            return 'Cannot Go Out';
+          }
+        }
+      } else {
+        return 'Go to Foot';
+      }
     }
     return 'Discard';
   }
 
   Color? get _discardButtonColor {
     if (_hasSelectedCard && humanPlayer.currentHand.length == 1) {
-      return humanPlayer.hasPickedUpFoot ? Colors.orange : Colors.blue;
+      if (humanPlayer.hasPickedUpFoot) {
+        // Color-code based on whether they can actually go out
+        return humanPlayer.canGoOut ? Colors.green : Colors.red;
+      } else {
+        return Colors.blue; // Go to foot
+      }
     }
     return null;
   }
