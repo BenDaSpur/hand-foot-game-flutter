@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class BalatroTheme {
   // Core Balatro-inspired color palette
@@ -30,7 +31,18 @@ class BalatroTheme {
     0xFF90caf9,
   ); // Light blue (for visibility)
 
+  /// Production theme with Google Fonts (use in main app)
   static ThemeData get darkTheme {
+    return _buildTheme(useGoogleFonts: true);
+  }
+
+  /// Test-safe theme without Google Fonts (use in e2e tests)
+  static ThemeData get testTheme {
+    return _buildTheme(useGoogleFonts: false);
+  }
+
+  /// Build theme with optional Google Fonts
+  static ThemeData _buildTheme({required bool useGoogleFonts}) {
     return ThemeData(
       brightness: Brightness.dark,
       primarySwatch: Colors.purple,
@@ -79,44 +91,63 @@ class BalatroTheme {
         ),
         contentTextStyle: const TextStyle(color: secondaryText, fontSize: 14),
       ),
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          color: primaryText,
-          fontWeight: FontWeight.bold,
-        ),
-        displayMedium: TextStyle(
-          color: primaryText,
-          fontWeight: FontWeight.bold,
-        ),
-        displaySmall: TextStyle(
-          color: primaryText,
-          fontWeight: FontWeight.bold,
-        ),
-        headlineLarge: TextStyle(
-          color: primaryText,
-          fontWeight: FontWeight.bold,
-        ),
-        headlineMedium: TextStyle(
-          color: primaryText,
-          fontWeight: FontWeight.bold,
-        ),
-        headlineSmall: TextStyle(
-          color: primaryText,
-          fontWeight: FontWeight.bold,
-        ),
-        titleLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        titleMedium: TextStyle(color: primaryText, fontWeight: FontWeight.w600),
-        titleSmall: TextStyle(
-          color: secondaryText,
-          fontWeight: FontWeight.w600,
-        ),
-        bodyLarge: TextStyle(color: primaryText),
-        bodyMedium: TextStyle(color: secondaryText),
-        bodySmall: TextStyle(color: secondaryText),
-        labelLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-        labelMedium: TextStyle(color: secondaryText),
-        labelSmall: TextStyle(color: secondaryText),
-      ),
+      textTheme:
+          (useGoogleFonts ? GoogleFonts.arimoTextTheme() : const TextTheme())
+              .copyWith(
+                displayLarge: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 48, // Game title size
+                ),
+                displayMedium: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24, // Dialog titles, subtitles
+                ),
+                displaySmall: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.w300,
+                  fontSize: 24, // Card game subtitle
+                ),
+                headlineLarge: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20, // Section headers, dialog headers
+                ),
+                headlineMedium: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18, // Large buttons, melds headers
+                ),
+                headlineSmall: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16, // Action buttons, status text
+                ),
+                titleLarge: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14, // Small buttons, round indicators
+                ),
+                titleMedium: const TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18, // Scoreboard totals
+                ),
+                titleSmall: TextStyle(
+                  color: secondaryText,
+                  fontWeight: FontWeight.w600,
+                ),
+                bodyLarge: TextStyle(color: primaryText),
+                bodyMedium: TextStyle(color: secondaryText),
+                bodySmall: TextStyle(color: secondaryText),
+                labelLarge: TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.bold,
+                ),
+                labelMedium: TextStyle(color: secondaryText),
+                labelSmall: TextStyle(color: secondaryText),
+              ),
     );
   }
 

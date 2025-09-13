@@ -587,9 +587,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                       vertical: 12,
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Start Next Round',
-                    style: TextStyle(fontSize: 18, color: Colors.white),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.headlineMedium?.copyWith(color: Colors.white),
                   ),
                 )
               else
@@ -646,7 +648,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
               const SizedBox(height: 8),
               Text(
                 'Final Score: ${gameState.winner?.score ?? 0} points',
-                style: const TextStyle(color: Colors.white, fontSize: 18),
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineMedium?.copyWith(color: Colors.white),
               ),
               const SizedBox(height: 32),
 

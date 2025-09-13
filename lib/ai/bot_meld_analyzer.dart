@@ -3,6 +3,7 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
+import '../utils/debug_logger.dart';
 
 /// Analyzes meld opportunities and calculations for bot players.
 ///
@@ -351,6 +352,25 @@ class BotMeldAnalyzer {
         if (meld.cards.length >= 5) {
           priority -= 1000; // Never contaminate a near-complete clean meld
         }
+      }
+    }
+
+    // NEW: CRITICAL PROTECTION FOR POTENTIAL CLEAN BOOKS
+    if (card.isWild && bot != null && meld.isClean && meld.cards.length >= 5) {
+      final cleanBookCount = bot.melds
+          .where((m) => m.isClean && m.cards.length >= 7)
+          .length;
+
+      // MASSIVE penalty for contaminating potential clean books
+      if (cleanBookCount < 2) {
+        // Need at least 2 clean books to go out
+        priority -=
+            5000; // NEVER contaminate potential clean books when we need them
+        DebugLogger.warning(
+          '${bot.name}: BLOCKED adding wild to potential clean book ${meld.rank} (${meld.cards.length} cards)',
+        );
+      } else if (cleanBookCount < 3) {
+        priority -= 2000; // Very reluctant even with 2 clean books
       }
     }
 

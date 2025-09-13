@@ -1382,13 +1382,11 @@ class _GameScreenState extends State<GameScreen> {
             shaderCallback: (bounds) => const LinearGradient(
               colors: [BalatroTheme.neonPink, BalatroTheme.glowColor],
             ).createShader(bounds),
-            child: const Text(
+            child: Text(
               'HAND & FOOT',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.displayMedium?.copyWith(color: Colors.white),
             ),
           ),
           backgroundColor: Colors.transparent,
@@ -1414,11 +1412,9 @@ class _GameScreenState extends State<GameScreen> {
               ),
               child: Text(
                 'ROUND ${gameState.round}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: BalatroTheme.neonGreen,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(color: BalatroTheme.neonGreen),
               ),
             ),
             PopupMenuButton<String>(
@@ -1580,28 +1576,22 @@ class _GameScreenState extends State<GameScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          Text(
-                            () {
-                              final player = _viewingPlayerMelds ?? humanPlayer;
-                              final playerName = player.name;
-                              // Minimal debug logging - only when there's a mismatch
-                              if (_viewingPlayerMelds != null &&
-                                  _viewingPlayerMelds != humanPlayer) {
-                                DebugLogger.debug(
-                                  'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
-                                );
-                              }
-                              if (playerName == 'You') {
-                                return 'Your Melds:';
-                              } else {
-                                return '$playerName\'s Melds:';
-                              }
-                            }(),
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text(() {
+                            final player = _viewingPlayerMelds ?? humanPlayer;
+                            final playerName = player.name;
+                            // Minimal debug logging - only when there's a mismatch
+                            if (_viewingPlayerMelds != null &&
+                                _viewingPlayerMelds != humanPlayer) {
+                              DebugLogger.debug(
+                                'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
+                              );
+                            }
+                            if (playerName == 'You') {
+                              return 'Your Melds:';
+                            } else {
+                              return '$playerName\'s Melds:';
+                            }
+                          }(), style: Theme.of(context).textTheme.headlineMedium),
                           if (_viewingPlayerMelds != null)
                             Padding(
                               padding: const EdgeInsets.only(left: 8),
@@ -1877,27 +1867,26 @@ class _GameScreenState extends State<GameScreen> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.emoji_events, color: Colors.black, size: 32),
-                        SizedBox(width: 12),
+                      children: [
+                        const Icon(
+                          Icons.emoji_events,
+                          color: Colors.black,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 12),
                         Text(
                           'GAME OVER!',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(color: Colors.black),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '${gameState.winner!.name} WINS with ${gameState.winner!.score} points!',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(color: Colors.black),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),

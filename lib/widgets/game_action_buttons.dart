@@ -79,11 +79,9 @@ class GameActionButtons extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Waiting for ${gameState.currentPlayer.name} to ${_getTurnPhaseDescription()}...',
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.amber,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(color: Colors.amber),
               textAlign: TextAlign.center,
             ),
           ],
@@ -187,10 +185,9 @@ class GameActionButtons extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(
-          fontSize: isSmallScreen ? 12 : 14,
-          fontWeight: FontWeight.bold,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontSize: isSmallScreen ? 12 : 14),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

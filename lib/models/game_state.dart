@@ -279,7 +279,7 @@ class GameState {
     turnPhase = TurnPhase.meld;
 
     final cardNames = cardsDrawn.map((c) => c.compactName).join(', ');
-    _logAction('drew: $cardNames');
+    _logAction('🎯 drew: $cardNames');
 
     return true;
   }
@@ -356,7 +356,7 @@ class GameState {
       if (meld != null) {
         currentPlayer.melds.add(meld);
         final meldCardNames = meldCards.map((c) => c.compactName).join(', ');
-        _logAction('unlocked discard pile and melded: $meldCardNames');
+        _logAction('🔓 unlocked discard pile and melded: $meldCardNames');
       }
     }
 
@@ -431,22 +431,22 @@ class GameState {
       final cardNames = cards.map((c) => c.compactName).join(', ');
       if (wasFirstMeld) {
         final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
-        _logAction('played down with $points points: $cardNames');
+        _logAction('🎴 played down with $points points: $cardNames');
       } else if (isAddingToExisting) {
-        _logAction('added to existing meld: $cardNames');
+        _logAction('➕ added to existing meld: $cardNames');
       } else {
-        _logAction('created new meld: $cardNames');
+        _logAction('📋 created new meld: $cardNames');
       }
 
       // Check if hand is empty after melding and pick up foot if needed
       if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
         currentPlayer.pickUpFoot();
-        _logAction('picked up foot pile');
+        _logAction('👠 picked up foot pile');
       }
 
       // Check if player has gone out after melding
       if (currentPlayer.canGoOut) {
-        _logAction('went out and ended the round!');
+        _logAction('🏆 went out and ended the round!');
 
         // Defensive logging for going out via playMeld
         if (kDebugMode) {
@@ -497,22 +497,24 @@ class GameState {
       final cardNames = cards.map((c) => c.compactName).join(', ');
       if (wasFirstMeld) {
         final points = cards.fold<int>(0, (sum, card) => sum + card.pointValue);
-        _logAction('played down (multi-meld) with $points points: $cardNames');
+        _logAction(
+          '🎴 played down (multi-meld) with $points points: $cardNames',
+        );
       } else if (isAddingToExisting) {
-        _logAction('added to existing meld: $cardNames');
+        _logAction('➕ added to existing meld: $cardNames');
       } else {
-        _logAction('created new meld: $cardNames');
+        _logAction('📋 created new meld: $cardNames');
       }
 
       // Check if hand is empty after melding and pick up foot if needed
       if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
         currentPlayer.pickUpFoot();
-        _logAction('picked up foot pile');
+        _logAction('👠 picked up foot pile');
       }
 
       // Check if player has gone out after melding
       if (currentPlayer.canGoOut) {
-        _logAction('went out and ended the round!');
+        _logAction('🏆 went out and ended the round!');
 
         // Defensive logging for going out via playMeldBypass
         if (kDebugMode) {
@@ -581,12 +583,12 @@ class GameState {
     if (!currentPlayer.addToMeld(meldIndex, card)) return false;
 
     hasMelded = true; // Mark that player has melded this turn
-    _logAction('added ${card.compactName} to existing meld');
+    _logAction('➕ added ${card.compactName} to existing meld');
 
     // Check if hand is empty after adding to meld and pick up foot if needed
     if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
       currentPlayer.pickUpFoot();
-      _logAction('picked up foot pile');
+      _logAction('👠 picked up foot pile');
     }
 
     return true;
@@ -598,7 +600,7 @@ class GameState {
 
     // Check if player has gone out after adding to meld
     if (currentPlayer.canGoOut) {
-      _logAction('went out and ended the round!');
+      _logAction('🏆 went out and ended the round!');
 
       // Defensive logging: Record the going out decision
       if (kDebugMode) {
@@ -647,7 +649,7 @@ class GameState {
     final removed = currentPlayer.removeCardFromHand(card);
     if (removed != null) {
       discardPile.add(removed);
-      _logAction('discarded ${card.compactName}');
+      _logAction('🗑️ discarded ${card.compactName}');
 
       // Check for 3s stalemate situation
       if (card.isThree) {
@@ -664,11 +666,11 @@ class GameState {
 
       if (currentPlayer.isHandEmpty && !currentPlayer.hasPickedUpFoot) {
         currentPlayer.pickUpFoot();
-        _logAction('picked up foot pile');
+        _logAction('👠 picked up foot pile');
       }
 
       if (currentPlayer.canGoOut) {
-        _logAction('went out and ended the round!');
+        _logAction('🏆 went out and ended the round!');
         endRound();
         return true;
       }

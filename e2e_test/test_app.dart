@@ -12,7 +12,7 @@ class TestApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Hand & Foot Test App',
-      theme: BalatroTheme.darkTheme,
+      theme: BalatroTheme.testTheme, // Use test-safe theme
       home: GameScreen(testSeed: seed),
     );
   }

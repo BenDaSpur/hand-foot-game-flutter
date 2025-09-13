@@ -24,6 +24,24 @@ class PlayingCardWidget extends StatelessWidget {
     this.isInMeld = false,
   });
 
+  /// Get TextStyle for card text
+  static TextStyle _getCardTextStyle({
+    required double fontSize,
+    required Color color,
+    FontWeight fontWeight = FontWeight.bold,
+    TextDecoration decoration = TextDecoration.none,
+    List<Shadow>? shadows,
+  }) {
+    // Use system font for test compatibility
+    return TextStyle(
+      fontSize: fontSize,
+      color: color,
+      fontWeight: fontWeight,
+      decoration: decoration,
+      shadows: shadows,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Force a full repaint to ensure styling is applied
@@ -178,8 +196,8 @@ class PlayingCardWidget extends StatelessWidget {
                       left: height > 60 ? 4 : 2,
                       child: Text(
                         _getCardDisplay(),
-                        style: TextStyle(
-                          fontSize: height > 60 ? 14 : 11,
+                        style: _getCardTextStyle(
+                          fontSize: height > 60 ? 18 : 14,
                           fontWeight: FontWeight.bold,
                           color: _getCardColor(),
                           shadows: [
@@ -203,8 +221,8 @@ class PlayingCardWidget extends StatelessWidget {
                         angle: 3.14159,
                         child: Text(
                           _getCardDisplay(),
-                          style: TextStyle(
-                            fontSize: height > 60 ? 14 : 11,
+                          style: _getCardTextStyle(
+                            fontSize: height > 60 ? 18 : 14,
                             fontWeight: FontWeight.bold,
                             color: _getCardColor(),
                             shadows: [
@@ -280,9 +298,9 @@ class PlayingCardWidget extends StatelessWidget {
         height: size + 10,
         alignment: Alignment.center,
         child: Text(
-          'JK',
-          style: TextStyle(
-            fontSize: size * 0.6,
+          '🃏', // Jester/playing card emoji
+          style: _getCardTextStyle(
+            fontSize: size * 0.8, // Slightly larger for emoji
             color: color,
             fontWeight: FontWeight.bold,
             decoration: TextDecoration.none,
@@ -291,34 +309,18 @@ class PlayingCardWidget extends StatelessWidget {
       );
     }
 
-    // Use custom painted shapes to ensure color persistence
-    Widget suitWidget;
-    switch (card.suit!) {
-      case Suit.hearts:
-        suitWidget = CustomPaint(
-          size: Size(size, size),
-          painter: HeartPainter(color: color),
-        );
-        break;
-      case Suit.diamonds:
-        suitWidget = CustomPaint(
-          size: Size(size, size),
-          painter: DiamondPainter(color: color),
-        );
-        break;
-      case Suit.clubs:
-        suitWidget = CustomPaint(
-          size: Size(size, size),
-          painter: ClubPainter(color: color),
-        );
-        break;
-      case Suit.spades:
-        suitWidget = CustomPaint(
-          size: Size(size, size),
-          painter: SpadePainter(color: color),
-        );
-        break;
-    }
+    // Use Unicode symbols with Arimo font for better consistency
+    final suitSymbol = card.suitIcon; // Already returns ♠ ♥ ♦ ♣
+    Widget suitWidget = Text(
+      suitSymbol,
+      style: _getCardTextStyle(
+        fontSize: size,
+        color: color,
+        fontWeight: FontWeight.bold,
+        decoration: TextDecoration.none,
+      ),
+      textAlign: TextAlign.center,
+    );
 
     // Add glow effect for selected or wild cards
     if (isSelected || card.isWild) {

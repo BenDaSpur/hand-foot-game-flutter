@@ -119,50 +119,56 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Player ${playerIndex + 1}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          if (canGoOut) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: BalatroTheme.neonGreen.withValues(
-                                  alpha: 0.2,
-                                ),
-                                border: Border.all(
-                                  color: BalatroTheme.neonGreen,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                      Flexible(
+                        child: Row(
+                          children: [
+                            Flexible(
                               child: Text(
-                                'CAN GO OUT',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: BalatroTheme.neonGreen,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                'Player ${playerIndex + 1}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(color: Colors.white),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (canGoOut) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: BalatroTheme.neonGreen.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                  border: Border.all(
+                                    color: BalatroTheme.neonGreen,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'CAN GO OUT',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: BalatroTheme.neonGreen,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                      Text(
-                        'Total: ${breakdown['gameTotal']}',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: _getScoreColor(breakdown['gameTotal']),
+                      Flexible(
+                        child: Text(
+                          'Total: ${breakdown['gameTotal']}',
+                          style: Theme.of(context).textTheme.headlineLarge
+                              ?.copyWith(
+                                color: _getScoreColor(breakdown['gameTotal']),
+                              ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -420,11 +426,8 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                     Flexible(
                       child: Text(
                         '🏆 Scoreboard - Round ${widget.gameState.round}',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(color: Colors.white),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

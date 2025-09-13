@@ -11,9 +11,11 @@ class EmergencyRoundEndDialog {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text(
+        title: Text(
           'Round Ended',
-          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineLarge?.copyWith(color: Colors.orange),
         ),
         content: Text(
           'The round has ended early due to insufficient cards in the deck.\n\n'

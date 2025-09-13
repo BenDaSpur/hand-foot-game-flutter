@@ -99,29 +99,27 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       children: [
                         Text(
                           'HAND & FOOT',
-                          style: TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: BalatroTheme.neonBlue,
-                            shadows: [
-                              Shadow(
-                                color: BalatroTheme.neonBlue.withValues(
-                                  alpha: 0.5,
-                                ),
-                                blurRadius: 20,
+                          style: Theme.of(context).textTheme.displayLarge
+                              ?.copyWith(
+                                color: BalatroTheme.neonBlue,
+                                shadows: [
+                                  Shadow(
+                                    color: BalatroTheme.neonBlue.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                    blurRadius: 20,
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'CARD GAME',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w300,
-                            color: BalatroTheme.neonPink,
-                            letterSpacing: 4,
-                          ),
+                          style: Theme.of(context).textTheme.displaySmall
+                              ?.copyWith(
+                                color: BalatroTheme.neonPink,
+                                letterSpacing: 4,
+                              ),
                         ),
                       ],
                     ),
@@ -514,11 +512,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
         title: Text(
           'Hand & Foot Rules',
-          style: TextStyle(
-            color: BalatroTheme.neonBlue,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineLarge?.copyWith(color: BalatroTheme.neonBlue),
         ),
         content: SizedBox(
           width: 300,
