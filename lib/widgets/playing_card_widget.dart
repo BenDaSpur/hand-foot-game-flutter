@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../models/card.dart';
 import '../theme/balatro_theme.dart';
 
@@ -287,6 +288,21 @@ class PlayingCardWidget extends StatelessWidget {
     }
   }
 
+  String _getSuitAssetPath() {
+    switch (card.suit) {
+      case Suit.hearts:
+        return 'assets/images/heart.svg';
+      case Suit.diamonds:
+        return 'assets/images/diamond.svg';
+      case Suit.clubs:
+        return 'assets/images/clover.svg';
+      case Suit.spades:
+        return 'assets/images/spade.svg';
+      case null:
+        return '';
+    }
+  }
+
   Widget _buildSuitSymbol(double height) {
     final color = _getCardColor();
     final size = height > 60 ? 30.0 : 18.0;
@@ -309,17 +325,18 @@ class PlayingCardWidget extends StatelessWidget {
       );
     }
 
-    // Use Unicode symbols with Arimo font for better consistency
-    final suitSymbol = card.suitIcon; // Already returns ♠ ♥ ♦ ♣
-    Widget suitWidget = Text(
-      suitSymbol,
-      style: _getCardTextStyle(
-        fontSize: size,
-        color: color,
-        fontWeight: FontWeight.bold,
-        decoration: TextDecoration.none,
-      ),
-      textAlign: TextAlign.center,
+    // Use SVG assets instead of Unicode symbols
+    final assetPath = _getSuitAssetPath();
+    if (assetPath.isEmpty) {
+      // Fallback for null suit
+      return SizedBox(width: size + 10, height: size + 10);
+    }
+
+    Widget suitWidget = SvgPicture.asset(
+      assetPath,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     );
 
     // Add glow effect for selected or wild cards
@@ -346,208 +363,4 @@ class PlayingCardWidget extends StatelessWidget {
       child: Center(child: suitWidget),
     );
   }
-}
-
-// Custom painters for suit symbols that respect color
-class HeartPainter extends CustomPainter {
-  final Color color;
-  HeartPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final width = size.width;
-    final height = size.height;
-
-    // Draw heart shape
-    path.moveTo(width * 0.5, height * 0.25);
-    path.cubicTo(
-      width * 0.2,
-      height * 0.1,
-      width * 0.1,
-      height * 0.3,
-      width * 0.1,
-      height * 0.4,
-    );
-    path.cubicTo(
-      width * 0.1,
-      height * 0.55,
-      width * 0.5,
-      height * 0.9,
-      width * 0.5,
-      height * 0.9,
-    );
-    path.cubicTo(
-      width * 0.5,
-      height * 0.9,
-      width * 0.9,
-      height * 0.55,
-      width * 0.9,
-      height * 0.4,
-    );
-    path.cubicTo(
-      width * 0.9,
-      height * 0.3,
-      width * 0.8,
-      height * 0.1,
-      width * 0.5,
-      height * 0.25,
-    );
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class DiamondPainter extends CustomPainter {
-  final Color color;
-  DiamondPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final width = size.width;
-    final height = size.height;
-
-    // Draw diamond shape
-    path.moveTo(width * 0.5, height * 0.1);
-    path.lineTo(width * 0.9, height * 0.5);
-    path.lineTo(width * 0.5, height * 0.9);
-    path.lineTo(width * 0.1, height * 0.5);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class ClubPainter extends CustomPainter {
-  final Color color;
-  ClubPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final width = size.width;
-    final height = size.height;
-
-    // Draw three circles for club
-    canvas.drawCircle(Offset(width * 0.3, height * 0.5), width * 0.2, paint);
-    canvas.drawCircle(Offset(width * 0.7, height * 0.5), width * 0.2, paint);
-    canvas.drawCircle(Offset(width * 0.5, height * 0.3), width * 0.2, paint);
-
-    // Draw stem
-    final stemPath = Path();
-    stemPath.moveTo(width * 0.5, height * 0.5);
-    stemPath.lineTo(width * 0.45, height * 0.9);
-    stemPath.lineTo(width * 0.55, height * 0.9);
-    stemPath.close();
-    canvas.drawPath(stemPath, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class SpadePainter extends CustomPainter {
-  final Color color;
-  SpadePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    final w = size.width;
-    final h = size.height;
-
-    // ----- Spade head: exact vertical flip of your heart -----
-    final head = Path()
-      // Start at the bottom cusp (mirror of heart’s top seam)
-      ..moveTo(w * 0.5, h * 0.75)
-      // Left lobe up toward the tip
-      ..cubicTo(
-        w * 0.2,
-        h * 0.90, // was (0.2, 0.10) -> flipped
-        w * 0.1,
-        h * 0.70, // was (0.1, 0.30)
-        w * 0.1,
-        h * 0.60, // was (0.1, 0.40)
-      )
-      // Into the sharp top point
-      ..cubicTo(
-        w * 0.1,
-        h * 0.45, // was (0.1, 0.55)
-        w * 0.5,
-        h * 0.10, // was (0.5, 0.90)  <-- tip’s handle = tip -> sharp
-        w * 0.5,
-        h * 0.10, // tip (sharp)
-      )
-      // Down the right lobe (mirror)
-      ..cubicTo(
-        w * 0.5,
-        h * 0.10, // tip’s handle = tip
-        w * 0.9,
-        h * 0.45, // was (0.9, 0.55)
-        w * 0.9,
-        h * 0.60, // was (0.9, 0.40)
-      )
-      // Back to the bottom cusp
-      ..cubicTo(
-        w * 0.9,
-        h * 0.70, // was (0.9, 0.30)
-        w * 0.8,
-        h * 0.90, // was (0.8, 0.10)
-        w * 0.5,
-        h * 0.75, // was (0.5, 0.25)
-      )
-      ..close();
-
-    canvas.drawPath(head, paint);
-
-    // ----- Stem: small pedestal + tiny foot (card-style) -----
-    final cx = w * 0.5;
-    final stemTopY = h * 0.75; // attaches at the cusp
-    final neckHalf = w * 0.06;
-    final baseHalf = w * 0.09;
-    final baseY = h * 0.90;
-    final footY = h * 0.96;
-    final footHalf = w * 0.03;
-
-    final stem = Path()
-      ..moveTo(cx - neckHalf, stemTopY)
-      ..quadraticBezierTo(cx, stemTopY + h * 0.03, cx + neckHalf, stemTopY)
-      ..lineTo(cx + baseHalf, baseY)
-      ..lineTo(cx - baseHalf, baseY)
-      ..close();
-
-    final foot = Path()
-      ..moveTo(cx, baseY)
-      ..lineTo(cx - footHalf, footY)
-      ..lineTo(cx + footHalf, footY)
-      ..close();
-
-    canvas.drawPath(stem, paint);
-    canvas.drawPath(foot, paint);
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
