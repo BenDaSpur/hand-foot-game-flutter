@@ -213,11 +213,12 @@ class MeldManager {
 
       final naturalCards = entry.value;
 
-      // Natural melds (3+ cards of same rank)
+      // Natural melds (3+ cards of same rank) - prefer minimum clean melds
       if (naturalCards.length >= 3) {
+        // Only add the full meld (conservative approach to prevent over-melding)
         possibleMelds.add(naturalCards);
       }
-      // Mixed melds (2+ naturals + wilds)
+      // Mixed melds (2+ naturals + wilds) - only if no clean meld available
       else if (naturalCards.length >= 2 && wildCards.isNotEmpty) {
         final meldCards = List<PlayingCard>.from(naturalCards);
         final wildsNeeded = 3 - naturalCards.length;

@@ -278,8 +278,14 @@ class GameState {
     hasDrawnFromDeck = true;
     turnPhase = TurnPhase.meld;
 
-    final cardNames = cardsDrawn.map((c) => c.compactName).join(', ');
-    _logAction('🎯 drew: $cardNames');
+    // Only show specific cards drawn for human players to prevent cheating
+    if (currentPlayer.type == PlayerType.human) {
+      final cardNames = cardsDrawn.map((c) => c.compactName).join(', ');
+      _logAction('🎯 drew: $cardNames');
+    } else {
+      // For bot players, only show that they drew cards, not which ones
+      _logAction('🎴 drew ${cardsDrawn.length} cards from deck');
+    }
 
     return true;
   }
@@ -397,12 +403,21 @@ class GameState {
 
     if (additionalDiscards.isNotEmpty) {
       currentPlayer.addNewlyDrawnCards(additionalDiscards);
-      final additionalNames = additionalDiscards
-          .map((c) => c.compactName)
-          .join(', ');
-      _logAction(
-        'took ${additionalDiscards.length} more cards from discard pile: $additionalNames',
-      );
+
+      // Only show specific cards for human players to prevent cheating
+      if (currentPlayer.type == PlayerType.human) {
+        final additionalNames = additionalDiscards
+            .map((c) => c.compactName)
+            .join(', ');
+        _logAction(
+          'took ${additionalDiscards.length} more cards from discard pile: $additionalNames',
+        );
+      } else {
+        // For bot players, only show count, not which cards
+        _logAction(
+          'took ${additionalDiscards.length} more cards from discard pile',
+        );
+      }
     }
 
     turnPhase = TurnPhase.meld;

@@ -693,28 +693,38 @@ class BotMeldAnalyzer {
     int combinationSize,
   ) {
     if (combinationSize == 1) {
-      // Single meld - simple iteration
+      // Single meld - find the most conservative option (closest to requirement)
+      List<PlayingCard>? bestMeld;
+      int bestValue = 999999; // Start with impossibly high value
+
       for (final meld in possibleMelds) {
         final meldValue = calculateTotalMeldValue([meld]);
-        if (meldValue >= requirement) {
-          return [meld];
+        if (meldValue >= requirement && meldValue < bestValue) {
+          bestMeld = meld;
+          bestValue = meldValue;
         }
       }
-      return [];
+
+      return bestMeld != null ? [bestMeld] : [];
     }
 
     if (combinationSize == 2) {
-      // Two-meld combinations - nested loops
+      // Two-meld combinations - find the most conservative option
+      List<List<PlayingCard>>? bestCombination;
+      int bestValue = 999999; // Start with impossibly high value
+
       for (int i = 0; i < possibleMelds.length; i++) {
         for (int j = i + 1; j < possibleMelds.length; j++) {
           final combination = [possibleMelds[i], possibleMelds[j]];
           final combinedValue = calculateTotalMeldValue(combination);
-          if (combinedValue >= requirement) {
-            return combination;
+          if (combinedValue >= requirement && combinedValue < bestValue) {
+            bestCombination = combination;
+            bestValue = combinedValue;
           }
         }
       }
-      return [];
+
+      return bestCombination ?? [];
     }
 
     // For 3+ melds, use recursive combination generation (with performance limits)
