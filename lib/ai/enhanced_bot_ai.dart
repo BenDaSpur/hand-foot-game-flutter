@@ -647,11 +647,19 @@ class EnhancedBotAI {
     // CORE RULE: Bots MUST always discard a card in discard phase
     // The ONLY exception is if they have no cards and can go out (end round/game)
 
-    // Exception: Bot has no cards and can go out (ends round)
+    // Exception: Bot has no cards - check if they can go out properly
     if (bot.currentHand.isEmpty) {
-      if (bot.canGoOutWithBooks) {
+      if (bot.canGoOut) {
         return BotDecision(action: 'goOut'); // Ends round - no discard needed
       } else {
+        // Critical bug: Bot emptied hand but can't go out (missing books or not on foot)
+        print(
+          'CRITICAL BUG: Bot ${bot.name} has empty hand but cannot go out!',
+        );
+        print('  - On foot: ${bot.hasPickedUpFoot}');
+        print('  - Has clean book: ${bot.hasCleanBook}');
+        print('  - Has dirty book: ${bot.hasDirtyBook}');
+        print('  - This indicates poor meld planning in earlier phases');
         return BotDecision(action: 'error'); // Invalid state
       }
     }

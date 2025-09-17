@@ -580,18 +580,34 @@ class BotTurnManager {
         return;
       }
 
-      // STEP 3: Last resort - create emergency card if somehow no cards exist
-      final emergencyCard = PlayingCard(rank: CardRank.three, suit: Suit.clubs);
-      DebugLogger.debug('Creating emergency card for guaranteed completion');
+      // STEP 3: Handle empty hand/foot scenario properly
+      if (botPlayer.currentHand.isEmpty) {
+        if (botPlayer.canGoOut) {
+          // Bot should go out instead of discarding
+          DebugLogger.debug(
+            'Bot ${botPlayer.name} forcing go out - empty hand with required books',
+          );
+          gameState.endRound();
+          onStateChanged();
+          return;
+        } else {
+          // Bot has empty hand but can't go out - this is a critical game logic error
+          DebugLogger.error(
+            'CRITICAL: Bot ${botPlayer.name} has empty hand but cannot go out!',
+          );
+          DebugLogger.error('  - On foot: ${botPlayer.hasPickedUpFoot}');
+          DebugLogger.error('  - Has clean book: ${botPlayer.hasCleanBook}');
+          DebugLogger.error('  - Has dirty book: ${botPlayer.hasDirtyBook}');
+          DebugLogger.error(
+            '  - This indicates a serious bug in meld planning logic',
+          );
 
-      botPlayer.removeCardFromHand(emergencyCard);
-      gameState.discardPile.add(emergencyCard);
-      gameState.recentActions.add(
-        GameAction(
-          message: 'emergency card discard - turn completed',
-          playerName: botPlayer.name,
-        ),
-      );
+          // Force advance turn to prevent infinite loop
+          gameState.nextPlayer();
+          onStateChanged();
+          return;
+        }
+      }
 
       gameState.nextPlayer();
       onStateChanged();
@@ -754,16 +770,21 @@ class BotTurnManager {
         return;
       }
 
-      // STEP 6: ABSOLUTE LAST RESORT - create emergency card to discard
-      // This ensures turn completion even in corrupted game states
-      DebugLogger.error('ABSOLUTE LAST RESORT: Creating emergency card');
+      // STEP 6: ABSOLUTE LAST RESORT - no cards available, can't create fake ones
+      // This indicates a severe game state corruption - log and advance turn
+      DebugLogger.error(
+        'ABSOLUTE LAST RESORT: No cards available, cannot force discard',
+      );
+      DebugLogger.error(
+        'Bot ${botPlayer.name} has no cards in hand or foot - advancing turn',
+      );
 
+      // Add to discard pile without removing from hand (emergency fallback only)
       final emergencyCard = PlayingCard(rank: CardRank.three, suit: Suit.clubs);
-      botPlayer.removeCardFromHand(emergencyCard);
       gameState.discardPile.add(emergencyCard);
       gameState.recentActions.add(
         GameAction(
-          message: 'emergency card discard - turn completed',
+          message: 'emergency state recovery - skipped discard',
           playerName: botPlayer.name,
         ),
       );
