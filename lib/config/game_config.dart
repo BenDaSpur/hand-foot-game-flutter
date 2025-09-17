@@ -169,6 +169,26 @@ class GameConfig {
   static const int excessiveWildThreshold = 3;
 
   // =============================================================================
+  // BOT AI CONSTANTS
+  // =============================================================================
+
+  /// Bot AI penalty and priority constants for strategic decision making
+  static const int wildCardMeldPenalty =
+      2000; // Penalty per wild card in new melds
+  static const int wildCardUsageBasePenalty =
+      3000; // Base penalty for using wilds
+  static const int cleanBookProtectionPenalty =
+      2000; // Penalty for contaminating clean books
+  static const int criticalCleanBookProtectionPenalty =
+      5000; // Never contaminate when no clean books
+  static const int bookCompletionPriority =
+      2000; // Priority for completing books
+  static const int cleanBookCompletionPriority =
+      1500; // Priority for clean book completion
+  static const int wildCardStrategicBonus =
+      2500; // Bonus in critical situations
+
+  // =============================================================================
   // DIFFICULTY & VARIANTS
   // =============================================================================
 

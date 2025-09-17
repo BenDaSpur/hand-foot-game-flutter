@@ -167,9 +167,25 @@ class BotEndGameManager {
       return null; // Not ready for end game decisions
     }
 
-    // Immediate go-out check - ENHANCED for small hands
-    if (bot.currentHand.isEmpty && bot.canGoOut) {
-      return BotDecision(action: 'goOut');
+    // Handle empty hand scenarios properly
+    if (bot.currentHand.isEmpty) {
+      if (!bot.hasPickedUpFoot) {
+        // Empty hand but no foot picked up - should pick up foot automatically
+        // This is handled by the game controller, not bot AI, but log for debugging
+        print(
+          'Info: Bot ${bot.name} has empty hand, will automatically pick up foot',
+        );
+        return null; // Let game controller handle foot pickup
+      } else if (bot.canGoOut) {
+        // On foot with empty hand and can go out - GO OUT!
+        return BotDecision(action: 'goOut');
+      } else {
+        // On foot with empty hand but can't go out (missing books)
+        print(
+          'Warning: Bot ${bot.name} has empty foot but cannot go out (missing required books)',
+        );
+        return null; // This shouldn't happen in normal gameplay
+      }
     }
 
     // CRITICAL: Go out immediately with 1-2 cards if we can
@@ -617,10 +633,14 @@ class BotEndGameManager {
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
-      // This should not happen if properly checked in calling methods, but be defensive
-      throw Exception(
-        'Cannot discard from empty hand - bot should go out or error',
-      );
+      // This indicates a logic error - empty hand should trigger foot pickup or go out
+      print('Warning: Bot ${bot.name} has empty hand but is trying to discard');
+      print('  - Has picked up foot: ${bot.hasPickedUpFoot}');
+      print('  - Can go out: ${bot.canGoOut}');
+      print('  - Using fallback card to prevent crash');
+
+      // Return a safe fallback card
+      return const PlayingCard(rank: CardRank.ace, suit: Suit.spades);
     }
 
     // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)

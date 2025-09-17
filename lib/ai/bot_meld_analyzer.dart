@@ -195,7 +195,10 @@ class BotMeldAnalyzer {
     // NEW: MASSIVE PENALTY for creating new melds with wild cards
     final wildCount = meld.where((card) => card.isWild).length;
     if (wildCount > 0) {
-      score -= wildCount * 2000; // Huge penalty per wild card in new meld
+      score -=
+          wildCount *
+          GameConfig
+              .wildCardMeldPenalty; // Huge penalty per wild card in new meld
 
       // EVEN BIGGER penalty if we're creating a mostly-wild meld
       final naturalCount = meld.length - wildCount;
@@ -261,56 +264,21 @@ class BotMeldAnalyzer {
       final twoCardRanks = rankCounts.entries.where((e) => e.value >= 2).length;
 
       // MASSIVE penalty for using wilds unless absolutely necessary
-      priority -= 3000; // Start with huge penalty
+      priority -=
+          GameConfig.wildCardUsageBasePenalty; // Start with huge penalty
 
-      // Only consider using wilds in these critical situations:
-      bool criticalSituation = false;
-
-      // 1. Need to play down and this is the ONLY way
-      if (!bot.hasPlayedDown) {
-        // Check if we have NO natural melds possible
-        final naturalMeldCount = twoCardRanks;
-        if (naturalMeldCount == 0) {
-          criticalSituation = true; // Must use wilds to play down
-        }
-      }
-      // 2. Trying to get into foot (hand almost empty)
-      else if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
-        criticalSituation = true; // Dump strategy to reach foot
-      }
-      // 3. End game - must complete required books
-      else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
-        final hasCleanBook = bot.melds.any(
-          (m) => m.isClean && m.cards.length >= 7,
-        );
-        final hasDirtyBook = bot.melds.any(
-          (m) => !m.isClean && m.cards.length >= 7,
-        );
-
-        // Only if we need to complete books for going out
-        if (!hasCleanBook || !hasDirtyBook) {
-          if (meld.cards.length >= 5) {
-            // Close to book completion
-            criticalSituation = true;
-          }
-        }
-      }
-
-      // 4. Unlocking valuable discard pile (future enhancement)
-      // This would require access to game state and discard pile value
+      // Determine if wild card usage is justified in current situation
+      final criticalSituation = _isWildCardUsageCritical(bot, twoCardRanks);
 
       if (criticalSituation) {
         priority +=
-            2500; // Reduce penalty significantly but still prefer natural cards
-
+            GameConfig.wildCardStrategicBonus; // Reduce penalty significantly
         // STRATEGIC WILD DUMPING: When we must use wilds, be smart about it
         priority += _calculateStrategicWildDumpingBonus(card, meld, bot);
       }
 
-      // Extra penalty if we have many unused 2-card combinations
-      if (twoCardRanks >= 2) {
-        priority -= 1000; // You have natural melds available, use those first!
-      }
+      // Apply situational modifiers (natural meld availability penalty, etc.)
+      priority += _calculateWildCardSituationalModifier(bot, criticalSituation);
     }
 
     // Check if bot has clean books (for enhanced protection)
@@ -346,7 +314,8 @@ class BotMeldAnalyzer {
 
         // CRITICAL: Extremely harsh penalty if we have no clean books
         if (!hasCleanBook) {
-          priority -= 2000; // Never contaminate when no clean books exist
+          priority -= GameConfig
+              .cleanBookProtectionPenalty; // Never contaminate when no clean books exist
         }
 
         if (meld.cards.length >= 5) {
@@ -364,13 +333,14 @@ class BotMeldAnalyzer {
       // MASSIVE penalty for contaminating potential clean books
       if (cleanBookCount < 2) {
         // Need at least 2 clean books to go out
-        priority -=
-            5000; // NEVER contaminate potential clean books when we need them
+        priority -= GameConfig
+            .criticalCleanBookProtectionPenalty; // NEVER contaminate potential clean books when we need them
         DebugLogger.warning(
           '${bot.name}: BLOCKED adding wild to potential clean book ${meld.rank} (${meld.cards.length} cards)',
         );
       } else if (cleanBookCount < 3) {
-        priority -= 2000; // Very reluctant even with 2 clean books
+        priority -= GameConfig
+            .cleanBookProtectionPenalty; // Very reluctant even with 2 clean books
       }
     }
 
@@ -992,5 +962,68 @@ class BotMeldAnalyzer {
     score -= (composition['penaltyCards'] as int) * 10;
 
     return score;
+  }
+
+  /// Check if wild card usage is justified in current game situation
+  bool _isWildCardUsageCritical(Player bot, int twoCardRanks) {
+    // 1. Need to play down and this is the ONLY way
+    if (!bot.hasPlayedDown) {
+      final naturalMeldCount = twoCardRanks;
+      if (naturalMeldCount == 0) {
+        return true; // Must use wilds to play down
+      }
+    }
+
+    // 2. Trying to get into foot (hand almost empty)
+    if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      return true; // Dump strategy to reach foot
+    }
+
+    // 3. End game - must complete required books
+    if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      final hasCleanBook = bot.melds.any(
+        (m) => m.isClean && m.cards.length >= 7,
+      );
+      final hasDirtyBook = bot.melds.any(
+        (m) => !m.isClean && m.cards.length >= 7,
+      );
+      if (!hasCleanBook || !hasDirtyBook) {
+        return true; // Need books to go out
+      }
+    }
+
+    // 4. Emergency situation (huge hand, late game)
+    if (bot.currentHand.length >= 20) {
+      return true; // Must reduce hand size
+    }
+
+    return false;
+  }
+
+  /// Calculate wild card situational modifier based on game context
+  int _calculateWildCardSituationalModifier(
+    Player bot,
+    bool criticalSituation,
+  ) {
+    if (criticalSituation) {
+      return GameConfig.wildCardStrategicBonus; // Reduce penalty significantly
+    }
+
+    // Extra penalty if we have many unused 2-card combinations
+    final hand = bot.currentHand;
+    final rankCounts = <CardRank, int>{};
+    for (final card in hand) {
+      if (!card.isWild && card.rank != CardRank.three) {
+        rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+      }
+    }
+
+    final twoCardRanks = rankCounts.entries.where((e) => e.value >= 2).length;
+    if (twoCardRanks >= 2) {
+      return -GameConfig
+          .cleanBookCompletionPriority; // You have natural melds available!
+    }
+
+    return 0; // No additional modifier
   }
 }
