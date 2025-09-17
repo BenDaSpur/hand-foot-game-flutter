@@ -30,7 +30,7 @@ void main() {
         'Bob',
         'Rita',
         'Ben',
-        'Penny',
+        'Tiana',
         'Alex',
         'Sue',
       ];
@@ -132,7 +132,7 @@ void main() {
         'Bob',
         'Rita',
         'Ben',
-        'Penny',
+        'Tiana',
         'Alex',
         'Sue',
       ];

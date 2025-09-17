@@ -155,29 +155,52 @@ class EnhancedBotAI {
       final shouldBypassEarlyGame = !isEarlyGame || hasCompetitivePressure;
 
       if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
-        // PANIC MODE: Use new maximal meld combination for aggressive hand emptying
+        // PANIC MODE: But still try conservative play-down first if not played down yet
         if (gameState.turnPhase == TurnPhase.meld) {
-          final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
-            bot,
-            controller,
-          );
-          if (maximalMelds.isNotEmpty) {
+          List<List<PlayingCard>> emergencyMelds;
+
+          // If not played down, try conservative play-down even in emergency
+          if (!bot.hasPlayedDown) {
+            emergencyMelds = _meldAnalyzer.findBestPlayDownCombination(
+              bot,
+              controller,
+              gameState.playDownRequirement,
+            );
+            if (emergencyMelds.isEmpty) {
+              // Conservative failed, fall back to maximal as last resort
+              emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
+                bot,
+                controller,
+              );
+            }
+          } else {
+            // Already played down, use maximal for foot transition
+            emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
+              bot,
+              controller,
+            );
+          }
+
+          if (emergencyMelds.isNotEmpty) {
+            final meldType = bot.hasPlayedDown
+                ? 'maximal'
+                : 'conservative emergency';
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
+              'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
             );
 
-            if (maximalMelds.length == 1) {
+            if (emergencyMelds.length == 1) {
               return BotDecision(
                 action: 'createMeld',
-                data: maximalMelds.first,
+                data: emergencyMelds.first,
                 skipPlayDownCheck: bot.hasPlayedDown,
               );
             } else {
               return BotDecision(
                 action: 'createMultipleMelds',
-                data: maximalMelds,
+                data: emergencyMelds,
                 skipPlayDownCheck: bot.hasPlayedDown,
               );
             }
@@ -624,11 +647,19 @@ class EnhancedBotAI {
     // CORE RULE: Bots MUST always discard a card in discard phase
     // The ONLY exception is if they have no cards and can go out (end round/game)
 
-    // Exception: Bot has no cards and can go out (ends round)
+    // Exception: Bot has no cards - check if they can go out properly
     if (bot.currentHand.isEmpty) {
-      if (bot.canGoOutWithBooks) {
+      if (bot.canGoOut) {
         return BotDecision(action: 'goOut'); // Ends round - no discard needed
       } else {
+        // Critical bug: Bot emptied hand but can't go out (missing books or not on foot)
+        print(
+          'CRITICAL BUG: Bot ${bot.name} has empty hand but cannot go out!',
+        );
+        print('  - On foot: ${bot.hasPickedUpFoot}');
+        print('  - Has clean book: ${bot.hasCleanBook}');
+        print('  - Has dirty book: ${bot.hasDirtyBook}');
+        print('  - This indicates poor meld planning in earlier phases');
         return BotDecision(action: 'error'); // Invalid state
       }
     }

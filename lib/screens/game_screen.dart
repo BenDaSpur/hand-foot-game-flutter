@@ -40,7 +40,7 @@ const List<BotConfig> kBotConfigurations = [
   BotConfig('Bob', BotPersonality.aggressive),
   BotConfig('Rita', BotPersonality.aggressive),
   BotConfig('Ben', BotPersonality.bookBuilder),
-  BotConfig('Penny', BotPersonality.bookBuilder),
+  BotConfig('Tiana', BotPersonality.bookBuilder),
   BotConfig('Alex', BotPersonality.adaptive),
   BotConfig('Sue', BotPersonality.adaptive),
 ];

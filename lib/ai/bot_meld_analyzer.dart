@@ -195,7 +195,10 @@ class BotMeldAnalyzer {
     // NEW: MASSIVE PENALTY for creating new melds with wild cards
     final wildCount = meld.where((card) => card.isWild).length;
     if (wildCount > 0) {
-      score -= wildCount * 2000; // Huge penalty per wild card in new meld
+      score -=
+          wildCount *
+          GameConfig
+              .wildCardMeldPenalty; // Huge penalty per wild card in new meld
 
       // EVEN BIGGER penalty if we're creating a mostly-wild meld
       final naturalCount = meld.length - wildCount;
@@ -261,56 +264,21 @@ class BotMeldAnalyzer {
       final twoCardRanks = rankCounts.entries.where((e) => e.value >= 2).length;
 
       // MASSIVE penalty for using wilds unless absolutely necessary
-      priority -= 3000; // Start with huge penalty
+      priority -=
+          GameConfig.wildCardUsageBasePenalty; // Start with huge penalty
 
-      // Only consider using wilds in these critical situations:
-      bool criticalSituation = false;
-
-      // 1. Need to play down and this is the ONLY way
-      if (!bot.hasPlayedDown) {
-        // Check if we have NO natural melds possible
-        final naturalMeldCount = twoCardRanks;
-        if (naturalMeldCount == 0) {
-          criticalSituation = true; // Must use wilds to play down
-        }
-      }
-      // 2. Trying to get into foot (hand almost empty)
-      else if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
-        criticalSituation = true; // Dump strategy to reach foot
-      }
-      // 3. End game - must complete required books
-      else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
-        final hasCleanBook = bot.melds.any(
-          (m) => m.isClean && m.cards.length >= 7,
-        );
-        final hasDirtyBook = bot.melds.any(
-          (m) => !m.isClean && m.cards.length >= 7,
-        );
-
-        // Only if we need to complete books for going out
-        if (!hasCleanBook || !hasDirtyBook) {
-          if (meld.cards.length >= 5) {
-            // Close to book completion
-            criticalSituation = true;
-          }
-        }
-      }
-
-      // 4. Unlocking valuable discard pile (future enhancement)
-      // This would require access to game state and discard pile value
+      // Determine if wild card usage is justified in current situation
+      final criticalSituation = _isWildCardUsageCritical(bot, twoCardRanks);
 
       if (criticalSituation) {
         priority +=
-            2500; // Reduce penalty significantly but still prefer natural cards
-
+            GameConfig.wildCardStrategicBonus; // Reduce penalty significantly
         // STRATEGIC WILD DUMPING: When we must use wilds, be smart about it
         priority += _calculateStrategicWildDumpingBonus(card, meld, bot);
       }
 
-      // Extra penalty if we have many unused 2-card combinations
-      if (twoCardRanks >= 2) {
-        priority -= 1000; // You have natural melds available, use those first!
-      }
+      // Apply situational modifiers (natural meld availability penalty, etc.)
+      priority += _calculateWildCardSituationalModifier(bot, criticalSituation);
     }
 
     // Check if bot has clean books (for enhanced protection)
@@ -346,7 +314,8 @@ class BotMeldAnalyzer {
 
         // CRITICAL: Extremely harsh penalty if we have no clean books
         if (!hasCleanBook) {
-          priority -= 2000; // Never contaminate when no clean books exist
+          priority -= GameConfig
+              .cleanBookProtectionPenalty; // Never contaminate when no clean books exist
         }
 
         if (meld.cards.length >= 5) {
@@ -364,13 +333,14 @@ class BotMeldAnalyzer {
       // MASSIVE penalty for contaminating potential clean books
       if (cleanBookCount < 2) {
         // Need at least 2 clean books to go out
-        priority -=
-            5000; // NEVER contaminate potential clean books when we need them
+        priority -= GameConfig
+            .criticalCleanBookProtectionPenalty; // NEVER contaminate potential clean books when we need them
         DebugLogger.warning(
           '${bot.name}: BLOCKED adding wild to potential clean book ${meld.rank} (${meld.cards.length} cards)',
         );
       } else if (cleanBookCount < 3) {
-        priority -= 2000; // Very reluctant even with 2 clean books
+        priority -= GameConfig
+            .cleanBookProtectionPenalty; // Very reluctant even with 2 clean books
       }
     }
 
@@ -656,13 +626,19 @@ class BotMeldAnalyzer {
     final possibleMelds = getPossibleMelds(bot, controller);
     if (possibleMelds.isEmpty) return [];
 
-    // AGGRESSIVE MODE: If bot has large hand, try to use ALL melds for foot transition
+    // EMERGENCY MODE: If bot has large hand but hasn't played down, be CONSERVATIVE
     final handSize = bot.currentHand.length;
-    if (handSize >= 12 && bot.hasPlayedDown) {
-      // Try to create ALL possible melds to aggressively empty hand
+    if (handSize >= 12 && !bot.hasPlayedDown) {
+      // Even in emergency, prefer efficient play-down over dumping all cards
+      // This prevents Sue from playing 3 melds when only 1 efficient meld is needed
+      // Fall through to normal conservative logic below
+    }
+    // POST-PLAYDOWN: If already played down and hand is huge, be more aggressive
+    else if (handSize >= 15 && bot.hasPlayedDown) {
+      // Only use ALL melds if absolutely necessary for foot transition
       final allMeldsValue = calculateTotalMeldValue(possibleMelds);
-      if (allMeldsValue >= requirement && possibleMelds.length <= 6) {
-        // Limit to 6 melds max to avoid UI/performance issues
+      if (allMeldsValue >= requirement && possibleMelds.length <= 4) {
+        // Reduced from 6 to 4 melds max to be less wasteful
         return possibleMelds;
       }
     }
@@ -686,6 +662,49 @@ class BotMeldAnalyzer {
     return []; // No combination meets requirement
   }
 
+  /// Calculate efficiency for play-down meld selection
+  /// Higher efficiency = better choice for conservative play-down
+  double _calculateMeldPlayDownEfficiency(
+    List<PlayingCard> meld,
+    int requirement,
+    int meldValue,
+  ) {
+    double efficiency = 100.0; // Base efficiency
+
+    // 1. Prefer melds closer to requirement (avoid over-melding)
+    final excess = meldValue - requirement;
+    if (excess == 0) {
+      efficiency += 50.0; // Perfect match bonus
+    } else {
+      // Penalty for excess points (more excess = lower efficiency)
+      efficiency -= (excess * 0.5); // 0.5 penalty per excess point
+    }
+
+    // 2. Strong preference for clean melds (no wilds)
+    final hasWilds = meld.any((card) => card.isWild);
+    if (!hasWilds) {
+      efficiency += 30.0; // Clean meld bonus
+    } else {
+      efficiency -= 20.0; // Dirty meld penalty
+    }
+
+    // 3. Prefer minimum card count (efficiency bonus)
+    if (meld.length == 3) {
+      efficiency += 15.0; // Minimum size bonus
+    } else if (meld.length >= 7) {
+      efficiency += 10.0; // Book bonus (but less than minimum size)
+    }
+
+    // 4. Special bonus for using high-value cards efficiently
+    // If using aces/kings for exact requirement, that's very efficient
+    final avgCardValue = meldValue / meld.length;
+    if (avgCardValue >= 20 && excess <= 10) {
+      efficiency += 10.0; // High-value efficiency bonus
+    }
+
+    return efficiency;
+  }
+
   /// Find the best combination of exactly N melds that meets the requirement
   List<List<PlayingCard>> _findBestCombinationOfSize(
     List<List<PlayingCard>> possibleMelds,
@@ -693,15 +712,23 @@ class BotMeldAnalyzer {
     int combinationSize,
   ) {
     if (combinationSize == 1) {
-      // Single meld - find the most conservative option (closest to requirement)
+      // Single meld - find the most EFFICIENT option for play-down
       List<PlayingCard>? bestMeld;
-      int bestValue = 999999; // Start with impossibly high value
+      double bestEfficiency = 0.0; // Higher efficiency is better
 
       for (final meld in possibleMelds) {
         final meldValue = calculateTotalMeldValue([meld]);
-        if (meldValue >= requirement && meldValue < bestValue) {
-          bestMeld = meld;
-          bestValue = meldValue;
+        if (meldValue >= requirement) {
+          // Calculate efficiency: prefer melds closer to requirement + clean melds
+          final efficiency = _calculateMeldPlayDownEfficiency(
+            meld,
+            requirement,
+            meldValue,
+          );
+          if (efficiency > bestEfficiency) {
+            bestMeld = meld;
+            bestEfficiency = efficiency;
+          }
         }
       }
 
@@ -709,17 +736,36 @@ class BotMeldAnalyzer {
     }
 
     if (combinationSize == 2) {
-      // Two-meld combinations - find the most conservative option
+      // Two-meld combinations - find the most efficient option
       List<List<PlayingCard>>? bestCombination;
-      int bestValue = 999999; // Start with impossibly high value
+      double bestEfficiency = 0.0;
 
       for (int i = 0; i < possibleMelds.length; i++) {
         for (int j = i + 1; j < possibleMelds.length; j++) {
           final combination = [possibleMelds[i], possibleMelds[j]];
           final combinedValue = calculateTotalMeldValue(combination);
-          if (combinedValue >= requirement && combinedValue < bestValue) {
-            bestCombination = combination;
-            bestValue = combinedValue;
+          if (combinedValue >= requirement) {
+            // Calculate combined efficiency of both melds
+            final efficiency1 = _calculateMeldPlayDownEfficiency(
+              possibleMelds[i],
+              requirement ~/ 2,
+              calculateTotalMeldValue([possibleMelds[i]]),
+            );
+            final efficiency2 = _calculateMeldPlayDownEfficiency(
+              possibleMelds[j],
+              requirement ~/ 2,
+              calculateTotalMeldValue([possibleMelds[j]]),
+            );
+            final combinedEfficiency = (efficiency1 + efficiency2) / 2;
+
+            // Bonus for combination that's closer to requirement
+            final excess = combinedValue - requirement;
+            final adjustedEfficiency = combinedEfficiency - (excess * 0.3);
+
+            if (adjustedEfficiency > bestEfficiency) {
+              bestCombination = combination;
+              bestEfficiency = adjustedEfficiency;
+            }
           }
         }
       }
@@ -916,5 +962,68 @@ class BotMeldAnalyzer {
     score -= (composition['penaltyCards'] as int) * 10;
 
     return score;
+  }
+
+  /// Check if wild card usage is justified in current game situation
+  bool _isWildCardUsageCritical(Player bot, int twoCardRanks) {
+    // 1. Need to play down and this is the ONLY way
+    if (!bot.hasPlayedDown) {
+      final naturalMeldCount = twoCardRanks;
+      if (naturalMeldCount == 0) {
+        return true; // Must use wilds to play down
+      }
+    }
+
+    // 2. Trying to get into foot (hand almost empty)
+    if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
+      return true; // Dump strategy to reach foot
+    }
+
+    // 3. End game - must complete required books
+    if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      final hasCleanBook = bot.melds.any(
+        (m) => m.isClean && m.cards.length >= 7,
+      );
+      final hasDirtyBook = bot.melds.any(
+        (m) => !m.isClean && m.cards.length >= 7,
+      );
+      if (!hasCleanBook || !hasDirtyBook) {
+        return true; // Need books to go out
+      }
+    }
+
+    // 4. Emergency situation (huge hand, late game)
+    if (bot.currentHand.length >= 20) {
+      return true; // Must reduce hand size
+    }
+
+    return false;
+  }
+
+  /// Calculate wild card situational modifier based on game context
+  int _calculateWildCardSituationalModifier(
+    Player bot,
+    bool criticalSituation,
+  ) {
+    if (criticalSituation) {
+      return GameConfig.wildCardStrategicBonus; // Reduce penalty significantly
+    }
+
+    // Extra penalty if we have many unused 2-card combinations
+    final hand = bot.currentHand;
+    final rankCounts = <CardRank, int>{};
+    for (final card in hand) {
+      if (!card.isWild && card.rank != CardRank.three) {
+        rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1;
+      }
+    }
+
+    final twoCardRanks = rankCounts.entries.where((e) => e.value >= 2).length;
+    if (twoCardRanks >= 2) {
+      return -GameConfig
+          .cleanBookCompletionPriority; // You have natural melds available!
+    }
+
+    return 0; // No additional modifier
   }
 }

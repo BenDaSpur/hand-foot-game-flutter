@@ -93,7 +93,7 @@ void main() {
         ('Bob', BotPersonality.aggressive),
         ('Rita', BotPersonality.aggressive),
         ('Ben', BotPersonality.bookBuilder),
-        ('Penny', BotPersonality.bookBuilder),
+        ('Tiana', BotPersonality.bookBuilder),
         ('Alex', BotPersonality.adaptive),
         ('Sue', BotPersonality.adaptive),
       ];

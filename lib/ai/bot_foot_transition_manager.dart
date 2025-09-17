@@ -23,7 +23,7 @@ class BotFootTransitionManager {
   static const int postPlaydownTransitionThreshold =
       8; // Transition at 8 cards after play-down instead of 7
   static const int emergencyTransitionThreshold =
-      6; // Earlier emergency at 6 cards instead of 4
+      8; // More aggressive - transition at 8 cards to ensure foot pickup
   static const int largeHandEmergencyThreshold =
       10; // MUCH earlier emergency at 10 cards instead of 12
 

@@ -30,6 +30,134 @@ class BotEndGameManager {
 
   BotEndGameManager();
 
+  /// Calculate minimum number of turns needed for bot to go out.
+  /// Returns -1 if bot cannot go out (doesn't have required books).
+  int calculateTurnsToGoOut(Player bot, GameController controller) {
+    if (!_hasRequiredBooks(bot)) {
+      return -1; // Cannot go out without required books
+    }
+
+    int currentHandSize = bot.currentHand.length;
+    if (currentHandSize == 0) {
+      return 0; // Can go out immediately
+    }
+
+    // Count cards that can be melded to existing melds
+    int meldableCards = _countMeldableCardsToExistingMelds(bot);
+
+    // Cards that cannot be melded (3s + cards that don't fit existing melds)
+    int nonMeldableCards = currentHandSize - meldableCards;
+
+    // Can only discard 1 card per turn, need exactly 1 card left to go out
+    return nonMeldableCards > 0 ? nonMeldableCards : 1;
+  }
+
+  /// Count cards that can be added to existing melds
+  int _countMeldableCardsToExistingMelds(Player bot) {
+    int meldableCount = 0;
+
+    for (final card in bot.currentHand) {
+      if (card.isThree) continue; // 3s cannot be melded
+
+      // Check if card can be added to any existing meld
+      for (final meld in bot.melds) {
+        if (meld.canAddCard(card)) {
+          meldableCount++;
+          break; // Count each card only once
+        }
+      }
+    }
+
+    return meldableCount;
+  }
+
+  /// Optimize bot's action to minimize turns to go out
+  BotDecision? optimizeForGoOut(Player bot, GameController controller) {
+    final currentTurns = calculateTurnsToGoOut(bot, controller);
+    if (currentTurns <= 0) {
+      return null; // Can't go out or already can go out immediately
+    }
+
+    // If we can go out in 1-2 turns, prioritize actions that get us there
+    if (currentTurns <= 2) {
+      final meldAction = _findOptimalMeldForGoOut(bot, controller);
+      if (meldAction != null) return meldAction;
+    }
+
+    return null;
+  }
+
+  /// Find the best meld action to minimize go-out timeline
+  BotDecision? _findOptimalMeldForGoOut(Player bot, GameController controller) {
+    BotDecision? bestAction;
+    int bestTurnsAfterAction = 999;
+
+    // Try melding each possible card to existing melds
+    for (final card in bot.currentHand) {
+      if (card.isThree) continue; // Can't meld 3s
+
+      for (int meldIndex = 0; meldIndex < bot.melds.length; meldIndex++) {
+        final meld = bot.melds[meldIndex];
+        if (meld.canAddCard(card)) {
+          // Simulate adding this card and calculate resulting go-out timeline
+          final turnsAfterMeld = _simulateTurnsAfterMelding(bot, card);
+
+          if (turnsAfterMeld >= 0 && turnsAfterMeld < bestTurnsAfterAction) {
+            bestAction = BotDecision(
+              action: 'addToMeld',
+              data: {'card': card, 'meldIndex': meldIndex},
+            );
+            bestTurnsAfterAction = turnsAfterMeld;
+          }
+        }
+      }
+    }
+
+    return bestAction;
+  }
+
+  /// Simulate how many turns to go out after melding a specific card
+  int _simulateTurnsAfterMelding(Player bot, PlayingCard cardToMeld) {
+    // Count remaining cards after melding
+    final remainingCards = bot.currentHand.where((c) => c != cardToMeld).length;
+
+    // Count other meldable cards in remaining hand (excluding the card we're melding)
+    int remainingMeldable = 0;
+    for (final card in bot.currentHand) {
+      if (card == cardToMeld || card.isThree) continue;
+
+      for (final meld in bot.melds) {
+        if (meld.canAddCard(card)) {
+          remainingMeldable++;
+          break;
+        }
+      }
+    }
+
+    // Cards that cannot be melded (must be discarded)
+    final nonMeldableCards = remainingCards - remainingMeldable;
+
+    return nonMeldableCards > 0 ? nonMeldableCards : 1;
+  }
+
+  /// Check if bot has required books (both clean and dirty)
+  bool _hasRequiredBooks(Player bot) {
+    bool hasCleanBook = false;
+    bool hasDirtyBook = false;
+
+    for (final meld in bot.melds) {
+      if (meld.cards.length >= bookMinSize) {
+        if (meld.isClean) {
+          hasCleanBook = true;
+        } else {
+          hasDirtyBook = true;
+        }
+      }
+    }
+
+    return hasCleanBook && hasDirtyBook;
+  }
+
   /// Main entry point for end game decisions.
   ///
   /// Determines if the bot should go out, complete books, or continue building
@@ -39,9 +167,25 @@ class BotEndGameManager {
       return null; // Not ready for end game decisions
     }
 
-    // Immediate go-out check - ENHANCED for small hands
-    if (bot.currentHand.isEmpty && bot.canGoOut) {
-      return BotDecision(action: 'goOut');
+    // Handle empty hand scenarios properly
+    if (bot.currentHand.isEmpty) {
+      if (!bot.hasPickedUpFoot) {
+        // Empty hand but no foot picked up - should pick up foot automatically
+        // This is handled by the game controller, not bot AI, but log for debugging
+        print(
+          'Info: Bot ${bot.name} has empty hand, will automatically pick up foot',
+        );
+        return null; // Let game controller handle foot pickup
+      } else if (bot.canGoOut) {
+        // On foot with empty hand and can go out - GO OUT!
+        return BotDecision(action: 'goOut');
+      } else {
+        // On foot with empty hand but can't go out (missing books)
+        print(
+          'Warning: Bot ${bot.name} has empty foot but cannot go out (missing required books)',
+        );
+        return null; // This shouldn't happen in normal gameplay
+      }
     }
 
     // CRITICAL: Go out immediately with 1-2 cards if we can
@@ -51,6 +195,17 @@ class BotEndGameManager {
           .toList();
       if (nonThreeCards.isNotEmpty) {
         return BotDecision(action: 'goOut', data: nonThreeCards.first);
+      }
+    }
+
+    // NEW: Go-out optimization for edge cases (like Ben with Q♦ + 5s)
+    // When bot has required books and 2-4 cards, optimize for minimum go-out turns
+    if (_hasRequiredBooks(bot) &&
+        bot.currentHand.length <= 4 &&
+        bot.currentHand.length > 2) {
+      final goOutOptimization = optimizeForGoOut(bot, controller);
+      if (goOutOptimization != null) {
+        return goOutOptimization;
       }
     }
 
@@ -478,10 +633,14 @@ class BotEndGameManager {
   PlayingCard _chooseCardToDiscard(Player bot) {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
-      // This should not happen if properly checked in calling methods, but be defensive
-      throw Exception(
-        'Cannot discard from empty hand - bot should go out or error',
-      );
+      // This indicates a logic error - empty hand should trigger foot pickup or go out
+      print('Warning: Bot ${bot.name} has empty hand but is trying to discard');
+      print('  - Has picked up foot: ${bot.hasPickedUpFoot}');
+      print('  - Can go out: ${bot.canGoOut}');
+      print('  - Using fallback card to prevent crash');
+
+      // Return a safe fallback card
+      return const PlayingCard(rank: CardRank.ace, suit: Suit.spades);
     }
 
     // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)

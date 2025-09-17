@@ -9,7 +9,7 @@ void main() {
       final expectedNames = [
         'Clara', 'Carl', // Conservative bots
         'Bob', 'Rita', // Aggressive bots
-        'Ben', 'Penny', // Book builder bots
+        'Ben', 'Tiana', // Book builder bots
         'Alex', 'Sue', // Adaptive bots
       ];
 
@@ -62,7 +62,7 @@ void main() {
         'Bob',
         'Rita',
         'Ben',
-        'Penny',
+        'Tiana',
         'Alex',
         'Sue',
       ];
