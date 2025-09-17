@@ -26,7 +26,7 @@ const List<BotConfig> kBotConfigurations = [
   BotConfig('Bob', BotPersonality.aggressive),
   BotConfig('Rita', BotPersonality.aggressive),
   BotConfig('Ben', BotPersonality.bookBuilder),
-  BotConfig('Penny', BotPersonality.bookBuilder),
+  BotConfig('Tiana', BotPersonality.bookBuilder),
   BotConfig('Alex', BotPersonality.adaptive),
   BotConfig('Sue', BotPersonality.adaptive),
 ];
@@ -783,26 +783,13 @@ class BotTurnManager {
   void logBotActionForUser(Player botPlayer, BotDecision decision) {
     String? actionDescription;
     switch (decision.action) {
+      // Skip actions already logged by game state to prevent duplicates
       case 'drawFromDeck':
-        actionDescription = '🎴 drew 2 cards from deck';
-        break;
       case 'drawFromDiscard':
-        actionDescription = '♻️ took discard pile';
-        break;
       case 'createMeld':
-        final cards = decision.data as List<PlayingCard>;
-        final rank = cards.first.rank.name.toUpperCase();
-        actionDescription = '📋 created ${cards.length}-card ${rank}s meld';
-        break;
       case 'createMultipleMelds':
-        final allMelds = decision.data as List<List<PlayingCard>>;
-        actionDescription = '📋 created ${allMelds.length} melds';
-        break;
       case 'addToMeld':
-        final data = decision.data as Map<String, dynamic>;
-        final card = data['card'] as PlayingCard;
-        actionDescription = '➕ added ${card.compactName} to meld';
-        break;
+        return; // Don't log duplicate actions
       case 'noMeld':
         actionDescription = '⏭️ chose not to meld';
         break;

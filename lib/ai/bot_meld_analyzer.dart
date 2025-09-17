@@ -656,13 +656,19 @@ class BotMeldAnalyzer {
     final possibleMelds = getPossibleMelds(bot, controller);
     if (possibleMelds.isEmpty) return [];
 
-    // AGGRESSIVE MODE: If bot has large hand, try to use ALL melds for foot transition
+    // EMERGENCY MODE: If bot has large hand but hasn't played down, be CONSERVATIVE
     final handSize = bot.currentHand.length;
-    if (handSize >= 12 && bot.hasPlayedDown) {
-      // Try to create ALL possible melds to aggressively empty hand
+    if (handSize >= 12 && !bot.hasPlayedDown) {
+      // Even in emergency, prefer efficient play-down over dumping all cards
+      // This prevents Sue from playing 3 melds when only 1 efficient meld is needed
+      // Fall through to normal conservative logic below
+    }
+    // POST-PLAYDOWN: If already played down and hand is huge, be more aggressive
+    else if (handSize >= 15 && bot.hasPlayedDown) {
+      // Only use ALL melds if absolutely necessary for foot transition
       final allMeldsValue = calculateTotalMeldValue(possibleMelds);
-      if (allMeldsValue >= requirement && possibleMelds.length <= 6) {
-        // Limit to 6 melds max to avoid UI/performance issues
+      if (allMeldsValue >= requirement && possibleMelds.length <= 4) {
+        // Reduced from 6 to 4 melds max to be less wasteful
         return possibleMelds;
       }
     }
@@ -686,6 +692,49 @@ class BotMeldAnalyzer {
     return []; // No combination meets requirement
   }
 
+  /// Calculate efficiency for play-down meld selection
+  /// Higher efficiency = better choice for conservative play-down
+  double _calculateMeldPlayDownEfficiency(
+    List<PlayingCard> meld,
+    int requirement,
+    int meldValue,
+  ) {
+    double efficiency = 100.0; // Base efficiency
+
+    // 1. Prefer melds closer to requirement (avoid over-melding)
+    final excess = meldValue - requirement;
+    if (excess == 0) {
+      efficiency += 50.0; // Perfect match bonus
+    } else {
+      // Penalty for excess points (more excess = lower efficiency)
+      efficiency -= (excess * 0.5); // 0.5 penalty per excess point
+    }
+
+    // 2. Strong preference for clean melds (no wilds)
+    final hasWilds = meld.any((card) => card.isWild);
+    if (!hasWilds) {
+      efficiency += 30.0; // Clean meld bonus
+    } else {
+      efficiency -= 20.0; // Dirty meld penalty
+    }
+
+    // 3. Prefer minimum card count (efficiency bonus)
+    if (meld.length == 3) {
+      efficiency += 15.0; // Minimum size bonus
+    } else if (meld.length >= 7) {
+      efficiency += 10.0; // Book bonus (but less than minimum size)
+    }
+
+    // 4. Special bonus for using high-value cards efficiently
+    // If using aces/kings for exact requirement, that's very efficient
+    final avgCardValue = meldValue / meld.length;
+    if (avgCardValue >= 20 && excess <= 10) {
+      efficiency += 10.0; // High-value efficiency bonus
+    }
+
+    return efficiency;
+  }
+
   /// Find the best combination of exactly N melds that meets the requirement
   List<List<PlayingCard>> _findBestCombinationOfSize(
     List<List<PlayingCard>> possibleMelds,
@@ -693,15 +742,23 @@ class BotMeldAnalyzer {
     int combinationSize,
   ) {
     if (combinationSize == 1) {
-      // Single meld - find the most conservative option (closest to requirement)
+      // Single meld - find the most EFFICIENT option for play-down
       List<PlayingCard>? bestMeld;
-      int bestValue = 999999; // Start with impossibly high value
+      double bestEfficiency = 0.0; // Higher efficiency is better
 
       for (final meld in possibleMelds) {
         final meldValue = calculateTotalMeldValue([meld]);
-        if (meldValue >= requirement && meldValue < bestValue) {
-          bestMeld = meld;
-          bestValue = meldValue;
+        if (meldValue >= requirement) {
+          // Calculate efficiency: prefer melds closer to requirement + clean melds
+          final efficiency = _calculateMeldPlayDownEfficiency(
+            meld,
+            requirement,
+            meldValue,
+          );
+          if (efficiency > bestEfficiency) {
+            bestMeld = meld;
+            bestEfficiency = efficiency;
+          }
         }
       }
 
@@ -709,17 +766,36 @@ class BotMeldAnalyzer {
     }
 
     if (combinationSize == 2) {
-      // Two-meld combinations - find the most conservative option
+      // Two-meld combinations - find the most efficient option
       List<List<PlayingCard>>? bestCombination;
-      int bestValue = 999999; // Start with impossibly high value
+      double bestEfficiency = 0.0;
 
       for (int i = 0; i < possibleMelds.length; i++) {
         for (int j = i + 1; j < possibleMelds.length; j++) {
           final combination = [possibleMelds[i], possibleMelds[j]];
           final combinedValue = calculateTotalMeldValue(combination);
-          if (combinedValue >= requirement && combinedValue < bestValue) {
-            bestCombination = combination;
-            bestValue = combinedValue;
+          if (combinedValue >= requirement) {
+            // Calculate combined efficiency of both melds
+            final efficiency1 = _calculateMeldPlayDownEfficiency(
+              possibleMelds[i],
+              requirement ~/ 2,
+              calculateTotalMeldValue([possibleMelds[i]]),
+            );
+            final efficiency2 = _calculateMeldPlayDownEfficiency(
+              possibleMelds[j],
+              requirement ~/ 2,
+              calculateTotalMeldValue([possibleMelds[j]]),
+            );
+            final combinedEfficiency = (efficiency1 + efficiency2) / 2;
+
+            // Bonus for combination that's closer to requirement
+            final excess = combinedValue - requirement;
+            final adjustedEfficiency = combinedEfficiency - (excess * 0.3);
+
+            if (adjustedEfficiency > bestEfficiency) {
+              bestCombination = combination;
+              bestEfficiency = adjustedEfficiency;
+            }
           }
         }
       }

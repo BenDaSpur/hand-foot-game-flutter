@@ -24,7 +24,7 @@ void main() {
 
       // Look for bot player cards to tap on
       final botNames = [
-        'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Penny', 'Alex', 'Sue',
+        'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Tiana', 'Alex', 'Sue',
         'Bot 1', 'Bot 2', 'Bot 3', // fallback names
       ];
 
@@ -88,7 +88,7 @@ void main() {
 
         // Find a bot to switch to first
         final botNames = [
-          'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Penny', 'Alex', 'Sue',
+          'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Tiana', 'Alex', 'Sue',
           'Bot 1', 'Bot 2', 'Bot 3', // fallback names
         ];
 
@@ -153,7 +153,7 @@ void main() {
 
       // Find at least two different bots
       final botNames = [
-        'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Penny', 'Alex', 'Sue',
+        'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Tiana', 'Alex', 'Sue',
         'Bot 1', 'Bot 2', 'Bot 3', // fallback names
       ];
 
@@ -252,7 +252,7 @@ void main() {
 
       // Find a bot to switch to
       final botNames = [
-        'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Penny', 'Alex', 'Sue',
+        'Clara', 'Carl', 'Bob', 'Rita', 'Ben', 'Tiana', 'Alex', 'Sue',
         'Bot 1', 'Bot 2', 'Bot 3', // fallback names
       ];
 

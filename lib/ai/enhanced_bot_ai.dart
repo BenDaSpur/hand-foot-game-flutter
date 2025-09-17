@@ -155,29 +155,52 @@ class EnhancedBotAI {
       final shouldBypassEarlyGame = !isEarlyGame || hasCompetitivePressure;
 
       if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
-        // PANIC MODE: Use new maximal meld combination for aggressive hand emptying
+        // PANIC MODE: But still try conservative play-down first if not played down yet
         if (gameState.turnPhase == TurnPhase.meld) {
-          final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
-            bot,
-            controller,
-          );
-          if (maximalMelds.isNotEmpty) {
+          List<List<PlayingCard>> emergencyMelds;
+
+          // If not played down, try conservative play-down even in emergency
+          if (!bot.hasPlayedDown) {
+            emergencyMelds = _meldAnalyzer.findBestPlayDownCombination(
+              bot,
+              controller,
+              gameState.playDownRequirement,
+            );
+            if (emergencyMelds.isEmpty) {
+              // Conservative failed, fall back to maximal as last resort
+              emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
+                bot,
+                controller,
+              );
+            }
+          } else {
+            // Already played down, use maximal for foot transition
+            emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
+              bot,
+              controller,
+            );
+          }
+
+          if (emergencyMelds.isNotEmpty) {
+            final meldType = bot.hasPlayedDown
+                ? 'maximal'
+                : 'conservative emergency';
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
+              'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
             );
 
-            if (maximalMelds.length == 1) {
+            if (emergencyMelds.length == 1) {
               return BotDecision(
                 action: 'createMeld',
-                data: maximalMelds.first,
+                data: emergencyMelds.first,
                 skipPlayDownCheck: bot.hasPlayedDown,
               );
             } else {
               return BotDecision(
                 action: 'createMultipleMelds',
-                data: maximalMelds,
+                data: emergencyMelds,
                 skipPlayDownCheck: bot.hasPlayedDown,
               );
             }

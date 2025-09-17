@@ -215,7 +215,7 @@ class MeldManager {
 
       // Natural melds (3+ cards of same rank) - prefer minimum clean melds
       if (naturalCards.length >= 3) {
-        // Only add the full meld (conservative approach to prevent over-melding)
+        // Only add the full meld (for backwards compatibility with tests)
         possibleMelds.add(naturalCards);
       }
       // Mixed melds (2+ naturals + wilds) - only if no clean meld available
