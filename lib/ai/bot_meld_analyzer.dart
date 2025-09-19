@@ -3,7 +3,6 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
-import '../utils/debug_logger.dart';
 
 /// Analyzes meld opportunities and calculations for bot players.
 ///
@@ -251,6 +250,45 @@ class BotMeldAnalyzer {
   }) {
     int priority = card.pointValue;
 
+    // CRITICAL: Check clean book protection FIRST before any bonuses
+    // Check if meld has no wild cards (potential clean meld/book)
+    final meldHasNoWilds = !meld.cards.any((c) => c.isWild);
+    if (card.isWild && bot != null && meldHasNoWilds) {
+      final cleanBookCount = bot.melds
+          .where((m) => m.isClean && m.cards.length >= 7)
+          .length;
+
+      // HARD BLOCK: Never contaminate large clean melds when we need clean books
+      if (meld.cards.length >= 5 && cleanBookCount < 2) {
+        // Check if there are smaller alternatives for this wild card
+        final alternativeTargets = bot.melds
+            .where(
+              (m) =>
+                  m != meld &&
+                  m.canAddCard(card) &&
+                  m.cards.length < meld.cards.length,
+            )
+            .toList();
+
+        if (alternativeTargets.isNotEmpty) {
+          return -50000; // Absolutely never do this when smaller alternatives exist
+        }
+      }
+
+      // Strong protection for medium-sized clean melds too
+      if (meld.cards.length >= 4 && cleanBookCount == 0) {
+        final alternativeTargets = bot.melds
+            .where(
+              (m) => m != meld && m.canAddCard(card) && m.cards.length <= 3,
+            )
+            .toList();
+
+        if (alternativeTargets.isNotEmpty) {
+          return -25000; // Very strong protection when small alternatives exist
+        }
+      }
+    }
+
     // NEW: ULTRA-AGGRESSIVE WILD CARD HOARDING STRATEGY
     if (card.isWild && bot != null) {
       // Count how many 2-card rank combinations we have (potential melds)
@@ -324,23 +362,23 @@ class BotMeldAnalyzer {
       }
     }
 
-    // NEW: CRITICAL PROTECTION FOR POTENTIAL CLEAN BOOKS
-    if (card.isWild && bot != null && meld.isClean && meld.cards.length >= 5) {
+    // Additional clean book protection penalties (backup to hard blocks above)
+    if (card.isWild && bot != null && meld.isClean && meld.cards.length >= 3) {
       final cleanBookCount = bot.melds
           .where((m) => m.isClean && m.cards.length >= 7)
           .length;
 
-      // MASSIVE penalty for contaminating potential clean books
-      if (cleanBookCount < 2) {
-        // Need at least 2 clean books to go out
-        priority -= GameConfig
-            .criticalCleanBookProtectionPenalty; // NEVER contaminate potential clean books when we need them
-        DebugLogger.warning(
-          '${bot.name}: BLOCKED adding wild to potential clean book ${meld.rank} (${meld.cards.length} cards)',
-        );
-      } else if (cleanBookCount < 3) {
-        priority -= GameConfig
-            .cleanBookProtectionPenalty; // Very reluctant even with 2 clean books
+      // Escalating penalties based on meld size and clean book deficit
+      if (cleanBookCount == 0) {
+        priority -= GameConfig.criticalCleanBookProtectionPenalty;
+        if (meld.cards.length >= 5) {
+          priority -= 2000; // Extra penalty for large clean melds
+        }
+      } else if (cleanBookCount < 2) {
+        priority -= GameConfig.cleanBookProtectionPenalty;
+        if (meld.cards.length >= 5) {
+          priority -= 1000; // Extra penalty for large clean melds
+        }
       }
     }
 
@@ -372,23 +410,56 @@ class BotMeldAnalyzer {
         bonus -= 300; // Don't waste wilds on completed books
       }
     }
-    // Strategy 2: FOOT PHASE - Prioritize near-book melds (6 cards) to create more books
+    // Strategy 2: FOOT PHASE - Prioritize completing books, but PROTECT clean books
     else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+      // Check if meld is clean and if we have clean book alternatives
+      final isCleanMeld = meld.isClean;
+      final cleanBookCount = bot.melds
+          .where((m) => m.isClean && m.cards.length >= 7)
+          .length;
+
       // MASSIVE bonus for completing books (6 -> 7 cards)
       if (meld.cards.length == 6) {
-        bonus += 1500; // Huge bonus for book completion
+        if (!isCleanMeld) {
+          bonus += 1500; // Huge bonus for dirty book completion
+        } else {
+          // For clean melds, only give bonus if no smaller alternatives exist
+          final smallerAlternatives = bot.melds
+              .where(
+                (m) => m != meld && m.canAddCard(card) && m.cards.length <= 4,
+              )
+              .toList();
+
+          if (smallerAlternatives.isEmpty) {
+            bonus +=
+                1000; // Reduced bonus for clean book completion when necessary
+          } else {
+            bonus -= 500; // Penalty for contaminating when alternatives exist
+          }
+        }
       }
       // Good bonus for near-book melds (5 -> 6 cards)
       else if (meld.cards.length == 5) {
-        bonus += 800; // Getting close to book
+        if (!isCleanMeld) {
+          bonus += 800; // Getting close to dirty book
+        } else {
+          bonus += 400; // Reduced bonus for clean melds
+        }
       }
       // Medium bonus for growing medium melds (4 -> 5 cards)
       else if (meld.cards.length == 4) {
         bonus += 400; // Building toward book
       }
-      // Small penalty for tiny melds (concentrate on bigger ones)
+      // REVISED: Bonus for tiny melds (prefer contaminating small melds)
       else if (meld.cards.length <= 3) {
-        bonus -= 200; // Focus on near-books instead
+        if (!isCleanMeld) {
+          bonus += 200; // Prefer already dirty small melds
+        } else if (cleanBookCount == 0) {
+          bonus -= 400; // Protect small clean melds when no clean books exist
+        } else {
+          bonus +=
+              100; // Small bonus for small clean melds when we have clean books
+        }
       }
     }
 
