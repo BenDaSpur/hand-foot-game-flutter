@@ -389,9 +389,7 @@ class GameState {
         );
       }
     } else {
-      _logAction(
-        'no additional cards available in discard pile',
-      );
+      _logAction('no additional cards available in discard pile');
     }
 
     turnPhase = TurnPhase.meld;
@@ -1032,5 +1030,4 @@ class GameState {
       'force reshuffled ${cardsToShuffle.length} cards from discard into deck',
     );
   }
-
 }

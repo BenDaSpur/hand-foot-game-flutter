@@ -12,11 +12,7 @@ class GameControllerFactory {
     int? seed,
     dynamic eventBus, // Optional event bus for event-driven architecture
   }) {
-    return GameController(
-      players: players,
-      seed: seed,
-      eventBus: eventBus,
-    );
+    return GameController(players: players, seed: seed, eventBus: eventBus);
   }
 
   /// Create a multiplayer game controller with Firebase backend

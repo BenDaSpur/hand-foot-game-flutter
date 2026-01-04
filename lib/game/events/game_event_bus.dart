@@ -50,10 +50,7 @@ class GameEventBus {
   StreamSubscription<T> subscribeToType<T extends GameEvent>(
     void Function(T) onEvent,
   ) {
-    return events
-        .where((event) => event is T)
-        .cast<T>()
-        .listen(onEvent);
+    return events.where((event) => event is T).cast<T>().listen(onEvent);
   }
 
   /// Subscribe to events matching a predicate
@@ -81,4 +78,3 @@ class GameEventBus {
 /// Global singleton event bus instance
 /// Can be overridden for testing
 GameEventBus gameEventBus = GameEventBus();
-

@@ -13,10 +13,8 @@ abstract class GameEvent {
   /// Player who triggered the event (null for system events)
   final Player? player;
 
-  GameEvent({
-    DateTime? timestamp,
-    this.player,
-  }) : timestamp = timestamp ?? DateTime.now();
+  GameEvent({DateTime? timestamp, this.player})
+    : timestamp = timestamp ?? DateTime.now();
 
   /// Event type identifier for filtering and routing
   String get eventType;
@@ -138,10 +136,8 @@ class RoundEndedEvent extends GameEvent {
 class RoundStartedEvent extends GameEvent {
   final int roundNumber;
 
-  RoundStartedEvent({
-    required this.roundNumber,
-    super.timestamp,
-  }) : super(player: null); // Round start is a system event
+  RoundStartedEvent({required this.roundNumber, super.timestamp})
+    : super(player: null); // Round start is a system event
 
   @override
   String get eventType => 'RoundStarted';
@@ -178,10 +174,7 @@ class GameEndedEvent extends GameEvent {
 
 /// Event fired when a player picks up their foot
 class FootPickedUpEvent extends GameEvent {
-  FootPickedUpEvent({
-    required super.player,
-    super.timestamp,
-  });
+  FootPickedUpEvent({required super.player, super.timestamp});
 
   @override
   String get eventType => 'FootPickedUp';
@@ -200,4 +193,3 @@ class PlayedDownEvent extends GameEvent {
   @override
   String get eventType => 'PlayedDown';
 }
-

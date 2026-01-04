@@ -10,7 +10,7 @@ enum _BotStyle { conservative, aggressive, bookBuilder, adaptive }
 /// Generates personality-based thinking messages for bots
 class BotThinkingMessages {
   static final _random = Random();
-  
+
   /// Map bot names to their personalities
   static const _botPersonalities = {
     'Clara': _BotStyle.conservative,
@@ -22,7 +22,7 @@ class BotThinkingMessages {
     'Alex': _BotStyle.adaptive,
     'Sue': _BotStyle.adaptive,
   };
-  
+
   /// Draw phase messages by personality
   static const _drawMessages = {
     _BotStyle.conservative: [
@@ -46,7 +46,7 @@ class BotThinkingMessages {
       'Let\'s see what I get...',
     ],
   };
-  
+
   /// Meld phase messages by personality
   static const _meldMessages = {
     _BotStyle.conservative: [
@@ -74,7 +74,7 @@ class BotThinkingMessages {
       'What\'s the best move here?',
     ],
   };
-  
+
   /// Near-book messages by personality
   static const _nearBookMessages = {
     _BotStyle.conservative: [
@@ -94,7 +94,7 @@ class BotThinkingMessages {
       'So close to completing this!',
     ],
   };
-  
+
   /// Discard phase messages by personality
   static const _discardMessages = {
     _BotStyle.conservative: [
@@ -118,7 +118,7 @@ class BotThinkingMessages {
       'This one can go...',
     ],
   };
-  
+
   /// Tough discard messages
   static const _discardToughMessages = {
     _BotStyle.conservative: [
@@ -133,40 +133,39 @@ class BotThinkingMessages {
       'But I need all of these for books!',
       'Every card is part of a set!',
     ],
-    _BotStyle.adaptive: [
-      'Tough choice...',
-      'All my cards are good...',
-    ],
+    _BotStyle.adaptive: ['Tough choice...', 'All my cards are good...'],
   };
-  
+
   /// Get the bot's personality style
   static _BotStyle _getStyle(String botName) {
     return _botPersonalities[botName] ?? _BotStyle.adaptive;
   }
-  
+
   /// Pick a random message from a list
   static String _pick(List<String> messages) {
     return messages[_random.nextInt(messages.length)];
   }
-  
+
   /// Get a contextual thinking message based on game state and bot personality
   static String getThinkingMessage(Player bot, GameState gameState) {
     final style = _getStyle(bot.name);
     final phase = gameState.turnPhase;
     final handSize = bot.currentHand.length;
-    
+
     switch (phase) {
       case TurnPhase.draw:
         return _pick(_drawMessages[style]!);
-        
+
       case TurnPhase.meld:
         // Check if bot is close to completing a book
-        final nearBook = bot.melds.any((m) => m.cards.length >= 5 && m.cards.length < 7);
+        final nearBook = bot.melds.any(
+          (m) => m.cards.length >= 5 && m.cards.length < 7,
+        );
         if (nearBook) {
           return _pick(_nearBookMessages[style]!);
         }
         return _pick(_meldMessages[style]!);
-        
+
       case TurnPhase.discard:
         // If hand is small, discarding is tough
         if (handSize <= 3) {
@@ -279,8 +278,11 @@ class GameActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!_isCurrentUserTurn) {
       final bot = gameState.currentPlayer;
-      final thinkingMessage = BotThinkingMessages.getThinkingMessage(bot, gameState);
-      
+      final thinkingMessage = BotThinkingMessages.getThinkingMessage(
+        bot,
+        gameState,
+      );
+
       return Container(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -336,10 +338,7 @@ class GameActionButtons extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '💭',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text('💭', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(

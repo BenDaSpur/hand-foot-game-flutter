@@ -163,7 +163,8 @@ class EnhancedBotAI {
       final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
       final hasCompetitivePressure = pressureResponse != null;
       // Only bypass early game if we have competitive pressure AND have had enough turns
-      final shouldBypassEarlyGame = (!isEarlyGame || hasCompetitivePressure) && 
+      final shouldBypassEarlyGame =
+          (!isEarlyGame || hasCompetitivePressure) &&
           botTurnCount >= minTurnsForEmergency;
 
       if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
@@ -375,11 +376,7 @@ class EnhancedBotAI {
         );
 
         // Enhanced: also check for pre-play-down opportunities if pile is very valuable
-        final shouldTake = _shouldTakeDiscardPile(
-          bot,
-          context,
-          riskTolerance,
-        );
+        final shouldTake = _shouldTakeDiscardPile(bot, context, riskTolerance);
         final canUnlock = context.canUnlockDiscard();
 
         if (shouldTake && canUnlock) {
@@ -475,7 +472,8 @@ class EnhancedBotAI {
       // Try to meld all remaining cards to minimize hand size for going out
       final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
         bot,
-        (context.controller as GameController?) ?? (throw StateError('Controller required for meld analysis')),
+        (context.controller as GameController?) ??
+            (throw StateError('Controller required for meld analysis')),
       );
       if (cardsToAdd.isNotEmpty) {
         DebugLogger.debug(
@@ -509,14 +507,11 @@ class EnhancedBotAI {
     // Note: This method is called from makeDecision, so we don't have access to pressureResponse
     // We need to check pressure here, but this should be cached from the earlier call
     final hasCompetitivePressure =
-        _evaluateOpponentPressureWithCaching(
-          bot,
-          context,
-          context.gameState,
-        ) !=
+        _evaluateOpponentPressureWithCaching(bot, context, context.gameState) !=
         null;
     // Only bypass early game if enough turns have passed
-    final shouldBypassEarlyGame = (!isEarlyGame || hasCompetitivePressure) &&
+    final shouldBypassEarlyGame =
+        (!isEarlyGame || hasCompetitivePressure) &&
         botTurnCount >= minTurnsForEmergency;
 
     if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
@@ -541,7 +536,9 @@ class EnhancedBotAI {
     }
 
     // Also require minimum turns for emergency mode
-    if (handSize >= emergencyHandSizeThreshold && !isEarlyGame && botTurnCount >= minTurnsForEmergency) {
+    if (handSize >= emergencyHandSizeThreshold &&
+        !isEarlyGame &&
+        botTurnCount >= minTurnsForEmergency) {
       // EMERGENCY MODE: Force aggressive meld creation
       if (bot.hasPlayedDown) {
         // Already played down - meld anything possible
@@ -581,7 +578,8 @@ class EnhancedBotAI {
 
       final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
         bot,
-        (context.controller as GameController?) ?? (throw StateError('Controller required for meld analysis')),
+        (context.controller as GameController?) ??
+            (throw StateError('Controller required for meld analysis')),
       );
       if (cardsToAdd.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
@@ -1409,10 +1407,7 @@ class EnhancedBotAI {
     // ENHANCED pre-play-down logic - MUCH more aggressive
     if (!bot.hasPlayedDown) {
       final playDownRequirement = gameState.playDownRequirement;
-      final currentMeldPotential = _calculateCurrentMeldPotential(
-        bot,
-        context,
-      );
+      final currentMeldPotential = _calculateCurrentMeldPotential(bot, context);
 
       // If pile helps meet play-down requirement, be EXTREMELY aggressive
       if (currentMeldPotential + (pileValue * 0.4) >= playDownRequirement) {
@@ -2953,8 +2948,7 @@ class EnhancedBotAI {
     final handString = bot.currentHand
         .map((c) => '${c.rank.name}-${c.suit?.name ?? 'J'}')
         .join(',');
-    final cacheKey =
-        '${handString}_${context.round}_${bot.melds.length}';
+    final cacheKey = '${handString}_${context.round}_${bot.melds.length}';
 
     // Return cached result if valid
     if (_lastMeldCacheKey == cacheKey && _cachedPossibleMelds != null) {
@@ -2968,7 +2962,10 @@ class EnhancedBotAI {
     if (controller == null) {
       return []; // No controller available (test context)
     }
-    final result = _meldAnalyzer.getPossibleMelds(bot, controller as GameController);
+    final result = _meldAnalyzer.getPossibleMelds(
+      bot,
+      controller as GameController,
+    );
     _cachedPossibleMelds = {cacheKey: result};
     _lastMeldCacheKey = cacheKey;
 

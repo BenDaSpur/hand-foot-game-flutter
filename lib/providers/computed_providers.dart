@@ -29,7 +29,7 @@ final currentPlayerProvider = Provider<Player?>((ref) {
 final leaderboardProvider = Provider<List<Player>>((ref) {
   final gameState = ref.watch(currentGameStateProvider);
   if (gameState == null) return [];
-  
+
   final sortedPlayers = List<Player>.from(gameState.players);
   sortedPlayers.sort((a, b) => b.score.compareTo(a.score));
   return sortedPlayers;
@@ -48,7 +48,7 @@ final gameStatusProvider = Provider<Map<String, dynamic>>((ref) {
       'discardPileSize': 0,
     };
   }
-  
+
   return {
     'phase': gameState.phase.name,
     'turnPhase': gameState.turnPhase.name,
@@ -96,11 +96,9 @@ final gameWinnerProvider = Provider<Player?>((ref) {
 final humanPlayerProvider = Provider<Player?>((ref) {
   final gameState = ref.watch(currentGameStateProvider);
   if (gameState == null) return null;
-  
+
   try {
-    return gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    return gameState.players.firstWhere((p) => p.type == PlayerType.human);
   } catch (e) {
     return null;
   }
@@ -110,10 +108,8 @@ final humanPlayerProvider = Provider<Player?>((ref) {
 final botPlayersProvider = Provider<List<Player>>((ref) {
   final gameState = ref.watch(currentGameStateProvider);
   if (gameState == null) return [];
-  
-  return gameState.players
-      .where((p) => p.type == PlayerType.bot)
-      .toList();
+
+  return gameState.players.where((p) => p.type == PlayerType.bot).toList();
 });
 
 /// Computed provider for play-down requirement for current round
@@ -121,4 +117,3 @@ final playDownRequirementProvider = Provider<int>((ref) {
   final gameState = ref.watch(currentGameStateProvider);
   return gameState?.playDownRequirement ?? 0;
 });
-

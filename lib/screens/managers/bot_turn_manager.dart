@@ -146,7 +146,8 @@ class BotTurnManager {
   }
 
   // Configurable delays for bot turn phases (in milliseconds)
-  static const int _phaseDelayMs = 1500; // Delay after each phase (draw, meld, discard)
+  static const int _phaseDelayMs =
+      1500; // Delay after each phase (draw, meld, discard)
   static const int _actionDelayMs = 800; // Delay between actions within a phase
   static const int _turnStartDelayMs = 500; // Brief delay when bot turn starts
 
@@ -159,7 +160,7 @@ class BotTurnManager {
       // Brief delay at start of bot turn so user sees the transition
       await Future.delayed(const Duration(milliseconds: _turnStartDelayMs));
       onStateChanged(); // Show "Waiting for X to draw..."
-      
+
       // Process bot turn iteratively until turn ends or max iterations reached
       int maxIterations = 15; // Increased to allow for longer meld phases
       int iteration = 0;
@@ -180,7 +181,7 @@ class BotTurnManager {
         final currentPhase = gameController.gameState.turnPhase;
         final phaseChanged = lastPhase != null && lastPhase != currentPhase;
         lastPhase = currentPhase;
-        
+
         // Add longer delay when transitioning between phases
         if (phaseChanged) {
           onStateChanged(); // Update UI to show new phase
@@ -241,8 +242,8 @@ class BotTurnManager {
 
         // Add delay after each bot action so users can see what happened
         // Use shorter delay for actions within meld phase, longer for phase transitions
-        final delayMs = gameController.gameState.turnPhase == TurnPhase.meld 
-            ? _actionDelayMs 
+        final delayMs = gameController.gameState.turnPhase == TurnPhase.meld
+            ? _actionDelayMs
             : _phaseDelayMs;
         await Future.delayed(Duration(milliseconds: delayMs));
 

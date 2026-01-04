@@ -70,4 +70,3 @@ class BotGameContext {
   /// Returns null if controller was not provided (e.g., in test contexts)
   GameInterface? get controller => _controller;
 }
-

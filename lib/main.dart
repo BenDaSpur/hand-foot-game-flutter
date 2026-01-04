@@ -51,11 +51,7 @@ void main() async {
     }
   }
 
-  runApp(
-    const ProviderScope(
-      child: HandAndFootApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: HandAndFootApp()));
 }
 
 class HandAndFootApp extends StatelessWidget {

@@ -23,11 +23,11 @@ class GameControllerState {
   final int version;
 
   GameControllerState(this.controller, [this.version = 0]);
-  
+
   GameControllerState incrementVersion() {
     return GameControllerState(controller, version + 1);
   }
-  
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -35,7 +35,7 @@ class GameControllerState {
         other.controller == controller &&
         other.version == version;
   }
-  
+
   @override
   int get hashCode => Object.hash(controller, version);
 }
@@ -50,7 +50,9 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
   bool _pendingUpdate = false;
   bool _isUpdating = false; // Prevent concurrent updates
   DateTime? _lastUpdateTime; // Track when last update occurred
-  static const _minUpdateInterval = Duration(milliseconds: 1000); // Minimum time between updates (increased to prevent loops)
+  static const _minUpdateInterval = Duration(
+    milliseconds: 1000,
+  ); // Minimum time between updates (increased to prevent loops)
 
   GameControllerNotifier() : super(null);
 
@@ -78,15 +80,15 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
     // Cancel previous subscription
     _eventSubscription?.cancel();
     _debounceTimer?.cancel();
-    
+
     state = GameControllerState(controller);
     _eventBus = eventBus ?? gameEventBus;
-    
+
     // Reset update tracking to prevent immediate updates after initialization
     _lastUpdateTime = DateTime.now();
     _pendingUpdate = false;
     _isUpdating = false;
-    
+
     // Subscribe to events to trigger state notifications
     // This makes the provider reactive to game state changes
     // CRITICAL: Only update on turn/round/game-level events to prevent infinite loops
@@ -114,36 +116,41 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
         // Use debouncing and rate limiting to prevent rapid-fire updates that cause infinite loops
         if (state != null && !_isUpdating) {
           // Critical events (turn/round/game changes) always update immediately
-          final isCriticalEvent = event is TurnEndedEvent ||
+          final isCriticalEvent =
+              event is TurnEndedEvent ||
               event is RoundStartedEvent ||
               event is RoundEndedEvent ||
               event is GameEndedEvent;
-          
+
           // Rate limiting: Don't update if we updated too recently (unless it's a critical event)
           if (!isCriticalEvent) {
             final now = DateTime.now();
-            if (_lastUpdateTime != null && 
+            if (_lastUpdateTime != null &&
                 now.difference(_lastUpdateTime!) < _minUpdateInterval) {
               // Too soon since last update, skip this one
-              DebugLogger.debug('GameControllerNotifier: Rate limit - skipping update (${now.difference(_lastUpdateTime!).inMilliseconds}ms since last)');
+              DebugLogger.debug(
+                'GameControllerNotifier: Rate limit - skipping update (${now.difference(_lastUpdateTime!).inMilliseconds}ms since last)',
+              );
               return;
             }
           }
-          
+
           // Additional guard: Don't update during bot turns to prevent loops
           // BUT always allow critical events to update so UI knows when turn changes
           final currentPlayer = state!.controller.gameState.currentPlayer;
           if (currentPlayer.type == PlayerType.bot && !isCriticalEvent) {
             // Skip updates during bot turns (except critical events)
-            DebugLogger.debug('GameControllerNotifier: Skipping update during bot turn (${currentPlayer.name})');
+            DebugLogger.debug(
+              'GameControllerNotifier: Skipping update during bot turn (${currentPlayer.name})',
+            );
             return;
           }
-          
+
           _pendingUpdate = true;
-          
+
           // Cancel existing timer
           _debounceTimer?.cancel();
-          
+
           // Critical events update immediately, others use debounce
           if (isCriticalEvent) {
             // Update immediately for critical events (turn/round/game changes)
@@ -153,14 +160,20 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
                 if (currentState != null) {
                   _isUpdating = true;
                   try {
-                    DebugLogger.debug('GameControllerNotifier: Immediate update for critical event, version ${currentState.version}');
+                    DebugLogger.debug(
+                      'GameControllerNotifier: Immediate update for critical event, version ${currentState.version}',
+                    );
                     final newState = currentState.incrementVersion();
                     state = newState;
                     _pendingUpdate = false;
                     _lastUpdateTime = DateTime.now();
-                    DebugLogger.debug('GameControllerNotifier: State updated to version ${newState.version}');
+                    DebugLogger.debug(
+                      'GameControllerNotifier: State updated to version ${newState.version}',
+                    );
                   } catch (e) {
-                    DebugLogger.error('GameControllerNotifier: Error updating state: $e');
+                    DebugLogger.error(
+                      'GameControllerNotifier: Error updating state: $e',
+                    );
                     _pendingUpdate = false;
                   } finally {
                     _isUpdating = false;
@@ -173,40 +186,46 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
           } else {
             // Schedule update after a delay to batch rapid events and prevent build loops
             _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-            // Check if notifier is still valid (not disposed) before updating
-            if (_pendingUpdate && !_isUpdating) {
-              final currentState = state;
-              if (currentState != null) {
-                // Check rate limit again before updating
-                final now = DateTime.now();
-                if (_lastUpdateTime != null && 
-                    now.difference(_lastUpdateTime!) < _minUpdateInterval) {
+              // Check if notifier is still valid (not disposed) before updating
+              if (_pendingUpdate && !_isUpdating) {
+                final currentState = state;
+                if (currentState != null) {
+                  // Check rate limit again before updating
+                  final now = DateTime.now();
+                  if (_lastUpdateTime != null &&
+                      now.difference(_lastUpdateTime!) < _minUpdateInterval) {
+                    _pendingUpdate = false;
+                    return;
+                  }
+
+                  _isUpdating = true;
+                  try {
+                    DebugLogger.debug(
+                      'GameControllerNotifier: Applying debounced state update, version ${currentState.version}',
+                    );
+                    // Create new state with incremented version to trigger rebuild
+                    final newState = currentState.incrementVersion();
+                    state = newState;
+                    _pendingUpdate = false;
+                    _lastUpdateTime = now;
+                    DebugLogger.debug(
+                      'GameControllerNotifier: State updated to version ${newState.version}',
+                    );
+                  } catch (e) {
+                    // Handle errors gracefully (e.g., if notifier was disposed during timer)
+                    DebugLogger.error(
+                      'GameControllerNotifier: Error updating state: $e',
+                    );
+                    _pendingUpdate = false;
+                  } finally {
+                    _isUpdating = false;
+                  }
+                } else {
+                  // State is null, clear pending update
                   _pendingUpdate = false;
-                  return;
                 }
-                
-                _isUpdating = true;
-                try {
-                  DebugLogger.debug('GameControllerNotifier: Applying debounced state update, version ${currentState.version}');
-                  // Create new state with incremented version to trigger rebuild
-                  final newState = currentState.incrementVersion();
-                  state = newState;
-                  _pendingUpdate = false;
-                  _lastUpdateTime = now;
-                  DebugLogger.debug('GameControllerNotifier: State updated to version ${newState.version}');
-                } catch (e) {
-                  // Handle errors gracefully (e.g., if notifier was disposed during timer)
-                  DebugLogger.error('GameControllerNotifier: Error updating state: $e');
-                  _pendingUpdate = false;
-                } finally {
-                  _isUpdating = false;
-                }
-              } else {
-                // State is null, clear pending update
-                _pendingUpdate = false;
               }
-            }
-          });
+            });
           } // Close else block for non-critical events
         }
       },
@@ -241,8 +260,8 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
 /// Note: Not using autoDispose to preserve game state across hot reloads
 final gameControllerProvider =
     StateNotifierProvider<GameControllerNotifier, GameControllerState?>((ref) {
-  return GameControllerNotifier();
-});
+      return GameControllerNotifier();
+    });
 
 /// Convenience provider to get the controller directly
 final gameControllerDirectProvider = Provider<GameController?>((ref) {
@@ -251,10 +270,12 @@ final gameControllerDirectProvider = Provider<GameController?>((ref) {
 
 /// Provider for multiplayer game controller
 final multiplayerControllerProvider =
-    StateNotifierProvider<MultiplayerControllerNotifier,
-        EnhancedMultiplayerController?>((ref) {
-  return MultiplayerControllerNotifier();
-});
+    StateNotifierProvider<
+      MultiplayerControllerNotifier,
+      EnhancedMultiplayerController?
+    >((ref) {
+      return MultiplayerControllerNotifier();
+    });
 
 /// StateNotifier for multiplayer controller
 class MultiplayerControllerNotifier
@@ -276,7 +297,7 @@ final gameInterfaceProvider = Provider<GameInterface?>((ref) {
   final singleplayerState = ref.watch(gameControllerProvider);
   final singleplayer = singleplayerState?.controller;
   final multiplayer = ref.watch(multiplayerControllerProvider);
-  
+
   return multiplayer ?? singleplayer;
 });
 
@@ -289,51 +310,52 @@ final botAIProvider = Provider<EnhancedBotAI>((ref) {
 /// Uses event bus to create a stream that emits when game state changes
 final gameStateStreamProvider = StreamProvider<GameState>((ref) {
   final gameInterface = ref.watch(gameInterfaceProvider);
-  
+
   if (gameInterface is MultiplayerGameInterface) {
     return gameInterface.gameStateStream;
   }
-  
+
   // For singleplayer: create stream from events + controller state
   final controllerState = ref.watch(gameControllerProvider);
   final controller = controllerState?.controller;
   final eventBus = ref.watch(gameEventBusProvider);
-  
+
   if (controller == null) {
     return const Stream<GameState>.empty();
   }
-  
+
   // Create a stream that emits on any game-changing event
   final controllerStream = StreamController<GameState>.broadcast();
-  
+
   // Subscribe to events that indicate state changes
   final subscription = eventBus.subscribe((event) {
     controllerStream.add(controller.gameState);
   });
-  
+
   // Emit initial state
   controllerStream.add(controller.gameState);
-  
+
   ref.onDispose(() {
     subscription.cancel();
     controllerStream.close();
   });
-  
+
   return controllerStream.stream;
 });
 
 /// Provider for game event listener service
-final gameEventListenerProvider = Provider.autoDispose<GameEventListener>((ref) {
+final gameEventListenerProvider = Provider.autoDispose<GameEventListener>((
+  ref,
+) {
   final eventBus = ref.watch(gameEventBusProvider);
   final listener = GameEventListener(eventBus);
   listener.startListening();
-  
+
   ref.onDispose(() {
     listener.dispose();
   });
-  
+
   return listener;
 });
 
 // Computed providers moved to computed_providers.dart for better organization
-

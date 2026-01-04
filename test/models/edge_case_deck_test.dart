@@ -114,65 +114,62 @@ void main() {
       },
     );
 
-    test(
-      'Edge Case 2: Should take available discard pile cards during unlock',
-      () {
-        final players = [
-          Player(id: '1', name: 'Player 1', type: PlayerType.human),
-          Player(id: '2', name: 'Player 2', type: PlayerType.bot),
-        ];
+    test('Edge Case 2: Should take available discard pile cards during unlock', () {
+      final players = [
+        Player(id: '1', name: 'Player 1', type: PlayerType.human),
+        Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+      ];
 
-        final deck = Deck(seed: 12345);
-        final gameState = GameState(players: players, deck: deck);
+      final deck = Deck(seed: 12345);
+      final gameState = GameState(players: players, deck: deck);
 
-        // Set up player with cards to unlock discard
-        final player = gameState.currentPlayer;
-        player.dealHand([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        ]);
+      // Set up player with cards to unlock discard
+      final player = gameState.currentPlayer;
+      player.dealHand([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ]);
 
-        // Player must have played down to unlock discard pile
-        player.hasPlayedDown = true;
+      // Player must have played down to unlock discard pile
+      player.hasPlayedDown = true;
 
-        // Empty most of the deck, leaving only 2 cards (not enough for the 5 needed)
-        while (gameState.deck.size > 2) {
-          gameState.deck.drawCard();
-        }
+      // Empty most of the deck, leaving only 2 cards (not enough for the 5 needed)
+      while (gameState.deck.size > 2) {
+        gameState.deck.drawCard();
+      }
 
-        // Set up discard pile with unlock target and 4 additional cards (total 5)
-        gameState.discardPile.clear();
-        gameState.discardPile.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.three),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(
-            suit: Suit.diamonds,
-            rank: CardRank.king,
-          ), // Unlock target
-        ]);
+      // Set up discard pile with unlock target and 4 additional cards (total 5)
+      gameState.discardPile.clear();
+      gameState.discardPile.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.three),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.king,
+        ), // Unlock target
+      ]);
 
-        final initialHandSize = player.currentHand.length;
-        expect(gameState.deck.size, equals(2));
-        expect(gameState.discardPile.length, equals(5));
+      final initialHandSize = player.currentHand.length;
+      expect(gameState.deck.size, equals(2));
+      expect(gameState.discardPile.length, equals(5));
 
-        // Unlock the discard pile
-        final success = gameState.unlockDiscard();
-        expect(success, true);
+      // Unlock the discard pile
+      final success = gameState.unlockDiscard();
+      expect(success, true);
 
-        // Per official rules: take only from discard pile, not deck
-        // Should take unlock card (king) + 4 additional cards from discard
-        expect(player.melds.length, equals(1)); // Meld was created
+      // Per official rules: take only from discard pile, not deck
+      // Should take unlock card (king) + 4 additional cards from discard
+      expect(player.melds.length, equals(1)); // Meld was created
 
-        // Player should have gained 4 cards from discard (lost 2 kings, gained 4)
-        expect(player.currentHand.length, equals(initialHandSize - 2 + 4));
+      // Player should have gained 4 cards from discard (lost 2 kings, gained 4)
+      expect(player.currentHand.length, equals(initialHandSize - 2 + 4));
 
-        // Discard pile should be empty now
-        expect(gameState.discardPile.length, equals(0));
-      },
-    );
+      // Discard pile should be empty now
+      expect(gameState.discardPile.length, equals(0));
+    });
 
     test(
       'Should draw 1 card, reshuffle, then draw 2nd card when deck has only 1 card',
