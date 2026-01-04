@@ -98,12 +98,6 @@ class GameConfig {
   /// Point penalty for black 3s (clubs, spades) when held in hand
   static const int black3Penalty = -5;
 
-  /// Point bonus for red 3s when properly melded/set aside
-  static const int redThreeBonus = 100;
-
-  /// Point penalty for black 3s when held in hand/foot
-  static const int blackThreePenalty = -100;
-
   // =============================================================================
   // PLAY-DOWN REQUIREMENTS
   // =============================================================================
@@ -313,7 +307,8 @@ class GameConfig {
   static const Duration botProcessingDelay = Duration(seconds: 1);
 
   /// Number of turns considered "early game" where bots don't panic about large hands
-  static const int earlyGameTurnThreshold = 3;
+  /// Starting hand is 11 cards, so bot needs ~5+ turns to accumulate before panic is warranted
+  static const int earlyGameTurnThreshold = 5;
 
   // =============================================================================
   // VALIDATION & HELPERS

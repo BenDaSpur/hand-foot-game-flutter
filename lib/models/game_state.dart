@@ -4,6 +4,7 @@ import 'deck.dart';
 import 'player.dart';
 import 'meld.dart';
 import '../config/game_config.dart';
+import '../game/managers/game_rules_engine.dart';
 
 enum GamePhase { setup, playing, roundEnd, gameEnd }
 
@@ -158,29 +159,20 @@ class GameState {
     return canUnlockDiscard();
   }
 
+  /// Checks if the current player can unlock the discard pile.
+  ///
+  /// Delegates to [GameRulesEngine] for rule validation.
   bool canUnlockDiscard() {
-    if (discardPile.isEmpty || hasDrawnFromDeck) return false;
-    final topCard = topDiscard!;
-    if (topCard.isWild) return false;
-
-    // 3s cannot be melded, so discard pile cannot be unlocked when top card is a 3
-    if (topCard.isThree) return false;
-
-    // Must have already met play-down requirement
-    if (!currentPlayer.hasPlayedDown) return false;
-
-    // Check if player has at least 2 matching natural cards
-    final matchingCards = currentPlayer.currentHand
-        .where((card) => card.rank == topCard.rank && !card.isWild)
-        .toList();
-
-    return matchingCards.length >= 2;
+    return GameRulesEngine.canUnlockDiscard(this);
   }
 
-  bool get canEndTurn => turnPhase == TurnPhase.discard && hasMelded;
+  /// Checks if the current player can end their turn.
+  ///
+  /// Delegates to [GameRulesEngine] for rule validation.
+  bool get canEndTurn => GameRulesEngine.canEndTurn(this);
 
   int get playDownRequirement {
-    return 30 + (round * 30); // Round 1: 60, Round 2: 90, Round 3: 120, etc.
+    return GameConfig.getPlayDownRequirement(round);
   }
 
   void nextPlayer() {
@@ -368,7 +360,8 @@ class GameState {
 
     currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
 
-    // Take the next cards from discard pile (or what's available)
+    // Take the next 5 cards from discard pile (or what's available)
+    // Per official rules: only take from discard pile, NOT from deck
     final additionalDiscards = <PlayingCard>[];
     for (
       int i = 0;
@@ -376,29 +369,6 @@ class GameState {
       i++
     ) {
       additionalDiscards.add(discardPile.removeLast());
-    }
-
-    // Edge Case 1: If no additional cards in discard, take remaining from deck
-    final remainingNeeded =
-        GameConfig.additionalDiscardPickup - additionalDiscards.length;
-    if (remainingNeeded > 0) {
-      // Edge Case 2: Reshuffle discard if deck doesn't have enough cards
-      if (deck.size < remainingNeeded && discardPile.length > 1) {
-        _reshuffleDiscardIntoDeck();
-      }
-
-      if (!deck.isEmpty) {
-        final cardsFromDeck = deck.drawCards(remainingNeeded);
-        if (cardsFromDeck.isNotEmpty) {
-          currentPlayer.addNewlyDrawnCards(cardsFromDeck);
-          final deckCardNames = cardsFromDeck
-              .map((c) => c.compactName)
-              .join(', ');
-          _logAction(
-            'took ${cardsFromDeck.length} cards from deck to complete pickup: $deckCardNames',
-          );
-        }
-      }
     }
 
     if (additionalDiscards.isNotEmpty) {
@@ -418,6 +388,10 @@ class GameState {
           'took ${additionalDiscards.length} more cards from discard pile',
         );
       }
+    } else {
+      _logAction(
+        'no additional cards available in discard pile',
+      );
     }
 
     turnPhase = TurnPhase.meld;
@@ -810,25 +784,11 @@ class GameState {
     endRound();
   }
 
-  // Check if any other player can immediately unlock with the newly discarded card
+  /// Checks if any other player can immediately unlock with the newly discarded card.
+  ///
+  /// Delegates to [GameRulesEngine] for rule validation.
   bool canAnyPlayerImmediatelyUnlock() {
-    if (discardPile.isEmpty) return false;
-    final topCard = topDiscard!;
-    if (topCard.isWild) return false;
-
-    for (int i = 0; i < players.length; i++) {
-      if (i == currentPlayerIndex) continue; // Skip current player
-
-      final player = players[i];
-      final matchingCards = player.currentHand
-          .where((card) => card.rank == topCard.rank && !card.isWild)
-          .toList();
-
-      if (matchingCards.length >= 2) {
-        return true;
-      }
-    }
-    return false;
+    return GameRulesEngine.canAnyPlayerImmediatelyUnlock(this);
   }
 
   // Allow immediate unlock for a specific player
@@ -1073,31 +1033,4 @@ class GameState {
     );
   }
 
-  /// Reshuffles discard pile into deck when deck runs low.
-  ///
-  /// Maintains game state by keeping the top discard card in place.
-  /// Requires at least [minDiscardForReshuffle] cards in discard pile to perform reshuffle.
-  /// The remaining cards (excluding top card) are added to deck and shuffled.
-  void _reshuffleDiscardIntoDeck() {
-    if (discardPile.length <= GameConfig.minDiscardForReshuffle) {
-      // Need sufficient cards in discard pile to reshuffle (keep top card)
-      return;
-    }
-
-    // Keep the top discard card (last item in the list)
-    final topCard = discardPile.removeLast();
-
-    // Take all other discard cards and add them to deck
-    final cardsToShuffle = List<PlayingCard>.from(discardPile);
-    discardPile.clear();
-    discardPile.add(topCard);
-
-    // Add the cards to deck and shuffle
-    deck.addCards(cardsToShuffle);
-    deck.shuffle();
-
-    _logAction(
-      'reshuffled ${cardsToShuffle.length} cards from discard pile into deck',
-    );
-  }
 }

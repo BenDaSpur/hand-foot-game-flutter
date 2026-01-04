@@ -7,7 +7,7 @@ import 'package:hand_foot_game_flutter/models/player.dart';
 void main() {
   group('Edge Case Deck Tests', () {
     test(
-      'Edge Case 1: Should take cards from deck when discard pile has no additional cards',
+      'Edge Case 1: Should only take available cards from discard pile when unlocking',
       () {
         final players = [
           Player(id: '1', name: 'Player 1', type: PlayerType.human),
@@ -47,12 +47,12 @@ void main() {
         // Player should have:
         // - Lost 2 kings from hand (used to unlock)
         // - The king from discard pile goes directly to meld, not hand
-        // - Gained 5 cards from deck (since discard pile was empty)
-        final expectedHandSize = initialHandSize - 2 + 5;
+        // - NO additional cards (per official rules: only from discard pile)
+        final expectedHandSize = initialHandSize - 2;
         expect(player.currentHand.length, equals(expectedHandSize));
 
-        // Deck should have 5 fewer cards
-        expect(gameState.deck.size, equals(initialDeckSize - 5));
+        // Deck should be unchanged (per official rules)
+        expect(gameState.deck.size, equals(initialDeckSize));
 
         // Player should have a meld with 3 kings
         expect(player.melds.length, equals(1));
@@ -115,7 +115,7 @@ void main() {
     );
 
     test(
-      'Edge Case 2: Should reshuffle during discard unlock when deck insufficient',
+      'Edge Case 2: Should take available discard pile cards during unlock',
       () {
         final players = [
           Player(id: '1', name: 'Player 1', type: PlayerType.human),
@@ -141,7 +141,7 @@ void main() {
           gameState.deck.drawCard();
         }
 
-        // Set up discard pile with unlock target and cards to reshuffle
+        // Set up discard pile with unlock target and 4 additional cards (total 5)
         gameState.discardPile.clear();
         gameState.discardPile.addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
@@ -154,6 +154,7 @@ void main() {
           ), // Unlock target
         ]);
 
+        final initialHandSize = player.currentHand.length;
         expect(gameState.deck.size, equals(2));
         expect(gameState.discardPile.length, equals(5));
 
@@ -161,16 +162,15 @@ void main() {
         final success = gameState.unlockDiscard();
         expect(success, true);
 
-        // Should have reshuffled and drawn cards successfully
-        expect(
-          gameState.discardPile.length,
-          lessThan(5),
-        ); // Some cards were reshuffled
+        // Per official rules: take only from discard pile, not deck
+        // Should take unlock card (king) + 4 additional cards from discard
         expect(player.melds.length, equals(1)); // Meld was created
-        expect(
-          player.currentHand.length,
-          greaterThan(3),
-        ); // Player got additional cards
+
+        // Player should have gained 4 cards from discard (lost 2 kings, gained 4)
+        expect(player.currentHand.length, equals(initialHandSize - 2 + 4));
+
+        // Discard pile should be empty now
+        expect(gameState.discardPile.length, equals(0));
       },
     );
 

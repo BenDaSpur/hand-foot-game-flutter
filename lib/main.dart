@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/main_menu_screen.dart';
 import 'services/firebase_service.dart';
@@ -50,7 +51,11 @@ void main() async {
     }
   }
 
-  runApp(const HandAndFootApp());
+  runApp(
+    const ProviderScope(
+      child: HandAndFootApp(),
+    ),
+  );
 }
 
 class HandAndFootApp extends StatelessWidget {

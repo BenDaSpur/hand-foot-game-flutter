@@ -145,15 +145,25 @@ class BotTurnManager {
     }
   }
 
+  // Configurable delays for bot turn phases (in milliseconds)
+  static const int _phaseDelayMs = 1500; // Delay after each phase (draw, meld, discard)
+  static const int _actionDelayMs = 800; // Delay between actions within a phase
+  static const int _turnStartDelayMs = 500; // Brief delay when bot turn starts
+
   /// SIMPLIFIED: Process bot turn iteratively to prevent stack overflow
   Future<void> processBotTurn(Player botPlayer) async {
     if (_isProcessingBotTurn) return;
     _isProcessingBotTurn = true;
 
     try {
+      // Brief delay at start of bot turn so user sees the transition
+      await Future.delayed(const Duration(milliseconds: _turnStartDelayMs));
+      onStateChanged(); // Show "Waiting for X to draw..."
+      
       // Process bot turn iteratively until turn ends or max iterations reached
-      int maxIterations = 10; // Prevent infinite loops
+      int maxIterations = 15; // Increased to allow for longer meld phases
       int iteration = 0;
+      TurnPhase? lastPhase;
 
       while (iteration < maxIterations) {
         iteration++;
@@ -164,6 +174,17 @@ class BotTurnManager {
             currentPlayer.type != PlayerType.bot) {
           DebugLogger.debug('Bot processing ended - player changed or not bot');
           break;
+        }
+
+        // Track phase changes to add appropriate delays
+        final currentPhase = gameController.gameState.turnPhase;
+        final phaseChanged = lastPhase != null && lastPhase != currentPhase;
+        lastPhase = currentPhase;
+        
+        // Add longer delay when transitioning between phases
+        if (phaseChanged) {
+          onStateChanged(); // Update UI to show new phase
+          await Future.delayed(const Duration(milliseconds: _phaseDelayMs));
         }
 
         bool actionSucceeded = false;
@@ -219,7 +240,11 @@ class BotTurnManager {
         onStateChanged();
 
         // Add delay after each bot action so users can see what happened
-        await Future.delayed(const Duration(milliseconds: 1000));
+        // Use shorter delay for actions within meld phase, longer for phase transitions
+        final delayMs = gameController.gameState.turnPhase == TurnPhase.meld 
+            ? _actionDelayMs 
+            : _phaseDelayMs;
+        await Future.delayed(Duration(milliseconds: delayMs));
 
         // Check if this bot still has the turn (multi-phase turn)
         final newCurrentPlayer = gameController.gameState.currentPlayer;
@@ -227,12 +252,17 @@ class BotTurnManager {
             newCurrentPlayer.type != PlayerType.bot) {
           // Turn has ended - bot completed their turn
           DebugLogger.debug('Bot ${botPlayer.name} completed turn');
+          // Final update and pause so user sees the completed turn
+          onStateChanged();
+          await Future.delayed(const Duration(milliseconds: _phaseDelayMs));
           break;
         }
 
         // Check for round end
         if (gameController.gameState.phase == GamePhase.roundEnd) {
           DebugLogger.debug('Round ended during bot turn');
+          onStateChanged();
+          await Future.delayed(const Duration(milliseconds: _phaseDelayMs));
           break;
         }
       }
@@ -336,6 +366,7 @@ class BotTurnManager {
             'Bot ${botPlayer.name} requesting emergency turn end',
           );
           gameState.nextPlayer();
+          gameController.publishTurnEndedEvent(botPlayer);
           success = true;
           break;
 
@@ -545,7 +576,10 @@ class BotTurnManager {
         }
 
         // ADVANCE TURN - this is guaranteed to work
+        final previousPlayer = botPlayer;
         gameState.nextPlayer();
+        // Publish event so UI knows turn changed
+        gameController.publishTurnEndedEvent(previousPlayer);
         // Flush analytics on turn completion for better timing
         AnalyticsBatcher.flushOnTurnCompletion();
         onStateChanged();
@@ -575,7 +609,9 @@ class BotTurnManager {
           );
         }
 
+        final previousPlayer2 = botPlayer;
         gameState.nextPlayer();
+        gameController.publishTurnEndedEvent(previousPlayer2);
         onStateChanged();
         return;
       }
@@ -603,18 +639,24 @@ class BotTurnManager {
           );
 
           // Force advance turn to prevent infinite loop
+          final previousPlayer3 = botPlayer;
           gameState.nextPlayer();
+          gameController.publishTurnEndedEvent(previousPlayer3);
           onStateChanged();
           return;
         }
       }
 
+      final previousPlayer4 = botPlayer;
       gameState.nextPlayer();
+      gameController.publishTurnEndedEvent(previousPlayer4);
       onStateChanged();
     } catch (e) {
       DebugLogger.error('CRITICAL ERROR in absolutelyGuaranteedDiscard: $e');
       // Even if everything fails, force advance turn to prevent infinite loops
+      final previousPlayer5 = botPlayer;
       gameState.nextPlayer();
+      gameController.publishTurnEndedEvent(previousPlayer5);
       onStateChanged();
     }
   }
@@ -725,6 +767,7 @@ class BotTurnManager {
 
         // Complete turn legally
         gameState.nextPlayer();
+        gameController.publishTurnEndedEvent(botPlayer);
         onStateChanged();
         return;
       }
@@ -753,6 +796,7 @@ class BotTurnManager {
 
           // Complete turn legally
           gameState.nextPlayer();
+          gameController.publishTurnEndedEvent(botPlayer);
           onStateChanged();
           return;
         }
@@ -791,11 +835,13 @@ class BotTurnManager {
 
       // Complete turn legally
       gameState.nextPlayer();
+      gameController.publishTurnEndedEvent(botPlayer);
       onStateChanged();
     } catch (e) {
       DebugLogger.error('CRITICAL ERROR in emergencyCompleteBotTurn: $e');
       // Even if everything fails, force advance turn to prevent infinite loops
       gameState.nextPlayer();
+      gameController.publishTurnEndedEvent(botPlayer);
       onStateChanged();
     }
   }

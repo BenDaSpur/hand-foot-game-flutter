@@ -10,8 +10,13 @@ class GameControllerFactory {
   static GameController createSingleplayerGame({
     required List<Player> players,
     int? seed,
+    dynamic eventBus, // Optional event bus for event-driven architecture
   }) {
-    return GameController(players: players, seed: seed);
+    return GameController(
+      players: players,
+      seed: seed,
+      eventBus: eventBus,
+    );
   }
 
   /// Create a multiplayer game controller with Firebase backend

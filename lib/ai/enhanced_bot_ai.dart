@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:math';
 
 import '../models/player.dart';
 import '../models/card.dart';
@@ -13,6 +12,7 @@ import 'bot_game_analyzer.dart';
 import 'bot_meld_analyzer.dart';
 import 'bot_foot_transition_manager.dart';
 import 'bot_end_game_manager.dart';
+import 'bot_game_context.dart';
 import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
@@ -29,7 +29,7 @@ class EnhancedBotAI {
   final BotEndGameManager _endGameManager;
 
   // Random number generator for decision variability
-  final Random _random;
+  final math.Random _random;
 
   // Multi-meld play-down state tracking (legacy - now disabled)
   List<List<PlayingCard>>? _plannedMelds;
@@ -62,12 +62,15 @@ class EnhancedBotAI {
       1.8; // REDUCED - more conservative in emergencies
 
   // EMERGENCY HAND SIZE PROTOCOLS - Prevents catastrophic accumulation like 32+ cards
+  // Note: Starting hand is 11 cards, draw 2 per turn, discard 1 = net +1 card/turn if not melding
   static const int emergencyHandSizeThreshold =
-      10; // CRITICAL: Force emergency actions (lowered after seeing 17-card failures)
+      15; // Force emergency actions after ~4 turns without melding
   static const int criticalHandSizeThreshold =
-      14; // PANIC: Any meld is better than none (lowered after data analysis)
+      18; // PANIC: Any meld is better than none after ~7 turns without melding
   static const int playDownEmergencyThreshold =
-      10; // Force play-down when accumulating without melding (lowered from 15)
+      14; // Force play-down when accumulating without melding (~3 turns)
+  // Minimum turns before emergency protocols can activate (give bots time to play normally)
+  static const int minTurnsForEmergency = 4;
   static const int competitiveThreatHandSizeGap =
       15; // When opponent is ahead by this much (competitive intelligence)
   static const double maxEmergencyRiskTolerance =
@@ -81,11 +84,17 @@ class EnhancedBotAI {
       _meldAnalyzer = BotMeldAnalyzer(),
       _footTransitionManager = BotFootTransitionManager(),
       _endGameManager = BotEndGameManager(),
-      _random = seed != null ? Random(seed) : Random();
+      _random = seed != null ? math.Random(seed) : math.Random();
 
   /// Main entry point for bot decisions
   BotDecision makeDecision(Player bot, GameController controller) {
-    final gameState = controller.gameState;
+    final context = BotGameContext(controller.gameState, controller);
+    return _makeDecisionWithContext(bot, context);
+  }
+
+  /// Internal decision-making method using BotGameContext for decoupling
+  BotDecision _makeDecisionWithContext(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
 
     try {
       // Set context for personality-based decisions
@@ -128,7 +137,7 @@ class EnhancedBotAI {
       // NEW: Opponent pressure detection and competitive response (with caching)
       final pressureResponse = _evaluateOpponentPressureWithCaching(
         bot,
-        controller,
+        context,
         gameState,
       );
 
@@ -150,9 +159,12 @@ class EnhancedBotAI {
       }
 
       // CRITICAL EMERGENCY: Hand size protocols override ALL other logic
-      // Exception: Skip early game grace if under competitive pressure
+      // But only after bot has had enough turns to play normally
+      final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
       final hasCompetitivePressure = pressureResponse != null;
-      final shouldBypassEarlyGame = !isEarlyGame || hasCompetitivePressure;
+      // Only bypass early game if we have competitive pressure AND have had enough turns
+      final shouldBypassEarlyGame = (!isEarlyGame || hasCompetitivePressure) && 
+          botTurnCount >= minTurnsForEmergency;
 
       if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
         // PANIC MODE: But still try conservative play-down first if not played down yet
@@ -161,6 +173,10 @@ class EnhancedBotAI {
 
           // If not played down, try conservative play-down even in emergency
           if (!bot.hasPlayedDown) {
+            final controller = context.controller as GameController?;
+            if (controller == null) {
+              return BotDecision(action: 'noMeld');
+            }
             emergencyMelds = _meldAnalyzer.findBestPlayDownCombination(
               bot,
               controller,
@@ -175,6 +191,10 @@ class EnhancedBotAI {
             }
           } else {
             // Already played down, use maximal for foot transition
+            final controller = context.controller as GameController?;
+            if (controller == null) {
+              return BotDecision(action: 'noMeld');
+            }
             emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
               bot,
               controller,
@@ -188,7 +208,7 @@ class EnhancedBotAI {
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
+              'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
             );
 
             if (emergencyMelds.length == 1) {
@@ -213,10 +233,14 @@ class EnhancedBotAI {
         if (gameState.turnPhase == TurnPhase.meld) {
           // If not played down, force emergency play-down with enhanced combination
           if (!bot.hasPlayedDown) {
-            return _handleEmergencyPlayDown(bot, controller);
+            return _handleEmergencyPlayDown(bot, context);
           }
 
           // Post-play-down: Use maximal meld combination
+          final controller = context.controller as GameController?;
+          if (controller == null) {
+            return BotDecision(action: 'noMeld');
+          }
           final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
             bot,
             controller,
@@ -225,7 +249,7 @@ class EnhancedBotAI {
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'EMERGENCY: Hand size $handSize exceeds $emergencyHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
+              'EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $emergencyHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
             );
 
             if (maximalMelds.length == 1) {
@@ -246,7 +270,7 @@ class EnhancedBotAI {
           DebugLogger.botDebug(
             bot.id,
             bot.name,
-            'EMERGENCY: Hand size $handSize - forcing quick draw to reach meld phase',
+            'EMERGENCY (turn $botTurnCount): Hand size $handSize - forcing quick draw to reach meld phase',
           );
           return BotDecision(action: 'drawFromDeck');
         }
@@ -262,7 +286,7 @@ class EnhancedBotAI {
           bot.name,
           'PLAY-DOWN EMERGENCY: $handSize cards without play-down - forcing any viable meld',
         );
-        final emergencyPlayDown = _handleEmergencyPlayDown(bot, controller);
+        final emergencyPlayDown = _handleEmergencyPlayDown(bot, context);
         // Safety check: if emergency play-down fails, fall back to normal logic
         if (emergencyPlayDown.action != 'noMeld') {
           return emergencyPlayDown;
@@ -272,26 +296,26 @@ class EnhancedBotAI {
 
       // PANIC MODE: Override normal logic for bots in terrible situations
       if (bot.score < -100 && !bot.hasPlayedDown) {
-        return _handlePanicMode(bot, controller, gameState);
+        return _handlePanicMode(bot, context, gameState);
       }
 
       // Route to appropriate decision handler based on turn phase with enhanced error handling
       BotDecision decision;
       try {
         decision = switch (gameState.turnPhase) {
-          TurnPhase.draw => _makeDrawDecision(bot, controller),
-          TurnPhase.meld => _makeMeldDecision(bot, controller),
-          TurnPhase.discard => _makeDiscardDecision(bot, controller),
+          TurnPhase.draw => _makeDrawDecision(bot, context),
+          TurnPhase.meld => _makeMeldDecision(bot, context),
+          TurnPhase.discard => _makeDiscardDecision(bot, context),
         };
 
         // Validate decision before returning
-        if (!_isValidDecision(decision, bot, controller)) {
+        if (!_isValidDecision(decision, bot, context)) {
           DebugLogger.botDebug(
             bot.id,
             bot.name,
             'Invalid decision ${decision.action}, falling back to safe choice',
           );
-          decision = _getSafeDecision(gameState.turnPhase, bot, controller);
+          decision = _getSafeDecision(gameState.turnPhase, bot, context);
         }
       } catch (e) {
         DebugLogger.botDebug(
@@ -299,7 +323,7 @@ class EnhancedBotAI {
           bot.name,
           'Decision error: $e, using emergency fallback',
         );
-        decision = _getSafeDecision(gameState.turnPhase, bot, controller);
+        decision = _getSafeDecision(gameState.turnPhase, bot, context);
       }
 
       DebugLogger.botDebug(
@@ -319,8 +343,8 @@ class EnhancedBotAI {
   }
 
   /// Handle draw phase decisions
-  BotDecision _makeDrawDecision(Player bot, GameController controller) {
-    final gameState = controller.gameState;
+  BotDecision _makeDrawDecision(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
 
     // DEBUG: Log draw decision context (removed in release builds)
     DebugLogger.botDebug(
@@ -353,10 +377,10 @@ class EnhancedBotAI {
         // Enhanced: also check for pre-play-down opportunities if pile is very valuable
         final shouldTake = _shouldTakeDiscardPile(
           bot,
-          controller,
+          context,
           riskTolerance,
         );
-        final canUnlock = controller.gameState.canUnlockDiscard();
+        final canUnlock = context.canUnlockDiscard();
 
         if (shouldTake && canUnlock) {
           DebugLogger.botDebug(
@@ -395,10 +419,10 @@ class EnhancedBotAI {
         );
         if (_shouldTakeDiscardPile(
               bot,
-              controller,
+              context,
               riskTolerance * 2.0,
             ) && // 2x risk tolerance for huge piles
-            controller.gameState.canUnlockDiscard()) {
+            context.canUnlockDiscard()) {
           DebugLogger.botDebug(
             bot.id,
             bot.name,
@@ -430,9 +454,9 @@ class EnhancedBotAI {
   }
 
   /// Handle meld phase decisions
-  BotDecision _makeMeldDecision(Player bot, GameController controller) {
+  BotDecision _makeMeldDecision(Player bot, BotGameContext context) {
     // PRIORITY 0: Check if bot should rush to go out
-    if (_shouldRushToGoOut(bot, controller.gameState)) {
+    if (_shouldRushToGoOut(bot, context.gameState)) {
       final handSize = bot.currentHand.length;
 
       // If very few cards (≤3), skip melding entirely to go out fastest
@@ -451,7 +475,7 @@ class EnhancedBotAI {
       // Try to meld all remaining cards to minimize hand size for going out
       final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
         bot,
-        controller,
+        (context.controller as GameController?) ?? (throw StateError('Controller required for meld analysis')),
       );
       if (cardsToAdd.isNotEmpty) {
         DebugLogger.debug(
@@ -461,7 +485,7 @@ class EnhancedBotAI {
       }
 
       // Try to create new melds to reduce hand size
-      final possibleMelds = _getCachedPossibleMelds(bot, controller);
+      final possibleMelds = _getCachedPossibleMelds(bot, context);
       if (possibleMelds.isNotEmpty) {
         DebugLogger.debug('${bot.name}: Creating new meld to reduce hand size');
         return BotDecision(action: 'createMeld', data: possibleMelds.first);
@@ -476,8 +500,10 @@ class EnhancedBotAI {
 
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
     // BUT: Give bots grace period early in round when large hands are normal
+    // AND: Require minimum turns before emergency can activate
     final handSize = bot.currentHand.length;
     final isEarlyGame = _isEarlyGamePhase(bot);
+    final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
 
     // Check if competitive pressure should override early game grace
     // Note: This method is called from makeDecision, so we don't have access to pressureResponse
@@ -485,21 +511,23 @@ class EnhancedBotAI {
     final hasCompetitivePressure =
         _evaluateOpponentPressureWithCaching(
           bot,
-          controller,
-          controller.gameState,
+          context,
+          context.gameState,
         ) !=
         null;
-    final shouldBypassEarlyGame = !isEarlyGame || hasCompetitivePressure;
+    // Only bypass early game if enough turns have passed
+    final shouldBypassEarlyGame = (!isEarlyGame || hasCompetitivePressure) &&
+        botTurnCount >= minTurnsForEmergency;
 
     if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
       // PANIC MODE: Any meld is better than none
-      final anyPossibleMelds = _getCachedPossibleMelds(bot, controller);
+      final anyPossibleMelds = _getCachedPossibleMelds(bot, context);
       if (anyPossibleMelds.isNotEmpty) {
         final panicMeld = anyPossibleMelds.first; // Take ANY meld
         DebugLogger.botDebug(
           bot.id,
           bot.name,
-          'CRITICAL EMERGENCY: Hand size $handSize exceeds $criticalHandSizeThreshold - forcing meld creation',
+          'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $criticalHandSizeThreshold - forcing meld creation',
         );
         return BotDecision(
           action: 'createMeld',
@@ -512,18 +540,19 @@ class EnhancedBotAI {
       // continue to emergency mode rather than crash
     }
 
-    if (handSize >= emergencyHandSizeThreshold && !isEarlyGame) {
+    // Also require minimum turns for emergency mode
+    if (handSize >= emergencyHandSizeThreshold && !isEarlyGame && botTurnCount >= minTurnsForEmergency) {
       // EMERGENCY MODE: Force aggressive meld creation
       if (bot.hasPlayedDown) {
         // Already played down - meld anything possible
-        final emergencyMelds = _getCachedPossibleMelds(bot, controller);
+        final emergencyMelds = _getCachedPossibleMelds(bot, context);
         if (emergencyMelds.isNotEmpty) {
           final urgentMeld = emergencyMelds.first;
           return BotDecision(action: 'createMeld', data: urgentMeld);
         }
       } else {
         // Force play-down even with suboptimal points
-        return _handleEmergencyPlayDown(bot, controller);
+        return _handleEmergencyPlayDown(bot, context);
       }
     }
 
@@ -540,7 +569,7 @@ class EnhancedBotAI {
         bot.hasPickedUpFoot &&
         handSize >= 10) {
       // Adaptive bots should never hold 10+ cards in foot phase
-      final possibleMelds = _getCachedPossibleMelds(bot, controller);
+      final possibleMelds = _getCachedPossibleMelds(bot, context);
       if (possibleMelds.isNotEmpty) {
         DebugLogger.botDebug(
           bot.id,
@@ -552,7 +581,7 @@ class EnhancedBotAI {
 
       final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
         bot,
-        controller,
+        (context.controller as GameController?) ?? (throw StateError('Controller required for meld analysis')),
       );
       if (cardsToAdd.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
@@ -560,6 +589,8 @@ class EnhancedBotAI {
     }
 
     // Check for end game decisions (after emergency protocols)
+    final controller = context.controller as GameController?;
+    if (controller == null) return BotDecision(action: 'noMeld');
     final endGameDecision = _endGameManager.handleEndGame(bot, controller);
     if (endGameDecision != null) {
       return endGameDecision;
@@ -567,41 +598,43 @@ class EnhancedBotAI {
 
     // NEW: Check if we can play ALL cards to immediately see foot
     if (bot.hasPlayedDown && !bot.hasPickedUpFoot) {
-      final canPlayAllDecision = _checkCanPlayAllCards(bot, controller);
+      final canPlayAllDecision = _checkCanPlayAllCards(bot, context);
       if (canPlayAllDecision != null) {
         return canPlayAllDecision;
       }
     }
 
     // Check for foot transition decisions
+    final controllerForFoot = context.controller as GameController?;
+    if (controllerForFoot == null) return BotDecision(action: 'noMeld');
     final footTransitionDecision = _footTransitionManager.handleFootTransition(
       bot,
-      controller,
+      controllerForFoot,
     );
     if (footTransitionDecision != null) {
       return footTransitionDecision;
     }
 
     // Check competitive positioning threat
-    if (_isCompetitivelyThreatened(bot, controller)) {
+    if (_isCompetitivelyThreatened(bot, context)) {
       DebugLogger.botDebug(
         bot.id,
         bot.name,
         'COMPETITIVE THREAT DETECTED: Switching to aggressive catch-up mode',
       );
-      return _handleCompetitiveThreat(bot, controller);
+      return _handleCompetitiveThreat(bot, context);
     }
 
     // Handle play-down if not yet played down
     if (!bot.hasPlayedDown) {
-      return _handlePlayDownDecision(bot, controller);
+      return _handlePlayDownDecision(bot, context);
     }
 
     // AGGRESSIVE FIX: Dramatically reduce strategic holding to prevent accumulation
     // Only hold with very small hands and only briefly
-    if (handSize <= 6 && _shouldHoldCardsStrategically(bot, controller)) {
+    if (handSize <= 6 && _shouldHoldCardsStrategically(bot, context)) {
       // Only hold if hand is small AND no human threat AND very selective conditions
-      final humanPlayers = controller.gameState.players.where(
+      final humanPlayers = context.players.where(
         (p) => p.type == PlayerType.human,
       );
       final humanThreat = humanPlayers.any(
@@ -616,8 +649,8 @@ class EnhancedBotAI {
     }
 
     // If ready to dump everything, execute all possible melds
-    if (_shouldExecuteDumpStrategy(bot, controller)) {
-      return _executeDumpStrategy(bot, controller);
+    if (_shouldExecuteDumpStrategy(bot, context)) {
+      return _executeDumpStrategy(bot, context);
     }
 
     // Look for meld opportunities (fallback for conservative play)
@@ -631,7 +664,7 @@ class EnhancedBotAI {
     }
 
     // Try to create new melds with book balance consideration
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     if (possibleMelds.isNotEmpty) {
       // Pass bot context to consider book balance
       final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds, bot: bot);
@@ -643,7 +676,7 @@ class EnhancedBotAI {
   }
 
   /// Handle discard phase decisions
-  BotDecision _makeDiscardDecision(Player bot, GameController controller) {
+  BotDecision _makeDiscardDecision(Player bot, BotGameContext context) {
     // CORE RULE: Bots MUST always discard a card in discard phase
     // The ONLY exception is if they have no cards and can go out (end round/game)
 
@@ -665,7 +698,7 @@ class EnhancedBotAI {
     }
 
     // RULE ENFORCEMENT: Bot must discard a card to follow Hand & Foot rules
-    final cardToDiscard = _chooseCardToDiscard(bot, controller.gameState);
+    final cardToDiscard = _chooseCardToDiscard(bot, context.gameState);
     if (cardToDiscard == null) {
       return BotDecision(action: 'error');
     }
@@ -678,9 +711,9 @@ class EnhancedBotAI {
   }
 
   /// EMERGENCY: Handle emergency play-down when hand size is critical
-  BotDecision _handleEmergencyPlayDown(Player bot, GameController controller) {
-    final gameState = controller.gameState;
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+  BotDecision _handleEmergencyPlayDown(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     final playDownRequirement = gameState.playDownRequirement;
 
     if (possibleMelds.isEmpty) {
@@ -688,6 +721,8 @@ class EnhancedBotAI {
     }
 
     // EMERGENCY: Try any combination that gets close to requirement
+    final controller = context.controller as GameController?;
+    if (controller == null) return BotDecision(action: 'noMeld');
     final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
       bot,
       controller,
@@ -927,8 +962,8 @@ class EnhancedBotAI {
   }
 
   /// Check if bot is competitively threatened by opponents
-  bool _isCompetitivelyThreatened(Player bot, GameController controller) {
-    final gameState = controller.gameState;
+  bool _isCompetitivelyThreatened(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
     final botHandSize = bot.currentHand.length;
 
     // Check all opponents
@@ -953,15 +988,17 @@ class EnhancedBotAI {
   }
 
   /// Handle competitive threat by switching to aggressive mode
-  BotDecision _handleCompetitiveThreat(Player bot, GameController controller) {
+  BotDecision _handleCompetitiveThreat(Player bot, BotGameContext context) {
     // Force meld creation if possible
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     if (possibleMelds.isNotEmpty) {
       final urgentMeld = possibleMelds.first; // Take first available meld
       return BotDecision(action: 'createMeld', data: urgentMeld);
     }
 
     // Try adding to existing melds
+    final controller = context.controller as GameController?;
+    if (controller == null) return BotDecision(action: 'noMeld');
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -975,9 +1012,9 @@ class EnhancedBotAI {
   }
 
   /// Handle play-down decision logic
-  BotDecision _handlePlayDownDecision(Player bot, GameController controller) {
-    final gameState = controller.gameState;
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+  BotDecision _handlePlayDownDecision(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     final playDownRequirement = gameState.playDownRequirement;
     final turnCount = _gameAnalyzer.getTurnCount(bot.id);
 
@@ -1042,6 +1079,8 @@ class EnhancedBotAI {
     }
 
     // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
+    final controller = context.controller as GameController?;
+    if (controller == null) return BotDecision(action: 'noMeld');
     final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
       bot,
       controller,
@@ -1100,7 +1139,7 @@ class EnhancedBotAI {
       DebugLogger.debug(
         '${bot.name}: Forced play-down but no valid combinations - attempting any meld',
       );
-      final anyPossibleMelds = _getCachedPossibleMelds(bot, controller);
+      final anyPossibleMelds = _getCachedPossibleMelds(bot, context);
       if (anyPossibleMelds.isNotEmpty) {
         return BotDecision(
           action: 'createMeld',
@@ -1123,10 +1162,14 @@ class EnhancedBotAI {
           playDownRequirement + 20, // Max 20 extra points, not multiplicative
         );
 
+    // Get controller once for all meld analyzer calls in this method
+    final controllerForMeld = context.controller as GameController?;
+    if (controllerForMeld == null) return BotDecision(action: 'noMeld');
+
     // Try natural melds first (preferred)
     final naturalMelds = _meldAnalyzer.findNaturalMeldOpportunities(
       bot,
-      controller,
+      controllerForMeld,
     );
     final naturalCombination = _findBestNaturalCombination(
       naturalMelds,
@@ -1141,7 +1184,7 @@ class EnhancedBotAI {
       // Reduced from 1.2 - much more willing to use wilds
       final wildCombination = _meldAnalyzer.findBestPlayDownCombination(
         bot,
-        controller,
+        controllerForMeld,
         adjustedRequirement,
       );
       if (wildCombination.isNotEmpty) {
@@ -1153,7 +1196,7 @@ class EnhancedBotAI {
     if (gameState.round >= 3 && !bot.hasPlayedDown) {
       final desperateCombination = _meldAnalyzer.findBestPlayDownCombination(
         bot,
-        controller,
+        controllerForMeld,
         playDownRequirement, // Use base requirement, no buffer
       );
       if (desperateCombination.isNotEmpty) {
@@ -1202,7 +1245,7 @@ class EnhancedBotAI {
   /// Handle panic mode for bots with terrible scores
   BotDecision _handlePanicMode(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
   ) {
     DebugLogger.botDebug(
@@ -1211,7 +1254,7 @@ class EnhancedBotAI {
       'PANIC MODE activated (score: ${bot.score})',
     );
 
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     final playDownRequirement = gameState.playDownRequirement;
 
     switch (gameState.turnPhase) {
@@ -1281,10 +1324,10 @@ class EnhancedBotAI {
   /// Enhanced discard pile unlocking logic for competitive play
   bool _shouldTakeDiscardPile(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     double riskTolerance,
   ) {
-    final gameState = controller.gameState;
+    final gameState = context.gameState;
     final discardPile = gameState.discardPile;
 
     if (discardPile.isEmpty) {
@@ -1368,7 +1411,7 @@ class EnhancedBotAI {
       final playDownRequirement = gameState.playDownRequirement;
       final currentMeldPotential = _calculateCurrentMeldPotential(
         bot,
-        controller,
+        context,
       );
 
       // If pile helps meet play-down requirement, be EXTREMELY aggressive
@@ -1632,8 +1675,8 @@ class EnhancedBotAI {
   /// Strategic holding decision: Should bot hold cards instead of melding immediately?
   /// This implements the superior "accumulate-and-dump" strategy for better discard pile unlocking
   /// Enhanced with personality-based holding tolerance and time-based pressure
-  bool _shouldHoldCardsStrategically(Player bot, GameController controller) {
-    final gameState = controller.gameState;
+  bool _shouldHoldCardsStrategically(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
     final handSize = bot.currentHand.length;
     final turnCount = _gameAnalyzer.getTurnCount(bot.id);
     final personality = _personalityManager.getPersonality(bot.id);
@@ -1679,7 +1722,7 @@ class EnhancedBotAI {
     if (handSize >= 12 &&
         _shouldHoldForRoundRequirement(
           bot,
-          controller,
+          context,
           playDownRequirement,
           handSize,
         )) {
@@ -1692,7 +1735,7 @@ class EnhancedBotAI {
     }
 
     // Hold if we can potentially dump everything soon
-    final dumpPotential = _calculateDumpPotential(bot, controller);
+    final dumpPotential = _calculateDumpPotential(bot, context);
     if (dumpPotential >= 0.8) {
       return true; // Increased threshold - be more selective about holding
     }
@@ -1701,8 +1744,8 @@ class EnhancedBotAI {
   }
 
   /// Should execute dump strategy: meld everything and go to foot
-  bool _shouldExecuteDumpStrategy(Player bot, GameController controller) {
-    final gameState = controller.gameState;
+  bool _shouldExecuteDumpStrategy(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
     final handSize = bot.currentHand.length;
     final playDownRequirement = gameState.playDownRequirement;
     final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
@@ -1710,7 +1753,7 @@ class EnhancedBotAI {
 
     // For initial play-down: check if we have enough meld potential for the round requirement
     if (!bot.hasPlayedDown) {
-      final currentMeldPoints = _calculateCurrentMeldPotential(bot, controller);
+      final currentMeldPoints = _calculateCurrentMeldPotential(bot, context);
       // Only dump if we can meet the round requirement
       if (currentMeldPoints >= playDownRequirement) return true;
       return false; // Keep accumulating if we can't meet the requirement
@@ -1725,7 +1768,7 @@ class EnhancedBotAI {
     }
 
     // Post-play-down: Execute if we can dump a good portion of our hand
-    final dumpPotential = _calculateDumpPotential(bot, controller);
+    final dumpPotential = _calculateDumpPotential(bot, context);
     if (dumpPotential >= 0.6 && handSize >= 4) {
       return true; // Reduced from 80% to 60%
     }
@@ -1752,7 +1795,9 @@ class EnhancedBotAI {
     }
 
     // Execute if we can go directly to foot
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    final controller = context.controller as GameController?;
+    if (controller == null) return false;
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -1770,7 +1815,7 @@ class EnhancedBotAI {
 
   /// Execute dump strategy: create all possible melds in this turn
   /// Enhanced with competitive book balance analysis
-  BotDecision _executeDumpStrategy(Player bot, GameController controller) {
+  BotDecision _executeDumpStrategy(Player bot, BotGameContext context) {
     // Enhanced book analysis
     final bookStatus = _analyzeBookRequirements(bot);
     final needsCleanBook = bookStatus['needsCleanBook'] as bool;
@@ -1778,6 +1823,8 @@ class EnhancedBotAI {
     final hasRequiredBooks = bookStatus['hasRequiredBooks'] as bool;
 
     // Priority 1: Add to existing melds with strategic book balance
+    final controller = context.controller as GameController?;
+    if (controller == null) return BotDecision(action: 'noMeld');
     final rawCardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -1838,7 +1885,7 @@ class EnhancedBotAI {
       }
     }
 
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     if (possibleMelds.isNotEmpty) {
       // NEW: If bot has sufficient books (4+), create any meld to reduce hand size
       final totalBooks = bot.melds.where((m) => m.isBook).length;
@@ -1923,11 +1970,13 @@ class EnhancedBotAI {
   }
 
   /// Calculate what percentage of hand can be melded (0.0 to 1.0)
-  double _calculateDumpPotential(Player bot, GameController controller) {
+  double _calculateDumpPotential(Player bot, BotGameContext context) {
     final handSize = bot.currentHand.length;
     if (handSize == 0) return 1.0;
 
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    final controller = context.controller as GameController?;
+    if (controller == null) return 0.0;
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -1941,12 +1990,14 @@ class EnhancedBotAI {
   }
 
   /// Check if bot can play ALL cards to immediately transition to foot
-  BotDecision? _checkCanPlayAllCards(Player bot, GameController controller) {
+  BotDecision? _checkCanPlayAllCards(Player bot, BotGameContext context) {
     final handSize = bot.currentHand.length;
     if (handSize == 0) return null;
 
     // Get all cards we can potentially play
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    final controller = context.controller as GameController?;
+    if (controller == null) return null;
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -1996,12 +2047,12 @@ class EnhancedBotAI {
   /// Determine if we should hold cards based on round play-down requirements
   bool _shouldHoldForRoundRequirement(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     int requirement,
     int handSize,
   ) {
     // Calculate current meld potential points
-    final currentMeldPoints = _calculateCurrentMeldPotential(bot, controller);
+    final currentMeldPoints = _calculateCurrentMeldPotential(bot, context);
 
     // More aggressive round-specific strategy
     if (requirement <= 60) {
@@ -2033,10 +2084,12 @@ class EnhancedBotAI {
   }
 
   /// Calculate total points from all possible melds we could make right now
-  int _calculateCurrentMeldPotential(Player bot, GameController controller) {
+  int _calculateCurrentMeldPotential(Player bot, BotGameContext context) {
     int totalPoints = 0;
 
     // Points from cards we could add to existing melds
+    final controller = context.controller as GameController?;
+    if (controller == null) return 0;
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -2047,7 +2100,7 @@ class EnhancedBotAI {
     }
 
     // Points from new melds we could create
-    final possibleMelds = _getCachedPossibleMelds(bot, controller);
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
     for (final meld in possibleMelds) {
       int meldValue = 0;
       for (final card in meld) {
@@ -2362,7 +2415,7 @@ class EnhancedBotAI {
   /// NEW: Cached opponent pressure evaluation for performance
   BotDecision? _evaluateOpponentPressureWithCaching(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
   ) {
     // Cache pressure analysis for performance (check max every 2 seconds)
@@ -2376,7 +2429,7 @@ class EnhancedBotAI {
     }
 
     // Perform fresh analysis
-    final result = _evaluateOpponentPressure(bot, controller, gameState);
+    final result = _evaluateOpponentPressure(bot, context, gameState);
 
     // Cache the result
     _lastPressureAnalysis ??= {};
@@ -2390,7 +2443,7 @@ class EnhancedBotAI {
   /// NEW: Evaluate opponent pressure and return competitive counter-strategy
   BotDecision? _evaluateOpponentPressure(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
   ) {
     final humanPlayers = gameState.players.where(
@@ -2401,18 +2454,18 @@ class EnhancedBotAI {
       // THREAT 1: Human accumulation strategy (like the 35-card pattern we observed)
       if (human.currentHand.length >= GameConfig.humanAccumulationThreat &&
           !human.hasPlayedDown) {
-        return _counterHumanAccumulation(bot, controller, gameState, human);
+        return _counterHumanAccumulation(bot, context, gameState, human);
       }
 
       // THREAT 2: Human close to going out
       if (human.hasPickedUpFoot &&
           human.currentHand.length <= GameConfig.dangerousOpponentHandSize) {
-        return _blockOpponentGoOut(bot, controller, gameState, human);
+        return _blockOpponentGoOut(bot, context, gameState, human);
       }
 
       // THREAT 3: Human building books faster than us
       if (_isOpponentOutpacingBooks(bot, human)) {
-        return _accelerateBookBuilding(bot, controller, gameState);
+        return _accelerateBookBuilding(bot, context, gameState);
       }
     }
 
@@ -2422,7 +2475,7 @@ class EnhancedBotAI {
   /// Counter human accumulation strategy - apply early pressure
   BotDecision? _counterHumanAccumulation(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
     Player human,
   ) {
@@ -2430,14 +2483,14 @@ class EnhancedBotAI {
 
     // AGGRESSIVE BOTS: Speed demon counter-strategy
     if (personality == BotPersonality.aggressive) {
-      return _executeSpeedDemonStrategy(bot, controller, gameState, human);
+      return _executeSpeedDemonStrategy(bot, context, gameState, human);
     }
 
     // OTHER BOTS: General counter-tactics
     if (gameState.turnPhase == TurnPhase.draw &&
         gameState.discardPile.length >= 6) {
       // Take large discard piles to deny accumulation opportunities
-      if (bot.hasPlayedDown && controller.canUnlockDiscard()) {
+      if (bot.hasPlayedDown && context.canUnlockDiscard()) {
         return BotDecision(action: 'drawFromDiscard');
       }
     }
@@ -2446,7 +2499,7 @@ class EnhancedBotAI {
         bot.hasPickedUpFoot &&
         bot.currentHand.length <= 10) {
       // If we're in foot and human is still accumulating, rush to go out
-      if (controller.canPlayerGoOut()) {
+      if (context.canPlayerGoOut()) {
         // Try to go out immediately to cut off their strategy
         final possibleDiscards = bot.currentHand
             .where((card) => !card.isThree)
@@ -2463,7 +2516,7 @@ class EnhancedBotAI {
   /// NEW: Speed demon strategy - end game before humans can accumulate
   BotDecision? _executeSpeedDemonStrategy(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
     Player human,
   ) {
@@ -2471,10 +2524,11 @@ class EnhancedBotAI {
 
     if (!bot.hasPlayedDown) {
       // EMERGENCY: Play down with minimum points if human accumulating - but ensure rule compliance
+      final controller = context.controller as GameController?;
+      if (controller == null) return null;
       final possibleMelds = controller.findPossibleMelds(bot);
       if (possibleMelds.isNotEmpty) {
         // Find a meld that meets the minimum play-down requirement
-        final gameState = controller.gameState;
         final playDownRequirement = gameState.playDownRequirement;
 
         for (final meld in possibleMelds) {
@@ -2506,7 +2560,7 @@ class EnhancedBotAI {
 
     if (bot.hasPickedUpFoot && bot.currentHand.length <= 12) {
       // Aggressive go-out attempt - don't wait for perfect books
-      if (controller.canPlayerGoOut()) {
+      if (context.canPlayerGoOut()) {
         final possibleDiscards = bot.currentHand
             .where((card) => !card.isThree)
             .toList();
@@ -2525,14 +2579,14 @@ class EnhancedBotAI {
 
       if (cleanBooks == 0 || dirtyBooks == 0) {
         // Rush to complete missing book type
-        return _rushToCompleteRequiredBooks(bot, controller);
+        return _rushToCompleteRequiredBooks(bot, context);
       }
     }
 
     // Take discard pile aggressively to speed up game
     if (gameState.turnPhase == TurnPhase.draw &&
         gameState.discardPile.length >= 4) {
-      if (controller.canUnlockDiscard()) {
+      if (context.canUnlockDiscard()) {
         return BotDecision(action: 'drawFromDiscard');
       }
     }
@@ -2543,7 +2597,7 @@ class EnhancedBotAI {
   /// Rush to complete required books for going out
   BotDecision? _rushToCompleteRequiredBooks(
     Player bot,
-    GameController controller,
+    BotGameContext context,
   ) {
     final cleanBooks = bot.melds
         .where((m) => m.cards.length >= 7 && m.isClean)
@@ -2578,6 +2632,8 @@ class EnhancedBotAI {
     }
 
     // If no near-complete books, create new meld of needed type
+    final controller = context.controller as GameController?;
+    if (controller == null) return null;
     final possibleMelds = controller.findPossibleMelds(bot);
     for (final meld in possibleMelds) {
       final isClean = !meld.any((card) => card.isWild);
@@ -2594,7 +2650,7 @@ class EnhancedBotAI {
   /// Block opponent from going out
   BotDecision? _blockOpponentGoOut(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
     Player opponent,
   ) {
@@ -2602,7 +2658,7 @@ class EnhancedBotAI {
 
     if (gameState.turnPhase == TurnPhase.draw) {
       // Take discard pile to prevent opponent from using it
-      if (gameState.discardPile.isNotEmpty && controller.canUnlockDiscard()) {
+      if (gameState.discardPile.isNotEmpty && context.canUnlockDiscard()) {
         return BotDecision(action: 'drawFromDiscard');
       }
     }
@@ -2621,7 +2677,7 @@ class EnhancedBotAI {
   /// Accelerate book building when opponent is outpacing us
   BotDecision? _accelerateBookBuilding(
     Player bot,
-    GameController controller,
+    BotGameContext context,
     GameState gameState,
   ) {
     if (gameState.turnPhase == TurnPhase.meld) {
@@ -2816,12 +2872,12 @@ class EnhancedBotAI {
   bool _isValidDecision(
     BotDecision decision,
     Player bot,
-    GameController controller,
+    BotGameContext context,
   ) {
     try {
       switch (decision.action) {
         case 'goOut':
-          return controller.canPlayerGoOut() && bot.hasPickedUpFoot;
+          return context.canPlayerGoOut() && bot.hasPickedUpFoot;
         case 'createMeld':
           return decision.data is List<PlayingCard> &&
               (decision.data as List<PlayingCard>).isNotEmpty;
@@ -2854,14 +2910,14 @@ class EnhancedBotAI {
   BotDecision _getSafeDecision(
     TurnPhase turnPhase,
     Player bot,
-    GameController controller,
+    BotGameContext context,
   ) {
     switch (turnPhase) {
       case TurnPhase.draw:
         return BotDecision(action: 'drawFromDeck');
       case TurnPhase.meld:
         // Try simple meld if possible, otherwise skip
-        final possibleMelds = controller.findPossibleMelds(bot);
+        final possibleMelds = context.controller?.findPossibleMelds(bot) ?? [];
         if (possibleMelds.isNotEmpty && bot.hasPlayedDown) {
           return BotDecision(action: 'createMeld', data: possibleMelds.first);
         }
@@ -2870,7 +2926,7 @@ class EnhancedBotAI {
         // Check if bot has any cards at all
         if (bot.currentHand.isEmpty) {
           // Bot has no cards - this should trigger going out or error
-          if (controller.canPlayerGoOut()) {
+          if (context.canPlayerGoOut()) {
             return BotDecision(action: 'goOut');
           }
           return BotDecision(action: 'noMeld'); // Can't discard with no cards
@@ -2891,14 +2947,14 @@ class EnhancedBotAI {
   /// Get possible melds with caching to avoid repeated expensive computations
   List<List<PlayingCard>> _getCachedPossibleMelds(
     Player bot,
-    GameController controller,
+    BotGameContext context,
   ) {
     // Create cache key based on hand contents and game state
     final handString = bot.currentHand
         .map((c) => '${c.rank.name}-${c.suit?.name ?? 'J'}')
         .join(',');
     final cacheKey =
-        '${handString}_${controller.gameState.round}_${bot.melds.length}';
+        '${handString}_${context.round}_${bot.melds.length}';
 
     // Return cached result if valid
     if (_lastMeldCacheKey == cacheKey && _cachedPossibleMelds != null) {
@@ -2906,7 +2962,13 @@ class EnhancedBotAI {
     }
 
     // Compute and cache new result
-    final result = _meldAnalyzer.getPossibleMelds(bot, controller);
+    // Note: This requires controller for findPossibleMelds, but we've decoupled
+    // most of the bot logic to use BotGameContext
+    final controller = context.controller;
+    if (controller == null) {
+      return []; // No controller available (test context)
+    }
+    final result = _meldAnalyzer.getPossibleMelds(bot, controller as GameController);
     _cachedPossibleMelds = {cacheKey: result};
     _lastMeldCacheKey = cacheKey;
 

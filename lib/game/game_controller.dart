@@ -10,6 +10,8 @@ import '../utils/debug_logger.dart';
 import 'game_interface.dart';
 import 'managers/meld_manager.dart';
 import 'managers/game_serializer.dart';
+import 'events/game_event.dart';
+import 'events/game_event_bus.dart';
 
 /// Result class for importing game state with bot personalities
 class ImportResult {
@@ -31,23 +33,36 @@ class ImportResult {
 class GameController implements GameInterface {
   final GameState _gameState;
   late final MeldManager _meldManager;
+  final GameEventBus _eventBus;
 
   @override
   final int? gameSeed;
 
-  factory GameController({required List<Player> players, int? seed}) {
+  factory GameController({
+    required List<Player> players,
+    int? seed,
+    GameEventBus? eventBus,
+  }) {
     final actualSeed = seed ?? Random().nextInt(1000000);
     final gameState = GameState(
       players: players,
       deck: Deck.createHandAndFootDeck(players.length, seed: actualSeed),
     );
 
-    return GameController._internal(gameState: gameState, seed: actualSeed);
+    return GameController._internal(
+      gameState: gameState,
+      seed: actualSeed,
+      eventBus: eventBus ?? gameEventBus,
+    );
   }
 
-  GameController._internal({required GameState gameState, required int seed})
-    : gameSeed = seed,
-      _gameState = gameState {
+  GameController._internal({
+    required GameState gameState,
+    required int seed,
+    required GameEventBus eventBus,
+  }) : gameSeed = seed,
+       _gameState = gameState,
+       _eventBus = eventBus {
     _meldManager = MeldManager(_gameState);
   }
 
@@ -61,25 +76,64 @@ class GameController implements GameInterface {
     _gameState.deck.shuffle();
     _gameState.startRound();
     _gameState.dealCards();
+
+    // Publish round started event
+    _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
+
     // Auto-save after new game initialization
     saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
   }
 
   @override
   bool drawFromDeck() {
+    final player = _gameState.currentPlayer;
     final result = _gameState.drawFromDeck();
+
+    if (result && player.currentHand.isNotEmpty) {
+      // Get the last card drawn (newest in hand)
+      final drawnCard = player.currentHand.last;
+      _eventBus.publish(
+        CardDrawnEvent(card: drawnCard, fromDeck: true, player: player),
+      );
+    }
+
     return result;
   }
 
   @override
   bool drawFromDiscardPile() {
+    final player = _gameState.currentPlayer;
+    final topDiscard = _gameState.topDiscard;
     final result = _gameState.drawFromDiscard();
+
+    if (result && topDiscard != null) {
+      _eventBus.publish(
+        CardDrawnEvent(card: topDiscard, fromDeck: false, player: player),
+      );
+    }
+
     return result;
   }
 
   @override
   bool unlockDiscardPile() {
+    final player = _gameState.currentPlayer;
+    final cardsBefore = _gameState.discardPile.length;
     final result = _gameState.unlockDiscard();
+
+    if (result) {
+      // Calculate how many cards were taken
+      final cardsAfter = _gameState.discardPile.length;
+      final cardsTaken = cardsBefore - cardsAfter;
+      final takenCards = _gameState.currentPlayer.currentHand
+          .take(cardsTaken)
+          .toList();
+
+      _eventBus.publish(
+        DiscardPileUnlockedEvent(cardsTaken: takenCards, player: player),
+      );
+    }
+
     return result;
   }
 
@@ -90,21 +144,54 @@ class GameController implements GameInterface {
 
   @override
   bool discardCard(PlayingCard card) {
+    final player = _gameState.currentPlayer;
     final result = _gameState.discard(card);
     _gameState.validateGameState();
 
+    if (result) {
+      _eventBus.publish(CardDiscardedEvent(card: card, player: player));
+
+      // Check if turn ended (player changed or phase changed)
+      final newPlayer = _gameState.currentPlayer;
+      if (newPlayer.id != player.id || _gameState.turnPhase == TurnPhase.draw) {
+        _eventBus.publish(
+          TurnEndedEvent(
+            turnNumber: _gameState.currentPlayerIndex,
+            nextPlayer: newPlayer,
+            player: player,
+          ),
+        );
+      }
+    }
+
     // Auto-save only after human player discards in single player games
-    if (result && _gameState.currentPlayer.type == PlayerType.human) {
+    if (result && player.type == PlayerType.human) {
       saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
     }
 
     return result;
   }
 
+  /// Publish a TurnEndedEvent manually for forced turn advances.
+  /// Used by BotTurnManager when it bypasses the normal discard flow.
+  void publishTurnEndedEvent(Player previousPlayer) {
+    _eventBus.publish(
+      TurnEndedEvent(
+        turnNumber: _gameState.currentPlayerIndex,
+        nextPlayer: _gameState.currentPlayer,
+        player: previousPlayer,
+      ),
+    );
+  }
+
   @override
   void nextRound() {
     if (_gameState.phase == GamePhase.roundEnd) {
       _gameState.resetForNewRound();
+
+      // Publish round started event
+      _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
+
       // Auto-save after round transition
       saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
     }
@@ -114,8 +201,81 @@ class GameController implements GameInterface {
 
   @override
   bool createMeld(List<PlayingCard> cards) {
+    final player = _gameState.currentPlayer;
+    final hadPlayedDown = player.hasPlayedDown;
+    final hadPickedUpFoot = player.hasPickedUpFoot;
+    final roundBefore = _gameState.round;
+    final phaseBefore = _gameState.phase;
+
     final result = _gameState.playMeld(cards);
     _gameState.validateGameState();
+
+    if (result && player.melds.isNotEmpty) {
+      final newMeld = player.melds.last;
+      _eventBus.publish(
+        MeldCreatedEvent(meld: newMeld, cards: cards, player: player),
+      );
+
+      // Check if this is the first play-down
+      if (!hadPlayedDown && player.hasPlayedDown) {
+        final pointsPlayed = cards.fold<int>(
+          0,
+          (sum, card) => sum + card.pointValue,
+        );
+        _eventBus.publish(
+          PlayedDownEvent(pointsPlayed: pointsPlayed, player: player),
+        );
+      }
+
+      // Check if foot was picked up
+      if (!hadPickedUpFoot && player.hasPickedUpFoot) {
+        _eventBus.publish(FootPickedUpEvent(player: player));
+      }
+
+      // Check if player went out (round or game ended)
+      if (_gameState.phase != phaseBefore) {
+        if (_gameState.phase == GamePhase.roundEnd) {
+          _eventBus.publish(
+            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+          );
+
+          // Calculate round scores
+          final roundScores = <Player, int>{};
+          for (final p in _gameState.players) {
+            roundScores[p] = p.score;
+          }
+          _eventBus.publish(
+            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+          );
+        } else if (_gameState.phase == GamePhase.gameEnd) {
+          _eventBus.publish(
+            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+          );
+
+          final roundScores = <Player, int>{};
+          for (final p in _gameState.players) {
+            roundScores[p] = p.score;
+          }
+          _eventBus.publish(
+            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+          );
+
+          if (_gameState.winner != null) {
+            final finalScores = <Player, int>{};
+            for (final p in _gameState.players) {
+              finalScores[p] = p.score;
+            }
+            _eventBus.publish(
+              GameEndedEvent(
+                winner: _gameState.winner!,
+                finalScores: finalScores,
+              ),
+            );
+          }
+        }
+      }
+    }
+
     return result;
   }
 
@@ -150,8 +310,72 @@ class GameController implements GameInterface {
 
   @override
   bool addCardToMeld(int meldIndex, PlayingCard card) {
+    final player = _gameState.currentPlayer;
+    final hadPickedUpFoot = player.hasPickedUpFoot;
+    final roundBefore = _gameState.round;
+    final phaseBefore = _gameState.phase;
+    final meld = player.melds[meldIndex];
     final result = _gameState.addToMeld(meldIndex, card);
     _gameState.validateGameState();
+
+    if (result) {
+      _eventBus.publish(
+        CardAddedToMeldEvent(
+          meldIndex: meldIndex,
+          card: card,
+          meld: meld,
+          player: player,
+        ),
+      );
+
+      // Check if foot was picked up
+      if (!hadPickedUpFoot && player.hasPickedUpFoot) {
+        _eventBus.publish(FootPickedUpEvent(player: player));
+      }
+
+      // Check if player went out (round or game ended)
+      if (_gameState.phase != phaseBefore) {
+        if (_gameState.phase == GamePhase.roundEnd) {
+          _eventBus.publish(
+            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+          );
+
+          final roundScores = <Player, int>{};
+          for (final p in _gameState.players) {
+            roundScores[p] = p.score;
+          }
+          _eventBus.publish(
+            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+          );
+        } else if (_gameState.phase == GamePhase.gameEnd) {
+          _eventBus.publish(
+            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+          );
+
+          final roundScores = <Player, int>{};
+          for (final p in _gameState.players) {
+            roundScores[p] = p.score;
+          }
+          _eventBus.publish(
+            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+          );
+
+          if (_gameState.winner != null) {
+            final finalScores = <Player, int>{};
+            for (final p in _gameState.players) {
+              finalScores[p] = p.score;
+            }
+            _eventBus.publish(
+              GameEndedEvent(
+                winner: _gameState.winner!,
+                finalScores: finalScores,
+              ),
+            );
+          }
+        }
+      }
+    }
+
     return result;
   }
 

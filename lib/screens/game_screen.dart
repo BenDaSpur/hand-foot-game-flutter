@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
@@ -24,6 +25,9 @@ import 'managers/bot_turn_manager.dart';
 import 'managers/dialog_manager.dart';
 import 'managers/game_state_manager.dart';
 import 'managers/persistence_manager.dart';
+import 'managers/event_based_game_state_manager.dart';
+import '../providers/game_providers.dart';
+import '../providers/computed_providers.dart';
 
 /// Bot configuration for randomized personality assignment
 class BotConfig {
@@ -45,19 +49,21 @@ const List<BotConfig> kBotConfigurations = [
   BotConfig('Sue', BotPersonality.adaptive),
 ];
 
-class GameScreen extends StatefulWidget {
+class GameScreen extends ConsumerStatefulWidget {
   final int? testSeed; // For deterministic testing
   final GameController? gameController; // For continuing saved games
 
   const GameScreen({super.key, this.testSeed, this.gameController});
 
   @override
-  State<GameScreen> createState() => _GameScreenState();
+  ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> {
-  late GameController _gameController;
-  late EnhancedBotAI _botAI;
+class _GameScreenState extends ConsumerState<GameScreen> {
+  // Use providers instead of local state - accessed via ref
+  GameController? get _gameController =>
+      ref.read(gameControllerProvider)?.controller;
+  EnhancedBotAI get _botAI => ref.read(botAIProvider);
 
   final List<int> _selectedCardIndices =
       []; // Track card indices instead of card objects
@@ -77,6 +83,7 @@ class _GameScreenState extends State<GameScreen> {
   late BotTurnManager _botTurnManager;
   late DialogManager _dialogManager;
   late GameStateManager _gameStateManager;
+  EventBasedGameStateManager? _eventBasedGameStateManager;
   late PersistenceManager _persistenceManager;
 
   // Prevent multiple game end dialogs
@@ -89,18 +96,25 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize event listener via Riverpod
+    ref.read(gameEventListenerProvider);
     _initializeGame();
   }
 
   @override
   void dispose() {
     _disposed = true;
+    // Dispose event-based manager to clean up subscriptions
+    _eventBasedGameStateManager?.dispose();
     super.dispose();
   }
 
   /// Helper method to assign bot personalities consistently
   void _assignBotPersonalities() {
-    final botPlayers = _gameController.gameState.players
+    final controller = _gameController;
+    if (controller == null) return;
+
+    final botPlayers = controller.gameState.players
         .where((p) => p.type == PlayerType.bot)
         .toList();
 
@@ -135,14 +149,21 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Initialize all manager instances after game controller setup
   void _initializeManagers() {
+    final controller = _gameController;
+    if (controller == null) return;
+
+    final eventBus = ref.read(gameEventBusProvider);
+
     _botTurnManager = BotTurnManager(
-      gameController: _gameController,
+      gameController: controller,
       botAI: _botAI,
       onStateChanged: () {
+        // Force UI rebuild to show updated bot turn phase
         if (mounted) {
-          setState(() {});
+          setState(() {
+            // Empty setState triggers rebuild which reads latest game state
+          });
           // Only trigger turn processing if no bot turn is currently in progress
-          // This prevents infinite loops during active bot processing
           if (!_isBotTurnInProgress) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted && !_isBotTurnInProgress) {
@@ -159,26 +180,35 @@ class _GameScreenState extends State<GameScreen> {
 
     _dialogManager = DialogManager(
       context: context,
-      gameController: _gameController,
+      gameController: controller,
       onStateChanged: () {
-        if (mounted) setState(() {});
+        // State changes handled reactively via providers
       },
       onNewGame: _startNewGame,
       onReturnToMenu: _returnToMainMenu,
     );
 
-    _gameStateManager = GameStateManager(
-      gameController: _gameController,
+    // Use event-based manager for reactive updates
+    _eventBasedGameStateManager = EventBasedGameStateManager(
+      gameController: controller,
+      eventBus: eventBus,
       onStateChanged: () {
-        if (mounted) setState(() {});
+        // State changes trigger provider updates automatically
+        // Don't call processCurrentPlayerTurn() here - only on turn end
+      },
+      onTurnEnd: () {
+        // Only trigger turn processing when a turn actually ends
+        // This prevents infinite loops from state changes during a turn
+        if (mounted && !_isBotTurnInProgress) {
+          processCurrentPlayerTurn();
+        }
       },
       onGameEnd: () {
-        if (_gameController.gameState.winner != null && !_gameEndDialogShown) {
+        final winner = ref.read(gameWinnerProvider);
+        if (winner != null && !_gameEndDialogShown) {
           _gameEndDialogShown = true;
-          _dialogManager.showGameEndDialog(
-            _gameController.gameState.winner!,
-            _gameController.gameState.players,
-          );
+          final players = ref.read(leaderboardProvider);
+          _dialogManager.showGameEndDialog(winner, players);
         }
       },
       onRoundEnd: () {
@@ -189,34 +219,41 @@ class _GameScreenState extends State<GameScreen> {
       },
     );
 
+    // Keep traditional manager for validation methods
+    _gameStateManager = GameStateManager(
+      gameController: controller,
+      onStateChanged: () {},
+      onGameEnd: () {},
+      onRoundEnd: () {},
+    );
+
     _persistenceManager = PersistenceManager(
-      gameController: _gameController,
+      gameController: controller,
       botAI: _botAI,
       onStateChanged: () {
-        if (mounted) setState(() {});
+        // State changes handled reactively via providers
       },
       onGameLoaded: (newController, botPersonalities) {
-        setState(() {
-          _gameController = newController;
-          _botAI = EnhancedBotAI();
+        // Update provider with new controller
+        ref
+            .read(gameControllerProvider.notifier)
+            .setController(newController, eventBus);
 
-          // Restore saved bot personalities or assign new ones
-          if (botPersonalities.isNotEmpty) {
-            _botTurnManager.restoreBotPersonalities(botPersonalities);
-          } else {
-            _botTurnManager.assignBotPersonalities();
-          }
+        // Restore saved bot personalities or assign new ones
+        if (botPersonalities.isNotEmpty) {
+          _botTurnManager.restoreBotPersonalities(botPersonalities);
+        } else {
+          _botTurnManager.assignBotPersonalities();
+        }
 
-          _selectedCardIndices.clear();
-          _viewingPlayerMelds = null;
-          _isInitialized = true;
+        _selectedCardIndices.clear();
+        _viewingPlayerMelds = null;
+        _isInitialized = true;
 
-          // Reinitialize managers with new controller
-          _initializeManagers();
-        });
+        // Reinitialize managers with new controller
+        _initializeManagers();
 
         // CRITICAL: Resume game flow after import
-        // Use post-frame callback to ensure UI is updated first
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             DebugLogger.debug('Resuming game flow after import');
@@ -230,13 +267,13 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _initializeGame() async {
     // If a gameController was provided (continuing saved game), use it
     if (widget.gameController != null) {
-      _gameController = widget.gameController!;
-      _botAI = EnhancedBotAI();
+      final eventBus = ref.read(gameEventBusProvider);
+      ref
+          .read(gameControllerProvider.notifier)
+          .setController(widget.gameController!, eventBus);
       _initializeManagers();
 
-      setState(() {
-        _isInitialized = true;
-      });
+      _isInitialized = true;
 
       // Start bot turns if needed
       processCurrentPlayerTurn();
@@ -311,17 +348,25 @@ class _GameScreenState extends State<GameScreen> {
       );
     }
 
-    _gameController = GameControllerFactory.createSingleplayerGame(
+    // Use Riverpod providers for game controller and bot AI
+    final controllerNotifier = ref.read(gameControllerProvider.notifier);
+    final eventBus = ref.read(gameEventBusProvider);
+
+    final newController = GameControllerFactory.createSingleplayerGame(
       players: players,
       seed: widget.testSeed,
+      eventBus: eventBus,
     );
 
-    // Create bot AI and assign the randomized personalities
-    _botAI = EnhancedBotAI();
-    _botAI.assignPersonality('2', botConfigs[0].personality);
-    _botAI.assignPersonality('3', botConfigs[1].personality);
+    // Store in Riverpod provider for reactive access
+    controllerNotifier.setController(newController, eventBus);
 
-    _gameController.initializeGame();
+    // Use Riverpod provider for bot AI
+    final botAI = ref.read(botAIProvider);
+    botAI.assignPersonality('2', botConfigs[0].personality);
+    botAI.assignPersonality('3', botConfigs[1].personality);
+
+    newController.initializeGame();
 
     // Initialize managers after game setup
     _initializeManagers();
@@ -333,12 +378,11 @@ class _GameScreenState extends State<GameScreen> {
     // Start analytics session tracking
     _startAnalyticsSession();
 
-    setState(() {
-      _isInitialized = true;
-    });
+    _isInitialized = true;
 
     // If the first player is human, save the initial game state
-    if (_gameController.gameState.currentPlayer.type == PlayerType.human) {
+    final gameState = ref.read(currentGameStateProvider);
+    if (gameState?.currentPlayer.type == PlayerType.human) {
       _persistenceManager.saveGameState().catchError((error) {
         DebugLogger.error('Error saving initial game state: $error');
       });
@@ -364,15 +408,23 @@ class _GameScreenState extends State<GameScreen> {
   void _processNextBotInQueue() {
     if (_botTurnQueue.isEmpty || _isBotTurnInProgress) return;
 
+    final controller = _gameController;
+    if (controller == null) {
+      _isBotTurnInProgress = false;
+      return;
+    }
+
     _isBotTurnInProgress = true;
     final botPlayer = _botTurnQueue.removeAt(0);
 
-    // Verify this bot is still the current player
-    final currentPlayer = _gameController.gameState.currentPlayer;
+    // Verify this bot is still the current player - read directly from controller
+    final gameState = controller.gameState;
+    final currentPlayer = gameState.currentPlayer;
+
     if (currentPlayer.id != botPlayer.id ||
         currentPlayer.type != PlayerType.bot) {
       DebugLogger.debug(
-        'Skipping queued bot ${botPlayer.name} - no longer current player',
+        'Skipping queued bot ${botPlayer.name} - current player is now ${currentPlayer.name}',
       );
       _isBotTurnInProgress = false;
       _processNextBotInQueue(); // Try next in queue
@@ -385,15 +437,14 @@ class _GameScreenState extends State<GameScreen> {
         .then((_) {
           _isBotTurnInProgress = false;
           DebugLogger.debug('Bot ${botPlayer.name} completed turn');
-          // Check if next player is also a bot
-          if (mounted) {
-            final nextPlayer = _gameController.gameState.currentPlayer;
-            if (nextPlayer.type == PlayerType.bot) {
-              DebugLogger.debug(
-                'Next player ${nextPlayer.name} is also a bot - processing immediately',
-              );
-              processCurrentPlayerTurn();
-            }
+          // Check if next player is also a bot - read directly from controller
+          if (mounted &&
+              controller.gameState.currentPlayer.type == PlayerType.bot) {
+            final nextPlayer = controller.gameState.currentPlayer;
+            DebugLogger.debug(
+              'Next player ${nextPlayer.name} is also a bot - processing immediately',
+            );
+            processCurrentPlayerTurn();
           }
         })
         .catchError((error) {
@@ -411,15 +462,21 @@ class _GameScreenState extends State<GameScreen> {
     if (!_isInitialized || _disposed || !mounted) return;
 
     try {
+      final controller = _gameController;
+      if (controller == null) return;
+
+      // Get game state directly from controller to avoid stale provider data
+      final gameState = controller.gameState;
+
       // CRITICAL: Check if game has ended before processing any turns
-      if (_gameController.gameState.phase == GamePhase.gameEnd) {
+      if (gameState.phase == GamePhase.gameEnd) {
         DebugLogger.debug('Game has ended - stopping turn processing');
-        if (_gameController.gameState.winner != null && !_gameEndDialogShown) {
+        final winner = gameState.winner;
+        if (winner != null && !_gameEndDialogShown) {
           _gameEndDialogShown = true;
-          _dialogManager.showGameEndDialog(
-            _gameController.gameState.winner!,
-            _gameController.gameState.players,
-          );
+          final players = List<Player>.from(gameState.players);
+          players.sort((a, b) => b.score.compareTo(a.score));
+          _dialogManager.showGameEndDialog(winner, players);
         }
         return;
       }
@@ -431,7 +488,12 @@ class _GameScreenState extends State<GameScreen> {
         return;
       }
 
-      final currentPlayer = _gameController.gameState.currentPlayer;
+      // Get current player directly from game state to avoid stale provider data
+      final currentPlayer = gameState.currentPlayer;
+
+      DebugLogger.debug(
+        'processCurrentPlayerTurn: Current player is ${currentPlayer.name} (${currentPlayer.type})',
+      );
 
       // CRITICAL: Detect and recover from stuck bot turns
       if (currentPlayer.type == PlayerType.bot && !_isBotTurnInProgress) {
@@ -448,27 +510,28 @@ class _GameScreenState extends State<GameScreen> {
       }
 
       // CRITICAL: Defend against turn corruption from multiplayer sync or other sources
-      final humanPlayer = _gameController.gameState.players.firstWhere(
+      final humanPlayer = gameState.players.firstWhere(
         (p) => p.type == PlayerType.human,
+        orElse: () => gameState.players.first,
       );
-      if (_gameController.gameState.turnPhase == TurnPhase.meld &&
+      if (gameState.turnPhase == TurnPhase.meld &&
           humanPlayer.currentHand.isNotEmpty &&
           currentPlayer.type != PlayerType.human) {
         DebugLogger.error(
           'TURN CORRUPTION DETECTED: Human should be playing but current player is ${currentPlayer.name}',
         );
         DebugLogger.debug('Correcting current player back to human');
-        final humanIndex = _gameController.gameState.players.indexWhere(
+        final humanIndex = gameState.players.indexWhere(
           (p) => p.type == PlayerType.human,
         );
-        _gameController.gameState.currentPlayerIndex = humanIndex;
+        controller.gameState.currentPlayerIndex = humanIndex;
         return;
       }
 
       // Check for round end condition first
-      if (_gameController.gameState.phase == GamePhase.roundEnd) {
+      if (gameState.phase == GamePhase.roundEnd) {
         DebugLogger.debug(
-          'Round has ended - handling transition (Round ${_gameController.gameState.round})',
+          'Round has ended - handling transition (Round ${gameState.round})',
         );
         _handleRoundTransition().catchError((error) {
           DebugLogger.error('Error handling round transition: $error');
@@ -485,7 +548,7 @@ class _GameScreenState extends State<GameScreen> {
         _botTurnManager
             .resetProcessingState(); // Clear any stuck bot processing flag
         if (mounted) {
-          setState(() {}); // Update UI to show it's human turn
+          // UI will update automatically via provider reactivity
           _gameStateManager.checkForRoundTransition();
         }
         return;
@@ -504,7 +567,8 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Handle complete round transition with proper state management
   Future<void> _handleRoundTransition() async {
-    if (_gameController.gameState.phase != GamePhase.roundEnd) return;
+    final gameState = ref.read(currentGameStateProvider);
+    if (gameState?.phase != GamePhase.roundEnd) return;
 
     DebugLogger.debug('Handling round transition - calculating scores');
 
@@ -513,10 +577,10 @@ class _GameScreenState extends State<GameScreen> {
     if (_disposed || !mounted) return;
 
     // Check if game should end (phase set to gameEnd by endRound() logic)
-    if (_gameController.gameState.phase == GamePhase.gameEnd) {
-      final scores = _gameController.gameState.players
-          .map((p) => p.score)
-          .toList();
+    final updatedState = ref.read(currentGameStateProvider);
+    if (updatedState?.phase == GamePhase.gameEnd) {
+      final players = ref.read(leaderboardProvider);
+      final scores = players.map((p) => p.score).toList();
       final highestScore = scores.isEmpty
           ? 0
           : scores.reduce((a, b) => a > b ? a : b);
@@ -524,34 +588,38 @@ class _GameScreenState extends State<GameScreen> {
       DebugLogger.debug(
         'Game end condition met - highest score: $highestScore',
       );
-      _dialogManager.showGameEndDialog(
-        _gameController.gameState.winner!,
-        _gameController.gameState.players,
-      );
+      final winner = ref.read(gameWinnerProvider);
+      if (winner != null) {
+        _dialogManager.showGameEndDialog(winner, players);
+      }
       return;
     }
 
     // Continue to next round
     try {
-      _gameController.nextRound();
-      DebugLogger.debug('Advanced to round ${_gameController.gameState.round}');
+      final controller = _gameController;
+      if (controller != null) {
+        controller.nextRound();
+        final newState = ref.read(currentGameStateProvider);
+        DebugLogger.debug('Advanced to round ${newState?.round ?? 0}');
 
-      if (mounted) {
-        setState(() {});
+        if (mounted) {
+          // UI will update automatically via provider reactivity
 
-        // Clear any UI selections
-        _selectedCardIndices.clear();
-        _viewingPlayerMelds = null;
+          // Clear any UI selections
+          _selectedCardIndices.clear();
+          _viewingPlayerMelds = null;
 
-        // Save game state after round transition (fire and forget)
-        _persistenceManager.saveGameState().catchError((error) {
-          DebugLogger.error(
-            'Error saving game state after round transition: $error',
-          );
-        });
+          // Save game state after round transition (fire and forget)
+          _persistenceManager.saveGameState().catchError((error) {
+            DebugLogger.error(
+              'Error saving game state after round transition: $error',
+            );
+          });
 
-        // Resume game flow
-        processCurrentPlayerTurn();
+          // Resume game flow
+          processCurrentPlayerTurn();
+        }
       }
     } catch (e) {
       DebugLogger.error('Error during round transition: $e');
@@ -562,13 +630,13 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onCardTap(int cardIndex) {
-    if (_gameController.gameState.currentPlayer.type != PlayerType.human) {
+    final currentPlayer = ref.read(currentPlayerProvider);
+    if (currentPlayer?.type != PlayerType.human) {
       return;
     }
 
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
 
     // Bounds checking
     if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
@@ -584,15 +652,15 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (_gameController.gameState.currentPlayer.type != PlayerType.human) {
+    final currentPlayer = ref.read(currentPlayerProvider);
+    if (currentPlayer?.type != PlayerType.human) {
       return;
     }
 
     _hasPlayerInteractedSinceDraw = true; // Mark that player has interacted
 
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
 
     if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
 
@@ -623,9 +691,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _selectAllCardsForMeld(int meldIndex) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
 
     if (meldIndex >= humanPlayer.melds.length) return;
 
@@ -672,9 +739,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   List<PlayingCard> get _selectedCards {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return [];
+
     return _selectedCardIndices
         .where((index) => index < humanPlayer.currentHand.length)
         .map((index) => humanPlayer.currentHand[index])
@@ -682,17 +749,21 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   bool _isCardPlayable(PlayingCard card) {
-    if (_gameController.gameState.currentPlayer.type != PlayerType.human) {
+    final currentPlayer = ref.read(currentPlayerProvider);
+    if (currentPlayer?.type != PlayerType.human) {
       return false;
     }
 
-    if (_gameController.gameState.turnPhase != TurnPhase.meld) {
+    final gameState = ref.read(currentGameStateProvider);
+    if (gameState?.turnPhase != TurnPhase.meld) {
       return false;
     }
 
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return false;
+
+    final controller = _gameController;
+    if (controller == null) return false;
 
     // Check if this card can be added to any existing meld
     for (int i = 0; i < humanPlayer.melds.length; i++) {
@@ -702,7 +773,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Check if this card can form a new meld
-    final possibleMelds = _gameController.findPossibleMelds(humanPlayer);
+    final possibleMelds = controller.findPossibleMelds(humanPlayer);
     for (final meld in possibleMelds) {
       if (meld.contains(card)) {
         return true;
@@ -713,10 +784,13 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   bool _isGameStuck() {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
-    final currentPlayer = _gameController.gameState.currentPlayer;
+    final humanPlayer = ref.read(humanPlayerProvider);
+    final currentPlayer = ref.read(currentPlayerProvider);
+    final gameState = ref.read(currentGameStateProvider);
+
+    if (humanPlayer == null || currentPlayer == null || gameState == null) {
+      return false;
+    }
 
     // Only consider it stuck if:
     // 1. It's the human player's turn
@@ -727,13 +801,16 @@ class _GameScreenState extends State<GameScreen> {
         humanPlayer.hasPickedUpFoot &&
         humanPlayer.foot.isEmpty &&
         !humanPlayer.canGoOutWithBooks &&
-        _gameController.gameState.turnPhase == TurnPhase.meld;
+        gameState.turnPhase == TurnPhase.meld;
   }
 
   void _forceNextTurn() {
-    _gameController.gameState.nextPlayer();
-    setState(() {});
-    processCurrentPlayerTurn();
+    final controller = _gameController;
+    if (controller != null) {
+      controller.gameState.nextPlayer();
+      // UI will update automatically via provider reactivity
+      processCurrentPlayerTurn();
+    }
   }
 
   Future<void> _restoreSavedGame() async {
@@ -741,21 +818,21 @@ class _GameScreenState extends State<GameScreen> {
       final savedController = await GameController.loadSavedGame();
 
       if (savedController != null) {
-        _gameController = savedController;
-        _botAI = EnhancedBotAI();
+        final eventBus = ref.read(gameEventBusProvider);
+        ref
+            .read(gameControllerProvider.notifier)
+            .setController(savedController, eventBus);
 
         // Assign consistent bot personalities based on player IDs
         _assignBotPersonalities();
 
         // Sort the human player's hand
-        final humanPlayer = _gameController.gameState.players.firstWhere(
-          (p) => p.type == PlayerType.human,
-        );
-        humanPlayer.sortHandByRank();
+        final humanPlayer = ref.read(humanPlayerProvider);
+        if (humanPlayer != null) {
+          humanPlayer.sortHandByRank();
+        }
 
-        setState(() {
-          _isInitialized = true;
-        });
+        _isInitialized = true;
 
         // Continue game flow
         processCurrentPlayerTurn();
@@ -788,7 +865,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onDrawFromDeck() {
-    if (_gameController.drawFromDeck()) {
+    final controller = _gameController;
+    if (controller == null) return;
+
+    if (controller.drawFromDeck()) {
       // Log human action for analytics
       _logHumanAction(
         action: 'drawFromDeck',
@@ -798,21 +878,22 @@ class _GameScreenState extends State<GameScreen> {
       // Cards are now automatically inserted in sorted position
       _hasPlayerInteractedSinceDraw =
           false; // Reset interaction flag after drawing
-      setState(() {}); // Just refresh the UI
+      // UI will update automatically via provider reactivity when event fires
     } else {
       // Check if the round ended automatically due to insufficient cards
-      if (_gameController.gameState.phase == GamePhase.roundEnd) {
+      final gameState = ref.read(currentGameStateProvider);
+      if (gameState?.phase == GamePhase.roundEnd) {
         _dialogManager.showEmergencyRoundEndDialog();
       } else {
         // Check if deck is empty or insufficient
-        if (_gameController.gameState.deck.isEmpty) {
+        if (gameState?.deck.isEmpty ?? false) {
           _dialogManager.showErrorDialog(
             'Cannot draw from deck: The deck is empty!\n\n'
             'The round will continue until a player goes out or all players pass.',
           );
-        } else if (_gameController.gameState.deck.size < 2) {
+        } else if ((gameState?.deck.size ?? 0) < 2) {
           _dialogManager.showErrorDialog(
-            'Cannot draw from deck: Only ${_gameController.gameState.deck.size} card(s) remaining.\n\n'
+            'Cannot draw from deck: Only ${gameState?.deck.size ?? 0} card(s) remaining.\n\n'
             'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
           );
         }
@@ -821,9 +902,12 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onUnlockDiscard() {
-    if (_gameController.unlockDiscardPile()) {
+    final controller = _gameController;
+    if (controller == null) return;
+
+    if (controller.unlockDiscardPile()) {
       // Cards are now automatically inserted in sorted position
-      setState(() {}); // Just refresh the UI
+      // UI will update automatically via provider reactivity
     }
   }
 
@@ -835,9 +919,8 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
 
     if (meldIndex >= humanPlayer.melds.length) {
       _dialogManager.showErrorDialog('Invalid meld selected.');
@@ -879,9 +962,8 @@ class _GameScreenState extends State<GameScreen> {
   bool _canAddCardToMeld(int meldIndex) {
     if (_selectedCards.isEmpty) return false;
 
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return false;
 
     if (meldIndex >= humanPlayer.melds.length) return false;
 
@@ -892,9 +974,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   ({int count, bool areWilds}) _getCompatibleCardsInfo(int meldIndex) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return (count: 0, areWilds: false);
 
     if (meldIndex >= humanPlayer.melds.length) {
       return (count: 0, areWilds: false);
@@ -937,9 +1018,8 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _executeAdvancedMeldCreation(List<List<int>> meldIndices) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
 
     // Safety check: Validate all indices are valid
     for (final indices in meldIndices) {
@@ -1042,7 +1122,10 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _performMultiMeldCreation(List<List<int>> meldIndices) async {
     // Use the new atomic multi-meld creation method
-    final success = _gameController.createMultipleMeldsFromIndices(
+    final controller = _gameController;
+    if (controller == null) return;
+
+    final success = controller.createMultipleMeldsFromIndices(
       meldIndices,
       skipPlayDownCheck: true,
     );
@@ -1088,9 +1171,11 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     if (_selectedCards.length == 1) {
-      final humanPlayer = _gameController.gameState.players.firstWhere(
-        (p) => p.type == PlayerType.human,
-      );
+      final humanPlayer = ref.read(humanPlayerProvider);
+      if (humanPlayer == null) return;
+
+      final controller = _gameController;
+      if (controller == null) return;
 
       // Check if discarding this card would empty the hand/foot
       final willBeEmpty = humanPlayer.currentHand.length == 1;
@@ -1099,7 +1184,7 @@ class _GameScreenState extends State<GameScreen> {
         // If this would be the last card, validate going out requirements
         if (!humanPlayer.hasPickedUpFoot) {
           // Going from hand to foot is always allowed
-          if (_gameController.discardCard(_selectedCards.first)) {
+          if (controller.discardCard(_selectedCards.first)) {
             // Log human discard action
             _logHumanAction(
               action: 'discardCard',
@@ -1119,10 +1204,11 @@ class _GameScreenState extends State<GameScreen> {
 
             // Schedule bot processing for next frame to avoid immediate execution during human turn
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted &&
-                  _gameController.gameState.currentPlayer.type !=
-                      PlayerType.human) {
-                processCurrentPlayerTurn();
+              if (mounted) {
+                final nextPlayer = ref.read(currentPlayerProvider);
+                if (nextPlayer?.type != PlayerType.human) {
+                  processCurrentPlayerTurn();
+                }
               }
             });
           }
@@ -1152,7 +1238,7 @@ class _GameScreenState extends State<GameScreen> {
         }
       }
 
-      if (_gameController.discardCard(_selectedCards.first)) {
+      if (controller.discardCard(_selectedCards.first)) {
         // Log human discard action
         _logHumanAction(
           action: 'discardCard',
@@ -1166,24 +1252,27 @@ class _GameScreenState extends State<GameScreen> {
         // Handle post-discard state updates (same as bot players)
         _botTurnManager.handlePostDiscardState(humanPlayer);
 
-        setState(() {});
+        // UI will update automatically via provider reactivity
         _selectedCardIndices.clear();
         await _gameStateManager.checkAndHandleRoundEnd();
 
         // Schedule bot processing for next frame to avoid immediate execution during human turn
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted &&
-              _gameController.gameState.currentPlayer.type !=
-                  PlayerType.human) {
-            processCurrentPlayerTurn();
+          if (mounted) {
+            final nextPlayer = ref.read(currentPlayerProvider);
+            if (nextPlayer?.type != PlayerType.human) {
+              processCurrentPlayerTurn();
+            }
           }
         });
       }
     } else {
       // Handle case where player has no cards to discard
-      final humanPlayer = _gameController.gameState.players.firstWhere(
-        (p) => p.type == PlayerType.human,
-      );
+      final humanPlayer = ref.read(humanPlayerProvider);
+      if (humanPlayer == null) return;
+
+      final controller = _gameController;
+      if (controller == null) return;
 
       if (humanPlayer.currentHand.isEmpty) {
         // DO NOT automatically pick up foot - let human player decide
@@ -1207,17 +1296,16 @@ class _GameScreenState extends State<GameScreen> {
         }
 
         // Force advance turn if we're truly stuck
-        _gameController.gameState.nextPlayer();
-        setState(() {});
+        controller.gameState.nextPlayer();
+        // UI will update automatically via provider reactivity
         processCurrentPlayerTurn();
       }
     }
   }
 
   void _sortHand(String sortType) {
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
 
     switch (sortType) {
       case 'rank':
@@ -1241,9 +1329,8 @@ class _GameScreenState extends State<GameScreen> {
     List<PlayingCard> invalidCards,
   ) {
     final wildsToAdd = cardsToAdd.where((card) => card.isWild).toList();
-    final humanPlayer = _gameController.gameState.players.firstWhere(
-      (p) => p.type == PlayerType.human,
-    );
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return;
     final meld = humanPlayer.melds[meldIndex];
 
     final wildNames = wildsToAdd.map((c) => c.displayName).join(', ');
@@ -1321,9 +1408,12 @@ class _GameScreenState extends State<GameScreen> {
     List<PlayingCard> cardsToAdd,
     List<PlayingCard> invalidCards,
   ) async {
+    final controller = _gameController;
+    if (controller == null) return;
+
     int addedCount = 0;
     for (final card in cardsToAdd) {
-      if (_gameController.addCardToMeld(meldIndex, card)) {
+      if (controller.addCardToMeld(meldIndex, card)) {
         // Log human meld addition
         _logHumanAction(
           action: 'addToMeld',
@@ -1337,7 +1427,7 @@ class _GameScreenState extends State<GameScreen> {
     if (addedCount > 0) {
       _sortHand('rank');
       _selectedCardIndices.clear();
-      setState(() {});
+      // UI will update automatically via provider reactivity
 
       // Check if adding cards to meld caused the round to end
       await _gameStateManager.checkAndHandleRoundEnd();
@@ -1355,23 +1445,25 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
+    // Use providers for reactive state access
+    // Watch the controller state directly to ensure we rebuild when version changes
+    final controllerState = ref.watch(gameControllerProvider);
+    // Access version to ensure Riverpod tracks this dependency
+    final _ = controllerState?.version;
+    final gameState = controllerState?.controller.gameState;
+    if (!_isInitialized || gameState == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final gameState = _gameController.gameState;
     final currentPlayer = gameState.currentPlayer;
     final humanPlayer = gameState.players.firstWhere(
       (p) => p.type == PlayerType.human,
     );
 
-    // Debug logging for critical issues only
-    if (currentPlayer.type != PlayerType.human &&
-        currentPlayer.name != humanPlayer.name) {
-      DebugLogger.debug(
-        'Current: ${currentPlayer.name}, Human: ${humanPlayer.name}',
-      );
-    }
+    // Debug logging for UI rebuilds
+    DebugLogger.debug(
+      'UI BUILD: Current player=${currentPlayer.name} (${currentPlayer.type}), version=${controllerState?.version}',
+    );
 
     return Container(
       decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
@@ -1701,9 +1793,12 @@ class _GameScreenState extends State<GameScreen> {
               humanPlayer: humanPlayer,
               selectedCardIndices: _selectedCardIndices,
               onDrawFromDeck: _onDrawFromDeck,
-              onUnlockDiscard: _gameController.canUnlockDiscard()
-                  ? _onUnlockDiscard
-                  : null,
+              onUnlockDiscard: () {
+                final controller = _gameController;
+                return (controller != null && controller.canUnlockDiscard())
+                    ? _onUnlockDiscard
+                    : null;
+              }(),
               onShowAdvancedMeldSelector: () =>
                   _dialogManager.showAdvancedMeldSelector(
                     onMeldsCreated: _executeAdvancedMeldCreation,
@@ -1971,9 +2066,12 @@ class _GameScreenState extends State<GameScreen> {
   /// Start analytics session tracking
   Future<void> _startAnalyticsSession() async {
     try {
+      final gameState = ref.read(currentGameStateProvider);
+      if (gameState == null) return;
+
       // Get bot personalities for tracking
       final botPersonalities = <String, BotPersonality>{};
-      for (final player in _gameController.gameState.players) {
+      for (final player in gameState.players) {
         if (player.type == PlayerType.bot) {
           botPersonalities[player.id] = _botAI.personalityManager
               .getPersonality(player.id);
@@ -1982,8 +2080,8 @@ class _GameScreenState extends State<GameScreen> {
 
       _actionSequenceNumber = 0; // Reset sequence counter for new game
       _analyticsSessionId = await GameAnalyticsLogger.startGameSession(
-        players: _gameController.gameState.players,
-        gameState: _gameController.gameState,
+        players: gameState.players,
+        gameState: gameState,
         gameMode: 'singleplayer',
         botPersonalities: botPersonalities,
       );
@@ -2006,6 +2104,9 @@ class _GameScreenState extends State<GameScreen> {
     if (_analyticsSessionId == null) return;
 
     try {
+      final gameState = ref.read(currentGameStateProvider);
+      if (gameState == null) return;
+
       _actionSequenceNumber++; // Increment sequence for this action
 
       final personality = _botAI.personalityManager.getPersonality(botId);
@@ -2014,13 +2115,13 @@ class _GameScreenState extends State<GameScreen> {
         decision: decision,
         reasoning: reasoning,
         personality: personality,
-        gameState: _gameController.gameState,
+        gameState: gameState,
         decisionContext: {
           ...?context,
           // Add sequencing information
           'actionSequence': _actionSequenceNumber,
           'turnNumber': _totalTurns,
-          'playerTurnIndex': _gameController.gameState.currentPlayerIndex,
+          'playerTurnIndex': gameState.currentPlayerIndex,
         },
       );
     } catch (e) {
@@ -2037,11 +2138,11 @@ class _GameScreenState extends State<GameScreen> {
     if (_analyticsSessionId == null) return;
 
     try {
-      _actionSequenceNumber++; // Increment sequence for this action
+      final gameState = ref.read(currentGameStateProvider);
+      final humanPlayer = ref.read(humanPlayerProvider);
+      if (gameState == null || humanPlayer == null) return;
 
-      final humanPlayer = _gameController.gameState.players.firstWhere(
-        (p) => p.type == PlayerType.human,
-      );
+      _actionSequenceNumber++; // Increment sequence for this action
 
       await GameAnalyticsLogger.logGameEvent(
         eventType: action,
@@ -2054,10 +2155,10 @@ class _GameScreenState extends State<GameScreen> {
           // Sequencing information
           'actionSequence': _actionSequenceNumber,
           'turnNumber': _totalTurns,
-          'playerTurnIndex': _gameController.gameState.currentPlayerIndex,
+          'playerTurnIndex': gameState.currentPlayerIndex,
 
-          'round': _gameController.gameState.round,
-          'turnPhase': _gameController.gameState.turnPhase.name,
+          'round': gameState.round,
+          'turnPhase': gameState.turnPhase.name,
 
           // Player state
           'handSize': humanPlayer.currentHand.length,
@@ -2086,15 +2187,15 @@ class _GameScreenState extends State<GameScreen> {
               .toList(),
 
           // Game state context
-          'deckSize': _gameController.gameState.deck.size,
-          'discardPileSize': _gameController.gameState.discardPile.length,
-          'topDiscardCard': _gameController.gameState.discardPile.isNotEmpty
-              ? _gameController.gameState.discardPile.last.compactName
+          'deckSize': gameState.deck.size,
+          'discardPileSize': gameState.discardPile.length,
+          'topDiscardCard': gameState.discardPile.isNotEmpty
+              ? gameState.discardPile.last.compactName
               : null,
-          'discardPileFrozen': _gameController.gameState.discardPileFrozen,
+          'discardPileFrozen': gameState.discardPileFrozen,
 
           // Opponent context (for strategic decisions)
-          'opponents': _gameController.gameState.players
+          'opponents': gameState.players
               .where((p) => p.id != humanPlayer.id)
               .map(
                 (opponent) => {
