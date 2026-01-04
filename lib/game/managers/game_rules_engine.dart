@@ -100,10 +100,7 @@ class GameRulesEngine {
   /// Used for immediate unlock scenarios.
   ///
   /// Returns true if the player can unlock, false otherwise.
-  static bool canPlayerUnlockDiscard(
-    GameState gameState,
-    Player player,
-  ) {
+  static bool canPlayerUnlockDiscard(GameState gameState, Player player) {
     if (gameState.discardPile.isEmpty) {
       return false;
     }
@@ -147,4 +144,3 @@ class GameRulesEngine {
     return gameState.turnPhase == TurnPhase.discard && gameState.hasMelded;
   }
 }
-
