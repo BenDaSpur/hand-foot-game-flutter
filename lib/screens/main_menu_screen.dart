@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
@@ -178,6 +179,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         ),
                         const SizedBox(height: 40),
                         _buildInfoButton(),
+                        if (kIsWeb) ...[
+                          const SizedBox(height: 16),
+                          _buildInstallButton(),
+                        ],
                       ],
                     ),
                 ],
@@ -307,6 +312,140 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildInstallButton() {
+    return TextButton(
+      onPressed: _showInstallInstructions,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.download_rounded,
+            color: BalatroTheme.neonGreen.withValues(alpha: 0.7),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Install App',
+            style: TextStyle(
+              color: BalatroTheme.neonGreen.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInstallInstructions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.cardBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: BalatroTheme.neonGreen.withValues(alpha: 0.3),
+          ),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.download_rounded, color: BalatroTheme.neonGreen),
+            SizedBox(width: 12),
+            Text('Install App', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Install this game on your device for offline play!\n',
+                style: TextStyle(color: Colors.white70),
+              ),
+              _buildInstallSection(
+                '🍎 iPhone / iPad (Safari only)',
+                [
+                  '1. Open this page in Safari',
+                  '2. Tap the Share button (📤)',
+                  '3. Scroll down and tap "Add to Home Screen"',
+                  '4. Tap "Add"',
+                ],
+                note:
+                    '⚠️ iOS only allows PWA installs from Safari.\nFirefox/Chrome cannot install apps on iOS.',
+              ),
+              const SizedBox(height: 16),
+              _buildInstallSection('🤖 Android (Chrome)', [
+                '1. Tap the menu (⋮) in Chrome',
+                '2. Tap "Add to Home screen" or "Install app"',
+                '3. Tap "Install"',
+              ]),
+              const SizedBox(height: 16),
+              _buildInstallSection('💻 Desktop (Chrome/Edge)', [
+                '1. Look for the install icon (⊕) in the address bar',
+                '2. Click "Install"',
+              ]),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Got it!',
+              style: TextStyle(color: BalatroTheme.neonGreen),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstallSection(
+    String title,
+    List<String> steps, {
+    String? note,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...steps.map(
+          (step) => Padding(
+            padding: const EdgeInsets.only(left: 8, bottom: 4),
+            child: Text(
+              step,
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+          ),
+        ),
+        if (note != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              note,
+              style: const TextStyle(color: Colors.orange, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

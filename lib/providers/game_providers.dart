@@ -96,8 +96,7 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
     _eventSubscription = _eventBus!.subscribeWhere(
       (event) {
         // Only update on high-level events that require UI rebuilds
-        // Also update on CardDrawnEvent for human players (to show drawn cards immediately)
-        // Skip other individual card/meld events to prevent excessive rebuilds
+        // Skip individual card/meld events during bot turns to prevent excessive rebuilds
         if (event is TurnEndedEvent ||
             event is RoundStartedEvent ||
             event is RoundEndedEvent ||
@@ -105,8 +104,13 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
             event is GameEndedEvent) {
           return true;
         }
-        // Only update on CardDrawnEvent for human players to avoid bot turn loops
+        // Update on CardDrawnEvent for human players (to show drawn cards immediately)
         if (event is CardDrawnEvent && event.player?.type == PlayerType.human) {
+          return true;
+        }
+        // Update on DiscardPileUnlockedEvent for human players (to show unlocked cards)
+        if (event is DiscardPileUnlockedEvent &&
+            event.player?.type == PlayerType.human) {
           return true;
         }
         return false;
@@ -115,12 +119,16 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
         // Notify listeners that state may have changed
         // Use debouncing and rate limiting to prevent rapid-fire updates that cause infinite loops
         if (state != null && !_isUpdating) {
-          // Critical events (turn/round/game changes) always update immediately
+          // Critical events (turn/round/game changes + human draw actions) always update immediately
           final isCriticalEvent =
               event is TurnEndedEvent ||
               event is RoundStartedEvent ||
               event is RoundEndedEvent ||
-              event is GameEndedEvent;
+              event is GameEndedEvent ||
+              (event is CardDrawnEvent &&
+                  event.player?.type == PlayerType.human) ||
+              (event is DiscardPileUnlockedEvent &&
+                  event.player?.type == PlayerType.human);
 
           // Rate limiting: Don't update if we updated too recently (unless it's a critical event)
           if (!isCriticalEvent) {
