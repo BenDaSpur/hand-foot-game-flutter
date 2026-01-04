@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
 import 'package:hand_foot_game_flutter/screens/game_screen.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +28,10 @@ void main() {
       tester,
     ) async {
       // This test ensures the widget can be created without immediate recursion issues
-      await tester.pumpWidget(MaterialApp(home: GameScreen(testSeed: 12345)));
+      // GameScreen requires ProviderScope since it uses Riverpod
+      await tester.pumpWidget(
+        ProviderScope(child: MaterialApp(home: GameScreen(testSeed: 12345))),
+      );
 
       // If we get here without hanging, recursion protection is working
       expect(find.byType(GameScreen), findsOneWidget);

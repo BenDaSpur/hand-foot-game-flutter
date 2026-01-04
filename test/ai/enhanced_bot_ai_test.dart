@@ -83,9 +83,10 @@ void main() {
         expect(EnhancedBotAI.wildCardDiscardThreshold, equals(8));
         expect(EnhancedBotAI.emergencyRiskTolerance, equals(1.8));
         expect(EnhancedBotAI.maxEmergencyRiskTolerance, equals(6.0));
-        expect(EnhancedBotAI.emergencyHandSizeThreshold, equals(10));
-        expect(EnhancedBotAI.criticalHandSizeThreshold, equals(14));
-        expect(EnhancedBotAI.playDownEmergencyThreshold, equals(10));
+        expect(EnhancedBotAI.emergencyHandSizeThreshold, equals(15));
+        expect(EnhancedBotAI.criticalHandSizeThreshold, equals(18));
+        expect(EnhancedBotAI.playDownEmergencyThreshold, equals(14));
+        expect(EnhancedBotAI.minTurnsForEmergency, equals(4));
       });
     });
 
