@@ -151,38 +151,36 @@ class GameControllerNotifier extends StateNotifier<GameControllerState?> {
           // Cancel existing timer
           _debounceTimer?.cancel();
 
-          // Critical events update immediately, others use debounce
+          // Critical events update SYNCHRONOUSLY to prevent stale UI
+          // Non-critical events use debounce to batch rapid updates
           if (isCriticalEvent) {
-            // Update immediately for critical events (turn/round/game changes)
-            scheduleMicrotask(() {
-              if (_pendingUpdate && !_isUpdating && state != null) {
-                final currentState = state;
-                if (currentState != null) {
-                  _isUpdating = true;
-                  try {
-                    DebugLogger.debug(
-                      'GameControllerNotifier: Immediate update for critical event, version ${currentState.version}',
-                    );
-                    final newState = currentState.incrementVersion();
-                    state = newState;
-                    _pendingUpdate = false;
-                    _lastUpdateTime = DateTime.now();
-                    DebugLogger.debug(
-                      'GameControllerNotifier: State updated to version ${newState.version}',
-                    );
-                  } catch (e) {
-                    DebugLogger.error(
-                      'GameControllerNotifier: Error updating state: $e',
-                    );
-                    _pendingUpdate = false;
-                  } finally {
-                    _isUpdating = false;
-                  }
-                } else {
-                  _pendingUpdate = false;
-                }
+            // Update synchronously for critical events (turn/round/game changes)
+            // This ensures UI reflects current state immediately when user interacts
+            final currentState = state;
+            if (currentState != null && !_isUpdating) {
+              _isUpdating = true;
+              try {
+                DebugLogger.debug(
+                  'GameControllerNotifier: SYNC update for critical event, version ${currentState.version}',
+                );
+                final newState = currentState.incrementVersion();
+                state = newState;
+                _pendingUpdate = false;
+                _lastUpdateTime = DateTime.now();
+                DebugLogger.debug(
+                  'GameControllerNotifier: State updated to version ${newState.version}',
+                );
+              } catch (e) {
+                DebugLogger.error(
+                  'GameControllerNotifier: Error updating state: $e',
+                );
+                _pendingUpdate = false;
+              } finally {
+                _isUpdating = false;
               }
-            });
+            } else {
+              _pendingUpdate = false;
+            }
           } else {
             // Schedule update after a delay to batch rapid events and prevent build loops
             _debounceTimer = Timer(const Duration(milliseconds: 500), () {

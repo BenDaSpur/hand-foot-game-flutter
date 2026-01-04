@@ -903,11 +903,67 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _onUnlockDiscard() {
     final controller = _gameController;
-    if (controller == null) return;
+    if (controller == null) {
+      debugPrint('DEBUG: _onUnlockDiscard - controller is null!');
+      _dialogManager.showErrorDialog('Game not initialized. Please restart.');
+      return;
+    }
+
+    final gameState = controller.gameState;
+    final topCard = gameState.topDiscard;
+    final currentPlayer = gameState.currentPlayer;
+
+    // Debug logging to understand why unlock might fail
+    debugPrint('DEBUG: _onUnlockDiscard called');
+    debugPrint('  - Turn phase: ${gameState.turnPhase}');
+    debugPrint('  - Has drawn from deck: ${gameState.hasDrawnFromDeck}');
+    debugPrint('  - Top discard: ${topCard?.compactName ?? "none"}');
+    debugPrint('  - Player has played down: ${currentPlayer.hasPlayedDown}');
+    if (topCard != null) {
+      final matchingCards = currentPlayer.currentHand
+          .where((card) => card.rank == topCard.rank && !card.isWild)
+          .toList();
+      debugPrint('  - Matching natural cards in hand: ${matchingCards.length}');
+    }
+
+    if (!controller.canUnlockDiscard()) {
+      // Provide specific feedback on why unlock is not available
+      String reason;
+      if (gameState.turnPhase != TurnPhase.draw) {
+        reason = 'You can only take the discard pile during the draw phase.';
+      } else if (gameState.hasDrawnFromDeck) {
+        reason = 'You have already drawn this turn.';
+      } else if (gameState.discardPile.isEmpty) {
+        reason = 'The discard pile is empty.';
+      } else if (topCard?.isWild == true) {
+        reason = 'Cannot take discard pile when a wild card is on top.';
+      } else if (topCard?.isThree == true) {
+        reason = 'Cannot take discard pile when a 3 is on top.';
+      } else if (!currentPlayer.hasPlayedDown) {
+        reason = 'You must play down first before taking the discard pile.';
+      } else {
+        final matchingCards = currentPlayer.currentHand
+            .where((card) => card.rank == topCard!.rank && !card.isWild)
+            .toList();
+        if (matchingCards.length < 2) {
+          reason =
+              'You need at least 2 ${topCard?.rank.name}s in your hand to take the discard.';
+        } else {
+          reason = 'Cannot take discard pile at this time.';
+        }
+      }
+      _dialogManager.showErrorDialog(reason);
+      return;
+    }
 
     if (controller.unlockDiscardPile()) {
-      // Cards are now automatically inserted in sorted position
-      // UI will update automatically via provider reactivity
+      // UI will update via Riverpod reactivity when DiscardPileUnlockedEvent fires
+      debugPrint('DEBUG: Discard pile unlocked successfully');
+    } else {
+      debugPrint('DEBUG: unlockDiscardPile returned false unexpectedly');
+      _dialogManager.showErrorDialog(
+        'Failed to take discard pile. Please try again.',
+      );
     }
   }
 
@@ -1170,6 +1226,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     if (!_hasPlayerInteractedSinceDraw) {
       return;
     }
+
     if (_selectedCards.length == 1) {
       final humanPlayer = ref.read(humanPlayerProvider);
       if (humanPlayer == null) return;
