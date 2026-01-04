@@ -1,13 +1,14 @@
 {
-    "name": "hand_foot_game_flutter",
-    "short_name": "hand_foot_game_flutter",
+    "name": "Hand & Foot Card Game",
+    "short_name": "Hand & Foot",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1a1625",
     "theme_color": "#8b5cf6",
-    "description": "A new Flutter project.",
+    "description": "Play the classic Hand and Foot card game against AI opponents or friends online.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "categories": ["games", "entertainment"],
     "icons": [
         {
             "src": "icons/Icon-192.png",
@@ -31,5 +32,9 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "screenshots": [],
+    "related_applications": [],
+    "scope": ".",
+    "lang": "en-US"
 }
