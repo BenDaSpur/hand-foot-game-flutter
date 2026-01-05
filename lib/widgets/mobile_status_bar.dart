@@ -80,6 +80,9 @@ class MobileStatusBar extends StatelessWidget {
   }
 
   Widget _buildVerticalLayout() {
+    final deckLow = gameState.deck.size <= 20;
+    final deckColor = deckLow ? Colors.red : BalatroTheme.neonYellow;
+
     return Column(
       children: [
         Row(
@@ -94,26 +97,43 @@ class MobileStatusBar extends StatelessWidget {
             const SizedBox(width: UIConstants.mediumSpacing),
             Expanded(
               child: _buildCompactChip(
-                'Deck: ${gameState.deck.size}',
-                BalatroTheme.neonYellow,
+                'Deck: ${gameState.deck.size}${deckLow ? ' ⚠️' : ''}',
+                deckColor,
                 icon: Icons.style,
               ),
             ),
           ],
         ),
-        if (gameState.topDiscard != null) ...[
-          const SizedBox(height: UIConstants.mediumSpacing),
-          _buildCompactChip(
-            'Top: ${gameState.topDiscard!.displayName}',
-            BalatroTheme.neonGreen,
-            icon: Icons.visibility,
-          ),
-        ],
+        const SizedBox(height: UIConstants.mediumSpacing),
+        Row(
+          children: [
+            Expanded(
+              child: _buildCompactChip(
+                'Discard: ${gameState.discardPile.length}',
+                BalatroTheme.glowColor,
+                icon: Icons.layers,
+              ),
+            ),
+            if (gameState.topDiscard != null) ...[
+              const SizedBox(width: UIConstants.mediumSpacing),
+              Expanded(
+                child: _buildCompactChip(
+                  'Top: ${gameState.topDiscard!.displayName}',
+                  BalatroTheme.neonGreen,
+                  icon: Icons.visibility,
+                ),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }
 
   Widget _buildHorizontalLayout() {
+    final deckLow = gameState.deck.size <= 20;
+    final deckColor = deckLow ? Colors.red : BalatroTheme.neonYellow;
+
     return Wrap(
       spacing: UIConstants.mediumSpacing,
       runSpacing: UIConstants.mediumSpacing,
@@ -124,9 +144,14 @@ class MobileStatusBar extends StatelessWidget {
           icon: Icons.casino,
         ),
         _buildCompactChip(
-          'Deck: ${gameState.deck.size}',
-          BalatroTheme.neonYellow,
+          'Deck: ${gameState.deck.size}${deckLow ? ' ⚠️' : ''}',
+          deckColor,
           icon: Icons.style,
+        ),
+        _buildCompactChip(
+          'Discard: ${gameState.discardPile.length}',
+          BalatroTheme.glowColor,
+          icon: Icons.layers,
         ),
         if (gameState.topDiscard != null)
           _buildCompactChip(

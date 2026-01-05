@@ -9,6 +9,8 @@ import '../ai/enhanced_bot_ai.dart';
 import '../game/events/game_event_bus.dart';
 import '../game/events/game_event.dart';
 import '../services/game_event_listener.dart';
+import '../services/sound_service.dart';
+import '../services/sound_event_listener.dart';
 import '../utils/debug_logger.dart';
 
 /// Provider for the global game event bus
@@ -356,6 +358,31 @@ final gameEventListenerProvider = Provider.autoDispose<GameEventListener>((
   final eventBus = ref.watch(gameEventBusProvider);
   final listener = GameEventListener(eventBus);
   listener.startListening();
+
+  ref.onDispose(() {
+    listener.dispose();
+  });
+
+  return listener;
+});
+
+/// Provider for sound service singleton
+final soundServiceProvider = Provider<SoundService>((ref) {
+  final service = SoundService();
+  service.initialize();
+  return service;
+});
+
+/// Provider for sound event listener service
+final soundEventListenerProvider = Provider.autoDispose<SoundEventListener>((
+  ref,
+) {
+  final eventBus = ref.watch(gameEventBusProvider);
+  final soundService = ref.watch(soundServiceProvider);
+  final listener = SoundEventListener(
+    eventBus: eventBus,
+    soundService: soundService,
+  );
 
   ref.onDispose(() {
     listener.dispose();

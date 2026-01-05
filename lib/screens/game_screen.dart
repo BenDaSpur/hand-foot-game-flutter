@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/card.dart';
 import '../models/player.dart';
@@ -76,7 +77,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   // Analytics tracking
   String? _analyticsSessionId;
-  final int _totalTurns = 0;
+  int _totalTurns = 0;
   int _actionSequenceNumber = 0; // Track action sequence within game
 
   // Manager instances for better code organization
@@ -93,17 +94,22 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _isBotTurnInProgress = false;
   final List<Player> _botTurnQueue = [];
 
+  // Keyboard shortcuts
+  final FocusNode _focusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
-    // Initialize event listener via Riverpod
+    // Initialize event listeners via Riverpod
     ref.read(gameEventListenerProvider);
+    ref.read(soundEventListenerProvider); // Initialize sound effects
     _initializeGame();
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _focusNode.dispose();
     // Dispose event-based manager to clean up subscriptions
     _eventBasedGameStateManager?.dispose();
     super.dispose();
@@ -199,6 +205,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       onTurnEnd: () {
         // Only trigger turn processing when a turn actually ends
         // This prevents infinite loops from state changes during a turn
+        _totalTurns++; // Track total turns for analytics
         if (mounted && !_isBotTurnInProgress) {
           processCurrentPlayerTurn();
         }
@@ -1500,6 +1507,101 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
   }
 
+  /// Handle keyboard shortcuts for desktop users
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    // Only handle key down events
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    // Only handle shortcuts during human turn
+    final currentPlayer = ref.read(currentPlayerProvider);
+    if (currentPlayer?.type != PlayerType.human) {
+      return KeyEventResult.ignored;
+    }
+
+    final gameState = ref.read(currentGameStateProvider);
+    if (gameState == null) return KeyEventResult.ignored;
+
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) return KeyEventResult.ignored;
+
+    final key = event.logicalKey;
+
+    // D = Draw from deck
+    if (key == LogicalKeyboardKey.keyD) {
+      if (gameState.turnPhase == TurnPhase.draw) {
+        _onDrawFromDeck();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // T = Take/unlock discard pile
+    if (key == LogicalKeyboardKey.keyT) {
+      final controller = _gameController;
+      if (controller != null &&
+          gameState.turnPhase == TurnPhase.draw &&
+          controller.canUnlockDiscard()) {
+        _onUnlockDiscard();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // M = Open meld selector
+    if (key == LogicalKeyboardKey.keyM) {
+      if (gameState.turnPhase == TurnPhase.meld && _selectedCards.isNotEmpty) {
+        _dialogManager.showAdvancedMeldSelector(
+          onMeldsCreated: _executeAdvancedMeldCreation,
+        );
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Enter/Space = Discard (if 1 card selected)
+    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) {
+      if (gameState.turnPhase == TurnPhase.meld && _selectedCards.length == 1) {
+        _onDiscard();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Escape = Clear selection
+    if (key == LogicalKeyboardKey.escape) {
+      if (_selectedCardIndices.isNotEmpty) {
+        setState(() => _selectedCardIndices.clear());
+        return KeyEventResult.handled;
+      }
+    }
+
+    // S = Sort hand by rank
+    if (key == LogicalKeyboardKey.keyS) {
+      _sortHand('rank');
+      return KeyEventResult.handled;
+    }
+
+    // Number keys 1-9 = Toggle card selection
+    final numberKeys = {
+      LogicalKeyboardKey.digit1: 0,
+      LogicalKeyboardKey.digit2: 1,
+      LogicalKeyboardKey.digit3: 2,
+      LogicalKeyboardKey.digit4: 3,
+      LogicalKeyboardKey.digit5: 4,
+      LogicalKeyboardKey.digit6: 5,
+      LogicalKeyboardKey.digit7: 6,
+      LogicalKeyboardKey.digit8: 7,
+      LogicalKeyboardKey.digit9: 8,
+      LogicalKeyboardKey.digit0: 9,
+    };
+
+    if (numberKeys.containsKey(key)) {
+      final index = numberKeys[key]!;
+      if (index < humanPlayer.currentHand.length) {
+        _onCardTap(index);
+        return KeyEventResult.handled;
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Use providers for reactive state access
@@ -1522,538 +1624,548 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       'UI BUILD: Current player=${currentPlayer.name} (${currentPlayer.type}), version=${controllerState?.version}',
     );
 
-    return Container(
-      decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              colors: [BalatroTheme.neonPink, BalatroTheme.glowColor],
-            ).createShader(bounds),
-            child: Text(
-              'HAND & FOOT',
-              style: Theme.of(
-                context,
-              ).textTheme.displayMedium?.copyWith(color: Colors.white),
-            ),
-          ),
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Container(
+        decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
+        child: Scaffold(
           backgroundColor: Colors.transparent,
-          elevation: 0,
-          actions: [
-            // Scoreboard button
-            IconButton(
-              icon: const Icon(
-                Icons.leaderboard,
-                color: BalatroTheme.neonYellow,
-              ),
-              tooltip: 'View Scoreboard',
-              onPressed: () {
-                _dialogManager.showScoreboard();
-              },
-            ),
-            Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BalatroTheme.glowDecoration(
-                glowColor: BalatroTheme.neonGreen,
-                backgroundColor: BalatroTheme.darkPurple,
-              ),
+          appBar: AppBar(
+            title: ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [BalatroTheme.neonPink, BalatroTheme.glowColor],
+              ).createShader(bounds),
               child: Text(
-                'ROUND ${gameState.round}',
+                'HAND & FOOT',
                 style: Theme.of(
                   context,
-                ).textTheme.titleLarge?.copyWith(color: BalatroTheme.neonGreen),
+                ).textTheme.displayMedium?.copyWith(color: Colors.white),
               ),
             ),
-            PopupMenuButton<String>(
-              onSelected: (String value) {
-                switch (value) {
-                  case 'new_game':
-                    _dialogManager.showNewGameConfirmation(_startNewGame);
-                    break;
-                  case 'copy_seed':
-                    _persistenceManager.copySeedToClipboard(context);
-                    break;
-                  case 'export_game':
-                    _persistenceManager.copyGameStateToClipboard(context);
-                    break;
-                  case 'load_game':
-                    _dialogManager.showLoadGameDialog(
-                      (inputText) => _persistenceManager.loadGameFromJson(
-                        inputText,
-                        context,
-                      ),
-                    );
-                    break;
-                  case 'how_to_play':
-                    _dialogManager.showHowToPlayDialog();
-                    break;
-                  case 'main_menu':
-                    _returnToMainMenu();
-                    break;
-                }
-              },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem<String>(
-                  value: 'new_game',
-                  child: Row(
-                    children: [
-                      Icon(Icons.refresh, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('New Game'),
-                    ],
-                  ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            actions: [
+              // Scoreboard button
+              IconButton(
+                icon: const Icon(
+                  Icons.leaderboard,
+                  color: BalatroTheme.neonYellow,
                 ),
-                const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'copy_seed',
-                  child: Row(
-                    children: [
-                      Icon(Icons.copy, color: Colors.orange),
-                      SizedBox(width: 8),
-                      Text('Copy Seed'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'export_game',
-                  child: Row(
-                    children: [
-                      Icon(Icons.download, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('Export Game'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'load_game',
-                  child: Row(
-                    children: [
-                      Icon(Icons.upload, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text('Load Game'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'how_to_play',
-                  child: Row(
-                    children: [
-                      Icon(Icons.help_outline, color: Colors.purple),
-                      SizedBox(width: 8),
-                      Text('How to Play'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'main_menu',
-                  child: Row(
-                    children: [
-                      Icon(Icons.home, color: BalatroTheme.neonBlue),
-                      SizedBox(width: 8),
-                      Text('Main Menu'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            // Mobile-optimized status bar
-            MobileStatusBar(
-              gameState: gameState,
-              isExpanded: _statusExpanded,
-              onToggle: () {
-                setState(() {
-                  _statusExpanded = !_statusExpanded;
-                });
-              },
-            ),
-
-            // Collapsible recent actions
-            CollapsibleRecentActions(
-              gameState: gameState,
-              isExpanded: _actionsExpanded,
-              onToggle: () {
-                setState(() {
-                  _actionsExpanded = !_actionsExpanded;
-                });
-              },
-            ),
-
-            const SizedBox(height: 8),
-
-            // Compact player scores
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Text(
-                'Tap a player to view their melds:',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
+                tooltip: 'View Scoreboard',
+                onPressed: () {
+                  _dialogManager.showScoreboard();
+                },
               ),
-            ),
-            CompactPlayerScores(
-              gameState: gameState,
-              viewingPlayerMelds: _viewingPlayerMelds,
-              onPlayerTap: (player) {
-                setState(() {
-                  // If tapping on the human player, set to null (view own melds)
-                  // Otherwise, set to the specific player to view their melds
-                  final humanPlayer = gameState.players.firstWhere(
-                    (p) => p.type == PlayerType.human,
-                  );
-                  _viewingPlayerMelds = player.id == humanPlayer.id
-                      ? null
-                      : player;
-                });
-              },
-              botPersonalityManager: _botAI.personalityManager,
-            ),
-
-            // Melds section
-            Expanded(
-              flex: 2,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Text(() {
-                            final player = _viewingPlayerMelds ?? humanPlayer;
-                            final playerName = player.name;
-                            // Minimal debug logging - only when there's a mismatch
-                            if (_viewingPlayerMelds != null &&
-                                _viewingPlayerMelds != humanPlayer) {
-                              DebugLogger.debug(
-                                'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
-                              );
-                            }
-                            if (playerName == 'You') {
-                              return 'Your Melds:';
-                            } else {
-                              return '$playerName\'s Melds:';
-                            }
-                          }(), style: Theme.of(context).textTheme.headlineMedium),
-                          if (_viewingPlayerMelds != null)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _viewingPlayerMelds = null;
-                                  });
-                                },
-                                child: const Text('Back to yours'),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if ((_viewingPlayerMelds ?? humanPlayer).melds.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text('No melds yet'),
-                      )
-                    else
-                      ...(() {
-                        // Sort melds by face value (CardRank)
-                        final player = _viewingPlayerMelds ?? humanPlayer;
-                        final indexedMelds = player.melds
-                            .asMap()
-                            .entries
-                            .toList();
-                        indexedMelds.sort((a, b) {
-                          // Special handling for Aces - put them at the end
-                          final aRank = a.value.rank;
-                          final bRank = b.value.rank;
-
-                          if (aRank == CardRank.ace && bRank != CardRank.ace) {
-                            return 1; // a (ace) comes after b
-                          }
-                          if (bRank == CardRank.ace && aRank != CardRank.ace) {
-                            return -1; // b (ace) comes after a
-                          }
-
-                          // For non-ace cards or both aces, use normal index comparison
-                          return aRank.index.compareTo(bRank.index);
-                        });
-
-                        return indexedMelds.map((entry) {
-                          final canAdd =
-                              _viewingPlayerMelds == null &&
-                              currentPlayer.type == PlayerType.human &&
-                              gameState.turnPhase == TurnPhase.meld;
-
-                          final compatibleInfo = canAdd
-                              ? _getCompatibleCardsInfo(entry.key)
-                              : (count: 0, areWilds: false);
-
-                          return MeldWidget(
-                            meld: entry.value,
-                            meldIndex: entry.key,
-                            canAddCards: canAdd,
-                            onTap: canAdd ? _onAddCardToMeld : null,
-                            onSelectAllCards: canAdd
-                                ? _selectAllCardsForMeld
-                                : null,
-                            canAcceptSelectedCard:
-                                canAdd && _canAddCardToMeld(entry.key),
-                            compatibleCardsInHand: compatibleInfo.count,
-                            compatibleCardsAreWilds: compatibleInfo.areWilds,
-                          );
-                        });
-                      })(),
-                  ],
-                ),
-              ),
-            ),
-
-            // Emergency recovery for stuck game (only show when necessary)
-            if (_isGameStuck() &&
-                currentPlayer.type == PlayerType.human &&
-                gameState.phase != GamePhase.gameEnd)
               Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.red[100],
-                child: Column(
-                  children: [
-                    const Text(
-                      'Game is stuck! You went out without meeting book requirements.',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _forceNextTurn,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                      ),
-                      child: const Text('Skip Turn (Emergency Recovery)'),
-                    ),
-                  ],
+                margin: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BalatroTheme.glowDecoration(
+                  glowColor: BalatroTheme.neonGreen,
+                  backgroundColor: BalatroTheme.darkPurple,
+                ),
+                child: Text(
+                  'ROUND ${gameState.round}',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: BalatroTheme.neonGreen,
+                  ),
                 ),
               ),
-
-            // Use the shared GameActionButtons widget for consistency
-            GameActionButtons(
-              gameState: gameState,
-              humanPlayer: humanPlayer,
-              selectedCardIndices: _selectedCardIndices,
-              onDrawFromDeck: _onDrawFromDeck,
-              onUnlockDiscard: () {
-                final controller = _gameController;
-                return (controller != null && controller.canUnlockDiscard())
-                    ? _onUnlockDiscard
-                    : null;
-              }(),
-              onShowAdvancedMeldSelector: () =>
-                  _dialogManager.showAdvancedMeldSelector(
-                    onMeldsCreated: _executeAdvancedMeldCreation,
-                  ),
-              onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
-              onClearSelection: () =>
-                  setState(() => _selectedCardIndices.clear()),
-            ),
-
-            // Hand (always visible, but only interactive during human turn and game not ended)
-            Opacity(
-              opacity:
-                  currentPlayer.type == PlayerType.human &&
-                      gameState.phase != GamePhase.gameEnd
-                  ? 1.0
-                  : 0.7,
-              child: Container(
-                height: 135, // Reduced height to minimize bottom space
-                padding: const EdgeInsets.fromLTRB(
-                  8,
-                  8,
-                  8,
-                  4,
-                ), // Reduced bottom padding
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: GestureDetector(
-                        onTap: () {
-                          if (_viewingPlayerMelds != null) {
-                            setState(() {
-                              _viewingPlayerMelds =
-                                  null; // Reset to human player view
-                            });
-                          }
-                        },
-                        child: Text(
-                          () {
-                            if (_viewingPlayerMelds != null &&
-                                _viewingPlayerMelds != humanPlayer) {
-                              return 'Viewing ${_viewingPlayerMelds!.name}\'s cards - Tap here to return to your hand';
-                            }
-                            return 'Your Hand (${humanPlayer.currentHand.length} cards)';
-                          }(),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color:
-                                _viewingPlayerMelds != null &&
-                                    _viewingPlayerMelds != humanPlayer
-                                ? BalatroTheme.neonYellow
-                                : Colors.white,
-                          ),
+              PopupMenuButton<String>(
+                onSelected: (String value) {
+                  switch (value) {
+                    case 'new_game':
+                      _dialogManager.showNewGameConfirmation(_startNewGame);
+                      break;
+                    case 'copy_seed':
+                      _persistenceManager.copySeedToClipboard(context);
+                      break;
+                    case 'export_game':
+                      _persistenceManager.copyGameStateToClipboard(context);
+                      break;
+                    case 'load_game':
+                      _dialogManager.showLoadGameDialog(
+                        (inputText) => _persistenceManager.loadGameFromJson(
+                          inputText,
+                          context,
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context).copyWith(
-                          dragDevices: {
-                            PointerDeviceKind.touch,
-                            PointerDeviceKind.mouse,
-                          },
-                        ),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 5,
-                          ),
-                          child: SizedBox(
-                            width: humanPlayer.currentHand.isNotEmpty
-                                ? (humanPlayer.currentHand.length - 1) * 50.0 +
-                                      70.0
-                                : 70.0,
-                            height:
-                                110, // Fixed height for the stack (98 + 12 for selection)
-                            child: Stack(
-                              clipBehavior: Clip
-                                  .none, // Allow cards to move outside bounds when selected
-                              children: humanPlayer.currentHand
-                                  .asMap()
-                                  .entries
-                                  .map((entry) {
-                                    final index = entry.key;
-                                    final card = entry.value;
-
-                                    return Positioned(
-                                      left: index * 50.0,
-                                      child: GestureDetector(
-                                        onTap:
-                                            currentPlayer.type ==
-                                                    PlayerType.human &&
-                                                gameState.phase !=
-                                                    GamePhase.gameEnd
-                                            ? () => _onCardTap(index)
-                                            : null,
-                                        onDoubleTap:
-                                            currentPlayer.type ==
-                                                    PlayerType.human &&
-                                                gameState.phase !=
-                                                    GamePhase.gameEnd
-                                            ? () => _onCardDoubleTap(index)
-                                            : null,
-                                        child: PlayingCardWidget(
-                                          key: ValueKey(
-                                            'hand-${card.rank}-${card.suit}-$index-${_viewingPlayerMelds?.id ?? "you"}',
-                                          ),
-                                          card: card,
-                                          width: 70,
-                                          height: 98,
-                                          isSelected: _selectedCardIndices
-                                              .contains(index),
-                                          isPlayable: _isCardPlayable(card),
-                                          isNewlyDrawn: humanPlayer
-                                              .isCardIndexNewlyDrawn(index),
-                                        ),
-                                      ),
-                                    );
-                                  })
-                                  .toList(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Game end overlay when game has finished
-            if (gameState.phase == GamePhase.gameEnd &&
-                gameState.winner != null)
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      BalatroTheme.neonYellow.withValues(alpha: 0.9),
-                      BalatroTheme.neonGreen.withValues(alpha: 0.9),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: BalatroTheme.glowColor, width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: BalatroTheme.neonYellow.withValues(alpha: 0.6),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      );
+                      break;
+                    case 'how_to_play':
+                      _dialogManager.showHowToPlayDialog();
+                      break;
+                    case 'main_menu':
+                      _returnToMainMenu();
+                      break;
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'new_game',
+                    child: Row(
                       children: [
-                        const Icon(
-                          Icons.emoji_events,
-                          color: Colors.black,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'GAME OVER!',
-                          style: Theme.of(context).textTheme.displayMedium
-                              ?.copyWith(color: Colors.black),
-                        ),
+                        Icon(Icons.refresh, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('New Game'),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${gameState.winner!.name} WINS with ${gameState.winner!.score} points!',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineMedium?.copyWith(color: Colors.black),
-                      textAlign: TextAlign.center,
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
+                    value: 'copy_seed',
+                    child: Row(
+                      children: [
+                        Icon(Icons.copy, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Text('Copy Seed'),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Use the menu button to view final scores or start a new game',
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'export_game',
+                    child: Row(
+                      children: [
+                        Icon(Icons.download, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('Export Game'),
+                      ],
                     ),
-                  ],
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'load_game',
+                    child: Row(
+                      children: [
+                        Icon(Icons.upload, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text('Load Game'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
+                    value: 'how_to_play',
+                    child: Row(
+                      children: [
+                        Icon(Icons.help_outline, color: Colors.purple),
+                        SizedBox(width: 8),
+                        Text('How to Play'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem<String>(
+                    value: 'main_menu',
+                    child: Row(
+                      children: [
+                        Icon(Icons.home, color: BalatroTheme.neonBlue),
+                        SizedBox(width: 8),
+                        Text('Main Menu'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              // Mobile-optimized status bar
+              MobileStatusBar(
+                gameState: gameState,
+                isExpanded: _statusExpanded,
+                onToggle: () {
+                  setState(() {
+                    _statusExpanded = !_statusExpanded;
+                  });
+                },
+              ),
+
+              // Collapsible recent actions
+              CollapsibleRecentActions(
+                gameState: gameState,
+                isExpanded: _actionsExpanded,
+                onToggle: () {
+                  setState(() {
+                    _actionsExpanded = !_actionsExpanded;
+                  });
+                },
+              ),
+
+              const SizedBox(height: 8),
+
+              // Compact player scores
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  'Tap a player to view their melds:',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ),
-          ],
+              CompactPlayerScores(
+                gameState: gameState,
+                viewingPlayerMelds: _viewingPlayerMelds,
+                onPlayerTap: (player) {
+                  setState(() {
+                    // If tapping on the human player, set to null (view own melds)
+                    // Otherwise, set to the specific player to view their melds
+                    final humanPlayer = gameState.players.firstWhere(
+                      (p) => p.type == PlayerType.human,
+                    );
+                    _viewingPlayerMelds = player.id == humanPlayer.id
+                        ? null
+                        : player;
+                  });
+                },
+                botPersonalityManager: _botAI.personalityManager,
+              ),
+
+              // Melds section
+              Expanded(
+                flex: 2,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Text(() {
+                              final player = _viewingPlayerMelds ?? humanPlayer;
+                              final playerName = player.name;
+                              // Minimal debug logging - only when there's a mismatch
+                              if (_viewingPlayerMelds != null &&
+                                  _viewingPlayerMelds != humanPlayer) {
+                                DebugLogger.debug(
+                                  'Viewing: ${_viewingPlayerMelds!.name}, Expected: ${humanPlayer.name}',
+                                );
+                              }
+                              if (playerName == 'You') {
+                                return 'Your Melds:';
+                              } else {
+                                return '$playerName\'s Melds:';
+                              }
+                            }(), style: Theme.of(context).textTheme.headlineMedium),
+                            if (_viewingPlayerMelds != null)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _viewingPlayerMelds = null;
+                                    });
+                                  },
+                                  child: const Text('Back to yours'),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if ((_viewingPlayerMelds ?? humanPlayer).melds.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('No melds yet'),
+                        )
+                      else
+                        ...(() {
+                          // Sort melds by face value (CardRank)
+                          final player = _viewingPlayerMelds ?? humanPlayer;
+                          final indexedMelds = player.melds
+                              .asMap()
+                              .entries
+                              .toList();
+                          indexedMelds.sort((a, b) {
+                            // Special handling for Aces - put them at the end
+                            final aRank = a.value.rank;
+                            final bRank = b.value.rank;
+
+                            if (aRank == CardRank.ace &&
+                                bRank != CardRank.ace) {
+                              return 1; // a (ace) comes after b
+                            }
+                            if (bRank == CardRank.ace &&
+                                aRank != CardRank.ace) {
+                              return -1; // b (ace) comes after a
+                            }
+
+                            // For non-ace cards or both aces, use normal index comparison
+                            return aRank.index.compareTo(bRank.index);
+                          });
+
+                          return indexedMelds.map((entry) {
+                            final canAdd =
+                                _viewingPlayerMelds == null &&
+                                currentPlayer.type == PlayerType.human &&
+                                gameState.turnPhase == TurnPhase.meld;
+
+                            final compatibleInfo = canAdd
+                                ? _getCompatibleCardsInfo(entry.key)
+                                : (count: 0, areWilds: false);
+
+                            return MeldWidget(
+                              meld: entry.value,
+                              meldIndex: entry.key,
+                              canAddCards: canAdd,
+                              onTap: canAdd ? _onAddCardToMeld : null,
+                              onSelectAllCards: canAdd
+                                  ? _selectAllCardsForMeld
+                                  : null,
+                              canAcceptSelectedCard:
+                                  canAdd && _canAddCardToMeld(entry.key),
+                              compatibleCardsInHand: compatibleInfo.count,
+                              compatibleCardsAreWilds: compatibleInfo.areWilds,
+                            );
+                          });
+                        })(),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Emergency recovery for stuck game (only show when necessary)
+              if (_isGameStuck() &&
+                  currentPlayer.type == PlayerType.human &&
+                  gameState.phase != GamePhase.gameEnd)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.red[100],
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Game is stuck! You went out without meeting book requirements.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _forceNextTurn,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        child: const Text('Skip Turn (Emergency Recovery)'),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Use the shared GameActionButtons widget for consistency
+              GameActionButtons(
+                gameState: gameState,
+                humanPlayer: humanPlayer,
+                selectedCardIndices: _selectedCardIndices,
+                onDrawFromDeck: _onDrawFromDeck,
+                onUnlockDiscard: () {
+                  final controller = _gameController;
+                  return (controller != null && controller.canUnlockDiscard())
+                      ? _onUnlockDiscard
+                      : null;
+                }(),
+                onShowAdvancedMeldSelector: () =>
+                    _dialogManager.showAdvancedMeldSelector(
+                      onMeldsCreated: _executeAdvancedMeldCreation,
+                    ),
+                onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
+                onClearSelection: () =>
+                    setState(() => _selectedCardIndices.clear()),
+              ),
+
+              // Hand (always visible, but only interactive during human turn and game not ended)
+              Opacity(
+                opacity:
+                    currentPlayer.type == PlayerType.human &&
+                        gameState.phase != GamePhase.gameEnd
+                    ? 1.0
+                    : 0.7,
+                child: Container(
+                  height: 135, // Reduced height to minimize bottom space
+                  padding: const EdgeInsets.fromLTRB(
+                    8,
+                    8,
+                    8,
+                    4,
+                  ), // Reduced bottom padding
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: GestureDetector(
+                          onTap: () {
+                            if (_viewingPlayerMelds != null) {
+                              setState(() {
+                                _viewingPlayerMelds =
+                                    null; // Reset to human player view
+                              });
+                            }
+                          },
+                          child: Text(
+                            () {
+                              if (_viewingPlayerMelds != null &&
+                                  _viewingPlayerMelds != humanPlayer) {
+                                return 'Viewing ${_viewingPlayerMelds!.name}\'s cards - Tap here to return to your hand';
+                              }
+                              return 'Your Hand (${humanPlayer.currentHand.length} cards)';
+                            }(),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  _viewingPlayerMelds != null &&
+                                      _viewingPlayerMelds != humanPlayer
+                                  ? BalatroTheme.neonYellow
+                                  : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(context).copyWith(
+                            dragDevices: {
+                              PointerDeviceKind.touch,
+                              PointerDeviceKind.mouse,
+                            },
+                          ),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
+                            child: SizedBox(
+                              width: humanPlayer.currentHand.isNotEmpty
+                                  ? (humanPlayer.currentHand.length - 1) *
+                                            50.0 +
+                                        70.0
+                                  : 70.0,
+                              height:
+                                  110, // Fixed height for the stack (98 + 12 for selection)
+                              child: Stack(
+                                clipBehavior: Clip
+                                    .none, // Allow cards to move outside bounds when selected
+                                children: humanPlayer.currentHand
+                                    .asMap()
+                                    .entries
+                                    .map((entry) {
+                                      final index = entry.key;
+                                      final card = entry.value;
+
+                                      return Positioned(
+                                        left: index * 50.0,
+                                        child: GestureDetector(
+                                          onTap:
+                                              currentPlayer.type ==
+                                                      PlayerType.human &&
+                                                  gameState.phase !=
+                                                      GamePhase.gameEnd
+                                              ? () => _onCardTap(index)
+                                              : null,
+                                          onDoubleTap:
+                                              currentPlayer.type ==
+                                                      PlayerType.human &&
+                                                  gameState.phase !=
+                                                      GamePhase.gameEnd
+                                              ? () => _onCardDoubleTap(index)
+                                              : null,
+                                          child: PlayingCardWidget(
+                                            key: ValueKey(
+                                              'hand-${card.rank}-${card.suit}-$index-${_viewingPlayerMelds?.id ?? "you"}',
+                                            ),
+                                            card: card,
+                                            width: 70,
+                                            height: 98,
+                                            isSelected: _selectedCardIndices
+                                                .contains(index),
+                                            isPlayable: _isCardPlayable(card),
+                                            isNewlyDrawn: humanPlayer
+                                                .isCardIndexNewlyDrawn(index),
+                                          ),
+                                        ),
+                                      );
+                                    })
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Game end overlay when game has finished
+              if (gameState.phase == GamePhase.gameEnd &&
+                  gameState.winner != null)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        BalatroTheme.neonYellow.withValues(alpha: 0.9),
+                        BalatroTheme.neonGreen.withValues(alpha: 0.9),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: BalatroTheme.glowColor, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: BalatroTheme.neonYellow.withValues(alpha: 0.6),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.emoji_events,
+                            color: Colors.black,
+                            size: 32,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'GAME OVER!',
+                            style: Theme.of(context).textTheme.displayMedium
+                                ?.copyWith(color: Colors.black),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${gameState.winner!.name} WINS with ${gameState.winner!.score} points!',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(color: Colors.black),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Use the menu button to view final scores or start a new game',
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

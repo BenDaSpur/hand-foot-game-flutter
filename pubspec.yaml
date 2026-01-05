@@ -21,6 +21,7 @@ dependencies:
   google_fonts: ^6.3.1
   flutter_svg: ^2.0.10
   flutter_riverpod: ^2.6.1
+  audioplayers: ^6.5.1
 
 dev_dependencies:
   flutter_test:

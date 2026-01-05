@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/ai/bot_decision.dart';
+import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
@@ -71,22 +72,23 @@ void main() {
     });
 
     group('Strategic Constants', () {
-      test('should have appropriate strategic constants', () {
+      test('should have appropriate strategic constants in BotConfig', () {
+        // All constants now centralized in BotConfig
         expect(
-          EnhancedBotAI.maxTurnsBeforeForcePlayDown,
+          BotConfig.maxTurnsBeforeForcePlayDown,
           equals(4),
         ); // EMERGENCY FIX - reduced further to prevent catastrophic accumulation
         expect(
-          EnhancedBotAI.strongPlayDownBuffer,
+          BotConfig.strongPlayDownBuffer,
           equals(5),
         ); // Reduced further for more aggressive play-downs
-        expect(EnhancedBotAI.wildCardDiscardThreshold, equals(8));
-        expect(EnhancedBotAI.emergencyRiskTolerance, equals(1.8));
-        expect(EnhancedBotAI.maxEmergencyRiskTolerance, equals(6.0));
-        expect(EnhancedBotAI.emergencyHandSizeThreshold, equals(15));
-        expect(EnhancedBotAI.criticalHandSizeThreshold, equals(18));
-        expect(EnhancedBotAI.playDownEmergencyThreshold, equals(14));
-        expect(EnhancedBotAI.minTurnsForEmergency, equals(4));
+        expect(BotConfig.wildCardDiscardThreshold, equals(8));
+        expect(BotConfig.emergencyRiskTolerance, equals(1.8));
+        expect(BotConfig.maxEmergencyRiskTolerance, equals(6.0));
+        expect(BotConfig.emergencyHandSizeThreshold, equals(15));
+        expect(BotConfig.criticalHandSizeThreshold, equals(18));
+        expect(BotConfig.playDownEmergencyThreshold, equals(14));
+        expect(BotConfig.minTurnsForEmergency, equals(4));
       });
     });
 
@@ -111,12 +113,12 @@ void main() {
     });
 
     group('Foot Phase Urgency Logic', () {
-      test('should validate foot phase urgency constants', () {
-        expect(EnhancedBotAI.footPhaseUrgencyThreshold, equals(5));
-        expect(EnhancedBotAI.minimumDiscardPileSize, equals(2));
-        expect(EnhancedBotAI.aggressiveDiscardMultiplier, equals(0.8));
-        expect(EnhancedBotAI.competitiveDiscardMultiplier, equals(0.6));
-        expect(EnhancedBotAI.defensiveDiscardMultiplier, equals(0.7));
+      test('should validate foot phase urgency constants in BotConfig', () {
+        expect(BotConfig.footPhaseUrgencyThreshold, equals(5));
+        expect(BotConfig.minimumDiscardPileSize, equals(2));
+        expect(BotConfig.aggressiveDiscardMultiplier, equals(0.8));
+        expect(BotConfig.competitiveDiscardMultiplier, equals(0.6));
+        expect(BotConfig.defensiveDiscardMultiplier, equals(0.7));
       });
 
       test('should handle foot phase with few cards without crashing', () {
@@ -124,7 +126,7 @@ void main() {
         botPlayer.hasPickedUpFoot = true;
         botPlayer.hand.clear();
         // Add exactly the threshold number of cards
-        for (int i = 0; i < EnhancedBotAI.footPhaseUrgencyThreshold; i++) {
+        for (int i = 0; i < BotConfig.footPhaseUrgencyThreshold; i++) {
           botPlayer.addCardToHand(
             PlayingCard(rank: CardRank.values[i % 13], suit: Suit.hearts),
           );

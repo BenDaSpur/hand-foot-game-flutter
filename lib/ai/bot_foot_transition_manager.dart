@@ -3,6 +3,7 @@ import '../models/card.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
+import 'bot_config.dart';
 
 /// Manages intelligent foot transition decisions for bot players.
 ///
@@ -11,35 +12,7 @@ import 'bot_decision.dart';
 /// multiple factors including hand size, card quality, game round, and
 /// strategic position.
 class BotFootTransitionManager {
-  // Transition thresholds - MADE MORE AGGRESSIVE
-  static const int aggressiveFootTransitionThreshold =
-      10; // MUCH more aggressive - transition at 10 cards instead of 6
-  static const int handSizePressureThreshold =
-      12; // Start pressure at 12 cards instead of 9
-  static const int lateRoundTransitionRound =
-      2; // Reduced from 3 - earlier urgency
-  static const int lateRoundHandSizeThreshold =
-      10; // Transition at 10 cards in late rounds instead of 8
-  static const int postPlaydownTransitionThreshold =
-      8; // Transition at 8 cards after play-down instead of 7
-  static const int emergencyTransitionThreshold =
-      8; // More aggressive - transition at 8 cards to ensure foot pickup
-  static const int largeHandEmergencyThreshold =
-      10; // MUCH earlier emergency at 10 cards instead of 12
-
-  // Hand quality thresholds
-  static const int handQualityNegativeThreshold = -40;
-  static const int handQualityThreeCountThreshold = 3;
-  static const int handQualityAvgValueThreshold = 5;
-  static const int handSizeQualityThreshold = 6;
-  static const int handSizePressureNegativeThreshold = -30;
-  static const int lateRoundModerateNegativeThreshold = -20;
-  static const int improvedEmergencyThreshold = -60;
-
-  // Strategy thresholds
-  static const double mostCardsPlayableThreshold = 0.6;
-  static const double someCardsPlayableThreshold = 0.5;
-  static const int excessiveWildsThreshold = 6;
+  // All thresholds now centralized in BotConfig
 
   BotFootTransitionManager();
 
@@ -102,7 +75,7 @@ class BotFootTransitionManager {
 
   /// Check if bot should make an emergency transition (very few cards)
   bool _shouldEmergencyTransition(Player bot, int remainingCards) {
-    return remainingCards <= emergencyTransitionThreshold &&
+    return remainingCards <= BotConfig.emergencyTransitionThreshold &&
         bot.hasPlayedDown &&
         !bot.hasPickedUpFoot;
   }
@@ -151,7 +124,8 @@ class BotFootTransitionManager {
     final gameState = controller.gameState;
     final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
     final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
-    final hasExcessiveWilds = wildCardCount >= excessiveWildsThreshold;
+    final hasExcessiveWilds =
+        wildCardCount >= BotConfig.excessiveWildsThreshold;
 
     // Check for competitive pressure
     final opponentOnFoot = gameState.players.any(
@@ -161,11 +135,11 @@ class BotFootTransitionManager {
 
     // Aggressive transition when: few cards OR competitive pressure with medium hand size
     final shouldTransitionForSize =
-        remainingCards <= aggressiveFootTransitionThreshold;
+        remainingCards <= BotConfig.aggressiveFootTransitionThreshold;
     final shouldTransitionForPressure =
         competitivePressure &&
         remainingCards <= 15 &&
-        remainingCards > aggressiveFootTransitionThreshold;
+        remainingCards > BotConfig.aggressiveFootTransitionThreshold;
 
     return (shouldTransitionForSize || shouldTransitionForPressure) &&
         !(stillOnHandPile && hasExcessiveWilds);
@@ -179,7 +153,8 @@ class BotFootTransitionManager {
   ) {
     final gameState = controller.gameState;
     final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
-    final hasExcessiveWilds = wildCardCount >= excessiveWildsThreshold;
+    final hasExcessiveWilds =
+        wildCardCount >= BotConfig.excessiveWildsThreshold;
 
     // Check for competitive pressure
     final opponentOnFoot = gameState.players.any(
@@ -187,7 +162,8 @@ class BotFootTransitionManager {
     );
     final competitivePressure = opponentOnFoot && bot.hasPlayedDown;
 
-    final hasHandSizePressure = remainingCards >= handSizePressureThreshold;
+    final hasHandSizePressure =
+        remainingCards >= BotConfig.handSizePressureThreshold;
     final hasCompetitivePressure = competitivePressure && remainingCards > 12;
     final shouldTransition = hasHandSizePressure || hasCompetitivePressure;
 
@@ -196,8 +172,8 @@ class BotFootTransitionManager {
 
   /// Check if bot should use late round transition strategy
   bool _shouldLateRoundTransition(int currentRound, int remainingCards) {
-    return currentRound >= lateRoundTransitionRound &&
-        remainingCards >= lateRoundHandSizeThreshold;
+    return currentRound >= BotConfig.lateRoundTransitionRound &&
+        remainingCards >= BotConfig.lateRoundHandSizeThreshold;
   }
 
   /// Check if bot should transition after playing down
@@ -206,7 +182,7 @@ class BotFootTransitionManager {
     final hasWeakMeldOpportunity = _hasOnlyWeakMeldOpportunities(bot);
 
     return bot.hasPlayedDown &&
-        remainingCards >= postPlaydownTransitionThreshold &&
+        remainingCards >= BotConfig.postPlaydownTransitionThreshold &&
         !hasWeakMeldOpportunity &&
         !stillOnHandPile;
   }
@@ -218,7 +194,8 @@ class BotFootTransitionManager {
     int remainingCards,
   ) {
     final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
-    final hasExcessiveWilds = wildCardCount >= excessiveWildsThreshold;
+    final hasExcessiveWilds =
+        wildCardCount >= BotConfig.excessiveWildsThreshold;
 
     return _shouldTransitionBasedOnHandQuality(
           bot,
@@ -246,7 +223,8 @@ class BotFootTransitionManager {
   bool _shouldPlayMostCardsTransition(Player bot, GameController controller) {
     final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
     final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
-    final hasExcessiveWilds = wildCardCount >= excessiveWildsThreshold;
+    final hasExcessiveWilds =
+        wildCardCount >= BotConfig.excessiveWildsThreshold;
     final hasWeakMeldOpportunity = _hasOnlyWeakMeldOpportunities(bot);
     final canPlayMostCards = _canPlayMostCards(bot, controller);
 
@@ -265,7 +243,7 @@ class BotFootTransitionManager {
     final wildCards = bot.currentHand.where((c) => c.isWild).toList();
 
     // Emergency discard for extremely large hands
-    if (handSize > largeHandEmergencyThreshold) {
+    if (handSize > BotConfig.largeHandEmergencyThreshold) {
       if (bot.currentHand.isEmpty) {
         return BotDecision(action: 'error');
       }
@@ -319,7 +297,7 @@ class BotFootTransitionManager {
     final handSize = bot.currentHand.length;
 
     // Emergency discard for extremely large hands
-    if (handSize > largeHandEmergencyThreshold) {
+    if (handSize > BotConfig.largeHandEmergencyThreshold) {
       if (bot.currentHand.isEmpty) {
         return BotDecision(action: 'error');
       }
@@ -343,7 +321,7 @@ class BotFootTransitionManager {
     }
 
     // Consider discarding if hand value is poor
-    if (handValue <= handSizePressureNegativeThreshold) {
+    if (handValue <= BotConfig.handSizePressureNegativeThreshold) {
       final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot, controller);
       if (cardsToAddToMelds.isNotEmpty) {
         final cardToAdd = cardsToAddToMelds.first;
@@ -366,8 +344,8 @@ class BotFootTransitionManager {
     int handValue,
   ) {
     // Be more willing to transition with moderate hands
-    if (handValue <= lateRoundModerateNegativeThreshold ||
-        bot.currentHand.length >= (lateRoundHandSizeThreshold + 1)) {
+    if (handValue <= BotConfig.lateRoundModerateNegativeThreshold ||
+        bot.currentHand.length >= (BotConfig.lateRoundHandSizeThreshold + 1)) {
       final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot, controller);
       if (cardsToAddToMelds.isNotEmpty) {
         final cardToAdd = cardsToAddToMelds.first;
@@ -461,7 +439,7 @@ class BotFootTransitionManager {
 
     // Emergency risk management
     final handValue = _calculateHandValue(bot.currentHand);
-    if (handValue <= improvedEmergencyThreshold) {
+    if (handValue <= BotConfig.improvedEmergencyThreshold) {
       final cardsToAddToMelds = _findCardsToAddToExistingMelds(bot, controller);
       if (cardsToAddToMelds.isNotEmpty) {
         final cardToAdd = cardsToAddToMelds.first;
@@ -484,7 +462,7 @@ class BotFootTransitionManager {
     int handSize,
   ) {
     // Negative point value
-    if (handValue <= handQualityNegativeThreshold) {
+    if (handValue <= BotConfig.handQualityNegativeThreshold) {
       return true;
     }
 
@@ -492,14 +470,14 @@ class BotFootTransitionManager {
     final threeCount = bot.currentHand
         .where((c) => c.rank == CardRank.three)
         .length;
-    if (threeCount >= handQualityThreeCountThreshold) {
+    if (threeCount >= BotConfig.handQualityThreeCountThreshold) {
       return true;
     }
 
     // Large hands with low average value
-    if (handSize >= handSizeQualityThreshold) {
+    if (handSize >= BotConfig.handSizeQualityThreshold) {
       final avgValue = handValue / handSize;
-      if (avgValue <= handQualityAvgValueThreshold) {
+      if (avgValue <= BotConfig.handQualityAvgValueThreshold) {
         return true;
       }
     }
@@ -520,7 +498,7 @@ class BotFootTransitionManager {
 
     // Can we use 60%+ of remaining cards?
     return totalPlayable >=
-        (remainingCards * mostCardsPlayableThreshold).floor();
+        (remainingCards * BotConfig.mostCardsPlayableThreshold).floor();
   }
 
   /// Calculate total cards that can be played (avoiding double-counting)
@@ -576,7 +554,8 @@ class BotFootTransitionManager {
 
     // Can we use 50%+ of remaining cards?
     final usableCards = addableCards + meldableCards;
-    return usableCards >= (remainingCards * someCardsPlayableThreshold).floor();
+    return usableCards >=
+        (remainingCards * BotConfig.someCardsPlayableThreshold).floor();
   }
 
   /// Choose the meld that uses the most cards

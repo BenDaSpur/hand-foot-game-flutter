@@ -10,6 +10,7 @@ import '../widgets/melds_section.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/game_hand_display.dart';
 import '../widgets/advanced_meld_selector.dart';
+import '../widgets/turn_timer.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../theme/balatro_theme.dart';
 import 'main_menu_screen.dart';
@@ -29,6 +30,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   final List<int> _selectedCardIndices = [];
   Player? _viewingPlayerMelds;
   bool _actionsExpanded = false;
+
+  // Turn timer settings
+  // ignore: prefer_final_fields - may be toggled in future settings
+  bool _turnTimerEnabled = true;
+  static const int _turnDurationSeconds = 120; // 2 minutes per turn
 
   @override
   void initState() {
@@ -235,6 +241,39 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     );
   }
 
+  /// Handle turn timeout - auto-discard a random card
+  void _handleTurnTimeout() {
+    if (!_gameController.isMyTurn) return;
+
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null || currentUserPlayer.currentHand.isEmpty) {
+      return;
+    }
+
+    // If we haven't drawn yet, draw first
+    if (_gameController.gameState.turnPhase == TurnPhase.draw) {
+      _gameController.drawFromDeck();
+    }
+
+    // Auto-discard the first card in hand
+    if (_gameController.gameState.turnPhase == TurnPhase.meld) {
+      final cardToDiscard = currentUserPlayer.currentHand.first;
+      _gameController.discardCard(cardToDiscard);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '⏰ Time up! Auto-discarded ${cardToDiscard.displayName}',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    setState(() => _selectedCardIndices.clear());
+  }
+
   // REUSE: Implement meld interaction methods (copied from earlier)
   Future<void> _onAddCardToMeld(int meldIndex) async {
     if (_selectedCards.isEmpty) return;
@@ -435,6 +474,28 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                           ),
                         ),
                       ),
+                      // Turn timer (only show when timer is enabled)
+                      if (_turnTimerEnabled) ...[
+                        const SizedBox(width: 8),
+                        TurnTimer(
+                          key: ValueKey(gameState.currentPlayer.id),
+                          turnDurationSeconds: _turnDurationSeconds,
+                          isActive: _gameController.isMyTurn,
+                          onTimeUp: _handleTurnTimeout,
+                          onTick: (remaining) {
+                            // Show warning at 30 seconds
+                            if (remaining == 30 && _gameController.isMyTurn) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('⏰ 30 seconds remaining!'),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),

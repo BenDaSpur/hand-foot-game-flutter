@@ -300,23 +300,41 @@ Train a neural network on game logs:
 - Adaptive difficulty based on player skill
 - Requires significant data collection first
 
-### 4.5 Reduce Magic Numbers in Bot AI
+### 4.5 Reduce Magic Numbers in Bot AI ✅ **PARTIALLY COMPLETED** (January 4, 2026)
 
 **Priority:** Medium | **Effort:** Medium
 
-`enhanced_bot_ai.dart` has many hardcoded thresholds:
+`enhanced_bot_ai.dart` has many hardcoded thresholds.
 
-```dart
-static const int emergencyHandSizeThreshold = 10;
-static const int criticalHandSizeThreshold = 14;
-static const int playDownEmergencyThreshold = 10;
-// ... 20+ more constants
-```
+**Implementation:**
 
-Consider:
+- ✅ Created `BotConfig` class in `lib/ai/bot_config.dart` with all bot constants
+- ✅ Updated all bot AI files to import and use `BotConfig`:
+  - `enhanced_bot_ai.dart`
+  - `bot_foot_transition_manager.dart`
+  - `bot_end_game_manager.dart`
+  - `bot_game_analyzer.dart`
+  - `bot_meld_analyzer.dart`
+  - `bot_discard_analyzer.dart`
+- ✅ Consolidated 50+ magic numbers into single location
+- ✅ Grouped by category: hand size, foot transition, play-down, etc.
+- ✅ COMPLETED: All bot code now uses `BotConfig` constants
+- ⬜ TODO: Make configurable per difficulty level
 
-- Move to `BotAIConfig` class with personality-based adjustments
-- Make configurable per difficulty level
+### 4.6 Defensive Discarding ✅ **COMPLETED** (January 4, 2026)
+
+**Priority:** Medium | **Effort:** Medium
+
+**Implementation:**
+
+- ✅ Created `BotDiscardAnalyzer` class in `lib/ai/bot_discard_analyzer.dart`
+- ✅ Smart discard selection considering:
+  - Card point values (3s first, protect wilds)
+  - Opponent needs (avoid feeding near-book melds)
+  - Bot's meld potential (keep duplicates)
+  - Book completion protection
+- ✅ Integrated into `EnhancedBotAI._chooseCardToDiscard()` with fallback
+- ✅ All 126 bot tests passing
 
 ---
 
@@ -607,12 +625,12 @@ Track version history:
 
 1. ⬜ Remove unused `minDiscardForReshuffle` constant
 2. ✅ Fix duplicate `dart:math` import (DONE - Jan 2, 2026)
-3. ⬜ Fix `_totalTurns` bug (change to non-final, increment on turns)
-4. ⬜ Add keyboard shortcuts for desktop
-5. ⬜ Add sound effects (use simple package)
-6. ⬜ Add card count display
+3. ✅ Fix `_totalTurns` bug (DONE - Jan 4, 2026)
+4. ✅ Add keyboard shortcuts for desktop (DONE - Jan 4, 2026)
+5. ✅ Add sound effects infrastructure (DONE - Jan 4, 2026)
+6. ✅ Add card count display (DONE - Jan 4, 2026)
 7. ✅ Bot thinking indicators (DONE - Jan 3, 2026)
-8. ⬜ Turn timer (multiplayer)
+8. ✅ Turn timer for multiplayer (DONE - Jan 4, 2026)
 
 ---
 

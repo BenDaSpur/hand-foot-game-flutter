@@ -13,6 +13,8 @@ import 'bot_meld_analyzer.dart';
 import 'bot_foot_transition_manager.dart';
 import 'bot_end_game_manager.dart';
 import 'bot_game_context.dart';
+import 'bot_discard_analyzer.dart';
+import 'bot_config.dart';
 import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
@@ -27,6 +29,7 @@ class EnhancedBotAI {
   final BotMeldAnalyzer _meldAnalyzer;
   final BotFootTransitionManager _footTransitionManager;
   final BotEndGameManager _endGameManager;
+  final BotDiscardAnalyzer _discardAnalyzer;
 
   // Random number generator for decision variability
   final math.Random _random;
@@ -43,40 +46,7 @@ class EnhancedBotAI {
   Map<String, List<List<PlayingCard>>>? _cachedPossibleMelds;
   String? _lastMeldCacheKey;
 
-  // Strategic constants - EMERGENCY FIXES for hand size management
-  static const int maxTurnsBeforeForcePlayDown =
-      4; // REDUCED FURTHER - prevent accumulation
-  static const int strongPlayDownBuffer =
-      5; // REDUCED FURTHER - much more aggressive play-downs
-
-  // NEW: Discard pile evaluation constants - extracted magic numbers
-  static const double aggressiveDiscardMultiplier = 0.8;
-  static const double competitiveDiscardMultiplier = 0.6;
-  static const double defensiveDiscardMultiplier = 0.7;
-  static const int minimumDiscardPileSize = 2;
-  static const int footPhaseUrgencyThreshold = 5;
-
-  static const int wildCardDiscardThreshold =
-      8; // INCREASED - discard wilds more readily
-  static const double emergencyRiskTolerance =
-      1.8; // REDUCED - more conservative in emergencies
-
-  // EMERGENCY HAND SIZE PROTOCOLS - Prevents catastrophic accumulation like 32+ cards
-  // Note: Starting hand is 11 cards, draw 2 per turn, discard 1 = net +1 card/turn if not melding
-  static const int emergencyHandSizeThreshold =
-      15; // Force emergency actions after ~4 turns without melding
-  static const int criticalHandSizeThreshold =
-      18; // PANIC: Any meld is better than none after ~7 turns without melding
-  static const int playDownEmergencyThreshold =
-      14; // Force play-down when accumulating without melding (~3 turns)
-  // Minimum turns before emergency protocols can activate (give bots time to play normally)
-  static const int minTurnsForEmergency = 4;
-  static const int competitiveThreatHandSizeGap =
-      15; // When opponent is ahead by this much (competitive intelligence)
-  static const double maxEmergencyRiskTolerance =
-      6.0; // INCREASED - allow major strategic gambles
-
-  // Opponent pressure detection thresholds moved to GameConfig
+  // All strategic constants now centralized in BotConfig
 
   EnhancedBotAI({int? seed})
     : _personalityManager = BotPersonalityManager(),
@@ -84,6 +54,7 @@ class EnhancedBotAI {
       _meldAnalyzer = BotMeldAnalyzer(),
       _footTransitionManager = BotFootTransitionManager(),
       _endGameManager = BotEndGameManager(),
+      _discardAnalyzer = BotDiscardAnalyzer(),
       _random = seed != null ? math.Random(seed) : math.Random();
 
   /// Main entry point for bot decisions
@@ -142,7 +113,8 @@ class EnhancedBotAI {
       );
 
       // If under pressure AND have large hand, bypass early game grace
-      if (pressureResponse != null && handSize >= criticalHandSizeThreshold) {
+      if (pressureResponse != null &&
+          handSize >= BotConfig.criticalHandSizeThreshold) {
         DebugLogger.botDebug(
           bot.id,
           bot.name,
@@ -165,9 +137,10 @@ class EnhancedBotAI {
       // Only bypass early game if we have competitive pressure AND have had enough turns
       final shouldBypassEarlyGame =
           (!isEarlyGame || hasCompetitivePressure) &&
-          botTurnCount >= minTurnsForEmergency;
+          botTurnCount >= BotConfig.minTurnsForEmergency;
 
-      if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
+      if (handSize >= BotConfig.criticalHandSizeThreshold &&
+          shouldBypassEarlyGame) {
         // PANIC MODE: But still try conservative play-down first if not played down yet
         if (gameState.turnPhase == TurnPhase.meld) {
           List<List<PlayingCard>> emergencyMelds;
@@ -209,7 +182,7 @@ class EnhancedBotAI {
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
+              'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $BotConfig.criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
             );
 
             if (emergencyMelds.length == 1) {
@@ -229,7 +202,8 @@ class EnhancedBotAI {
         }
       }
 
-      if (handSize >= emergencyHandSizeThreshold && shouldBypassEarlyGame) {
+      if (handSize >= BotConfig.emergencyHandSizeThreshold &&
+          shouldBypassEarlyGame) {
         // EMERGENCY MODE: Use maximal meld combination for aggressive melding
         if (gameState.turnPhase == TurnPhase.meld) {
           // If not played down, force emergency play-down with enhanced combination
@@ -250,7 +224,7 @@ class EnhancedBotAI {
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $emergencyHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
+              'EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $BotConfig.emergencyHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
             );
 
             if (maximalMelds.length == 1) {
@@ -278,7 +252,7 @@ class EnhancedBotAI {
       }
 
       // SPECIAL EMERGENCY: Bot with too many cards and no play-down
-      if (handSize >= playDownEmergencyThreshold &&
+      if (handSize >= BotConfig.playDownEmergencyThreshold &&
           !bot.hasPlayedDown &&
           shouldBypassEarlyGame &&
           gameState.turnPhase == TurnPhase.meld) {
@@ -512,9 +486,10 @@ class EnhancedBotAI {
     // Only bypass early game if enough turns have passed
     final shouldBypassEarlyGame =
         (!isEarlyGame || hasCompetitivePressure) &&
-        botTurnCount >= minTurnsForEmergency;
+        botTurnCount >= BotConfig.minTurnsForEmergency;
 
-    if (handSize >= criticalHandSizeThreshold && shouldBypassEarlyGame) {
+    if (handSize >= BotConfig.criticalHandSizeThreshold &&
+        shouldBypassEarlyGame) {
       // PANIC MODE: Any meld is better than none
       final anyPossibleMelds = _getCachedPossibleMelds(bot, context);
       if (anyPossibleMelds.isNotEmpty) {
@@ -522,7 +497,7 @@ class EnhancedBotAI {
         DebugLogger.botDebug(
           bot.id,
           bot.name,
-          'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $criticalHandSizeThreshold - forcing meld creation',
+          'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $BotConfig.criticalHandSizeThreshold - forcing meld creation',
         );
         return BotDecision(
           action: 'createMeld',
@@ -536,9 +511,9 @@ class EnhancedBotAI {
     }
 
     // Also require minimum turns for emergency mode
-    if (handSize >= emergencyHandSizeThreshold &&
+    if (handSize >= BotConfig.emergencyHandSizeThreshold &&
         !isEarlyGame &&
-        botTurnCount >= minTurnsForEmergency) {
+        botTurnCount >= BotConfig.minTurnsForEmergency) {
       // EMERGENCY MODE: Force aggressive meld creation
       if (bot.hasPlayedDown) {
         // Already played down - meld anything possible
@@ -972,7 +947,8 @@ class EnhancedBotAI {
       final meldGap = opponent.melds.length - bot.melds.length;
 
       // Threatened if opponent has significant advantage
-      if (handSizeGap >= competitiveThreatHandSizeGap || meldGap >= 3) {
+      if (handSizeGap >= BotConfig.competitiveThreatHandSizeGap ||
+          meldGap >= 3) {
         return true;
       }
 
@@ -1154,8 +1130,8 @@ class EnhancedBotAI {
     );
     // AGGRESSIVE FIX: Don't increase requirement beyond base + small buffer
     // (Removed thresholdModifier - was making bots too conservative)
-    final adjustedRequirement = (playDownRequirement + strongPlayDownBuffer)
-        .clamp(
+    final adjustedRequirement =
+        (playDownRequirement + BotConfig.strongPlayDownBuffer).clamp(
           playDownRequirement,
           playDownRequirement + 20, // Max 20 extra points, not multiplicative
         );
@@ -1350,10 +1326,10 @@ class EnhancedBotAI {
 
     // Book completion urgency - take piles if they help complete books
     if (bookStatus['needsBookBalance'] == true) {
-      adjustedValueThreshold *=
-          defensiveDiscardMultiplier; // More willing to take pile for books
-      adjustedSizeThreshold *=
-          aggressiveDiscardMultiplier; // Lower size threshold for book completion
+      adjustedValueThreshold *= BotConfig
+          .defensiveDiscardMultiplier; // More willing to take pile for books
+      adjustedSizeThreshold *= BotConfig
+          .aggressiveDiscardMultiplier; // Lower size threshold for book completion
     }
 
     // Opponent threat adjustment - be more aggressive when opponents are dangerous
@@ -1400,8 +1376,8 @@ class EnhancedBotAI {
     // NEW: Competitive pile denial - take piles that would benefit opponents
     if (pileSize >= 5 &&
         _pileWouldBenefitOpponents(discardPile, gameState, bot)) {
-      adjustedValueThreshold *=
-          competitiveDiscardMultiplier; // Take piles to deny opponents
+      adjustedValueThreshold *= BotConfig
+          .competitiveDiscardMultiplier; // Take piles to deny opponents
     }
 
     // ENHANCED pre-play-down logic - MUCH more aggressive
@@ -1421,7 +1397,8 @@ class EnhancedBotAI {
 
       return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
           pileSize >=
-              minimumDiscardPileSize; // Take any pile with minimum cards if not played down
+              BotConfig
+                  .minimumDiscardPileSize; // Take any pile with minimum cards if not played down
     }
 
     // Enhanced post-play-down logic - consider hand management and foot transition
@@ -1429,14 +1406,15 @@ class EnhancedBotAI {
     final handSize = bot.currentHand.length;
 
     // NEW: FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
-    if (isInFoot && handSize <= footPhaseUrgencyThreshold) {
+    if (isInFoot && handSize <= BotConfig.footPhaseUrgencyThreshold) {
       // Check if we should be rushing to go out instead of taking discard pile
       if (handSize <= 2 && bot.canGoOutWithBooks) {
         return false; // Don't take pile, focus on going out
       }
       return pileValue >
           adjustedValueThreshold *
-              aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
+              BotConfig
+                  .aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
     }
 
     // If hand is getting large, prioritize pile taking to prevent getting stuck
@@ -1528,6 +1506,30 @@ class EnhancedBotAI {
     // Safe guard against empty hands - return null instead of crashing
     if (hand.isEmpty) {
       return null;
+    }
+
+    // Use enhanced discard analyzer for smarter decisions
+    // This considers opponent needs and defensive discarding
+    try {
+      final smartDiscard = _discardAnalyzer.chooseCardToDiscard(
+        bot,
+        gameState,
+        analyzer: _gameAnalyzer,
+      );
+      // Log defensive discard decisions in debug mode
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Smart discard selected: ${smartDiscard.displayName}',
+      );
+      return smartDiscard;
+    } catch (e) {
+      // Fall back to legacy logic if analyzer fails
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Smart discard failed ($e), using legacy logic',
+      );
     }
 
     // COMPETITIVE ENHANCEMENT: Check if bot should rush to go out

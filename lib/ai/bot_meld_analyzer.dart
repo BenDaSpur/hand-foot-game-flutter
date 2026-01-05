@@ -3,6 +3,7 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
+import 'bot_config.dart';
 
 /// Analyzes meld opportunities and calculations for bot players.
 ///
@@ -10,13 +11,7 @@ import '../config/game_config.dart';
 /// calculating meld values, determining the best meld opportunities, and evaluating
 /// cards that can be added to existing melds.
 class BotMeldAnalyzer {
-  // Meld evaluation constants
-  static const int minMeldSize = 3;
-  static const int weakMeldThreshold = 50;
-  static const int strongMeldThreshold = 100;
-  static const int bookSize = 7;
-  static const int cleanMeldBonus = 50;
-  static const int bookProgressBonus = 30;
+  // All constants now centralized in BotConfig
 
   // Cached results for performance
   List<List<PlayingCard>>? _cachedPossibleMelds;
@@ -153,7 +148,7 @@ class BotMeldAnalyzer {
       score +=
           meld.length * 15; // INCREASED from 10 - prioritize larger melds more
     } else {
-      score += minMeldSize * 10; // Prefer minimum viable melds
+      score += BotConfig.minMeldSize * 10; // Prefer minimum viable melds
     }
 
     // Bonus for point value - ENHANCED
@@ -169,25 +164,29 @@ class BotMeldAnalyzer {
     // CRITICAL: Strongly prefer the book type we're missing
     if (needsCleanBookMore && isClean) {
       score +=
-          cleanMeldBonus * 5; // MASSIVE bonus for desperately needed clean meld
+          BotConfig.cleanMeldBonus *
+          5; // MASSIVE bonus for desperately needed clean meld
     } else if (needsDirtyBookMore && !isClean) {
       score +=
-          cleanMeldBonus * 2; // Double bonus for desperately needed dirty meld
+          BotConfig.cleanMeldBonus *
+          2; // Double bonus for desperately needed dirty meld
     } else if (isClean && preferClean) {
-      score += cleanMeldBonus; // Normal clean bonus
+      score += BotConfig.cleanMeldBonus; // Normal clean bonus
     }
 
     // ADDITIONAL: Heavily penalize creating dirty melds when no clean books exist
     if (needsCleanBookMore && !isClean) {
       score -=
-          cleanMeldBonus * 3; // Major penalty for wrong type when desperate
+          BotConfig.cleanMeldBonus *
+          3; // Major penalty for wrong type when desperate
     }
 
     // Book potential bonus - extra important for the type we need
     if (meld.length >= 5) {
-      score += bookProgressBonus;
+      score += BotConfig.bookProgressBonus;
       if ((needsCleanBookMore && isClean) || (needsDirtyBookMore && !isClean)) {
-        score += bookProgressBonus * 2; // Extra bonus for needed book type
+        score +=
+            BotConfig.bookProgressBonus * 2; // Extra bonus for needed book type
       }
     }
 
@@ -586,7 +585,7 @@ class BotMeldAnalyzer {
         0,
         (sum, card) => sum + card.pointValue,
       );
-      if (meldPoints >= weakMeldThreshold) {
+      if (meldPoints >= BotConfig.weakMeldThreshold) {
         return false; // Has at least one good meld
       }
     }
@@ -657,7 +656,9 @@ class BotMeldAnalyzer {
 
   /// Find existing books (7+ cards)
   List<Meld> findExistingBooks(Player bot) {
-    return bot.melds.where((meld) => meld.cards.length >= bookSize).toList();
+    return bot.melds
+        .where((meld) => meld.cards.length >= BotConfig.bookSize)
+        .toList();
   }
 
   /// Count clean and dirty books
@@ -666,7 +667,7 @@ class BotMeldAnalyzer {
     int dirtyBooks = 0;
 
     for (final meld in bot.melds) {
-      if (meld.cards.length >= bookSize) {
+      if (meld.cards.length >= BotConfig.bookSize) {
         if (meld.isClean) {
           cleanBooks++;
         } else {

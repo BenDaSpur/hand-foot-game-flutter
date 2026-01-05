@@ -4,6 +4,7 @@ import '../models/meld.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
+import 'bot_config.dart';
 
 /// Manages end game decisions for bot players.
 ///
@@ -11,22 +12,7 @@ import 'bot_decision.dart';
 /// complete books, and position themselves for winning. It focuses on the
 /// strategic timing of going out while maximizing points through book completion.
 class BotEndGameManager {
-  // Book completion constants - ENHANCED for competitive play
-  static const int bookMinSize = 7;
-  static const int cleanBookBonus = 500;
-  static const int dirtyBookBonus = 300;
-  static const int winningPositionHandSize =
-      6; // INCREASED - allow larger hand for strategic advantage
-  static const int aggressiveGoOutHandSize =
-      8; // NEW - go out more aggressively under pressure
-
-  // Priority scores for book completion
-  static const int cleanBookCompletionPriority = 2000;
-  static const int dirtyBookCompletionPriority = 1500;
-  static const int cleanMeldProtectionBonus = 1000;
-  static const int wildPenaltyForCleanMeld = 500;
-  static const int oversizedBookPenalty = 100;
-  static const int excessiveWildPenalty = 200;
+  // All constants now centralized in BotConfig
 
   BotEndGameManager();
 
@@ -146,7 +132,7 @@ class BotEndGameManager {
     bool hasDirtyBook = false;
 
     for (final meld in bot.melds) {
-      if (meld.cards.length >= bookMinSize) {
+      if (meld.cards.length >= BotConfig.bookSize) {
         if (meld.isClean) {
           hasCleanBook = true;
         } else {
@@ -249,7 +235,7 @@ class BotEndGameManager {
   bool _isInWinningPosition(Player bot) {
     // Must be on foot with few cards AND have required books
     if (!bot.hasPickedUpFoot ||
-        bot.currentHand.length > winningPositionHandSize ||
+        bot.currentHand.length > BotConfig.winningPositionHandSize ||
         !bot.canGoOut) {
       return false;
     }
@@ -258,7 +244,7 @@ class BotEndGameManager {
     int cleanBooks = 0;
     int dirtyBooks = 0;
     for (final meld in bot.melds) {
-      if (meld.cards.length >= bookMinSize) {
+      if (meld.cards.length >= BotConfig.bookSize) {
         if (meld.isClean) {
           cleanBooks++;
         } else {
@@ -338,7 +324,7 @@ class BotEndGameManager {
 
     // Count existing books and near-books
     for (final meld in bot.melds) {
-      if (meld.cards.length >= bookMinSize) {
+      if (meld.cards.length >= BotConfig.bookSize) {
         if (meld.isClean) {
           cleanBooks++;
         } else {
@@ -370,7 +356,7 @@ class BotEndGameManager {
         // We have clean melds that could become books
         for (final meld in bot.melds) {
           if (meld.cards.length >= 4 && // Reduced from 5 - more optimistic
-              meld.cards.length < bookMinSize &&
+              meld.cards.length < BotConfig.bookSize &&
               meld.isClean) {
             // Check if we can add natural cards (not wilds) to complete it
             for (final card in bot.currentHand) {
@@ -412,7 +398,8 @@ class BotEndGameManager {
       if (dirtyMeldsNearBook > 0 || cleanMeldsNearBook > 0) {
         // We have melds that could become dirty books (can add wilds to clean melds)
         for (final meld in bot.melds) {
-          if (meld.cards.length >= 4 && meld.cards.length < bookMinSize) {
+          if (meld.cards.length >= 4 &&
+              meld.cards.length < BotConfig.bookSize) {
             // Reduced from 5 - more aggressive
             // Check if we can add any card (including wilds) to complete it
             for (final card in bot.currentHand) {
@@ -470,7 +457,7 @@ class BotEndGameManager {
               data: {
                 'meldIndex': i,
                 'card': card,
-                'priority': cleanBookCompletionPriority,
+                'priority': BotConfig.cleanBookCompletionPriority,
               },
             );
           }
@@ -490,7 +477,7 @@ class BotEndGameManager {
               data: {
                 'meldIndex': i,
                 'card': card,
-                'priority': dirtyBookCompletionPriority,
+                'priority': BotConfig.dirtyBookCompletionPriority,
               },
             );
           }
@@ -522,26 +509,28 @@ class BotEndGameManager {
       // Clean book protection: heavily prioritize keeping clean melds clean
       if (meld.isClean) {
         if (!card.isWild) {
-          score += cleanMeldProtectionBonus; // Massive bonus for naturals
+          score +=
+              BotConfig.cleanMeldProtectionBonus; // Massive bonus for naturals
         } else {
           // Penalty for making clean meld dirty, unless already a book
-          if (meld.cards.length >= bookMinSize) {
+          if (meld.cards.length >= BotConfig.bookSize) {
             score += 25; // Small bonus - already a clean book
           } else {
-            score -= wildPenaltyForCleanMeld; // Big penalty - would make dirty
+            score -= BotConfig
+                .wildPenaltyForCleanMeld; // Big penalty - would make dirty
           }
         }
       } else {
         // Dirty meld - limit wild accumulation
         final wildCount = meld.cards.where((c) => c.isWild).length;
         if (card.isWild && wildCount >= GameConfig.excessiveWildThreshold) {
-          score -= excessiveWildPenalty; // Discourage excessive wilds
+          score -= BotConfig.excessiveWildPenalty; // Discourage excessive wilds
         }
       }
 
       // Book size limits: discourage oversized books (8+ cards are wasteful)
       if (meld.cards.length >= 8) {
-        score -= oversizedBookPenalty; // Better to spread cards
+        score -= BotConfig.oversizedBookPenalty; // Better to spread cards
       }
 
       if (score > bestScore) {
@@ -667,7 +656,7 @@ class BotEndGameManager {
     for (final human in humanPlayers) {
       // If human is accumulating massive hands (25+ cards), cut off their strategy
       if (human.currentHand.length >= 25 && !human.hasPlayedDown) {
-        return bot.currentHand.length <= aggressiveGoOutHandSize;
+        return bot.currentHand.length <= BotConfig.aggressiveGoOutHandSize;
       }
 
       // If human has more books than us, go out to prevent them from gaining more advantage
@@ -676,13 +665,13 @@ class BotEndGameManager {
           .length;
       final botBooks = bot.melds.where((Meld m) => m.cards.length >= 7).length;
       if (humanBooks > botBooks &&
-          bot.currentHand.length <= aggressiveGoOutHandSize) {
+          bot.currentHand.length <= BotConfig.aggressiveGoOutHandSize) {
         return true;
       }
 
       // Late game aggression - if we're past round 4, be more willing to go out
       if (gameState.round >= 4 &&
-          bot.currentHand.length <= aggressiveGoOutHandSize) {
+          bot.currentHand.length <= BotConfig.aggressiveGoOutHandSize) {
         return true;
       }
     }

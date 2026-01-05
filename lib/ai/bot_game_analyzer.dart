@@ -2,6 +2,7 @@ import '../models/player.dart';
 import '../models/card.dart';
 import '../models/game_state.dart';
 import '../config/game_config.dart';
+import 'bot_config.dart';
 
 /// Represents analysis data for an opponent player.
 class OpponentAnalysis {
@@ -53,14 +54,7 @@ class OpponentAnalysis {
 /// hand quality evaluation, and strategic position assessment to inform
 /// bot decision-making.
 class BotGameAnalyzer {
-  // Analysis constants
-  static const int dangerousTurnThreshold = 2;
-  static const int nearBookThreshold = 6;
-  static const int bookSize = 7;
-  static const double highHandQualityThreshold = 0.7;
-  static const double lowHandQualityThreshold = 0.4;
-  static const int emergencyHandSize = 20;
-  static const int endGameHandSize = 5;
+  // All constants now centralized in BotConfig
 
   // Tracking data
   final Map<String, int> _playerTurnCounts = {};
@@ -107,7 +101,9 @@ class BotGameAnalyzer {
     }
 
     // Check book requirements (simplified)
-    final hasBooks = player.melds.any((meld) => meld.cards.length >= bookSize);
+    final hasBooks = player.melds.any(
+      (meld) => meld.cards.length >= BotConfig.bookSize,
+    );
     final hasMultipleMelds = player.melds.length >= 2;
 
     int turnsNeeded = 0;
@@ -136,7 +132,7 @@ class BotGameAnalyzer {
 
     // Look for melds that are close to becoming books (6+ cards)
     for (final meld in player.melds) {
-      if (meld.cards.length >= nearBookThreshold) {
+      if (meld.cards.length >= BotConfig.nearBookThreshold) {
         // Find the natural cards to determine rank
         final naturalCard = meld.cards.firstWhere(
           (card) => !card.isWild,
@@ -281,8 +277,8 @@ class BotGameAnalyzer {
     // Hand assessment
     final handQuality = assessHandQuality(botPlayer);
     position['handQuality'] = handQuality;
-    position['hasGoodHand'] = handQuality > highHandQualityThreshold;
-    position['hasPoorHand'] = handQuality < lowHandQualityThreshold;
+    position['hasGoodHand'] = handQuality > BotConfig.highHandQualityThreshold;
+    position['hasPoorHand'] = handQuality < BotConfig.lowHandQualityThreshold;
 
     return position;
   }
@@ -311,9 +307,9 @@ class BotGameAnalyzer {
 
     // Hand quality adjustment
     final handQuality = assessHandQuality(botPlayer);
-    if (handQuality > highHandQualityThreshold) {
+    if (handQuality > BotConfig.highHandQualityThreshold) {
       riskTolerance *= 0.8; // Can be more patient with good hands
-    } else if (handQuality < lowHandQualityThreshold) {
+    } else if (handQuality < BotConfig.lowHandQualityThreshold) {
       riskTolerance *= 1.4; // Need to take chances with poor hands
     }
 
