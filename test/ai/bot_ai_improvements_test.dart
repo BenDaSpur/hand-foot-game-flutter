@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
@@ -234,7 +235,7 @@ void main() {
         final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
         bot.hand.addAll([
           ...List.generate(
-            EnhancedBotAI.wildCardDiscardThreshold,
+            BotConfig.wildCardDiscardThreshold,
             (_) => const PlayingCard(rank: CardRank.joker),
           ),
         ]);
