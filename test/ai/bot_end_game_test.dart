@@ -68,8 +68,8 @@ void main() {
           gameController,
         );
         expect(decision, isNotNull);
-        // Bot may choose to add to existing meld if it can, or discard
-        expect(decision!.action, anyOf(['discard', 'addToMeld']));
+        // Bot may go out, add to an existing meld, or discard
+        expect(decision!.action, anyOf(['discard', 'addToMeld', 'goOut']));
         if (decision.action == 'discard') {
           expect(decision.data, isA<PlayingCard>());
         }

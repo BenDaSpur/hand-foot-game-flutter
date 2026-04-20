@@ -98,6 +98,9 @@ class BotConfig {
   /// Bonus for book progress
   static const int bookProgressBonus = 30;
 
+  /// Extra penalty for starting/growing a wild meld when a clean book is still required
+  static const int dirtyNewMeldWhenCleanBookNeededPenalty = 4500;
+
   // ===== END GAME =====
 
   /// Winning position hand size threshold
@@ -105,6 +108,12 @@ class BotConfig {
 
   /// Aggressive go-out hand size under pressure
   static const int aggressiveGoOutHandSize = 8;
+
+  /// Prefer aggressive go-out when an opponent's hand+foot penalty value is at least this high
+  static const int aggressiveGoOutOpponentPenaltyThreshold = 180;
+
+  /// If all opponents' unplayed-card penalty is below this, bots may delay rushing go-out (when safe)
+  static const int rushDelayOpponentPenaltyCeiling = 140;
 
   /// Clean book bonus points
   static const int cleanBookBonus = 500;

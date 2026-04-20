@@ -4,6 +4,7 @@ import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
 import 'bot_config.dart';
+import 'bot_meld_analyzer.dart';
 
 /// Manages intelligent foot transition decisions for bot players.
 ///
@@ -14,7 +15,10 @@ import 'bot_config.dart';
 class BotFootTransitionManager {
   // All thresholds now centralized in BotConfig
 
-  BotFootTransitionManager();
+  final BotMeldAnalyzer _meldAnalyzer;
+
+  BotFootTransitionManager({BotMeldAnalyzer? meldAnalyzer})
+    : _meldAnalyzer = meldAnalyzer ?? BotMeldAnalyzer();
 
   /// Main entry point for foot transition decisions.
   ///
@@ -103,7 +107,7 @@ class BotFootTransitionManager {
     // PRIORITY 2: Try to create new melds if possible
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = possibleMelds.first;
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -276,7 +280,7 @@ class BotFootTransitionManager {
     // Try to create any meld possible (prioritize using wilds)
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = _chooseBestMeldForTransition(possibleMelds, wildCards);
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -316,7 +320,7 @@ class BotFootTransitionManager {
     // Create melds more aggressively
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = _chooseLargestMeld(possibleMelds);
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -357,7 +361,7 @@ class BotFootTransitionManager {
     if (_canPlaySomeCards(bot, controller)) {
       final possibleMelds = controller.findPossibleMelds(bot);
       if (possibleMelds.isNotEmpty) {
-        final bestMeld = _chooseLargestMeld(possibleMelds);
+        final bestMeld = _selectBestNewMeld(bot, possibleMelds);
         return BotDecision(action: 'createMeld', data: bestMeld);
       }
     }
@@ -388,7 +392,7 @@ class BotFootTransitionManager {
         .where((meld) => meld.length >= GameConfig.minTotalCardsForMeld)
         .toList();
     if (smallMelds.isNotEmpty) {
-      final bestMeld = _chooseLargestMeld(smallMelds);
+      final bestMeld = _selectBestNewMeld(bot, smallMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -414,7 +418,7 @@ class BotFootTransitionManager {
     // Even small melds are worthwhile to clear bad hands
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = possibleMelds.first; // Any meld is good
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -433,7 +437,7 @@ class BotFootTransitionManager {
   ) {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = _chooseLargestMeld(possibleMelds);
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -548,7 +552,7 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     int meldableCards = 0;
     if (possibleMelds.isNotEmpty) {
-      final bestMeld = _chooseLargestMeld(possibleMelds);
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       meldableCards = bestMeld.length;
     }
 
@@ -558,43 +562,16 @@ class BotFootTransitionManager {
         (remainingCards * BotConfig.someCardsPlayableThreshold).floor();
   }
 
-  /// Choose the meld that uses the most cards
-  List<PlayingCard> _chooseLargestMeld(List<List<PlayingCard>> possibleMelds) {
-    possibleMelds.sort((a, b) => b.length.compareTo(a.length));
-    return possibleMelds.first;
-  }
-
-  /// Choose the best meld for foot transition (prioritize using wilds)
-  List<PlayingCard> _chooseBestMeldForTransition(
+  /// Best new meld using analyzer scoring (clean/dirty balance), not list order.
+  List<PlayingCard> _selectBestNewMeld(
+    Player bot,
     List<List<PlayingCard>> possibleMelds,
-    List<PlayingCard> wildCards,
   ) {
-    if (wildCards.isEmpty) {
-      // No wilds, just choose largest meld
-      return _chooseLargestMeld(possibleMelds);
-    }
-
-    // Find melds that contain wild cards
-    final meldsWithWilds = possibleMelds.where((meld) {
-      return meld.any((card) => card.isWild);
-    }).toList();
-
-    if (meldsWithWilds.isNotEmpty) {
-      // Prefer melds that use our wild cards
-      meldsWithWilds.sort((a, b) {
-        final aWildCount = a.where((c) => c.isWild).length;
-        final bWildCount = b.where((c) => c.isWild).length;
-        // First by wild count (more wilds used = better)
-        final wildCompare = bWildCount.compareTo(aWildCount);
-        if (wildCompare != 0) return wildCompare;
-        // Then by total size
-        return b.length.compareTo(a.length);
-      });
-      return meldsWithWilds.first;
-    }
-
-    // No melds with wilds, choose largest
-    return _chooseLargestMeld(possibleMelds);
+    return _meldAnalyzer.findBestMeld(
+      possibleMelds,
+      bot: bot,
+      preferLarger: true,
+    );
   }
 
   /// Calculate the total point value of a hand

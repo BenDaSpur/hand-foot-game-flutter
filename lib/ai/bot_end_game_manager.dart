@@ -5,6 +5,7 @@ import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
 import 'bot_config.dart';
+import 'bot_meld_analyzer.dart';
 
 /// Manages end game decisions for bot players.
 ///
@@ -14,7 +15,10 @@ import 'bot_config.dart';
 class BotEndGameManager {
   // All constants now centralized in BotConfig
 
-  BotEndGameManager();
+  final BotMeldAnalyzer _meldAnalyzer;
+
+  BotEndGameManager({BotMeldAnalyzer? meldAnalyzer})
+    : _meldAnalyzer = meldAnalyzer ?? BotMeldAnalyzer();
 
   /// Calculate minimum number of turns needed for bot to go out.
   /// Returns -1 if bot cannot go out (doesn't have required books).
@@ -597,25 +601,7 @@ class BotEndGameManager {
     Player bot,
     GameController controller,
   ) {
-    final additions = <Map<String, dynamic>>[];
-
-    for (int i = 0; i < bot.melds.length; i++) {
-      final meld = bot.melds[i];
-      for (final card in bot.currentHand) {
-        if (_canAddCardToMeld(card, meld)) {
-          additions.add({
-            'card': card,
-            'meld': meld,
-            'meldIndex': i,
-            'priority': card.pointValue,
-          });
-        }
-      }
-    }
-
-    // Sort by priority (highest point value first)
-    additions.sort((a, b) => b['priority'].compareTo(a['priority']));
-    return additions;
+    return _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller);
   }
 
   /// Choose the best card to discard from bot's hand
@@ -657,6 +643,13 @@ class BotEndGameManager {
       // If human is accumulating massive hands (25+ cards), cut off their strategy
       if (human.currentHand.length >= 25 && !human.hasPlayedDown) {
         return bot.currentHand.length <= BotConfig.aggressiveGoOutHandSize;
+      }
+
+      // Opponent holding a large penalty pile — good time to end the round
+      if (human.calculateAllUnplayedCardsValue() >=
+              BotConfig.aggressiveGoOutOpponentPenaltyThreshold &&
+          bot.currentHand.length <= BotConfig.aggressiveGoOutHandSize) {
+        return true;
       }
 
       // If human has more books than us, go out to prevent them from gaining more advantage
