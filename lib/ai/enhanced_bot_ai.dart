@@ -3077,6 +3077,14 @@ class EnhancedBotAI {
     Player bot,
     GameState gameState,
   ) {
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) continue;
+      if (opponent.canGoOutWithBooks &&
+          opponent.currentHand.length <= 5) {
+        return false;
+      }
+    }
+
     var maxOpponentPenalty = 0;
     for (final p in gameState.players) {
       if (p.id == bot.id) continue;
@@ -3096,16 +3104,6 @@ class EnhancedBotAI {
         .fold(0, (max, score) => score > max ? score : max);
 
     if (maxOpponentScore >= 7000) return false;
-
-    for (final opponent in gameState.players) {
-      if (opponent.id == bot.id) continue;
-      final opponentBooks = opponent.melds.where((m) => m.isBook).length;
-      if (opponentBooks >= 6 &&
-          opponent.canGoOutWithBooks &&
-          opponent.currentHand.length <= 5) {
-        return false;
-      }
-    }
 
     return true;
   }

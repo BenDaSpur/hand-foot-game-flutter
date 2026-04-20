@@ -68,10 +68,18 @@ void main() {
           gameController,
         );
         expect(decision, isNotNull);
-        // Bot may go out, add to an existing meld, or discard
-        expect(decision!.action, anyOf(['discard', 'addToMeld', 'goOut']));
-        if (decision.action == 'discard') {
-          expect(decision.data, isA<PlayingCard>());
+        switch (decision!.action) {
+          case 'discard':
+            expect(decision.data, isA<PlayingCard>());
+          case 'addToMeld':
+            expect(decision.data, isA<Map<String, dynamic>>());
+            final payload = decision.data as Map<String, dynamic>;
+            expect(payload, containsPair('meldIndex', isA<int>()));
+            expect(payload['card'], isA<PlayingCard>());
+          case 'goOut':
+            expect(decision.data, anyOf(isNull, isA<PlayingCard>()));
+          default:
+            fail('unexpected action ${decision.action}');
         }
       });
 
