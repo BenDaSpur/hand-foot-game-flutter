@@ -48,14 +48,37 @@ class EnhancedBotAI {
 
   // All strategic constants now centralized in BotConfig
 
-  EnhancedBotAI({int? seed})
-    : _personalityManager = BotPersonalityManager(),
-      _gameAnalyzer = BotGameAnalyzer(),
-      _meldAnalyzer = BotMeldAnalyzer(),
-      _footTransitionManager = BotFootTransitionManager(),
-      _endGameManager = BotEndGameManager(),
-      _discardAnalyzer = BotDiscardAnalyzer(),
-      _random = seed != null ? math.Random(seed) : math.Random();
+  factory EnhancedBotAI({int? seed}) {
+    final meldAnalyzer = BotMeldAnalyzer();
+    final random = seed != null ? math.Random(seed) : math.Random();
+    return EnhancedBotAI._(
+      personalityManager: BotPersonalityManager(),
+      gameAnalyzer: BotGameAnalyzer(),
+      meldAnalyzer: meldAnalyzer,
+      footTransitionManager: BotFootTransitionManager(
+        meldAnalyzer: meldAnalyzer,
+      ),
+      endGameManager: BotEndGameManager(meldAnalyzer: meldAnalyzer),
+      discardAnalyzer: BotDiscardAnalyzer(),
+      random: random,
+    );
+  }
+
+  EnhancedBotAI._({
+    required BotPersonalityManager personalityManager,
+    required BotGameAnalyzer gameAnalyzer,
+    required BotMeldAnalyzer meldAnalyzer,
+    required BotFootTransitionManager footTransitionManager,
+    required BotEndGameManager endGameManager,
+    required BotDiscardAnalyzer discardAnalyzer,
+    required math.Random random,
+  }) : _personalityManager = personalityManager,
+       _gameAnalyzer = gameAnalyzer,
+       _meldAnalyzer = meldAnalyzer,
+       _footTransitionManager = footTransitionManager,
+       _endGameManager = endGameManager,
+       _discardAnalyzer = discardAnalyzer,
+       _random = random;
 
   /// Main entry point for bot decisions
   BotDecision makeDecision(Player bot, GameController controller) {
@@ -460,7 +483,10 @@ class EnhancedBotAI {
       final possibleMelds = _getCachedPossibleMelds(bot, context);
       if (possibleMelds.isNotEmpty) {
         DebugLogger.debug('${bot.name}: Creating new meld to reduce hand size');
-        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, possibleMelds),
+        );
       }
 
       // If no melds possible, proceed to discard phase
@@ -493,7 +519,7 @@ class EnhancedBotAI {
       // PANIC MODE: Any meld is better than none
       final anyPossibleMelds = _getCachedPossibleMelds(bot, context);
       if (anyPossibleMelds.isNotEmpty) {
-        final panicMeld = anyPossibleMelds.first; // Take ANY meld
+        final panicMeld = _selectBestNewMeld(bot, anyPossibleMelds);
         DebugLogger.botDebug(
           bot.id,
           bot.name,
@@ -519,7 +545,7 @@ class EnhancedBotAI {
         // Already played down - meld anything possible
         final emergencyMelds = _getCachedPossibleMelds(bot, context);
         if (emergencyMelds.isNotEmpty) {
-          final urgentMeld = emergencyMelds.first;
+          final urgentMeld = _selectBestNewMeld(bot, emergencyMelds);
           return BotDecision(action: 'createMeld', data: urgentMeld);
         }
       } else {
@@ -548,7 +574,10 @@ class EnhancedBotAI {
           bot.name,
           'ADAPTIVE FIX: Force melding in foot phase with $handSize cards',
         );
-        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, possibleMelds),
+        );
       }
 
       final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
@@ -838,11 +867,26 @@ class EnhancedBotAI {
 
   /// Check if bot should rush to go out (affects discard and meld priorities)
   bool _shouldRushToGoOut(Player bot, GameState gameState) {
-    // Must have picked up foot and have both required books
     if (!bot.hasPickedUpFoot || !bot.canGoOutWithBooks) {
       return false;
     }
 
+    if (!_shouldRushToGoOutCore(bot, gameState)) {
+      return false;
+    }
+
+    if (_shouldDelayRushForLowOpponentPenalty(bot, gameState)) {
+      DebugLogger.debug(
+        '${bot.name}: Delaying rush go-out — opponents have little unplayed-card penalty',
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  /// Core rush-go-out evaluation (before opponent-penalty delay).
+  bool _shouldRushToGoOutCore(Player bot, GameState gameState) {
     // Scenario 1: Bot should go out based on book count and hand size
     final bookCount = bot.melds.where((m) => m.isBook).length;
 
@@ -890,7 +934,6 @@ class EnhancedBotAI {
       final opponentBooks = opponent.melds.where((m) => m.isBook).length;
       final opponentHasGoingOutBooks = opponent.canGoOutWithBooks;
 
-      // EMERGENCY: Opponent has 6+ books and very small hand - they can go out soon!
       if (opponentBooks >= 6 &&
           opponentHasGoingOutBooks &&
           opponent.currentHand.length <= 5) {
@@ -966,7 +1009,7 @@ class EnhancedBotAI {
     // Force meld creation if possible
     final possibleMelds = _getCachedPossibleMelds(bot, context);
     if (possibleMelds.isNotEmpty) {
-      final urgentMeld = possibleMelds.first; // Take first available meld
+      final urgentMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: urgentMeld);
     }
 
@@ -1176,24 +1219,21 @@ class EnhancedBotAI {
       if (desperateCombination.isNotEmpty) {
         return _executePlayDown(desperateCombination);
       }
-
-      // SUPER EMERGENCY: Try to play down with ANY valid combination
-      final anyValidMeld = possibleMelds.firstWhere(
-        (meld) =>
-            meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
-            playDownRequirement,
-        orElse: () => [],
-      );
-      if (anyValidMeld.isNotEmpty) {
-        return BotDecision(action: 'createMeld', data: anyValidMeld);
-      }
     }
 
-    // ULTRA EMERGENCY: Round 4+ and still no play-down = play ANY meld possible
+    // ULTRA EMERGENCY: Round 4+ without play-down — only legal analyzer combinations
     final isLateRoundWithoutPlaydown =
         gameState.round >= 4 && !bot.hasPlayedDown;
     if (isLateRoundWithoutPlaydown && possibleMelds.isNotEmpty) {
-      return BotDecision(action: 'createMeld', data: possibleMelds.first);
+      final legalPlayDown = _meldAnalyzer.findBestPlayDownCombination(
+        bot,
+        controllerForMeld,
+        playDownRequirement,
+      );
+      if (legalPlayDown.isNotEmpty) {
+        return _executePlayDown(legalPlayDown);
+      }
+      return BotDecision(action: 'noMeld');
     }
 
     // NEGATIVE SCORE/HAND EMERGENCY: If bot has terrible score OR terrible hand value
@@ -1204,13 +1244,28 @@ class EnhancedBotAI {
     if ((bot.score < -50 || handPenalty < -250) &&
         !bot.hasPlayedDown &&
         possibleMelds.isNotEmpty) {
-      final emergencyMeld = possibleMelds.firstWhere(
-        (meld) =>
-            meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
-            (playDownRequirement * 0.7).round(),
-        orElse: () => possibleMelds.first, // ANY meld if desperate enough
+      final legalPlayDown = _meldAnalyzer.findBestPlayDownCombination(
+        bot,
+        controllerForMeld,
+        playDownRequirement,
       );
-      return BotDecision(action: 'createMeld', data: emergencyMeld);
+      if (legalPlayDown.isNotEmpty) {
+        return _executePlayDown(legalPlayDown);
+      }
+      final qualifyingEmergency = possibleMelds
+          .where(
+            (meld) =>
+                meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+                playDownRequirement,
+          )
+          .toList();
+      if (qualifyingEmergency.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, qualifyingEmergency),
+        );
+      }
+      return BotDecision(action: 'noMeld');
     }
 
     return BotDecision(action: 'noMeld');
@@ -1237,14 +1292,45 @@ class EnhancedBotAI {
         return BotDecision(action: 'drawFromDeck');
 
       case TurnPhase.meld:
-        // Play ANY meld that gets close to requirement, ignore normal strategy
+        // Pre-play-down: only legal full play-down combinations or melds meeting requirement.
         if (possibleMelds.isNotEmpty) {
-          final desperateMeld = possibleMelds.firstWhere(
-            (meld) =>
-                meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
-                (playDownRequirement * 0.7).round(),
-            orElse: () => possibleMelds.first,
-          );
+          final controllerPanic = context.controller as GameController?;
+          if (!bot.hasPlayedDown) {
+            if (controllerPanic != null) {
+              final legalPlayDown = _meldAnalyzer.findBestPlayDownCombination(
+                bot,
+                controllerPanic,
+                playDownRequirement,
+              );
+              if (legalPlayDown.isNotEmpty) {
+                return _executePlayDown(legalPlayDown);
+              }
+            }
+            final qualifyingPanic = possibleMelds
+                .where(
+                  (meld) =>
+                      meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+                      playDownRequirement,
+                )
+                .toList();
+            if (qualifyingPanic.isNotEmpty) {
+              return BotDecision(
+                action: 'createMeld',
+                data: _selectBestNewMeld(bot, qualifyingPanic),
+              );
+            }
+            return BotDecision(action: 'noMeld');
+          }
+          final qualifyingPanic = possibleMelds
+              .where(
+                (meld) =>
+                    meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+                    (playDownRequirement * 0.7).round(),
+              )
+              .toList();
+          final desperateMeld = qualifyingPanic.isNotEmpty
+              ? _selectBestNewMeld(bot, qualifyingPanic)
+              : _selectBestNewMeld(bot, possibleMelds);
           return BotDecision(action: 'createMeld', data: desperateMeld);
         }
         return BotDecision(action: 'noMeld');
@@ -1890,34 +1976,33 @@ class EnhancedBotAI {
         DebugLogger.debug(
           '${bot.name}: Has $totalBooks books - creating any meld to reduce hand size',
         );
-        return BotDecision(action: 'createMeld', data: possibleMelds.first);
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, possibleMelds),
+        );
       }
 
       // Select meld type based on book requirements for competitive advantage
       List<PlayingCard>? strategicMeld;
 
       if (needsCleanBook) {
-        // Prioritize natural melds that can become clean books
-        strategicMeld = possibleMelds.firstWhere(
-          (meld) => !meld.any((card) => card.isWild),
-          orElse: () => [],
-        );
+        final cleanCandidates = possibleMelds
+            .where((meld) => !meld.any((card) => card.isWild))
+            .toList();
+        if (cleanCandidates.isNotEmpty) {
+          strategicMeld = _selectBestNewMeld(bot, cleanCandidates);
+        }
       } else if (needsDirtyBook) {
-        // Prioritize melds with wilds that can become dirty books
-        strategicMeld = possibleMelds.firstWhere(
-          (meld) => meld.any((card) => card.isWild),
-          orElse: () => [],
-        );
+        final dirtyCandidates = possibleMelds
+            .where((meld) => meld.any((card) => card.isWild))
+            .toList();
+        if (dirtyCandidates.isNotEmpty) {
+          strategicMeld = _selectBestNewMeld(bot, dirtyCandidates);
+        }
       }
 
-      // Use strategic meld if found, otherwise use enhanced best meld selection
-      final selectedMeld = (strategicMeld?.isNotEmpty ?? false)
-          ? strategicMeld!
-          : _meldAnalyzer.findBestMeld(
-              possibleMelds,
-              bot: bot,
-              preferLarger: true, // Prefer larger melds for efficiency
-            );
+      final selectedMeld =
+          strategicMeld ?? _selectBestNewMeld(bot, possibleMelds);
 
       return BotDecision(action: 'createMeld', data: selectedMeld);
     }
@@ -2146,6 +2231,7 @@ class EnhancedBotAI {
     List<Map<String, dynamic>> cardsToAdd,
     Player bot,
   ) {
+    var result = cardsToAdd;
     // In critical situations, allow wild card usage
     bool criticalSituation = false;
 
@@ -2170,31 +2256,42 @@ class EnhancedBotAI {
     }
     // 3. End game - need to complete books to go out
     else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
-      final hasCleanBook = bot.melds.any(
-        (m) => m.isClean && m.cards.length >= 7,
-      );
-      final hasDirtyBook = bot.melds.any(
-        (m) => !m.isClean && m.cards.length >= 7,
-      );
+      final hasCleanBook = bot.hasCleanBook;
+      final hasDirtyBook = bot.hasDirtyBook;
 
       if (!hasCleanBook || !hasDirtyBook) {
-        // Check if any meld is close to book completion (6 cards)
+        // Mirror BotMeldAnalyzer: don't treat near-books as critical when we
+        // already have a dirty book but need clean and hand still has cards.
+        final suppressNearBookCritical =
+            !hasCleanBook && hasDirtyBook && bot.currentHand.length > 2;
         final hasNearBooks = bot.melds.any((m) => m.cards.length >= 6);
-        if (hasNearBooks) {
+        if (hasNearBooks && !suppressNearBookCritical) {
           criticalSituation = true;
         }
       }
     }
 
-    // If not critical, filter out wild cards
+    // If not critical, filter out wild cards (with an extra guard below).
     if (!criticalSituation) {
-      return cardsToAdd.where((addition) {
+      result = result.where((addition) {
         final card = addition['card'] as PlayingCard;
-        return !card.isWild; // Remove wild card additions
+        return !card.isWild;
       }).toList();
     }
 
-    return cardsToAdd; // Return all options in critical situations
+    // No clean book yet: never add wilds to naturals-only melds — use wilds only
+    // on piles that are already dirty (building the dirty book lane).
+    if (bot.hasPlayedDown && !bot.hasCleanBook) {
+      result = result.where((addition) {
+        final card = addition['card'] as PlayingCard;
+        if (!card.isWild) return true;
+        final meld = addition['meld'] as Meld;
+        final alreadyDirty = meld.cards.any((c) => c.isWild);
+        return alreadyDirty;
+      }).toList();
+    }
+
+    return result;
   }
 
   /// Helper method to randomly select from a list of equally good options
@@ -2329,14 +2426,15 @@ class EnhancedBotAI {
       final isNearComplete = meld.cards.length >= 6;
 
       if (isBook) {
-        if (meld.isClean) {
+        if (!meld.cards.any((c) => c.isWild)) {
           cleanBooks++;
         } else {
           dirtyBooks++;
         }
       } else if (isNearComplete) {
         nearCompleteBooks++;
-        if (meld.isClean) {
+        final allNatural = !meld.cards.any((c) => c.isWild);
+        if (allNatural) {
           nearCompleteCleanBooks++;
         } else {
           nearCompleteDirtyBooks++;
@@ -2916,7 +3014,10 @@ class EnhancedBotAI {
         // Try simple meld if possible, otherwise skip
         final possibleMelds = context.controller?.findPossibleMelds(bot) ?? [];
         if (possibleMelds.isNotEmpty && bot.hasPlayedDown) {
-          return BotDecision(action: 'createMeld', data: possibleMelds.first);
+          return BotDecision(
+            action: 'createMeld',
+            data: _selectBestNewMeld(bot, possibleMelds),
+          );
         }
         return BotDecision(action: 'noMeld');
       case TurnPhase.discard:
@@ -2972,6 +3073,51 @@ class EnhancedBotAI {
     _lastMeldCacheKey = cacheKey;
 
     return result;
+  }
+
+  /// Highest-scoring new meld via analyzer (clean/dirty balance); never uses raw list order from [findPossibleMelds].
+  List<PlayingCard> _selectBestNewMeld(
+    Player bot,
+    List<List<PlayingCard>> possibleMelds,
+  ) {
+    assert(possibleMelds.isNotEmpty);
+    return _meldAnalyzer.findBestMeld(
+      possibleMelds,
+      bot: bot,
+      preferLarger: true,
+    );
+  }
+
+  /// Delay rushing go-out when opponents would barely be penalized (thin hands / foot already empty).
+  bool _shouldDelayRushForLowOpponentPenalty(Player bot, GameState gameState) {
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) continue;
+      if (opponent.canGoOutWithBooks && opponent.currentHand.length <= 5) {
+        return false;
+      }
+    }
+
+    var maxOpponentPenalty = 0;
+    for (final p in gameState.players) {
+      if (p.id == bot.id) continue;
+      final penalty = p.calculateAllUnplayedCardsValue();
+      if (penalty > maxOpponentPenalty) maxOpponentPenalty = penalty;
+    }
+
+    if (maxOpponentPenalty >= BotConfig.rushDelayOpponentPenaltyCeiling) {
+      return false;
+    }
+
+    if (bot.currentHand.length <= 2) return false;
+
+    final maxOpponentScore = gameState.players
+        .where((p) => p.id != bot.id)
+        .map((p) => p.score)
+        .fold(0, (max, score) => score > max ? score : max);
+
+    if (maxOpponentScore >= 7000) return false;
+
+    return true;
   }
 
   /// Helper method to check if bot is in early game phase where large hands are normal

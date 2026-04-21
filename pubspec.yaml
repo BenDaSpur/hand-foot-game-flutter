@@ -18,7 +18,8 @@ dependencies:
   device_info_plus: ^11.5.0
   uuid: ^4.5.1
   connectivity_plus: ^6.1.5
-  google_fonts: ^6.3.1
+  # 6.3.3+ requires Dart ^3.9.0. Pin 6.3.2 for SDK ^3.8.1 (CI) + FontWeight const fix
+  google_fonts: ">=6.3.2 <6.3.3"
   flutter_svg: ^2.0.10
   flutter_riverpod: ^2.6.1
   audioplayers: ^6.5.1
