@@ -2399,14 +2399,15 @@ class EnhancedBotAI {
       final isNearComplete = meld.cards.length >= 6;
 
       if (isBook) {
-        if (meld.isClean) {
+        if (!meld.cards.any((c) => c.isWild)) {
           cleanBooks++;
         } else {
           dirtyBooks++;
         }
       } else if (isNearComplete) {
         nearCompleteBooks++;
-        if (meld.isClean) {
+        final allNatural = !meld.cards.any((c) => c.isWild);
+        if (allNatural) {
           nearCompleteCleanBooks++;
         } else {
           nearCompleteDirtyBooks++;

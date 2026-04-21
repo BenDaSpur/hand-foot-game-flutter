@@ -1069,16 +1069,23 @@ class BotMeldAnalyzer {
       return true; // Dump strategy to reach foot
     }
 
-    // 3. End game - must complete required books
+    // 3. End game — align with [_isInCriticalWildDumpingSituation]
     if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
-      final hasCleanBook = bot.melds.any(
-        (m) => m.isClean && m.cards.length >= 7,
-      );
-      final hasDirtyBook = bot.melds.any(
-        (m) => !m.isClean && m.cards.length >= 7,
-      );
+      final hasCleanBook = bot.hasCleanBook;
+      final hasDirtyBook = bot.hasDirtyBook;
+
+      if (!hasCleanBook && hasDirtyBook) {
+        return bot.currentHand.length <= 2;
+      }
+
+      if (!hasCleanBook &&
+          !hasDirtyBook &&
+          bot.melds.any((m) => m.cards.length >= 4 && _isAllNatural(m))) {
+        return false;
+      }
+
       if (!hasCleanBook || !hasDirtyBook) {
-        return true; // Need books to go out
+        return true;
       }
     }
 
