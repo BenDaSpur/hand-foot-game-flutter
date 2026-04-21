@@ -1219,31 +1219,21 @@ class EnhancedBotAI {
       if (desperateCombination.isNotEmpty) {
         return _executePlayDown(desperateCombination);
       }
-
-      // SUPER EMERGENCY: Try to play down with ANY valid combination
-      final qualifyingPlayDown = possibleMelds
-          .where(
-            (meld) =>
-                meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
-                playDownRequirement,
-          )
-          .toList();
-      if (qualifyingPlayDown.isNotEmpty) {
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, qualifyingPlayDown),
-        );
-      }
     }
 
-    // ULTRA EMERGENCY: Round 4+ and still no play-down = play ANY meld possible
+    // ULTRA EMERGENCY: Round 4+ without play-down — only legal analyzer combinations
     final isLateRoundWithoutPlaydown =
         gameState.round >= 4 && !bot.hasPlayedDown;
     if (isLateRoundWithoutPlaydown && possibleMelds.isNotEmpty) {
-      return BotDecision(
-        action: 'createMeld',
-        data: _selectBestNewMeld(bot, possibleMelds),
+      final legalPlayDown = _meldAnalyzer.findBestPlayDownCombination(
+        bot,
+        controllerForMeld,
+        playDownRequirement,
       );
+      if (legalPlayDown.isNotEmpty) {
+        return _executePlayDown(legalPlayDown);
+      }
+      return BotDecision(action: 'noMeld');
     }
 
     // NEGATIVE SCORE/HAND EMERGENCY: If bot has terrible score OR terrible hand value
