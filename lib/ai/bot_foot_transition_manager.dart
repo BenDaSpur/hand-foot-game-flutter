@@ -623,8 +623,7 @@ class BotFootTransitionManager {
         a['priority'] = base + (card.isWild ? 100 : 0);
       }
       additions.sort(
-        (a, b) =>
-            (b['priority'] as int).compareTo(a['priority'] as int),
+        (a, b) => (b['priority'] as int).compareTo(a['priority'] as int),
       );
     }
     return additions;

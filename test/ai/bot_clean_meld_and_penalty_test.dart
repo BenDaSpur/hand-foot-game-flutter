@@ -56,61 +56,55 @@ void main() {
   });
 
   group('BotEndGameManager — meld additions use analyzer priorities', () {
-    test(
-      'handleEndGame addToMeld uses same top pick as BotMeldAnalyzer',
-      () {
-        final analyzer = BotMeldAnalyzer();
-        final endGameManager = BotEndGameManager(meldAnalyzer: analyzer);
+    test('handleEndGame addToMeld uses same top pick as BotMeldAnalyzer', () {
+      final analyzer = BotMeldAnalyzer();
+      final endGameManager = BotEndGameManager(meldAnalyzer: analyzer);
 
-        final players = [
-          Player(id: '1', name: 'Human', type: PlayerType.human),
-          Player(id: '2', name: 'Bot', type: PlayerType.bot),
-        ];
+      final players = [
+        Player(id: '1', name: 'Human', type: PlayerType.human),
+        Player(id: '2', name: 'Bot', type: PlayerType.bot),
+      ];
 
-        final controller = GameController(players: players);
-        controller.initializeGame();
+      final controller = GameController(players: players);
+      controller.initializeGame();
 
-        final botPlayer = players[1];
-        botPlayer.hasPlayedDown = true;
-        botPlayer.hasPickedUpFoot = true;
+      final botPlayer = players[1];
+      botPlayer.hasPlayedDown = true;
+      botPlayer.hasPickedUpFoot = true;
 
-        final sixQueens = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-        ];
-        botPlayer.melds.add(Meld.createMeld(sixQueens)!);
+      final sixQueens = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+      ];
+      botPlayer.melds.add(Meld.createMeld(sixQueens)!);
 
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.addAll([
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-        ]);
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+      ]);
 
-        controller.gameState.currentPlayerIndex = 1;
-        controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.meld;
 
-        final additions = analyzer.findCardsToAddToExistingMelds(
-          botPlayer,
-          controller,
-        );
-        expect(additions, isNotEmpty);
+      final additions = analyzer.findCardsToAddToExistingMelds(
+        botPlayer,
+        controller,
+      );
+      expect(additions, isNotEmpty);
 
-        final decision = endGameManager.handleEndGame(botPlayer, controller);
-        expect(decision, isNotNull);
-        expect(decision!.action, 'addToMeld');
-        final chosen = decision.data as Map<String, dynamic>;
-        // Delegates to [BotMeldAnalyzer.findCardsToAddToExistingMelds] — same top pick
-        expect(
-          chosen['card'],
-          same(additions.first['card'] as PlayingCard),
-        );
-      },
-    );
+      final decision = endGameManager.handleEndGame(botPlayer, controller);
+      expect(decision, isNotNull);
+      expect(decision!.action, 'addToMeld');
+      final chosen = decision.data as Map<String, dynamic>;
+      // Delegates to [BotMeldAnalyzer.findCardsToAddToExistingMelds] — same top pick
+      expect(chosen['card'], same(additions.first['card'] as PlayingCard));
+    });
   });
 
   group('Aggressive go-out — opponent penalty heuristic', () {
@@ -145,7 +139,9 @@ void main() {
 
         expect(
           human.calculateAllUnplayedCardsValue(),
-          greaterThanOrEqualTo(BotConfig.aggressiveGoOutOpponentPenaltyThreshold),
+          greaterThanOrEqualTo(
+            BotConfig.aggressiveGoOutOpponentPenaltyThreshold,
+          ),
         );
 
         final cleanBook = [

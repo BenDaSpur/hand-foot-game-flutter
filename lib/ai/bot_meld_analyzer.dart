@@ -517,9 +517,7 @@ class BotMeldAnalyzer {
       // Need both books and already building a strong naturals pile — stay off wild dumps.
       if (!hasCleanBook &&
           !hasDirtyBook &&
-          bot.melds.any(
-            (m) => m.cards.length >= 4 && _isAllNatural(m),
-          )) {
+          bot.melds.any((m) => m.cards.length >= 4 && _isAllNatural(m))) {
         return false;
       }
 

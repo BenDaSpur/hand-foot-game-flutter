@@ -1962,31 +1962,19 @@ class EnhancedBotAI {
             .where((meld) => !meld.any((card) => card.isWild))
             .toList();
         if (cleanCandidates.isNotEmpty) {
-          strategicMeld = _meldAnalyzer.findBestMeld(
-            cleanCandidates,
-            bot: bot,
-            preferLarger: true,
-          );
+          strategicMeld = _selectBestNewMeld(bot, cleanCandidates);
         }
       } else if (needsDirtyBook) {
         final dirtyCandidates = possibleMelds
             .where((meld) => meld.any((card) => card.isWild))
             .toList();
         if (dirtyCandidates.isNotEmpty) {
-          strategicMeld = _meldAnalyzer.findBestMeld(
-            dirtyCandidates,
-            bot: bot,
-            preferLarger: true,
-          );
+          strategicMeld = _selectBestNewMeld(bot, dirtyCandidates);
         }
       }
 
-      final selectedMeld = strategicMeld ??
-          _meldAnalyzer.findBestMeld(
-            possibleMelds,
-            bot: bot,
-            preferLarger: true,
-          );
+      final selectedMeld =
+          strategicMeld ?? _selectBestNewMeld(bot, possibleMelds);
 
       return BotDecision(action: 'createMeld', data: selectedMeld);
     }
@@ -3073,14 +3061,10 @@ class EnhancedBotAI {
   }
 
   /// Delay rushing go-out when opponents would barely be penalized (thin hands / foot already empty).
-  bool _shouldDelayRushForLowOpponentPenalty(
-    Player bot,
-    GameState gameState,
-  ) {
+  bool _shouldDelayRushForLowOpponentPenalty(Player bot, GameState gameState) {
     for (final opponent in gameState.players) {
       if (opponent.id == bot.id) continue;
-      if (opponent.canGoOutWithBooks &&
-          opponent.currentHand.length <= 5) {
+      if (opponent.canGoOutWithBooks && opponent.currentHand.length <= 5) {
         return false;
       }
     }
