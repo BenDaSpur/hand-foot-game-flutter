@@ -1254,17 +1254,28 @@ class EnhancedBotAI {
     if ((bot.score < -50 || handPenalty < -250) &&
         !bot.hasPlayedDown &&
         possibleMelds.isNotEmpty) {
+      final legalPlayDown = _meldAnalyzer.findBestPlayDownCombination(
+        bot,
+        controllerForMeld,
+        playDownRequirement,
+      );
+      if (legalPlayDown.isNotEmpty) {
+        return _executePlayDown(legalPlayDown);
+      }
       final qualifyingEmergency = possibleMelds
           .where(
             (meld) =>
                 meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
-                (playDownRequirement * 0.7).round(),
+                playDownRequirement,
           )
           .toList();
-      final emergencyMeld = qualifyingEmergency.isNotEmpty
-          ? _selectBestNewMeld(bot, qualifyingEmergency)
-          : _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: emergencyMeld);
+      if (qualifyingEmergency.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, qualifyingEmergency),
+        );
+      }
+      return BotDecision(action: 'noMeld');
     }
 
     return BotDecision(action: 'noMeld');
@@ -1291,8 +1302,35 @@ class EnhancedBotAI {
         return BotDecision(action: 'drawFromDeck');
 
       case TurnPhase.meld:
-        // Play ANY meld that gets close to requirement, ignore normal strategy
+        // Pre-play-down: only legal full play-down combinations or melds meeting requirement.
         if (possibleMelds.isNotEmpty) {
+          final controllerPanic = context.controller as GameController?;
+          if (!bot.hasPlayedDown) {
+            if (controllerPanic != null) {
+              final legalPlayDown = _meldAnalyzer.findBestPlayDownCombination(
+                bot,
+                controllerPanic,
+                playDownRequirement,
+              );
+              if (legalPlayDown.isNotEmpty) {
+                return _executePlayDown(legalPlayDown);
+              }
+            }
+            final qualifyingPanic = possibleMelds
+                .where(
+                  (meld) =>
+                      meld.fold<int>(0, (sum, card) => sum + card.pointValue) >=
+                      playDownRequirement,
+                )
+                .toList();
+            if (qualifyingPanic.isNotEmpty) {
+              return BotDecision(
+                action: 'createMeld',
+                data: _selectBestNewMeld(bot, qualifyingPanic),
+              );
+            }
+            return BotDecision(action: 'noMeld');
+          }
           final qualifyingPanic = possibleMelds
               .where(
                 (meld) =>
@@ -2228,17 +2266,16 @@ class EnhancedBotAI {
     }
     // 3. End game - need to complete books to go out
     else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
-      final hasCleanBook = bot.melds.any(
-        (m) => m.isClean && m.cards.length >= 7,
-      );
-      final hasDirtyBook = bot.melds.any(
-        (m) => !m.isClean && m.cards.length >= 7,
-      );
+      final hasCleanBook = bot.hasCleanBook;
+      final hasDirtyBook = bot.hasDirtyBook;
 
       if (!hasCleanBook || !hasDirtyBook) {
-        // Check if any meld is close to book completion (6 cards)
+        // Mirror BotMeldAnalyzer: don't treat near-books as critical when we
+        // already have a dirty book but need clean and hand still has cards.
+        final suppressNearBookCritical =
+            !hasCleanBook && hasDirtyBook && bot.currentHand.length > 2;
         final hasNearBooks = bot.melds.any((m) => m.cards.length >= 6);
-        if (hasNearBooks) {
+        if (hasNearBooks && !suppressNearBookCritical) {
           criticalSituation = true;
         }
       }
