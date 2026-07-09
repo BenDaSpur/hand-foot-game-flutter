@@ -20,10 +20,7 @@ void main() {
         rank: CardRank.ace,
         cards: List.generate(
           7,
-          (i) => PlayingCard(
-            suit: Suit.values[i % 4],
-            rank: CardRank.ace,
-          ),
+          (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.ace),
         ),
         type: MeldType.natural,
       );
@@ -120,10 +117,7 @@ void main() {
       botPlayer.dealHand(
         List.generate(
           9,
-          (i) => PlayingCard(
-            suit: Suit.values[i % 4],
-            rank: CardRank.five,
-          ),
+          (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.five),
         ),
       );
 

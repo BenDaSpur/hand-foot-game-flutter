@@ -198,10 +198,7 @@ class BotEndGameManager {
         return BotDecision(action: 'noMeld');
       }
       if (turnPhase == TurnPhase.discard) {
-        return BotDecision(
-          action: 'discard',
-          data: _chooseCardToDiscard(bot),
-        );
+        return BotDecision(action: 'discard', data: _chooseCardToDiscard(bot));
       }
     }
 
