@@ -630,13 +630,6 @@ class EnhancedBotAI {
         return _executeDumpStrategy(bot, context);
       }
 
-      if (bot.hasPickedUpFoot) {
-        final footRush = _handleFootPhaseMeldDecision(bot, context);
-        if (footRush != null) {
-          return footRush;
-        }
-      }
-
       final rushCardsToAdd = _filterWildCardAdditions(
         _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
         bot,
@@ -1742,13 +1735,6 @@ class EnhancedBotAI {
     if (bot.hasPickedUpFoot &&
         handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
       return false;
-    }
-
-    // ADAPTIVE PERSONALITY FIX: Be much more aggressive in foot phase
-    if (personality == BotPersonality.adaptive &&
-        bot.hasPickedUpFoot &&
-        handSize >= 8) {
-      return false; // Never hold 8+ cards in foot phase for adaptive bots
     }
 
     // Don't hold if opponents are close to going out (competitive pressure)

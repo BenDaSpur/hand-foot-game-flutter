@@ -81,7 +81,9 @@ async function refreshAccessToken(creds) {
 
   creds.tokens.access_token = result.access_token;
   creds.tokens.expires_at = Date.now() + result.expires_in * 1000;
-  fs.writeFileSync(CREDS_PATH, JSON.stringify(creds, null, '\t'));
+  fs.writeFileSync(CREDS_PATH, JSON.stringify(creds, null, '\t'), {
+    mode: 0o600,
+  });
   return result.access_token;
 }
 

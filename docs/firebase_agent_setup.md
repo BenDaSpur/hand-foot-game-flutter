@@ -11,7 +11,7 @@ This repo is **public**. Firebase secrets live only in **gitignored** local file
 | `.firebase/agent-config.json` | Non-secret metadata + script pointers |
 
 **Project:** `hand-foot-game-flutter`  
-**Account:** `ben@spurlock.app`
+**Account:** project owner Google account (see `firebase_get_environment` after MCP login)
 
 ## Firebase MCP (preferred in Cursor)
 
