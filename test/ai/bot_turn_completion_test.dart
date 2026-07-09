@@ -135,8 +135,8 @@ void main() {
 
         final decision = botAI.makeDecision(botPlayer, gameController);
 
-        // Should return safe fallback decision (enhanced error handling)
-        expect(decision.action, equals('noMeld'));
+        // Propagate error so BotTurnManager can recover via _recoverFromBotError
+        expect(decision.action, equals('error'));
       });
 
       test('should never return invalid actions', () {

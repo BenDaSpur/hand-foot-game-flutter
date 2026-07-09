@@ -131,4 +131,34 @@ void main() {
       expect(botPlayer.melds.first.cards.length, greaterThan(meldSizeBefore));
     });
   });
+
+  group('EnhancedBotAI error propagation', () {
+    late GameController gameController;
+    late Player botPlayer;
+    late EnhancedBotAI botAI;
+
+    setUp(() {
+      final players = [
+        Player(id: 'human', name: 'You', type: PlayerType.human),
+        Player(id: 'bot1', name: 'Clara', type: PlayerType.bot),
+      ];
+      gameController = GameController(players: players, seed: 1);
+      gameController.initializeGame();
+      botPlayer = players[1];
+      botAI = EnhancedBotAI(seed: 1);
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.hasPlayedDown = true;
+      botPlayer.hasPickedUpFoot = true;
+      gameController.gameState.currentPlayerIndex = 1;
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      gameController.gameState.hasDrawnFromDeck = true;
+    });
+
+    test('preserves error decision for empty hand without books', () {
+      final decision = botAI.makeDecision(botPlayer, gameController);
+
+      expect(decision.action, equals('error'));
+    });
+  });
 }

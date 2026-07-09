@@ -653,9 +653,9 @@ class EnhancedBotAI {
         return _executeDumpStrategy(bot, context);
       }
 
-      final rushCardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      final rushCardsToAdd = _filterWildCardAdditions(
+        _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
         bot,
-        controller,
       );
       if (rushCardsToAdd.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: rushCardsToAdd.first);
@@ -2985,13 +2985,18 @@ class EnhancedBotAI {
         case 'endTurn':
           return true; // These are always safe
         case 'error':
-          return false; // Routed to recovery in turn manager
+          return _isRecoverableErrorState(bot);
         default:
           return false;
       }
     } catch (e) {
       return false;
     }
+  }
+
+  /// Empty-hand states should propagate `error` only when going out is impossible.
+  bool _isRecoverableErrorState(Player bot) {
+    return bot.currentHand.isEmpty && !bot.canGoOut;
   }
 
   /// Get safe fallback decision when normal logic fails
@@ -3004,6 +3009,12 @@ class EnhancedBotAI {
       case TurnPhase.draw:
         return BotDecision(action: 'drawFromDeck');
       case TurnPhase.meld:
+        if (bot.currentHand.isEmpty) {
+          if (context.canPlayerGoOut()) {
+            return BotDecision(action: 'goOut');
+          }
+          return BotDecision(action: 'error');
+        }
         // Try simple meld if possible, otherwise skip
         final possibleMelds = context.controller?.findPossibleMelds(bot) ?? [];
         if (possibleMelds.isNotEmpty && bot.hasPlayedDown) {
@@ -3016,11 +3027,11 @@ class EnhancedBotAI {
       case TurnPhase.discard:
         // Check if bot has any cards at all
         if (bot.currentHand.isEmpty) {
-          // Bot has no cards - this should trigger going out or error
+          // Bot has no cards - this should trigger going out or error recovery
           if (context.canPlayerGoOut()) {
             return BotDecision(action: 'goOut');
           }
-          return BotDecision(action: 'noMeld'); // Can't discard with no cards
+          return BotDecision(action: 'error');
         }
 
         // Find any valid discard

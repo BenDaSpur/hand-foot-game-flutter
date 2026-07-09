@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
@@ -29,10 +30,25 @@ void main() {
 
     test('melds aggressively when human is on foot instead of holding', () {
       human.hasPickedUpFoot = true;
+      // >5 foot cards avoids _isCompetitivelyThreatened "close to going out".
       human.dealFoot([
         const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
         const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
       ]);
+      // Match meld count so meld-gap competitive threat does not trigger.
+      human.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+        ])!,
+      );
 
       bot.dealHand([
         const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
@@ -49,6 +65,13 @@ void main() {
           const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
         ])!,
       );
+
+      final handSizeGap = bot.currentHand.length - human.currentHand.length;
+      final meldGap = human.melds.length - bot.melds.length;
+      expect(human.hasPickedUpFoot, isTrue);
+      expect(human.currentHand.length, greaterThan(5));
+      expect(handSizeGap, lessThan(BotConfig.competitiveThreatHandSizeGap));
+      expect(meldGap, lessThan(3));
 
       final decision = botAI.makeDecision(bot, gameController);
 
