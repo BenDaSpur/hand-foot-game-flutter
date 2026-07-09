@@ -99,10 +99,33 @@ class Player {
     return newlyDrawnCardIndices.contains(index);
   }
 
+  /// Resolves a card to the actual instance in [currentHand].
+  /// Prefers identical reference; falls back to rank+suit for multi-deck duplicates.
+  PlayingCard? findHandCardInstance(PlayingCard card) {
+    for (final handCard in currentHand) {
+      if (identical(handCard, card)) {
+        return handCard;
+      }
+    }
+    for (final handCard in currentHand) {
+      if (handCard.rank == card.rank && handCard.suit == card.suit) {
+        return handCard;
+      }
+    }
+    return null;
+  }
+
+  bool hasHandCard(PlayingCard card) => findHandCardInstance(card) != null;
+
   PlayingCard? removeCardFromHand(PlayingCard card) {
+    final instance = findHandCardInstance(card);
+    if (instance == null) {
+      return null;
+    }
+
     // Find the exact index of this card instance
     for (int i = 0; i < currentHand.length; i++) {
-      if (identical(currentHand[i], card)) {
+      if (identical(currentHand[i], instance)) {
         final removedCard = currentHand.removeAt(i);
         _updateIndicesAfterRemoval([i]);
         return removedCard;
