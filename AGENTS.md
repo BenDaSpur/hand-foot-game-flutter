@@ -1,5 +1,14 @@
 # AGENTS.md
 
+## Repository context
+
+**This is a public repository** (`BenDaSpur/hand-foot-game-flutter` on GitHub). Treat all code, commits, PRs, and review comments as world-readable.
+
+- **Never commit secrets** — no API keys, Firebase credentials, `.env` files, service account JSON, or tokens.
+- **Never paste secrets** into issues, PR descriptions, or agent prompts.
+- Use the repo's **stub** `lib/firebase_options.dart` locally; inject real Firebase config only via `scripts/setup_local_firebase.sh` + a local `.env` (gitignored).
+- Assume CI logs, PR reviews (including CodeRabbit), and Cloud Agent transcripts may be visible to others.
+
 ## Cursor Cloud specific instructions
 
 This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and optional Firebase multiplayer. Standard dev/test/build commands live in `README.md`, `CLAUDE.md`, and `format_and_test.sh`; use those as the source of truth.
@@ -19,3 +28,15 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 - `flutter test` runs the full unit/widget suite (~750 tests) and passes headlessly with no extra setup. Tests skip Firebase automatically under `FLUTTER_TEST`.
 - `flutter analyze` must be clean (zero issues) — the repo enforces this.
 - E2E integration tests (`e2e_test/`) are documented to run on `-d macos` and are **disabled in CI**; they are not runnable in this Linux/web environment.
+
+### Code quality (required before commit/PR)
+
+CI enforces formatting — unformatted Dart will fail `quality-checks`. After any code change:
+
+```bash
+dart format .              # required — CI runs: dart format --set-exit-if-changed .
+flutter analyze            # must be zero issues
+flutter test               # full suite must pass
+```
+
+Or run the all-in-one script: `./format_and_test.sh`

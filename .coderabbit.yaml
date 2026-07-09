@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reads AGENTS.md and CLAUDE.md automatically for coding guidelines.
+# This file adds repository-wide review reminders.
+
+reviews:
+  path_instructions:
+    - path: "**/*.dart"
+      instructions: |
+        This is a PUBLIC GitHub repository. Do not suggest committing secrets, API keys,
+        Firebase credentials, .env files, or service account JSON.
+
+        All Dart changes must be formatted before merge. CI runs:
+          dart format --output=none --set-exit-if-changed .
+        Remind authors to run `dart format .` or `./format_and_test.sh` locally.
+
+        Flutter style: always use curly braces on control-flow statements.
+        `flutter analyze` must pass with zero issues.

@@ -76,6 +76,9 @@ flutter build linux      # Linux
 - **Multi-platform CI/CD** - Ubuntu (unit tests) + macOS (E2E tests)
 - **Branch protection** - all checks must pass to merge
 - **Pre-commit hooks** for formatting
+- **CI enforces `dart format`** — run `dart format .` (or `./format_and_test.sh`) after every code change before pushing
+
+> **Public repo:** This project is open source on GitHub. Do not commit secrets, credentials, or `.env` files.
 
 ## 🎪 How to Play
 

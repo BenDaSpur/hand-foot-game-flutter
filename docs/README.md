@@ -12,5 +12,6 @@ This directory contains all documentation for the Hand & Foot Flutter game.
 ## Quick Links
 
 - [Main README](../README.md) - Project overview and getting started
+- [AGENTS.md](../AGENTS.md) - Instructions for Cursor Cloud agents and AI tooling
 - [CLAUDE.md](../CLAUDE.md) - Developer instructions for Claude Code
 - [Testing Guide](TESTING.md) - How to run and write tests

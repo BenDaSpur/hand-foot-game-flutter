@@ -2,10 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Public repository
+
+**This repo is public on GitHub.** Do not commit or suggest committing secrets (Firebase keys, `.env`, service accounts, tokens). Use stub Firebase config in-tree; real credentials belong only in local `.env` via `scripts/setup_local_firebase.sh`.
+
 ## Development Commands
 
 - **Run the app**: `flutter run`
 - **Build for release**: `flutter build apk` (Android) or `flutter build ios` (iOS)
+- **Format code**: `dart format .` — **required after every change**; CI fails if formatting differs (`dart format --set-exit-if-changed .`)
+- **Run all quality checks**: `./format_and_test.sh` (format + test + analyze + deps)
 - **Static analysis**: `flutter analyze`
 - **Run tests**: `flutter test test/` for unit tests, `flutter test e2e/ -d macos` for e2e integration tests
 - **Hot reload**: Available when running with `flutter run` - press `r` to reload
@@ -218,6 +224,7 @@ Key constants defined in `GameConfig`:
 
 **Git Workflow**: 
 - Branch naming: `bs/feature-description` (developer-initials/description)
+- **Always run `dart format .` before committing** — CI will reject unformatted Dart
 - Always run `flutter analyze` before committing
 - Commit only lib/ changes unless specifically adding tests
 
@@ -263,6 +270,7 @@ for (int i = 0; i < 10; i++) {
 - **Prefer composition over inheritance** for widgets
 
 ### Static Analysis Compliance
+- Run `dart format .` before every commit — CI enforces `dart format --set-exit-if-changed .`
 - Run `flutter analyze` before every commit
 - Fix ALL warnings and errors - zero tolerance policy
 - Use `// ignore: rule_name` only for exceptional cases with clear comments explaining why
