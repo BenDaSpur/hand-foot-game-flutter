@@ -645,10 +645,7 @@ class EnhancedBotAI {
 
     // AGGRESSIVE FIX: Dramatically reduce strategic holding to prevent accumulation
     // Opponents on foot are racing to go out — stop hoarding and melt hand down
-    final opponentOnFoot = context.players.any(
-      (p) => p.id != bot.id && p.hasPickedUpFoot,
-    );
-    if (opponentOnFoot && !bot.hasPickedUpFoot) {
+    if (_opponentOnFootPressure(context, bot) && !bot.hasPickedUpFoot) {
       if (_shouldExecuteDumpStrategy(bot, context)) {
         return _executeDumpStrategy(bot, context);
       }
@@ -679,7 +676,7 @@ class EnhancedBotAI {
         (h) => h.hasPickedUpFoot && h.currentHand.length <= 10,
       );
 
-      if (!humanThreat && !opponentOnFoot && handSize <= 6) {
+      if (!humanThreat) {
         return BotDecision(action: 'noMeld');
       }
       // Otherwise, continue to meld building instead of holding
