@@ -1,6 +1,7 @@
 import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
+import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
@@ -148,6 +149,65 @@ class BotEndGameManager {
     return hasCleanBook && hasDirtyBook;
   }
 
+  /// Whether the bot has both required books and is on the foot pile.
+  bool isReadyToFinishRound(Player bot) {
+    return bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+  }
+
+  /// Build the correct action to end the round when books are satisfied.
+  ///
+  /// Going out requires an empty hand — bots must discard or meld their last
+  /// card(s) first. Returns null when the bot is not in a finishing position.
+  BotDecision? buildFinishRoundDecision(
+    Player bot,
+    GameController controller,
+    TurnPhase turnPhase,
+  ) {
+    if (!isReadyToFinishRound(bot)) {
+      return null;
+    }
+
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'goOut');
+    }
+
+    if (bot.currentHand.length <= 4) {
+      final optimized = optimizeForGoOut(bot, controller);
+      if (optimized != null) {
+        return optimized;
+      }
+    }
+
+    if (bot.currentHand.length == 1) {
+      if (turnPhase == TurnPhase.discard) {
+        return BotDecision(action: 'discard', data: bot.currentHand.first);
+      }
+      final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+      if (cardsToAdd.isNotEmpty) {
+        return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      }
+      return BotDecision(action: 'noMeld');
+    }
+
+    if (bot.currentHand.length == 2) {
+      if (turnPhase == TurnPhase.meld) {
+        final meldAction = _findOptimalMeldForGoOut(bot, controller);
+        if (meldAction != null) {
+          return meldAction;
+        }
+        return BotDecision(action: 'noMeld');
+      }
+      if (turnPhase == TurnPhase.discard) {
+        return BotDecision(
+          action: 'discard',
+          data: _chooseCardToDiscard(bot),
+        );
+      }
+    }
+
+    return null;
+  }
+
   /// Main entry point for end game decisions.
   ///
   /// Determines if the bot should go out, complete books, or continue building
@@ -157,35 +217,22 @@ class BotEndGameManager {
       return null; // Not ready for end game decisions
     }
 
-    // Handle empty hand scenarios properly
-    if (bot.currentHand.isEmpty) {
-      if (!bot.hasPickedUpFoot) {
-        // Empty hand but no foot picked up - should pick up foot automatically
-        // This is handled by the game controller, not bot AI, but log for debugging
-        print(
-          'Info: Bot ${bot.name} has empty hand, will automatically pick up foot',
-        );
-        return null; // Let game controller handle foot pickup
-      } else if (bot.canGoOut) {
-        // On foot with empty hand and can go out - GO OUT!
-        return BotDecision(action: 'goOut');
-      } else {
-        // On foot with empty hand but can't go out (missing books)
-        print(
-          'Warning: Bot ${bot.name} has empty foot but cannot go out (missing required books)',
-        );
-        return null; // This shouldn't happen in normal gameplay
-      }
+    final gameState = controller.gameState;
+    final finishDecision = buildFinishRoundDecision(
+      bot,
+      controller,
+      gameState.turnPhase,
+    );
+    if (finishDecision != null) {
+      return finishDecision;
     }
 
-    // CRITICAL: Go out immediately with 1-2 cards if we can
-    if (bot.currentHand.length <= 2 && controller.canPlayerGoOut()) {
-      final nonThreeCards = bot.currentHand
-          .where((card) => !card.isThree)
-          .toList();
-      if (nonThreeCards.isNotEmpty) {
-        return BotDecision(action: 'goOut', data: nonThreeCards.first);
-      }
+    // On foot with empty hand but missing books — cannot finish
+    if (bot.currentHand.isEmpty) {
+      print(
+        'Warning: Bot ${bot.name} has empty foot but cannot go out (missing required books)',
+      );
+      return null;
     }
 
     // NEW: Go-out optimization for edge cases (like Ben with Q♦ + 5s)
@@ -199,8 +246,7 @@ class BotEndGameManager {
       }
     }
 
-    // NEW: Aggressive go-out under competitive pressure
-    final gameState = controller.gameState;
+    // Aggressive go-out under competitive pressure
     if (_shouldGoOutAggressively(bot, gameState)) {
       final goOutDecision = _attemptAggressiveGoOut(bot, controller);
       if (goOutDecision != null) return goOutDecision;
@@ -240,7 +286,7 @@ class BotEndGameManager {
     // Must be on foot with few cards AND have required books
     if (!bot.hasPickedUpFoot ||
         bot.currentHand.length > BotConfig.winningPositionHandSize ||
-        !bot.canGoOut) {
+        !bot.canGoOutWithBooks) {
       return false;
     }
 
@@ -683,12 +729,15 @@ class BotEndGameManager {
         .length;
 
     if (cleanBooks > 0 && dirtyBooks > 0) {
-      // Have required books, find card to discard and go out
+      // Have required books — discard last card(s) to go out (hand must be empty)
       final possibleDiscards = bot.currentHand
           .where((card) => !card.isThree)
           .toList();
       if (possibleDiscards.isNotEmpty) {
-        return BotDecision(action: 'goOut', data: possibleDiscards.first);
+        return BotDecision(action: 'discard', data: possibleDiscards.first);
+      }
+      if (bot.currentHand.isNotEmpty) {
+        return BotDecision(action: 'discard', data: bot.currentHand.first);
       }
     }
 

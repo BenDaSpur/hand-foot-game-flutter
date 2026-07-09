@@ -94,15 +94,24 @@ class EnhancedBotAI {
       // Set context for personality-based decisions
       _personalityManager.setCurrentPlayerContext(bot.id);
 
-      // CRITICAL: Check if bot can go out BEFORE any other decisions
-      // Valid in both discard phase (discard last card) and meld phase (play last card into meld)
-      if ((gameState.turnPhase == TurnPhase.discard ||
-              gameState.turnPhase == TurnPhase.meld) &&
-          _shouldGoOutImmediately(bot, gameState)) {
-        DebugLogger.debug(
-          '${bot.name}: CRITICAL - Going out immediately to prevent opponent victory!',
-        );
-        return BotDecision(action: 'goOut');
+      // CRITICAL: Finish the round when books are met — discard/meld last cards
+      // before going out (empty hand required for canGoOut).
+      if (gameState.turnPhase == TurnPhase.discard ||
+          gameState.turnPhase == TurnPhase.meld) {
+        final controller = context.controller as GameController?;
+        if (controller != null) {
+          final finishDecision = _endGameManager.buildFinishRoundDecision(
+            bot,
+            controller,
+            gameState.turnPhase,
+          );
+          if (finishDecision != null) {
+            DebugLogger.debug(
+              '${bot.name}: CRITICAL - Finishing round (${finishDecision.action})',
+            );
+            return finishDecision;
+          }
+        }
       }
 
       // DEBUG: Log decision context (removed in release builds)
@@ -803,66 +812,6 @@ class EnhancedBotAI {
     }
 
     return BotDecision(action: 'noMeld');
-  }
-
-  /// CRITICAL: Check if bot should prioritize going out over other actions
-  /// This addresses the major strategic flaw where bots miss going out opportunities
-  bool _shouldGoOutImmediately(Player bot, GameState gameState) {
-    // Must have picked up foot and have both required books
-    if (!bot.hasPickedUpFoot || !bot.canGoOutWithBooks) {
-      return false;
-    }
-
-    // Check for critical going out scenarios - only return true if bot can ACTUALLY go out right now
-
-    // Scenario 1: Bot has no cards and can go out immediately
-    if (bot.currentHand.isEmpty && bot.canGoOut) {
-      DebugLogger.debug(
-        '${bot.name}: Immediate going out - hand empty and can go out',
-      );
-      return true;
-    }
-
-    // Scenario 2: EMERGENCY - Bot has 1 card and can discard to go out
-    if (bot.currentHand.length == 1 && bot.canGoOutWithBooks) {
-      DebugLogger.debug(
-        '${bot.name}: Emergency going out - 1 card left and can go out',
-      );
-      return true;
-    }
-
-    // Scenario 3: COMPETITIVE EMERGENCY - Opponent has massive book advantage and small hand
-    for (final opponent in gameState.players) {
-      if (opponent.id == bot.id) continue;
-
-      final opponentBooks = opponent.melds.where((m) => m.isBook).length;
-      final opponentHasGoingOutBooks = opponent.canGoOutWithBooks;
-
-      // If opponent has 6+ books and small hand, and bot can go out with 2-3 cards
-      if (opponentBooks >= 6 &&
-          opponentHasGoingOutBooks &&
-          opponent.currentHand.length <= 4 &&
-          bot.currentHand.length <= 3 &&
-          bot.canGoOutWithBooks) {
-        DebugLogger.debug(
-          '${bot.name}: COMPETITIVE EMERGENCY - Opponent has $opponentBooks books and ${opponent.currentHand.length} cards, going out NOW!',
-        );
-        return true;
-      }
-    }
-
-    // Scenario 4: CATASTROPHIC 3s MANAGEMENT - Bot has mostly 3s and must go out to avoid penalty spiral
-    final threeCount = bot.currentHand.where((card) => card.isThree).length;
-    if (bot.currentHand.length >= 8 &&
-        threeCount >= bot.currentHand.length - 2 && // Almost all 3s
-        bot.canGoOut) {
-      DebugLogger.debug(
-        '${bot.name}: 3s CATASTROPHE - $threeCount 3s out of ${bot.currentHand.length} cards, emergency go out!',
-      );
-      return true;
-    }
-
-    return false; // For other scenarios, we'll modify behavior in specific turn phases
   }
 
   /// Check if bot should rush to go out (affects discard and meld priorities)
@@ -2592,17 +2541,10 @@ class EnhancedBotAI {
 
     if (gameState.turnPhase == TurnPhase.meld &&
         bot.hasPickedUpFoot &&
-        bot.currentHand.length <= 10) {
-      // If we're in foot and human is still accumulating, rush to go out
-      if (context.canPlayerGoOut()) {
-        // Try to go out immediately to cut off their strategy
-        final possibleDiscards = bot.currentHand
-            .where((card) => !card.isThree)
-            .toList();
-        if (possibleDiscards.isNotEmpty) {
-          return BotDecision(action: 'goOut', data: possibleDiscards.first);
-        }
-      }
+        bot.currentHand.length <= 10 &&
+        bot.canGoOutWithBooks) {
+      // Rush to finish — meld what we can, then discard to go out
+      return BotDecision(action: 'noMeld');
     }
 
     return null;
@@ -2649,18 +2591,23 @@ class EnhancedBotAI {
     }
 
     if (bot.hasPlayedDown && !bot.hasPickedUpFoot && bot.isHandEmpty) {
-      // Rush to foot immediately
-      return BotDecision(action: 'pickUpFoot');
+      // Foot pickup is handled automatically by the game engine after meld/discard
+      return null;
     }
 
     if (bot.hasPickedUpFoot && bot.currentHand.length <= 12) {
-      // Aggressive go-out attempt - don't wait for perfect books
-      if (context.canPlayerGoOut()) {
-        final possibleDiscards = bot.currentHand
-            .where((card) => !card.isThree)
-            .toList();
-        if (possibleDiscards.isNotEmpty) {
-          return BotDecision(action: 'goOut', data: possibleDiscards.first);
+      // Aggressive finish attempt when books are met
+      if (bot.canGoOutWithBooks) {
+        final controller = context.controller as GameController?;
+        if (controller != null) {
+          final finishDecision = _endGameManager.buildFinishRoundDecision(
+            bot,
+            controller,
+            gameState.turnPhase,
+          );
+          if (finishDecision != null) {
+            return finishDecision;
+          }
         }
       }
 
@@ -2972,7 +2919,7 @@ class EnhancedBotAI {
     try {
       switch (decision.action) {
         case 'goOut':
-          return context.canPlayerGoOut() && bot.hasPickedUpFoot;
+          return bot.canGoOut && bot.hasPickedUpFoot;
         case 'createMeld':
           return decision.data is List<PlayingCard> &&
               (decision.data as List<PlayingCard>).isNotEmpty;

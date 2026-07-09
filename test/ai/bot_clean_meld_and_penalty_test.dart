@@ -181,7 +181,8 @@ void main() {
 
         final decision = endGameManager.handleEndGame(botPlayer, controller);
         expect(decision, isNotNull);
-        expect(decision!.action, 'goOut');
+        expect(decision!.action, 'discard');
+        expect(decision.data, isA<PlayingCard>());
       },
     );
   });
