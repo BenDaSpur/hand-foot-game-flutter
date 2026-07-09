@@ -4,6 +4,7 @@ import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
+import '../utils/debug_logger.dart';
 import 'bot_decision.dart';
 import 'bot_config.dart';
 import 'bot_meld_analyzer.dart';
@@ -226,8 +227,8 @@ class BotEndGameManager {
 
     // On foot with empty hand but missing books — cannot finish
     if (bot.currentHand.isEmpty) {
-      print(
-        'Warning: Bot ${bot.name} has empty foot but cannot go out (missing required books)',
+      DebugLogger.warning(
+        'Bot ${bot.name} has empty foot but cannot go out (missing required books)',
       );
       return null;
     }
