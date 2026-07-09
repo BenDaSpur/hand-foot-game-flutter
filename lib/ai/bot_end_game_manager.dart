@@ -261,20 +261,25 @@ class BotEndGameManager {
       return _handleBookCompletion(bot, controller);
     }
 
-    // Can't complete books easily - hold cards and wait
-    if (bot.currentHand.length <= 3) {
+    // Can't complete books easily - try melding in meld phase, discard later
+    if (gameState.turnPhase == TurnPhase.meld) {
       final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
       if (cardsToAdd.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
       }
+
+      final possibleMelds = controller.findPossibleMelds(bot);
+      if (possibleMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _findBestBookPotentialMeld(possibleMelds),
+        );
+      }
+
+      return BotDecision(action: 'noMeld');
     }
 
-    // Emergency case - hand empty but can't go out
-    if (bot.currentHand.isEmpty && !bot.canGoOut) {
-      return BotDecision(action: 'error');
-    }
-
-    // Default: discard conservatively
+    // Default: discard conservatively in discard phase
     final cardToDiscard = _chooseCardToDiscard(bot);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
