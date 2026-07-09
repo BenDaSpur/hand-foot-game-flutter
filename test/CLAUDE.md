@@ -2,6 +2,8 @@
 
 This file provides guidance for running and debugging Flutter tests in this project.
 
+> **Public repo:** Do not commit secrets or credentials. Run `dart format .` after code changes — CI enforces formatting.
+
 ## Basic Test Commands
 
 - **Run all tests**: `flutter test`

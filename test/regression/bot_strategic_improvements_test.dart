@@ -110,12 +110,12 @@ void main() {
       // Act: Bot makes decision
       final decision = botAI.makeDecision(botPlayer, gameController);
 
-      // Assert: Should skip melding (noMeld) to rush to discard phase for going out
+      // Assert: Meld the playable card first, then discard to go out same turn
       expect(
         decision.action,
-        equals('noMeld'),
+        equals('addToMeld'),
         reason:
-            'Bot with 2 cards and required books should skip melding and rush to go out',
+            'Bot with 2 cards and required books should meld playable cards before discarding to go out',
       );
     });
 
@@ -169,12 +169,12 @@ void main() {
       // Act: Bot makes decision
       final decision = botAI.makeDecision(botPlayer, gameController);
 
-      // Assert: Should go out immediately when possible (improved competitive behavior)
+      // Assert: Meld last card into existing meld to empty hand (round ends via engine)
       expect(
         decision.action,
-        equals('goOut'),
+        equals('addToMeld'),
         reason:
-            'Bot should go out immediately when they have 1 card and required books (can end round by playing last card into meld)',
+            'Bot with 1 meldable card and required books should meld it to go out (empty hand required)',
       );
     });
 

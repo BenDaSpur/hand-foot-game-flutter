@@ -146,7 +146,9 @@ class BotFootTransitionManager {
         remainingCards > BotConfig.aggressiveFootTransitionThreshold;
 
     return (shouldTransitionForSize || shouldTransitionForPressure) &&
-        !(stillOnHandPile && hasExcessiveWilds);
+        !(stillOnHandPile &&
+            hasExcessiveWilds &&
+            remainingCards > BotConfig.aggressiveFootTransitionThreshold);
   }
 
   /// Check if bot should transition due to hand size pressure
@@ -156,9 +158,6 @@ class BotFootTransitionManager {
     int remainingCards,
   ) {
     final gameState = controller.gameState;
-    final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
-    final hasExcessiveWilds =
-        wildCardCount >= BotConfig.excessiveWildsThreshold;
 
     // Check for competitive pressure
     final opponentOnFoot = gameState.players.any(
@@ -171,7 +170,7 @@ class BotFootTransitionManager {
     final hasCompetitivePressure = competitivePressure && remainingCards > 12;
     final shouldTransition = hasHandSizePressure || hasCompetitivePressure;
 
-    return shouldTransition && bot.hasPlayedDown && !hasExcessiveWilds;
+    return shouldTransition && bot.hasPlayedDown;
   }
 
   /// Check if bot should use late round transition strategy
@@ -182,13 +181,12 @@ class BotFootTransitionManager {
 
   /// Check if bot should transition after playing down
   bool _shouldPostPlaydownTransition(Player bot, int remainingCards) {
-    final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
     final hasWeakMeldOpportunity = _hasOnlyWeakMeldOpportunities(bot);
 
     return bot.hasPlayedDown &&
+        !bot.hasPickedUpFoot &&
         remainingCards >= BotConfig.postPlaydownTransitionThreshold &&
-        !hasWeakMeldOpportunity &&
-        !stillOnHandPile;
+        !hasWeakMeldOpportunity;
   }
 
   /// Check if bot should transition based on hand quality
@@ -225,15 +223,13 @@ class BotFootTransitionManager {
 
   /// Check if bot should transition when most cards can be played
   bool _shouldPlayMostCardsTransition(Player bot, GameController controller) {
-    final stillOnHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
     final wildCardCount = bot.currentHand.where((c) => c.isWild).length;
     final hasExcessiveWilds =
         wildCardCount >= BotConfig.excessiveWildsThreshold;
     final hasWeakMeldOpportunity = _hasOnlyWeakMeldOpportunities(bot);
     final canPlayMostCards = _canPlayMostCards(bot, controller);
 
-    final shouldBeConservative =
-        hasExcessiveWilds || hasWeakMeldOpportunity || stillOnHandPile;
+    final shouldBeConservative = hasExcessiveWilds || hasWeakMeldOpportunity;
 
     return canPlayMostCards && !shouldBeConservative;
   }
