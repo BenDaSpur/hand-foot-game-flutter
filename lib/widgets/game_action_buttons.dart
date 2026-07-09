@@ -202,11 +202,14 @@ class GameActionButtons extends StatelessWidget {
 
   bool get _hasSelectedCard => selectedCardIndices.length == 1;
 
+  /// Last-card discard can end the round when book requirements are met.
+  bool get _canFinishWithLastCard =>
+      humanPlayer.hasPickedUpFoot && humanPlayer.canGoOutWithBooks;
+
   String get _discardButtonText {
     if (_hasSelectedCard && humanPlayer.currentHand.length == 1) {
       if (humanPlayer.hasPickedUpFoot) {
-        // Check if player can actually go out
-        if (humanPlayer.canGoOut) {
+        if (_canFinishWithLastCard) {
           return 'Go Out';
         } else {
           // Show specific requirement that's missing
@@ -230,8 +233,7 @@ class GameActionButtons extends StatelessWidget {
   Color? get _discardButtonColor {
     if (_hasSelectedCard && humanPlayer.currentHand.length == 1) {
       if (humanPlayer.hasPickedUpFoot) {
-        // Color-code based on whether they can actually go out
-        return humanPlayer.canGoOut ? Colors.green : Colors.red;
+        return _canFinishWithLastCard ? Colors.green : Colors.red;
       } else {
         return Colors.blue; // Go to foot
       }

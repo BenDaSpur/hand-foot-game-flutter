@@ -393,16 +393,18 @@ class EnhancedBotAI {
           );
           return BotDecision(action: 'drawFromDiscard');
         }
-        // NEW: Also try unlocking pile manually if game doesn't allow it but we want it
+        // Pre-play-down: play down first so we can unlock the pile on a future turn
         if (shouldTake && !canUnlock && !bot.hasPlayedDown) {
-          // Check if we could unlock it if we had played down
           if (_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'Returning unlockDiscardPile (pre-play-down opportunity)',
+              'Valuable discard pile blocked - prioritizing play-down first',
             );
-            return BotDecision(action: 'unlockDiscardPile');
+            final playDownDecision = _handlePlayDownDecision(bot, context);
+            if (playDownDecision.action != 'noMeld') {
+              return playDownDecision;
+            }
           }
         }
       } catch (e) {
@@ -642,18 +644,39 @@ class EnhancedBotAI {
     }
 
     // AGGRESSIVE FIX: Dramatically reduce strategic holding to prevent accumulation
-    // Only hold with very small hands and only briefly
+    // Opponents on foot are racing to go out — stop hoarding and melt hand down
+    if (_opponentOnFootPressure(context, bot) && !bot.hasPickedUpFoot) {
+      if (_shouldExecuteDumpStrategy(bot, context)) {
+        return _executeDumpStrategy(bot, context);
+      }
+
+      final rushCardsToAdd = _filterWildCardAdditions(
+        _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+        bot,
+      );
+      if (rushCardsToAdd.isNotEmpty) {
+        return BotDecision(action: 'addToMeld', data: rushCardsToAdd.first);
+      }
+
+      final rushMelds = _getCachedPossibleMelds(bot, context);
+      if (rushMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _meldAnalyzer.findBestMeld(rushMelds, bot: bot),
+        );
+      }
+    }
+
+    // Only hold with small hands when no opponent foot pressure
     if (handSize <= 6 && _shouldHoldCardsStrategically(bot, context)) {
-      // Only hold if hand is small AND no human threat AND very selective conditions
       final humanPlayers = context.players.where(
         (p) => p.type == PlayerType.human,
       );
       final humanThreat = humanPlayers.any(
-        (h) => h.hasPickedUpFoot && h.currentHand.length <= 8,
+        (h) => h.hasPickedUpFoot && h.currentHand.length <= 10,
       );
 
-      // Much more restrictive holding - only with tiny hands and no threats
-      if (!humanThreat && handSize <= 6) {
+      if (!humanThreat) {
         return BotDecision(action: 'noMeld');
       }
       // Otherwise, continue to meld building instead of holding
@@ -1723,6 +1746,11 @@ class EnhancedBotAI {
     // Don't hold if hand exceeds personality-based limit (adjusted for time pressure)
     if (handSize >= personalityHoldingLimit) return false;
 
+    // Race to foot when opponents are already on foot (human-style tempo play)
+    if (_opponentOnFootPressure(context, bot) && !bot.hasPickedUpFoot) {
+      return false;
+    }
+
     // ADAPTIVE PERSONALITY FIX: Be much more aggressive in foot phase
     if (personality == BotPersonality.adaptive &&
         bot.hasPickedUpFoot &&
@@ -2305,7 +2333,18 @@ class EnhancedBotAI {
     // Reduce limit based on time pressure
     final pressureReduction = (timePressure * 5)
         .round(); // Up to 5 card reduction - more pressure
-    return (baseLimit - pressureReduction).clamp(8, baseLimit);
+    final minLimit = switch (personality) {
+      BotPersonality.adaptive => 5,
+      BotPersonality.aggressive => 6,
+      BotPersonality.bookBuilder => 7,
+      BotPersonality.conservative => 8,
+    };
+    return (baseLimit - pressureReduction).clamp(minLimit, baseLimit);
+  }
+
+  /// True when any opponent has picked up foot — bots should race to transition.
+  bool _opponentOnFootPressure(BotGameContext context, Player bot) {
+    return context.players.any((p) => p.id != bot.id && p.hasPickedUpFoot);
   }
 
   /// Enhanced book completion strategy for competitive play
@@ -2935,17 +2974,26 @@ class EnhancedBotAI {
               meldIndex < bot.melds.length;
         case 'discard':
           return decision.data is PlayingCard &&
-              bot.currentHand.contains(decision.data);
+              bot.hasHandCard(decision.data as PlayingCard);
         case 'drawFromDeck':
         case 'drawFromDiscard':
+        case 'unlockDiscardPile':
         case 'noMeld':
+        case 'endTurn':
           return true; // These are always safe
+        case 'error':
+          return _isRecoverableErrorState(bot);
         default:
           return false;
       }
     } catch (e) {
       return false;
     }
+  }
+
+  /// Empty-hand states should propagate `error` only when going out is impossible.
+  bool _isRecoverableErrorState(Player bot) {
+    return bot.currentHand.isEmpty && !bot.canGoOut;
   }
 
   /// Get safe fallback decision when normal logic fails
@@ -2958,6 +3006,12 @@ class EnhancedBotAI {
       case TurnPhase.draw:
         return BotDecision(action: 'drawFromDeck');
       case TurnPhase.meld:
+        if (bot.currentHand.isEmpty) {
+          if (context.canPlayerGoOut()) {
+            return BotDecision(action: 'goOut');
+          }
+          return BotDecision(action: 'error');
+        }
         // Try simple meld if possible, otherwise skip
         final possibleMelds = context.controller?.findPossibleMelds(bot) ?? [];
         if (possibleMelds.isNotEmpty && bot.hasPlayedDown) {
@@ -2970,11 +3024,11 @@ class EnhancedBotAI {
       case TurnPhase.discard:
         // Check if bot has any cards at all
         if (bot.currentHand.isEmpty) {
-          // Bot has no cards - this should trigger going out or error
+          // Bot has no cards - this should trigger going out or error recovery
           if (context.canPlayerGoOut()) {
             return BotDecision(action: 'goOut');
           }
-          return BotDecision(action: 'noMeld'); // Can't discard with no cards
+          return BotDecision(action: 'error');
         }
 
         // Find any valid discard

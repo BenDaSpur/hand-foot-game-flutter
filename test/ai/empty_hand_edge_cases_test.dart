@@ -76,8 +76,8 @@ void main() {
 
         final decision = botAI.makeDecision(botPlayer, controller);
 
-        // Should recognize it can go out (or return noMeld if bot logic is different)
-        expect(decision.action, isIn(['goOut', 'noMeld']));
+        // Should recognize it can go out with both books and empty hand
+        expect(decision.action, equals('goOut'));
       });
 
       test('should handle empty hand without required books safely', () {
@@ -91,8 +91,8 @@ void main() {
 
         final decision = botAI.makeDecision(botPlayer, controller);
 
-        // Should return error or safe fallback since it can't discard or go out
-        expect(decision.action, isIn(['error', 'noMeld']));
+        // Should return error recovery since it can't discard or go out
+        expect(decision.action, equals('error'));
       });
     });
 
@@ -318,15 +318,15 @@ void _setupBotWithBooks(Player player) {
     const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
   ];
 
-  // Add dirty book
+  // Add dirty book (4 naturals + 3 wilds)
   final dirtyBook = [
     const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
     const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
     const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+    const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
     const PlayingCard(suit: null, rank: CardRank.joker),
-    const PlayingCard(suit: null, rank: CardRank.joker),
-    const PlayingCard(suit: null, rank: CardRank.joker),
-    const PlayingCard(suit: null, rank: CardRank.joker),
+    const PlayingCard(suit: null, rank: CardRank.two),
+    const PlayingCard(suit: null, rank: CardRank.two),
   ];
 
   final cleanMeld = Meld.createMeld(cleanBook);

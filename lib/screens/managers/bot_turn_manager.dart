@@ -317,6 +317,19 @@ class BotTurnManager {
           }
           break;
 
+        case 'unlockDiscardPile':
+          success = gameController.unlockDiscardPile();
+          if (!success && gameState.canUnlockDiscard()) {
+            success = gameController.drawFromDiscardPile();
+          }
+          if (!success) {
+            DebugLogger.debug(
+              'Bot unlockDiscardPile failed - falling back to deck draw',
+            );
+            success = gameController.drawFromDeck();
+          }
+          break;
+
         case 'createMeld':
           final cards = decision.data as List<PlayingCard>;
           success = gameController.createMeld(cards);
@@ -337,9 +350,12 @@ class BotTurnManager {
           final data = decision.data as Map<String, dynamic>;
           final meldIndex = data['meldIndex'] as int;
           final card = data['card'] as PlayingCard;
+          final handCard = botPlayer.findHandCardInstance(card);
           // Validate meld index
-          if (meldIndex >= 0 && meldIndex < botPlayer.melds.length) {
-            success = gameController.addCardToMeld(meldIndex, card);
+          if (meldIndex >= 0 &&
+              meldIndex < botPlayer.melds.length &&
+              handCard != null) {
+            success = gameController.addCardToMeld(meldIndex, handCard);
             if (success) {
               validateGameStateAfterMeld(botPlayer);
             }
@@ -348,9 +364,12 @@ class BotTurnManager {
 
         case 'discard':
           final card = decision.data as PlayingCard;
-          success = gameController.discardCard(card);
-          if (success) {
-            handlePostDiscardState(botPlayer);
+          final handCard = botPlayer.findHandCardInstance(card);
+          if (handCard != null) {
+            success = gameController.discardCard(handCard);
+            if (success) {
+              handlePostDiscardState(botPlayer);
+            }
           }
           break;
 
@@ -375,6 +394,13 @@ class BotTurnManager {
           if (botPlayer.canGoOut) {
             gameState.endRound();
             success = true;
+          } else if (botPlayer.canGoOutWithBooks &&
+              botPlayer.currentHand.length == 1) {
+            final lastCard = botPlayer.currentHand.first;
+            success = gameController.discardCard(lastCard);
+            if (success) {
+              handlePostDiscardState(botPlayer);
+            }
           } else {
             DebugLogger.warning(
               'Bot tried to go out but cannot - missing book requirements',
@@ -384,8 +410,11 @@ class BotTurnManager {
           break;
 
         case 'error':
-          DebugLogger.warning('Bot reported error state');
-          return false;
+          DebugLogger.warning(
+            'Bot reported error state - attempting turn recovery',
+          );
+          _recoverFromBotError(botPlayer);
+          return true;
 
         default:
           DebugLogger.error('Unknown bot decision: ${decision.action}');
@@ -478,6 +507,82 @@ class BotTurnManager {
     }
   }
 
+  /// Attempt a meld during forced turn completion to shrink hand toward foot.
+  bool tryForceMeld(Player botPlayer) {
+    if (!botPlayer.hasPlayedDown) {
+      return false;
+    }
+
+    for (int i = 0; i < botPlayer.melds.length; i++) {
+      for (final card in [...botPlayer.currentHand]) {
+        if (botPlayer.melds[i].canAddCard(card)) {
+          if (gameController.addCardToMeld(i, card)) {
+            validateGameStateAfterMeld(botPlayer);
+            return true;
+          }
+        }
+      }
+    }
+
+    final possibleMelds = gameController.findPossibleMelds(botPlayer)
+      ..sort((a, b) => b.length.compareTo(a.length));
+    for (final meld in possibleMelds) {
+      if (gameController.createMeld(meld)) {
+        validateGameStateAfterMeld(botPlayer);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Recover from bot error decisions without counting as failed attempts.
+  void _recoverFromBotError(Player botPlayer) {
+    final gameState = gameController.gameState;
+
+    if (gameState.phase == GamePhase.roundEnd) {
+      return;
+    }
+
+    if (botPlayer.currentHand.isEmpty) {
+      if (!botPlayer.hasPickedUpFoot && botPlayer.foot.isNotEmpty) {
+        botPlayer.pickUpFoot();
+        gameState.recentActions.add(
+          GameAction(
+            message: 'picked up foot after error recovery',
+            playerName: botPlayer.name,
+          ),
+        );
+      }
+      if (botPlayer.canGoOut) {
+        gameState.endRound();
+        onStateChanged();
+        return;
+      }
+    }
+
+    switch (gameState.turnPhase) {
+      case TurnPhase.draw:
+        if (!gameState.hasDrawnFromDeck) {
+          gameController.drawFromDeck();
+        }
+        if (gameState.turnPhase == TurnPhase.meld) {
+          tryForceMeld(botPlayer);
+        }
+        gameState.turnPhase = TurnPhase.discard;
+        absolutelyGuaranteedDiscard(botPlayer);
+        break;
+      case TurnPhase.meld:
+        tryForceMeld(botPlayer);
+        gameState.turnPhase = TurnPhase.discard;
+        absolutelyGuaranteedDiscard(botPlayer);
+        break;
+      case TurnPhase.discard:
+        absolutelyGuaranteedDiscard(botPlayer);
+        break;
+    }
+  }
+
   /// Force bot to complete their turn using fallback actions that follow game rules
   void forceCompleteBotTurn(Player botPlayer) {
     final gameState = gameController.gameState;
@@ -505,12 +610,17 @@ class BotTurnManager {
               return;
             }
           }
+          if (gameState.turnPhase == TurnPhase.meld) {
+            tryForceMeld(botPlayer);
+          }
           // Force to discard phase to complete turn
           gameState.turnPhase = TurnPhase.discard;
           guaranteedTurnCompletion(botPlayer);
           break;
 
         case TurnPhase.meld:
+          // Try melding before force-discarding to shrink hand toward foot
+          tryForceMeld(botPlayer);
           // Bot can skip melding - force to discard phase and GUARANTEE completion
           gameState.turnPhase = TurnPhase.discard;
           absolutelyGuaranteedDiscard(botPlayer);
@@ -566,15 +676,7 @@ class BotTurnManager {
         );
 
         // Check for foot pickup after discard
-        if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
-          botPlayer.pickUpFoot();
-          gameState.recentActions.add(
-            GameAction(
-              message: 'picked up foot after forced discard',
-              playerName: botPlayer.name,
-            ),
-          );
-        }
+        handlePostDiscardState(botPlayer);
 
         // ADVANCE TURN - this is guaranteed to work
         final previousPlayer = botPlayer;
@@ -815,8 +917,7 @@ class BotTurnManager {
         return;
       }
 
-      // STEP 6: ABSOLUTE LAST RESORT - no cards available, can't create fake ones
-      // This indicates a severe game state corruption - log and advance turn
+      // STEP 6: ABSOLUTE LAST RESORT - no cards available
       DebugLogger.error(
         'ABSOLUTE LAST RESORT: No cards available, cannot force discard',
       );
@@ -824,9 +925,6 @@ class BotTurnManager {
         'Bot ${botPlayer.name} has no cards in hand or foot - advancing turn',
       );
 
-      // Add to discard pile without removing from hand (emergency fallback only)
-      final emergencyCard = PlayingCard(rank: CardRank.three, suit: Suit.clubs);
-      gameState.discardPile.add(emergencyCard);
       gameState.recentActions.add(
         GameAction(
           message: 'emergency state recovery - skipped discard',
@@ -834,7 +932,7 @@ class BotTurnManager {
         ),
       );
 
-      // Complete turn legally
+      // Complete turn without polluting discard pile with synthetic cards
       gameState.nextPlayer();
       gameController.publishTurnEndedEvent(botPlayer);
       onStateChanged();

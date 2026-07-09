@@ -107,6 +107,29 @@ void main() {
       expect(notRemoved, isNull);
     });
 
+    test('should resolve duplicate rank+suit cards when removing', () {
+      final kingInHand = const PlayingCard(
+        suit: Suit.hearts,
+        rank: CardRank.king,
+      );
+      final kingDuplicate = const PlayingCard(
+        suit: Suit.hearts,
+        rank: CardRank.king,
+      );
+      player.dealHand([kingInHand, kingDuplicate]);
+
+      final removed = player.removeCardFromHand(
+        PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+      );
+
+      expect(removed, isNotNull);
+      expect(player.currentHand.length, 1);
+      expect(
+        player.hasHandCard(kingInHand) || player.hasHandCard(kingDuplicate),
+        isTrue,
+      );
+    });
+
     test('should remove cards by indices correctly', () {
       final cards = [
         const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
