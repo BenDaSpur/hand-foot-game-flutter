@@ -21,8 +21,11 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 - Run on web: `flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080` (serves at `http://localhost:8080`). Use a browser to reach it; the `web-server` device has no auto-launched Chrome. The first web build takes ~30–60s to compile before the URL is served.
 - Solo play (`PLAY SOLO`) is fully offline and needs no backend. `main.dart` catches Firebase init failures and continues, so the app runs without Firebase credentials.
 
-### Multiplayer / Firebase (optional, not set up here)
-- The repo ships a **stub** `lib/firebase_options.dart`. Online multiplayer (`CREATE GAME`/`JOIN GAME`) requires real Firebase/Firestore credentials injected via `scripts/setup_local_firebase.sh` + a `.env`. Without them, only solo vs. bots works — which is sufficient to exercise core gameplay.
+### Multiplayer / Firebase (optional)
+- The repo ships a **stub** `lib/firebase_options.dart`. Online multiplayer (`CREATE GAME`/`JOIN GAME`) requires real Firebase/Firestore credentials injected via `scripts/setup_local_firebase.sh` + a local `.env` (gitignored).
+- **Firebase MCP + agent credentials:** See `docs/firebase_agent_setup.md`. When configured, this workspace may contain gitignored `.env` and `.firebase/firebase-tools-credentials.json` (OAuth for admin Firestore reads). Use Firebase MCP `firebase_login` if tokens expire, then `./scripts/refresh_firebase_agent_credentials.sh`.
+- **Analytics queries:** `node scripts/query_analytics_session.js --scores 3325,1140,1185 --foot-only` (analytics collections are client write-only; OAuth required to read).
+- Without Firebase credentials, solo vs. bots still works — sufficient for core gameplay.
 
 ### Testing
 - `flutter test` runs the full unit/widget suite (~750 tests) and passes headlessly with no extra setup. Tests skip Firebase automatically under `FLUTTER_TEST`.

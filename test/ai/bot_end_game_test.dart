@@ -227,9 +227,12 @@ void main() {
           botPlayer,
           gameController,
         );
-        // End game manager may decide to discard penalty cards even with many cards
+        // In meld phase without book completion path, may meld or pass
         if (decision != null) {
-          expect(decision.action, anyOf(['discard', 'createMeld']));
+          expect(
+            decision.action,
+            anyOf(['noMeld', 'discard', 'createMeld', 'addToMeld']),
+          );
         }
       });
     });

@@ -62,6 +62,12 @@ class BotConfig {
   /// In foot phase, become urgent about discards at this threshold
   static const int footPhaseUrgencyThreshold = 5;
 
+  /// In foot phase, force melding (all personalities) at this hand size
+  static const int footPhaseAggressiveMeldingThreshold = 8;
+
+  /// Opponent book count that triggers foot-phase panic melding
+  static const int footPhaseOpponentBookPanicThreshold = 4;
+
   // ===== WILD CARD MANAGEMENT =====
 
   /// Threshold to consider discarding wild cards

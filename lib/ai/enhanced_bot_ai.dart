@@ -507,6 +507,12 @@ class EnhancedBotAI {
       return BotDecision(action: 'noMeld');
     }
 
+    // PRIORITY 0b: Foot phase — melt large hands and complete book pairs (all personalities)
+    final footPhaseDecision = _handleFootPhaseMeldDecision(bot, context);
+    if (footPhaseDecision != null) {
+      return footPhaseDecision;
+    }
+
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
     // BUT: Give bots grace period early in round when large hands are normal
     // AND: Require minimum turns before emergency can activate
@@ -573,33 +579,7 @@ class EnhancedBotAI {
     }
 
     // ADAPTIVE PERSONALITY FIX: Force aggressive melding in foot phase with large hands
-    final personality = _personalityManager.getPersonality(bot.id);
-    if (personality == BotPersonality.adaptive &&
-        bot.hasPickedUpFoot &&
-        handSize >= 10) {
-      // Adaptive bots should never hold 10+ cards in foot phase
-      final possibleMelds = _getCachedPossibleMelds(bot, context);
-      if (possibleMelds.isNotEmpty) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'ADAPTIVE FIX: Force melding in foot phase with $handSize cards',
-        );
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, possibleMelds),
-        );
-      }
-
-      final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
-        bot,
-        (context.controller as GameController?) ??
-            (throw StateError('Controller required for meld analysis')),
-      );
-      if (cardsToAdd.isNotEmpty) {
-        return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
-      }
-    }
+    // (covered for all personalities by _handleFootPhaseMeldDecision above)
 
     // Check for end game decisions (after emergency protocols)
     final controller = context.controller as GameController?;
@@ -645,8 +625,8 @@ class EnhancedBotAI {
 
     // AGGRESSIVE FIX: Dramatically reduce strategic holding to prevent accumulation
     // Opponents on foot are racing to go out — stop hoarding and melt hand down
-    if (_opponentOnFootPressure(context, bot) && !bot.hasPickedUpFoot) {
-      if (_shouldExecuteDumpStrategy(bot, context)) {
+    if (_opponentOnFootPressure(context, bot)) {
+      if (!bot.hasPickedUpFoot && _shouldExecuteDumpStrategy(bot, context)) {
         return _executeDumpStrategy(bot, context);
       }
 
@@ -1751,11 +1731,10 @@ class EnhancedBotAI {
       return false;
     }
 
-    // ADAPTIVE PERSONALITY FIX: Be much more aggressive in foot phase
-    if (personality == BotPersonality.adaptive &&
-        bot.hasPickedUpFoot &&
-        handSize >= 8) {
-      return false; // Never hold 8+ cards in foot phase for adaptive bots
+    // Never hold large hands on foot — must melt down to go out (all personalities)
+    if (bot.hasPickedUpFoot &&
+        handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
+      return false;
     }
 
     // Don't hold if opponents are close to going out (competitive pressure)
@@ -2232,7 +2211,9 @@ class EnhancedBotAI {
       criticalSituation = true;
     }
     // 3. End game - need to complete books to go out
-    else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
+    else if (bot.hasPickedUpFoot &&
+        bot.currentHand.length <=
+            BotConfig.footPhaseAggressiveMeldingThreshold + 2) {
       final hasCleanBook = bot.hasCleanBook;
       final hasDirtyBook = bot.hasDirtyBook;
 
@@ -2724,6 +2705,157 @@ class EnhancedBotAI {
     }
 
     return null;
+  }
+
+  /// Foot-phase melding for all personalities: melt large hands and complete book pairs.
+  BotDecision? _handleFootPhaseMeldDecision(
+    Player bot,
+    BotGameContext context,
+  ) {
+    if (!bot.hasPickedUpFoot) {
+      return null;
+    }
+
+    final handSize = bot.currentHand.length;
+    final controller = context.controller as GameController?;
+    if (controller == null) {
+      return null;
+    }
+
+    // Always try to complete the missing clean/dirty book type first
+    final bookRush = _rushToCompleteRequiredBooks(bot, context);
+    if (bookRush != null) {
+      return bookRush;
+    }
+
+    // Opponent close to going out — stop hoarding and melt the foot hand
+    if (_opponentThreateningGoOut(context.gameState, bot)) {
+      final forced = _forceFootPhaseMeld(
+        bot,
+        context,
+        prioritizeMissingBookType: true,
+      );
+      if (forced != null) {
+        return forced;
+      }
+    }
+
+    // Large foot hand: every personality must meld (not just adaptive at 10+)
+    if (handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
+      return _forceFootPhaseMeld(bot, context, prioritizeMissingBookType: true);
+    }
+
+    return null;
+  }
+
+  /// Force a meld/add in foot when hand is large or books are incomplete.
+  BotDecision? _forceFootPhaseMeld(
+    Player bot,
+    BotGameContext context, {
+    bool prioritizeMissingBookType = false,
+  }) {
+    final controller = context.controller as GameController?;
+    if (controller == null) {
+      return null;
+    }
+
+    final needsClean = !bot.hasCleanBook;
+    final needsDirty = !bot.hasDirtyBook;
+
+    // Have dirty books but need clean — build a naturals-only lane, not more dirty piles
+    if (prioritizeMissingBookType && needsClean && bot.hasDirtyBook) {
+      final cleanMelds = _getCachedPossibleMelds(
+        bot,
+        context,
+      ).where((meld) => !meld.any((card) => card.isWild)).toList();
+      if (cleanMelds.isNotEmpty) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'FOOT: creating clean meld — have dirty books but need clean book',
+        );
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, cleanMelds),
+        );
+      }
+
+      final naturalAdditions =
+          _filterWildCardAdditions(
+            _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+            bot,
+          ).where((addition) {
+            final meldIndex = addition['meldIndex'] as int;
+            final meld = bot.melds[meldIndex];
+            return meld.cards.length < GameConfig.bookSize &&
+                !meld.cards.any((card) => card.isWild);
+          }).toList();
+      if (naturalAdditions.isNotEmpty) {
+        return BotDecision(action: 'addToMeld', data: naturalAdditions.first);
+      }
+    }
+
+    // Need dirty book but have clean — allow wild-heavy melds
+    if (prioritizeMissingBookType && needsDirty && bot.hasCleanBook) {
+      final dirtyMelds = _getCachedPossibleMelds(
+        bot,
+        context,
+      ).where((meld) => meld.any((card) => card.isWild)).toList();
+      if (dirtyMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, dirtyMelds),
+        );
+      }
+    }
+
+    final cardsToAdd = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+      bot,
+    );
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    if (possibleMelds.isNotEmpty) {
+      return BotDecision(
+        action: 'createMeld',
+        data: _selectBestNewMeld(bot, possibleMelds),
+      );
+    }
+
+    return null;
+  }
+
+  /// True when an opponent is close to ending the round (human going out).
+  bool _opponentThreateningGoOut(GameState gameState, Player bot) {
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) {
+        continue;
+      }
+
+      final opponentBooks = opponent.melds
+          .where((m) => m.cards.length >= GameConfig.bookSize)
+          .length;
+
+      if (opponent.canGoOutWithBooks && opponent.currentHand.length <= 10) {
+        return true;
+      }
+
+      if (opponentBooks >= BotConfig.footPhaseOpponentBookPanicThreshold &&
+          opponent.currentHand.length <= 10) {
+        return true;
+      }
+
+      if (opponent.hasPickedUpFoot &&
+          opponentBooks >= 2 &&
+          opponent.currentHand.length <= 8) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // Getters for testing and debugging
