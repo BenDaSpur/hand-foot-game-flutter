@@ -987,7 +987,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _logHumanAction(
         action: 'unlockDiscardPile',
         reasoning: 'Human unlocked discard pile',
-        context: {'drawSource': 'unlock', 'cardsTaken': cardsBeforeUnlock},
+        context: {'cardsTaken': cardsBeforeUnlock},
       );
     } else {
       debugPrint('DEBUG: unlockDiscardPile returned false unexpectedly');

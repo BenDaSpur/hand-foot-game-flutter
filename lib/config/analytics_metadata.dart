@@ -1,7 +1,17 @@
-/// Analytics version metadata — keep [appVersion] in sync with pubspec.yaml.
+import 'package:package_info_plus/package_info_plus.dart';
+
+/// Analytics version metadata loaded at runtime from package info.
 class AnalyticsMetadata {
-  /// App version for cross-session analytics (sync with pubspec.yaml `version`).
-  static const String appVersion = '1.0.0';
+  static String? _appVersion;
+
+  /// Loads [appVersion] from the platform package metadata.
+  static Future<void> initialize() async {
+    final info = await PackageInfo.fromPlatform();
+    _appVersion = info.version;
+  }
+
+  /// App version for cross-session analytics.
+  static String get appVersion => _appVersion ?? 'unknown';
 
   AnalyticsMetadata._();
 }

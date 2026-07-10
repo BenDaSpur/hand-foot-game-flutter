@@ -2,13 +2,23 @@
 String? drawSourceFromAction(String action) {
   switch (action) {
     case 'drawFromDeck':
-      return 'deck';
+    case 'card_drawn':
+      {
+        return 'deck';
+      }
     case 'drawFromDiscard':
-      return 'discard';
+      {
+        return 'discard';
+      }
     case 'unlockDiscardPile':
-      return 'unlock';
+    case 'discard_pile_unlocked':
+      {
+        return 'unlock';
+      }
     default:
-      return null;
+      {
+        return null;
+      }
   }
 }
 
@@ -22,4 +32,11 @@ bool isMeldCreationAction(String action) {
 /// Whether an action/event type represents a discard.
 bool isDiscardAction(String action) {
   return action == 'discardCard';
+}
+
+/// Event-bus events already tracked via human/bot decision logs.
+bool shouldSkipEventBusTurnTracking(String eventType) {
+  return eventType == 'card_drawn' ||
+      eventType == 'meld_created' ||
+      eventType == 'discard_pile_unlocked';
 }
