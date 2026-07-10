@@ -26,7 +26,11 @@ function httpsRequest(options, body, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
       res.on('data', (chunk) => (data += chunk));
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(JSON.parse(data || '{}'));
+          try {
+            resolve(JSON.parse(data || '{}'));
+          } catch (parseError) {
+            reject(parseError);
+          }
         } else {
           reject(new Error(`HTTP ${res.statusCode}: ${data}`));
         }

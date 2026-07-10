@@ -636,6 +636,11 @@ class EnhancedBotAI {
       return BotDecision(action: 'noMeld');
     }
 
+    // Human pattern: burst-meld at 15+ before foot-transition discard paths
+    if (_shouldExecuteDumpStrategy(bot, context)) {
+      return _executeDumpStrategy(bot, context);
+    }
+
     // Check for foot transition decisions
     final controllerForFoot = context.controller as GameController?;
     if (controllerForFoot == null) {
@@ -680,11 +685,6 @@ class EnhancedBotAI {
           data: _meldAnalyzer.findBestMeld(rushMelds, bot: bot),
         );
       }
-    }
-
-    // If ready to dump everything, execute all possible melds
-    if (_shouldExecuteDumpStrategy(bot, context)) {
-      return _executeDumpStrategy(bot, context);
     }
 
     // Look for meld opportunities (fallback for conservative play)

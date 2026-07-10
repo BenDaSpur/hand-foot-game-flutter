@@ -1,3 +1,6 @@
+@Tags(['human_play_pattern_ai'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_discard_analyzer.dart';
@@ -122,18 +125,63 @@ void main() {
       },
     );
 
+    test('bursts at 15-card threshold with high meld potential', () {
+      final bot = controller.gameState.players.firstWhere(
+        (p) => p.id == 'bot1',
+      );
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.hand.clear();
+      bot.hand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+      ]);
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        ])!,
+      );
+
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+
+      final decision = botAI.makeDecision(bot, controller);
+
+      expect(
+        decision.action,
+        anyOf('addToMeld', 'createMultipleMelds'),
+        reason: '15-card hand should burst-meld past accumulation threshold',
+      );
+      expect(bot.currentHand.length, 15);
+    });
+
     test('prefers low-rank discard on large hands even with duplicates', () {
       final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
       bot.hasPlayedDown = true;
       bot.hand.addAll([
-        ...List.generate(
-          4,
-          (_) => const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-        ),
-        ...List.generate(
-          3,
-          (_) => const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-        ),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
         ...List.generate(
           8,
           (i) => PlayingCard(

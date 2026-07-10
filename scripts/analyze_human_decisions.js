@@ -115,7 +115,7 @@ function meldRankFromEvent(e) {
 
 async function main() {
   const creds = loadCreds();
-  const token = await getAccessToken(creds);
+  const token = await getAccessToken(creds, CREDS_PATH);
 
   console.log('Loading sessions...');
   const sessions = await listCollection(token, 'game_sessions', 500);
