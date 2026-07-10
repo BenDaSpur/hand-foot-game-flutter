@@ -110,6 +110,80 @@ void main() {
       expect(decision!.action, equals('goOut'));
     });
 
+    test('does not aggressively finish when only dirty books exist', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.melds.add(
+        Meld(
+          rank: CardRank.queen,
+          cards: [
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          ],
+          type: MeldType.mixed,
+        ),
+      );
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+      ]);
+
+      expect(botPlayer.hasDirtyBook, isTrue);
+      expect(botPlayer.hasCleanBook, isFalse);
+      expect(botPlayer.canGoOutWithBooks, isFalse);
+
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
+
+      final decision = endGameManager.handleEndGame(botPlayer, gameController);
+
+      expect(decision, isNotNull);
+      expect(decision!.action, isNot('discard'));
+      expect(decision.action, isNot('goOut'));
+    });
+
+    test(
+      'builds clean book lane when dirty books exist but clean is missing',
+      () {
+        botPlayer.melds.clear();
+        botPlayer.melds.add(dirtyBook());
+        botPlayer.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          ])!,
+        );
+        botPlayer.hand.clear();
+        botPlayer.foot.clear();
+        botPlayer.foot.add(
+          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+        );
+
+        gameController.gameState.turnPhase = TurnPhase.meld;
+        gameController.gameState.hasDrawnFromDeck = true;
+
+        final decision = endGameManager.handleEndGame(
+          botPlayer,
+          gameController,
+        );
+
+        expect(decision, isNotNull);
+        expect(decision!.action, equals('addToMeld'));
+        final addition = decision.data as Map<String, dynamic>;
+        expect((addition['card'] as PlayingCard).rank, equals(CardRank.seven));
+      },
+    );
+
     test('post-playdown transition triggers on hand pile with 8+ cards', () {
       final transitionManager = BotFootTransitionManager();
       botPlayer.hasPickedUpFoot = false;

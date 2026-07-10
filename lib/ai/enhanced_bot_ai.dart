@@ -705,6 +705,15 @@ class EnhancedBotAI {
     );
     final cardsToAdd = _filterWildCardAdditions(rawCardsToAdd, bot);
     if (cardsToAdd.isNotEmpty) {
+      if (bot.hasPickedUpFoot && bot.hasDirtyBook && !bot.hasCleanBook) {
+        final cleanAdditions = _filterCleanBookPriorityAdditions(
+          bot,
+          cardsToAdd,
+        );
+        if (cleanAdditions.isNotEmpty) {
+          return BotDecision(action: 'addToMeld', data: cleanAdditions.first);
+        }
+      }
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
@@ -1786,6 +1795,11 @@ class EnhancedBotAI {
     final turnCount = _gameAnalyzer.getTurnCount(bot.id);
     final personality = _personalityManager.getPersonality(bot.id);
 
+    // On foot without both book types — keep melding, never hoard toward go-out
+    if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+      return false;
+    }
+
     // Calculate time-based pressure: worry more the longer we've been in hand without reaching foot
     final timePressure = _calculateTimePressure(bot, turnCount, personality);
     final personalityHoldingLimit = _getPersonalityHoldingLimit(
@@ -2530,9 +2544,14 @@ class EnhancedBotAI {
     // No clean book yet: never add wilds to naturals-only melds — use wilds only
     // on piles that are already dirty (building the dirty book lane).
     if (bot.hasPlayedDown && !bot.hasCleanBook) {
+      if (bot.hasPickedUpFoot && bot.hasDirtyBook) {
+        return _filterCleanBookPriorityAdditions(bot, result);
+      }
       result = result.where((addition) {
         final card = addition['card'] as PlayingCard;
-        if (!card.isWild) return true;
+        if (!card.isWild) {
+          return true;
+        }
         final meld = addition['meld'] as Meld;
         final alreadyDirty = meld.cards.any((c) => c.isWild);
         return alreadyDirty;
@@ -2986,17 +3005,22 @@ class EnhancedBotAI {
     final needsDirty = dirtyBooks == 0;
 
     // Find near-complete melds of the needed type
+    final minNearBookSize = needsClean && dirtyBooks > 0 && bot.hasPickedUpFoot
+        ? 3
+        : 5;
+
     for (int i = 0; i < bot.melds.length; i++) {
       final meld = bot.melds[i];
-      if (meld.cards.length >= 5) {
+      if (meld.cards.length >= minNearBookSize) {
         // Near book
         final isClean = meld.isClean;
 
         if ((needsClean && isClean) || (needsDirty && !isClean)) {
           // Try to add cards to complete this book
-          final addableCards = bot.currentHand.where(
-            (card) => meld.canAddCard(card),
-          );
+          final addableCards = bot.currentHand
+              .where((card) => meld.canAddCard(card))
+              .where((card) => needsClean ? !card.isWild : true)
+              .toList();
           if (addableCards.isNotEmpty) {
             return BotDecision(
               action: 'addToMeld',

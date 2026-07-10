@@ -244,10 +244,31 @@ class BotEndGameManager {
       }
     }
 
-    // Aggressive go-out under competitive pressure
+    // Missing a required book type — build the clean/dirty pair before shrinking hand
+    if (!bot.canGoOutWithBooks) {
+      final incompleteBookDecision = _handleIncompleteBookRequirements(
+        bot,
+        controller,
+        gameState.turnPhase,
+      );
+      if (incompleteBookDecision != null) {
+        return incompleteBookDecision;
+      }
+      // Dirty books but no clean book: never discard into an empty-hand trap
+      if (gameState.turnPhase == TurnPhase.discard &&
+          bot.currentHand.length <= 1 &&
+          bot.hasDirtyBook &&
+          !bot.hasCleanBook) {
+        return null;
+      }
+    }
+
+    // Aggressive go-out under competitive pressure (only when books are valid)
     if (_shouldGoOutAggressively(bot, gameState)) {
       final goOutDecision = _attemptAggressiveGoOut(bot, controller);
-      if (goOutDecision != null) return goOutDecision;
+      if (goOutDecision != null) {
+        return goOutDecision;
+      }
     }
 
     // Check if bot is in winning position (has required books and few cards)
@@ -518,7 +539,11 @@ class BotEndGameManager {
       }
     }
 
-    // Priority 2: Complete dirty books if no clean books possible
+    // Priority 2: Complete dirty books only when a clean book already exists
+    if (!bot.hasCleanBook) {
+      return null;
+    }
+
     for (int i = 0; i < bot.melds.length; i++) {
       final meld = bot.melds[i];
       if (meld.cards.length == 6 && !meld.isClean) {
@@ -549,10 +574,18 @@ class BotEndGameManager {
     Map<String, dynamic>? bestAddition;
     int bestScore = -1;
 
+    final needsCleanBook = !bot.hasCleanBook && bot.hasDirtyBook;
+
     for (final addition in cardsToAdd) {
       final meldIndex = addition['meldIndex'] as int;
       final meld = bot.melds[meldIndex];
       final card = addition['card'] as PlayingCard;
+
+      if (needsCleanBook) {
+        if (!meld.isClean || card.isWild) {
+          continue;
+        }
+      }
 
       // Base score on meld progress toward book status
       int score = meld.cards.length;
@@ -681,8 +714,80 @@ class BotEndGameManager {
     return sortedHand.first;
   }
 
+  /// Build toward the missing clean or dirty book before attempting to go out.
+  BotDecision? _handleIncompleteBookRequirements(
+    Player bot,
+    GameController controller,
+    TurnPhase turnPhase,
+  ) {
+    if (turnPhase != TurnPhase.meld) {
+      return null;
+    }
+
+    final needsClean = !bot.hasCleanBook;
+    final needsDirty = !bot.hasDirtyBook;
+    if (!needsClean && !needsDirty) {
+      return null;
+    }
+
+    if (needsClean) {
+      for (int i = 0; i < bot.melds.length; i++) {
+        final meld = bot.melds[i];
+        if (meld.isClean && meld.cards.length < BotConfig.bookSize) {
+          for (final card in bot.currentHand) {
+            if (!card.isWild && _canAddCardToMeld(card, meld)) {
+              return BotDecision(
+                action: 'addToMeld',
+                data: {'meldIndex': i, 'card': card},
+              );
+            }
+          }
+        }
+      }
+
+      final cleanMelds = controller
+          .findPossibleMelds(bot)
+          .where((meld) => !meld.any((card) => card.isWild))
+          .toList();
+      if (cleanMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _findBestBookPotentialMeld(cleanMelds),
+        );
+      }
+    }
+
+    if (needsDirty) {
+      final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+      for (final addition in cardsToAdd) {
+        final meldIndex = addition['meldIndex'] as int;
+        final meld = bot.melds[meldIndex];
+        if (!meld.isClean && meld.cards.length < BotConfig.bookSize) {
+          return BotDecision(action: 'addToMeld', data: addition);
+        }
+      }
+
+      final dirtyMelds = controller
+          .findPossibleMelds(bot)
+          .where((meld) => meld.any((card) => card.isWild))
+          .toList();
+      if (dirtyMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _findBestBookPotentialMeld(dirtyMelds),
+        );
+      }
+    }
+
+    return null;
+  }
+
   /// NEW: Check if bot should go out aggressively under pressure
   bool _shouldGoOutAggressively(Player bot, dynamic gameState) {
+    if (!bot.canGoOutWithBooks) {
+      return false;
+    }
+
     // Get human players
     final humanPlayers = gameState.players.where(
       (p) => p.type == PlayerType.human,
@@ -744,20 +849,21 @@ class BotEndGameManager {
       }
     }
 
-    // If we're close to books, try to complete them aggressively
-    if ((cleanBooks > 0 || dirtyBooks > 0) && bot.currentHand.length <= 3) {
-      // Try to complete the missing book type
+    // If we're close to books, try to complete the missing book type
+    if (cleanBooks > 0 || dirtyBooks > 0) {
       final needsClean = cleanBooks == 0;
       final needsDirty = dirtyBooks == 0;
+      final minMeldSize = needsClean && dirtyBooks > 0 ? 3 : 5;
 
       for (int i = 0; i < bot.melds.length; i++) {
         final meld = bot.melds[i];
-        if (meld.cards.length >= 5) {
-          // Near book - try to complete it
+        if (meld.cards.length >= minMeldSize &&
+            meld.cards.length < BotConfig.bookSize) {
           if ((needsClean && meld.isClean) || (needsDirty && !meld.isClean)) {
-            final addableCards = bot.currentHand.where(
-              (card) => meld.canAddCard(card),
-            );
+            final addableCards = bot.currentHand
+                .where((card) => meld.canAddCard(card))
+                .where((card) => needsClean ? !card.isWild : true)
+                .toList();
             if (addableCards.isNotEmpty) {
               return BotDecision(
                 action: 'addToMeld',
@@ -765,6 +871,19 @@ class BotEndGameManager {
               );
             }
           }
+        }
+      }
+
+      if (needsClean) {
+        final cleanMelds = controller
+            .findPossibleMelds(bot)
+            .where((meld) => !meld.any((card) => card.isWild))
+            .toList();
+        if (cleanMelds.isNotEmpty) {
+          return BotDecision(
+            action: 'createMeld',
+            data: _findBestBookPotentialMeld(cleanMelds),
+          );
         }
       }
     }

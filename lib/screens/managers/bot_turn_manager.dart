@@ -1052,7 +1052,7 @@ class BotTurnManager {
 
         case 'discard':
           final card = decision.data;
-          if (handSize <= 3) {
+          if (handSize <= 3 && bot.canGoOutWithBooks) {
             return '$personality bot discarding ${card?.toString() ?? 'card'} while positioning for end-game';
           } else {
             return '$personality bot discarding ${card?.toString() ?? 'card'} (${handSize - 1} cards remaining)';

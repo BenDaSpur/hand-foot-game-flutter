@@ -237,5 +237,65 @@ void main() {
         anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
       );
     });
+
+    test(
+      'Alex session regression: builds clean sevens instead of wilds on dirty queens',
+      () {
+        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+
+        dealBotFoot([
+          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.three),
+        ]);
+
+        bot.melds.addAll([
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+          ])!,
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.joker),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          ])!,
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.joker),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          ])!,
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          ])!,
+        ]);
+
+        expect(bot.hasDirtyBook, isTrue);
+        expect(bot.hasCleanBook, isFalse);
+        expect(bot.canGoOutWithBooks, isFalse);
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        expect(decision.action, equals('addToMeld'));
+        final addition = decision.data as Map<String, dynamic>;
+        final card = addition['card'] as PlayingCard;
+        expect(card.rank, equals(CardRank.seven));
+        expect(card.isWild, isFalse);
+      },
+    );
   });
 }
