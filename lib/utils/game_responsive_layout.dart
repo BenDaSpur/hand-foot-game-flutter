@@ -25,27 +25,27 @@ class GameCardSizes {
 
   /// Small phone (≤360px)
   static const smallPhone = GameCardSizes(
-    handWidth: 56,
-    handHeight: 78,
-    handOffset: 40,
-    meldWidth: 34,
-    meldHeight: 48,
-    pileWidth: 46,
-    pileHeight: 64,
+    handWidth: 60,
+    handHeight: 84,
+    handOffset: 32,
+    meldWidth: 38,
+    meldHeight: 53,
+    pileWidth: 48,
+    pileHeight: 67,
   );
 
   /// Normal phone (≤430px)
   static const normalPhone = GameCardSizes(
-    handWidth: 62,
-    handHeight: 87,
-    handOffset: 44,
-    meldWidth: 36,
-    meldHeight: 50,
-    pileWidth: 50,
-    pileHeight: 70,
+    handWidth: 68,
+    handHeight: 95,
+    handOffset: 36,
+    meldWidth: 40,
+    meldHeight: 56,
+    pileWidth: 52,
+    pileHeight: 73,
   );
 
-  /// Tablet and desktop (>430px) — matches legacy fixed sizes
+  /// Tablet and desktop (>430px)
   static const tabletPlus = GameCardSizes(
     handWidth: 70,
     handHeight: 98,
@@ -65,6 +65,23 @@ class GameCardSizes {
 
   double handCardLeft(int index) {
     return index * handOffset;
+  }
+
+  GameCardSizes copyWithHand({
+    required double handWidth,
+    required double handHeight,
+    required double handOffset,
+  }) {
+    return GameCardSizes(
+      handWidth: handWidth,
+      handHeight: handHeight,
+      handOffset: handOffset,
+      meldWidth: meldWidth,
+      meldHeight: meldHeight,
+      pileWidth: pileWidth,
+      pileHeight: pileHeight,
+      selectionLift: selectionLift,
+    );
   }
 }
 
@@ -104,6 +121,21 @@ class GameResponsiveLayout {
 
   static GameCardSizes cardSizes(BuildContext context) {
     return cardSizesForWidth(MediaQuery.of(context).size.width);
+  }
+
+  /// Hand cards on phone prioritize readability (horizontal scroll is expected).
+  static GameCardSizes handSizes(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final base = cardSizesForWidth(width);
+    if (!isPhone(width)) {
+      return base;
+    }
+
+    return base.copyWithHand(
+      handWidth: base.handWidth,
+      handHeight: base.handWidth / GameConfig.cardAspectRatio,
+      handOffset: base.handOffset,
+    );
   }
 
   static int getGridCrossAxisCount(BuildContext context) {

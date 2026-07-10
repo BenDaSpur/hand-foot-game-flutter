@@ -7,9 +7,7 @@ import '../utils/game_responsive_layout.dart';
 import 'card_back_widget.dart';
 import 'playing_card_widget.dart';
 
-/// Compact in-game header merging round/phase info, deck/discard piles, and
-/// expandable game stats. Replaces separate MobileStatusBar + GamePilesRow on phone.
-/// expandable game stats. Replaces separate MobileStatusBar + GamePilesRow on phone.
+/// Compact in-game header: round/phase on row 1, deck/discard on row 2 (phone).
 class GameCompactHeader extends StatelessWidget {
   final GameState gameState;
   final GlobalKey deckKey;
@@ -18,6 +16,7 @@ class GameCompactHeader extends StatelessWidget {
   final VoidCallback onToggleExpand;
   final VoidCallback? onRecentActionsTap;
   final List<Widget> headerExtras;
+  final List<Widget> expandedExtras;
 
   const GameCompactHeader({
     super.key,
@@ -28,6 +27,7 @@ class GameCompactHeader extends StatelessWidget {
     required this.onToggleExpand,
     this.onRecentActionsTap,
     this.headerExtras = const [],
+    this.expandedExtras = const [],
   });
 
   Color _phaseColor() {
@@ -44,123 +44,132 @@ class GameCompactHeader extends StatelessWidget {
   String _phaseLabel() {
     switch (gameState.turnPhase) {
       case TurnPhase.draw:
-        return 'DRAW';
+        return 'Draw';
       case TurnPhase.meld:
-        return 'MELD';
+        return 'Meld';
       case TurnPhase.discard:
-        return 'DISCARD';
+        return 'Discard';
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isPhone = GameResponsiveLayout.isPhone(screenWidth);
     final sizes = GameResponsiveLayout.cardSizes(context);
     final deckLow = gameState.deck.size <= 20;
     final deckColor = deckLow ? Colors.red : BalatroTheme.neonYellow;
     final topDiscard = gameState.topDiscard;
-    final pileW = sizes.pileWidth;
-    final pileH = sizes.pileHeight;
 
     return Container(
-      margin: const EdgeInsets.symmetric(
-        horizontal: UIConstants.defaultMargin,
-        vertical: UIConstants.smallSpacing,
-      ),
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
       decoration: BalatroTheme.glowDecoration(
-        backgroundColor: BalatroTheme.darkPurple,
-        glowColor: BalatroTheme.glowColor,
+        backgroundColor: BalatroTheme.darkPurple.withValues(alpha: 0.92),
+        glowColor: BalatroTheme.glowColor.withValues(alpha: 0.35),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: UIConstants.defaultPadding,
-              vertical: UIConstants.smallSpacing,
-            ),
+            padding: const EdgeInsets.fromLTRB(10, 8, 4, 4),
             child: Row(
               children: [
                 _RoundBadge(round: gameState.round),
-                const SizedBox(width: UIConstants.smallSpacing),
+                const SizedBox(width: 6),
                 _PhaseChip(label: _phaseLabel(), color: _phaseColor()),
-                const SizedBox(width: UIConstants.smallSpacing),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _DeckPileAnchor(
-                        key: deckKey,
-                        width: pileW,
-                        height: pileH,
-                        deckSize: gameState.deck.size,
-                        deckLow: deckLow,
-                      ),
-                      SizedBox(width: pileW * 0.35),
-                      _DiscardPileAnchor(
-                        key: discardKey,
-                        width: pileW,
-                        height: pileH,
-                        topDiscard: topDiscard,
-                        discardCount: gameState.discardPile.length,
-                      ),
-                    ],
+                  child: Text(
+                    gameState.currentPlayer.name,
+                    style: const TextStyle(
+                      color: BalatroTheme.secondaryText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (!isPhone) ...headerExtras,
                 if (onRecentActionsTap != null &&
                     gameState.recentActions.isNotEmpty)
                   _RecentActionsChip(
                     count: gameState.recentActions.length,
                     onTap: onRecentActionsTap!,
                   ),
-                ...headerExtras,
                 IconButton(
                   onPressed: onToggleExpand,
                   icon: Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
                     color: BalatroTheme.glowColor,
-                    size: 20,
+                    size: 22,
                   ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
+                    minWidth: 36,
+                    minHeight: 36,
                   ),
                   tooltip: isExpanded ? 'Hide details' : 'Show details',
                 ),
               ],
             ),
           ),
-          if (isExpanded) ...[
-            const Divider(color: BalatroTheme.glowColor, height: 1),
-            Padding(
-              padding: const EdgeInsets.all(UIConstants.defaultPadding),
-              child: Wrap(
-                spacing: UIConstants.mediumSpacing,
-                runSpacing: UIConstants.smallSpacing,
-                children: [
-                  _InfoChip(
-                    label: gameState.currentPlayer.name,
-                    color: BalatroTheme.neonPink,
-                    icon: Icons.person,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LabeledPile(
+                  label: 'Deck',
+                  count: gameState.deck.size,
+                  countColor: deckColor,
+                  child: _DeckPileAnchor(
+                    key: deckKey,
+                    width: sizes.pileWidth,
+                    height: sizes.pileHeight,
+                    deckSize: gameState.deck.size,
                   ),
+                ),
+                SizedBox(width: isPhone ? 32 : 48),
+                _LabeledPile(
+                  label: 'Discard',
+                  count: gameState.discardPile.length,
+                  countColor: BalatroTheme.glowColor,
+                  child: _DiscardPileAnchor(
+                    key: discardKey,
+                    width: sizes.pileWidth,
+                    height: sizes.pileHeight,
+                    topDiscard: topDiscard,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isExpanded) ...[
+            Divider(
+              color: BalatroTheme.glowColor.withValues(alpha: 0.25),
+              height: 1,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (isPhone) ...expandedExtras,
+                  if (isPhone) ...headerExtras,
                   _InfoChip(
-                    label: 'Play Down: ${gameState.playDownRequirement}',
+                    label: 'Play down ${gameState.playDownRequirement}',
                     color: BalatroTheme.neonOrange,
                     icon: Icons.casino,
                   ),
                   _InfoChip(
-                    label: 'Deck: ${gameState.deck.size}${deckLow ? ' ⚠' : ''}',
+                    label: 'Deck ${gameState.deck.size}${deckLow ? ' ⚠' : ''}',
                     color: deckColor,
                     icon: Icons.style,
                   ),
-                  _InfoChip(
-                    label: 'Discard: ${gameState.discardPile.length}',
-                    color: BalatroTheme.glowColor,
-                    icon: Icons.layers,
-                  ),
                   if (topDiscard != null)
                     _InfoChip(
-                      label: 'Top: ${topDiscard.displayName}',
+                      label: 'Top ${topDiscard.displayName}',
                       color: BalatroTheme.neonGreen,
                       icon: Icons.visibility,
                     ),
@@ -170,6 +179,49 @@ class GameCompactHeader extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _LabeledPile extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color countColor;
+  final Widget child;
+
+  const _LabeledPile({
+    required this.label,
+    required this.count,
+    required this.countColor,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 4),
+        child,
+        const SizedBox(height: 3),
+        Text(
+          '$count',
+          style: TextStyle(
+            color: countColor,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -184,9 +236,11 @@ class _RoundBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: BalatroTheme.neonYellow.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: BalatroTheme.neonYellow, width: 1),
+        color: BalatroTheme.neonYellow.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: BalatroTheme.neonYellow.withValues(alpha: 0.7),
+        ),
       ),
       child: Text(
         'R$round',
@@ -211,9 +265,9 @@ class _PhaseChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color, width: 1),
+        color: color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.7)),
       ),
       child: Text(
         label,
@@ -231,42 +285,27 @@ class _DeckPileAnchor extends StatelessWidget {
   final double width;
   final double height;
   final int deckSize;
-  final bool deckLow;
 
   const _DeckPileAnchor({
     super.key,
     required this.width,
     required this.height,
     required this.deckSize,
-    required this.deckLow,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (deckSize > 1)
-              Positioned(
-                left: 3,
-                top: -3,
-                child: CardBackWidget(width: width, height: height),
-              ),
-            CardBackWidget(width: width, height: height),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          '$deckSize',
-          style: TextStyle(
-            color: deckLow ? Colors.red : BalatroTheme.neonYellow,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
+        if (deckSize > 1)
+          Positioned(
+            left: 4,
+            top: -4,
+            child: CardBackWidget(width: width, height: height),
           ),
-        ),
+        CardBackWidget(width: width, height: height),
       ],
     );
   }
@@ -276,54 +315,36 @@ class _DiscardPileAnchor extends StatelessWidget {
   final double width;
   final double height;
   final PlayingCard? topDiscard;
-  final int discardCount;
 
   const _DiscardPileAnchor({
     super.key,
     required this.width,
     required this.height,
     required this.topDiscard,
-    required this.discardCount,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        topDiscard == null
-            ? Container(
-                width: width,
-                height: height,
-                decoration: BoxDecoration(
-                  color: BalatroTheme.darkPurple.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: BalatroTheme.cardBorder.withValues(alpha: 0.5),
-                  ),
-                ),
-                child: Icon(
-                  Icons.layers_clear,
-                  color: Colors.white24,
-                  size: width * 0.35,
-                ),
-              )
-            : PlayingCardWidget(
-                card: topDiscard!,
-                width: width,
-                height: height,
-              ),
-        const SizedBox(height: 2),
-        Text(
-          '$discardCount',
-          style: const TextStyle(
-            color: BalatroTheme.glowColor,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
+    if (topDiscard == null) {
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: BalatroTheme.darkPurple.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: BalatroTheme.cardBorder.withValues(alpha: 0.4),
           ),
         ),
-      ],
-    );
+        child: Icon(
+          Icons.layers_outlined,
+          color: Colors.white.withValues(alpha: 0.2),
+          size: width * 0.35,
+        ),
+      );
+    }
+
+    return PlayingCardWidget(card: topDiscard!, width: width, height: height);
   }
 }
 
@@ -341,16 +362,16 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: BalatroTheme.darkPurple.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.6)),
+        color: Colors.black.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 13, color: color),
           const SizedBox(width: 4),
           Text(
             label,
@@ -374,34 +395,42 @@ class _RecentActionsChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: BalatroTheme.darkPurple.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: BalatroTheme.glowColor.withValues(alpha: 0.5),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          margin: const EdgeInsets.only(right: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: BalatroTheme.glowColor.withValues(alpha: 0.35),
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.history, size: 14, color: BalatroTheme.glowColor),
-            if (count > 0) ...[
-              const SizedBox(width: 2),
-              Text(
-                '$count',
-                style: const TextStyle(
-                  color: BalatroTheme.glowColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.history,
+                size: 15,
+                color: BalatroTheme.glowColor,
               ),
+              if (count > 0) ...[
+                const SizedBox(width: 3),
+                Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: BalatroTheme.glowColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -445,7 +474,10 @@ void showRecentActionsSheet(BuildContext context, GameState gameState) {
                   ],
                 ),
               ),
-              const Divider(color: BalatroTheme.glowColor, height: 1),
+              Divider(
+                color: BalatroTheme.glowColor.withValues(alpha: 0.25),
+                height: 1,
+              ),
               Expanded(
                 child: ListView.builder(
                   controller: scrollController,

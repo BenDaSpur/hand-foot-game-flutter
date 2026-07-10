@@ -5,7 +5,6 @@ import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
 import '../ai/bot_personality.dart';
 
-/// Constants for personality icons
 class PersonalityIcons {
   static const IconData defaultBot = Icons.smart_toy;
   static const IconData conservative = Icons.shield;
@@ -32,47 +31,31 @@ class CompactPlayerScores extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: UIConstants.playerScoresHeight,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Row(
-        children: [
-          Tooltip(
-            message: 'Tap a player to view their melds',
+        children: gameState.players.map((player) {
+          final isViewing = viewingPlayerMelds == player;
+          final isCurrent = player == gameState.currentPlayer;
+          final isCurrentUser = currentUserId != null
+              ? player.id == currentUserId
+              : player.type == PlayerType.human;
+
+          return Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(left: 8, right: 4),
-              child: Icon(
-                Icons.touch_app,
-                size: 16,
-                color: Colors.white.withValues(alpha: 0.4),
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: _PlayerChip(
+                player: player,
+                isViewing: isViewing,
+                isCurrent: isCurrent,
+                isCurrentUser: isCurrentUser,
+                isMultiplayer: currentUserId != null,
+                onTap: () => onPlayerTap(player),
+                botPersonalityManager: botPersonalityManager,
               ),
             ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                children: gameState.players.map((player) {
-                  return SizedBox(
-                    width: UIConstants.playerScoresMinWidth,
-                    child: _PlayerChip(
-                      player: player,
-                      gameState: gameState,
-                      isViewing: viewingPlayerMelds == player,
-                      isCurrent: player == gameState.currentPlayer,
-                      isCurrentUser: currentUserId != null
-                          ? player.id == currentUserId
-                          : player.type == PlayerType.human,
-                      isMultiplayer: currentUserId != null,
-                      onTap: () => onPlayerTap(player),
-                      botPersonalityManager: botPersonalityManager,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -80,7 +63,6 @@ class CompactPlayerScores extends StatelessWidget {
 
 class _PlayerChip extends StatelessWidget {
   final Player player;
-  final GameState gameState;
   final bool isViewing;
   final bool isCurrent;
   final bool isCurrentUser;
@@ -90,7 +72,6 @@ class _PlayerChip extends StatelessWidget {
 
   const _PlayerChip({
     required this.player,
-    required this.gameState,
     required this.isViewing,
     required this.isCurrent,
     required this.isCurrentUser,
@@ -101,136 +82,119 @@ class _PlayerChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        constraints: const BoxConstraints(minHeight: 48),
-        decoration: BoxDecoration(
-          gradient: isViewing
-              ? const LinearGradient(
-                  colors: [BalatroTheme.neonGreen, Colors.green],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : isCurrent
-              ? const LinearGradient(
-                  colors: [BalatroTheme.neonBlue, Colors.blue],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : LinearGradient(
-                  colors: [Colors.grey[700]!, Colors.grey[600]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-          borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
-          border: Border.all(
+    final accent = isViewing
+        ? BalatroTheme.neonGreen
+        : isCurrent
+        ? BalatroTheme.neonBlue
+        : Colors.white.withValues(alpha: 0.35);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Ink(
+          height: UIConstants.playerScoresHeight,
+          decoration: BoxDecoration(
             color: isViewing
-                ? BalatroTheme.neonGreen
+                ? BalatroTheme.neonGreen.withValues(alpha: 0.18)
                 : isCurrent
-                ? BalatroTheme.neonBlue
-                : Colors.grey,
-            width: isViewing ? 2 : 1,
+                ? BalatroTheme.neonBlue.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.22),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: accent,
+              width: isViewing || isCurrent ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isCurrentUser)
-                  const Icon(
-                    Icons.person,
-                    size: UIConstants.playerScoresIconSize,
-                    color: Colors.white,
-                  )
-                else if (isMultiplayer)
-                  const Icon(
-                    Icons.group,
-                    size: UIConstants.playerScoresIconSize,
-                    color: Colors.white70,
-                  )
-                else
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   Icon(
-                    _getBotPersonalityIcon(player),
-                    size: UIConstants.playerScoresIconSize,
-                    color: Colors.white,
+                    _leadingIcon(),
+                    size: 11,
+                    color: Colors.white.withValues(alpha: 0.85),
                   ),
-                const SizedBox(width: 2),
-                Flexible(
-                  child: Text(
-                    player.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: UIConstants.playerScoresNameFontSize,
-                      color: Colors.white,
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      player.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: UIConstants.playerScoresNameFontSize,
+                        color: Colors.white,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
                   ),
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: player.hasPickedUpFoot
-                    ? Colors.orange.withValues(alpha: 0.8)
-                    : Colors.blue.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(4),
+                ],
               ),
-              child: Text(
-                player.hasPickedUpFoot ? 'FOOT' : 'HAND',
-                style: const TextStyle(
-                  fontSize: UIConstants.playerScoresHandFootFontSize,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${player.score}',
-                  style: const TextStyle(
-                    fontSize: UIConstants.playerScoresScoreFontSize,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${player.score}',
+                    style: const TextStyle(
+                      fontSize: UIConstants.playerScoresScoreFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: BalatroTheme.neonYellow,
+                    ),
                   ),
-                ),
-                if (player.melds.isNotEmpty) ...[
                   const SizedBox(width: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 3,
+                      horizontal: 4,
                       vertical: 1,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(3),
+                      color: player.hasPickedUpFoot
+                          ? BalatroTheme.neonOrange.withValues(alpha: 0.35)
+                          : BalatroTheme.neonBlue.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      '${player.melds.length}M',
+                      player.hasPickedUpFoot ? 'FT' : 'HD',
                       style: const TextStyle(
-                        fontSize: UIConstants.playerScoresMeldFontSize,
+                        fontSize: 8,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
                   ),
+                  if (player.melds.isNotEmpty) ...[
+                    const SizedBox(width: 3),
+                    Text(
+                      '${player.melds.length}m',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.white.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  IconData _leadingIcon() {
+    if (isCurrentUser) {
+      return Icons.person;
+    }
+    if (isMultiplayer) {
+      return Icons.group;
+    }
+    return _getBotPersonalityIcon(player);
   }
 
   IconData _getBotPersonalityIcon(Player player) {
@@ -238,9 +202,7 @@ class _PlayerChip extends StatelessWidget {
       return PersonalityIcons.defaultBot;
     }
 
-    final personality = botPersonalityManager!.getPersonality(player.id);
-
-    switch (personality) {
+    switch (botPersonalityManager!.getPersonality(player.id)) {
       case BotPersonality.conservative:
         return PersonalityIcons.conservative;
       case BotPersonality.aggressive:

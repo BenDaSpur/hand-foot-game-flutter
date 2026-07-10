@@ -39,7 +39,7 @@ class GameHandDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sizes = GameResponsiveLayout.cardSizes(context);
+    final sizes = GameResponsiveLayout.handSizes(context);
     final stackHeight =
         sizes.handHeight + sizes.selectionLift + UIConstants.smallSpacing;
 

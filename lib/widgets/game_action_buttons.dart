@@ -413,38 +413,21 @@ class GameActionButtons extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isPhone ? 8 : 16,
-        vertical: isPhone ? 6 : 12,
+        horizontal: isPhone ? 10 : 16,
+        vertical: isPhone ? 8 : 12,
       ),
-      child: isPhone
-          ? Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 6,
-              runSpacing: 6,
-              children: buttons
-                  .map(
-                    (button) => SizedBox(
-                      width: buttons.length <= 2
-                          ? (MediaQuery.of(context).size.width - 24) / 2 - 3
-                          : null,
-                      child: button,
-                    ),
-                  )
-                  .toList(),
+      child: Row(
+        children: buttons
+            .map(
+              (button) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: button,
+                ),
+              ),
             )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: buttons
-                  .map(
-                    (button) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: button,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+            .toList(),
+      ),
     );
   }
 
@@ -455,24 +438,30 @@ class GameActionButtons extends StatelessWidget {
     required BuildContext context,
     Color? backgroundColor,
   }) {
-    final isSmallScreen = GameResponsiveLayout.isMobile(context);
+    final isPhone = GameResponsiveLayout.isPhone(
+      MediaQuery.of(context).size.width,
+    );
 
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: backgroundColor,
+        disabledBackgroundColor: Colors.grey.shade800,
         padding: EdgeInsets.symmetric(
-          vertical: isSmallScreen ? 8 : 12,
-          horizontal: isSmallScreen ? 8 : 16,
+          vertical: isPhone ? 10 : 12,
+          horizontal: isPhone ? 6 : 16,
         ),
-        minimumSize: Size.zero,
+        minimumSize: Size(isPhone ? 0 : 64, 44),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        elevation: isPhone ? 2 : 4,
       ),
       child: Text(
         text,
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontSize: isSmallScreen ? 12 : 14),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: isPhone ? 13 : 14,
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

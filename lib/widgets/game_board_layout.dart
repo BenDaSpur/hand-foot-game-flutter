@@ -3,15 +3,12 @@ import '../models/game_state.dart';
 import '../models/player.dart';
 import '../ai/bot_personality.dart';
 import '../constants/ui_constants.dart';
-import '../utils/game_responsive_layout.dart';
+import '../theme/balatro_theme.dart';
 import 'game_compact_header.dart';
 import 'compact_player_scores.dart';
 import 'collapsible_recent_actions.dart';
 
 /// Mobile-first game board shell shared by solo and multiplayer screens.
-///
-/// Layout zones: compact header → player chips → melds (expanded) → bottom dock
-/// (actions + hand pinned for thumb reach).
 class GameBoardLayout extends StatelessWidget {
   final GameState gameState;
   final Player? viewingPlayerMelds;
@@ -25,6 +22,7 @@ class GameBoardLayout extends StatelessWidget {
   final bool headerExpanded;
   final VoidCallback onHeaderToggle;
   final List<Widget> headerExtras;
+  final List<Widget> expandedHeaderExtras;
   final String? currentUserId;
   final BotPersonalityManager? botPersonalityManager;
   final Widget? aboveMelds;
@@ -46,6 +44,7 @@ class GameBoardLayout extends StatelessWidget {
     required this.headerExpanded,
     required this.onHeaderToggle,
     this.headerExtras = const [],
+    this.expandedHeaderExtras = const [],
     this.currentUserId,
     this.botPersonalityManager,
     this.aboveMelds,
@@ -60,83 +59,74 @@ class GameBoardLayout extends StatelessWidget {
     final isWide = width > UIConstants.smallScreenBreakpoint;
 
     return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Column(
-            children: [
-              GameCompactHeader(
-                gameState: gameState,
-                deckKey: deckKey,
-                discardKey: discardKey,
-                isExpanded: headerExpanded,
-                onToggleExpand: onHeaderToggle,
-                onRecentActionsTap: isWide
-                    ? null
-                    : () => showRecentActionsSheet(context, gameState),
-                headerExtras: headerExtras,
-              ),
+      child: Column(
+        children: [
+          GameCompactHeader(
+            gameState: gameState,
+            deckKey: deckKey,
+            discardKey: discardKey,
+            isExpanded: headerExpanded,
+            onToggleExpand: onHeaderToggle,
+            onRecentActionsTap: isWide
+                ? null
+                : () => showRecentActionsSheet(context, gameState),
+            headerExtras: headerExtras,
+            expandedExtras: expandedHeaderExtras,
+          ),
 
-              if (isWide &&
-                  useDesktopRecentActions &&
-                  gameState.recentActions.isNotEmpty)
-                CollapsibleRecentActions(
-                  gameState: gameState,
-                  isExpanded: recentActionsExpanded,
-                  onToggle: onRecentActionsToggle ?? () {},
+          if (isWide &&
+              useDesktopRecentActions &&
+              gameState.recentActions.isNotEmpty)
+            CollapsibleRecentActions(
+              gameState: gameState,
+              isExpanded: recentActionsExpanded,
+              onToggle: onRecentActionsToggle ?? () {},
+            ),
+
+          CompactPlayerScores(
+            gameState: gameState,
+            viewingPlayerMelds: viewingPlayerMelds,
+            onPlayerTap: onPlayerTap,
+            currentUserId: currentUserId,
+            botPersonalityManager: botPersonalityManager,
+          ),
+
+          if (aboveMelds != null) aboveMelds!,
+
+          Expanded(
+            child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
+          ),
+
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  BalatroTheme.darkPurple.withValues(alpha: 0.88),
+                  BalatroTheme.deepPurple.withValues(alpha: 0.98),
+                ],
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: BalatroTheme.glowColor.withValues(alpha: 0.18),
                 ),
-
-              CompactPlayerScores(
-                gameState: gameState,
-                viewingPlayerMelds: viewingPlayerMelds,
-                onPlayerTap: onPlayerTap,
-                currentUserId: currentUserId,
-                botPersonalityManager: botPersonalityManager,
               ),
-
-              if (aboveMelds != null) aboveMelds!,
-
-              Expanded(
-                child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
-              ),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  border: Border(
-                    top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, -3),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [actionButtons, handDisplay],
-                ),
-              ),
-            ],
-          );
-        },
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [actionButtons, handDisplay],
+            ),
+          ),
+        ],
       ),
     );
-  }
-}
-
-/// Provides [GameCardSizes] to descendants via [InheritedWidget].
-class GameCardSizesScope extends InheritedWidget {
-  final GameCardSizes sizes;
-
-  const GameCardSizesScope({
-    super.key,
-    required this.sizes,
-    required super.child,
-  });
-
-  static GameCardSizes of(BuildContext context) {
-    final scope = context
-        .dependOnInheritedWidgetOfExactType<GameCardSizesScope>();
-    return scope?.sizes ?? GameCardSizes.tabletPlus;
-  }
-
-  @override
-  bool updateShouldNotify(GameCardSizesScope oldWidget) {
-    return sizes.handWidth != oldWidget.sizes.handWidth;
   }
 }

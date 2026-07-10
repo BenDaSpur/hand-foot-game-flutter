@@ -24,8 +24,7 @@ class UIConstants {
   static const double smallScreenBreakpoint = 600.0;
 
   // Player scores
-  static const double playerScoresHeight = 52.0;
-  static const double playerScoresMinWidth = 72.0;
+  static const double playerScoresHeight = 48.0;
   static const double playerScoresIconSize = 12.0;
   static const double playerScoresNameFontSize = 11.0;
   static const double playerScoresScoreFontSize = 13.0;
