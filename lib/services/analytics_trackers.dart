@@ -20,7 +20,9 @@ class TurnTracker {
     String? discardedCardRank,
   }) {
     this.playerId = playerId;
-    this.round = round;
+    if (round != null) {
+      this.round = round;
+    }
     if (playerType != null) {
       this.playerType = playerType;
     }
@@ -96,14 +98,21 @@ class DiscardOutcomeTracker {
 
   bool get hasPending => discarderId != null && cardRank != null;
 
-  void registerDiscard({
+  /// Resolves any existing pending discard as not taken before registering anew.
+  DiscardOutcomeResult? registerDiscard({
     required String discarderId,
     required String cardRank,
     required int turnNumber,
   }) {
+    DiscardOutcomeResult? superseded;
+    if (hasPending) {
+      superseded = onTurnEndedWithoutTake();
+    }
+
     this.discarderId = discarderId;
     this.cardRank = cardRank;
     this.turnNumber = turnNumber;
+    return superseded;
   }
 
   DiscardOutcomeResult? onOpponentTookDiscard({

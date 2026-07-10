@@ -10,6 +10,20 @@ void main() {
       expect(drawSourceFromAction('unlockDiscardPile'), 'unlock');
       expect(drawSourceFromAction('discardCard'), isNull);
     });
+
+    test('maps event-bus action names to normalized drawSource', () {
+      expect(drawSourceFromAction('card_drawn'), 'deck');
+      expect(drawSourceFromAction('discard_pile_unlocked'), 'unlock');
+    });
+  });
+
+  group('shouldSkipEventBusTurnTracking', () {
+    test('skips duplicate event-bus turn metrics', () {
+      expect(shouldSkipEventBusTurnTracking('card_drawn'), isTrue);
+      expect(shouldSkipEventBusTurnTracking('meld_created'), isTrue);
+      expect(shouldSkipEventBusTurnTracking('discard_pile_unlocked'), isTrue);
+      expect(shouldSkipEventBusTurnTracking('player_went_out'), isFalse);
+    });
   });
 
   group('TurnTracker', () {
@@ -55,6 +69,23 @@ void main() {
       tracker.reset();
       expect(tracker.actionCount, 0);
       expect(tracker.drawSources, isEmpty);
+    });
+
+    test('does not clear round when a null round is recorded', () {
+      final tracker = TurnTracker();
+
+      tracker.recordAction(
+        playerId: 'human_1',
+        action: 'drawFromDeck',
+        round: 2,
+      );
+      tracker.recordAction(
+        playerId: 'human_1',
+        action: 'discardCard',
+        round: null,
+      );
+
+      expect(tracker.round, 2);
     });
   });
 
@@ -124,6 +155,28 @@ void main() {
       );
 
       expect(result, isNull);
+      expect(tracker.hasPending, isTrue);
+    });
+
+    test('resolves superseded pending discard before registering anew', () {
+      final tracker = DiscardOutcomeTracker();
+      tracker.registerDiscard(
+        discarderId: 'bot_1',
+        cardRank: 'seven',
+        turnNumber: 3,
+      );
+
+      final superseded = tracker.registerDiscard(
+        discarderId: 'human_1',
+        cardRank: 'queen',
+        turnNumber: 4,
+      );
+
+      expect(superseded, isNotNull);
+      expect(superseded!.outcome, 'discard_not_taken');
+      expect(superseded.outcomeContext['cardRank'], 'seven');
+      expect(tracker.discarderId, 'human_1');
+      expect(tracker.cardRank, 'queen');
       expect(tracker.hasPending, isTrue);
     });
   });

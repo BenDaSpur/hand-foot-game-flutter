@@ -52,11 +52,11 @@ node scripts/query_analytics_session.js --session <sessionId> --turn-summaries -
 
 | Field | Collections | Values |
 |-------|-------------|--------|
-| `appVersion` | all | e.g. `1.0.0` (sync with pubspec.yaml) |
+| `appVersion` | all | e.g. `1.0.0` (from package metadata at runtime) |
 | `botAiVersion` | all | e.g. `2026.07-human-patterns` — bump when bot AI changes |
 | `drawSource` | `game_events`, `bot_decisions` | `deck`, `discard`, `unlock` |
-| `turn_summaries` | per completed turn | `actionCount`, `drawSources`, `meldsCreated`, `discardedRank` |
-| `decision_outcomes` | after discards | `opponent_took_discard`, `opponent_unlocked`, `discard_not_taken` |
+| `actionCount`, `drawSources`, `meldsCreated`, `discardedRank` | `turn_summaries` | per completed turn |
+| `outcome` | `decision_outcomes` | `opponent_took_discard`, `opponent_unlocked`, `discard_not_taken` |
 
 ## Token expiry
 

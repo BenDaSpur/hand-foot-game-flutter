@@ -67,6 +67,7 @@ class GameAnalyticsLogger {
     bool analyticsEnabled = true,
     bool detailedLoggingEnabled = false,
   }) async {
+    await AnalyticsMetadata.initialize();
     _analyticsEnabled = analyticsEnabled;
     _detailedLoggingEnabled = detailedLoggingEnabled;
 
@@ -344,7 +345,7 @@ class GameAnalyticsLogger {
         turnCompletion: true, // Flush faster on turn completion
       );
 
-      _recordActionForTracking(
+      await _recordActionForTracking(
         playerId: botId,
         action: decision,
         playerType: PlayerType.bot.name,
@@ -413,15 +414,17 @@ class GameAnalyticsLogger {
         sanitizedEventData,
       );
 
-      _recordActionForTracking(
-        playerId: playerId,
-        action: eventType,
-        playerType: playerType?.name,
-        handSize: handSize,
-        round: round,
-        turnNumber: _extractTurnNumberFromEventData(sanitizedEventData),
-        discardedCardRank: discardedCardRank,
-      );
+      if (!shouldSkipEventBusTurnTracking(eventType)) {
+        await _recordActionForTracking(
+          playerId: playerId,
+          action: eventType,
+          playerType: playerType?.name,
+          handSize: handSize,
+          round: round,
+          turnNumber: _extractTurnNumberFromEventData(sanitizedEventData),
+          discardedCardRank: discardedCardRank,
+        );
+      }
 
       if (kDebugMode) {
         _logger.fine('🎯 Logged game event: $eventType for $playerId');
@@ -529,15 +532,20 @@ class GameAnalyticsLogger {
       return;
     }
 
-    final notTaken = _discardTracker.onTurnEndedWithoutTake();
-    if (notTaken != null) {
-      await logDecisionOutcome(
-        botId: notTaken.discarderId,
-        originalDecision: 'discardCard',
-        outcome: notTaken.outcome,
-        turnsLater: notTaken.turnsLater,
-        outcomeContext: notTaken.outcomeContext,
-      );
+    final endingPlayerId = event.player?.id;
+    final isDiscardOwnerTurnEnd =
+        endingPlayerId != null && endingPlayerId == _discardTracker.discarderId;
+    if (_discardTracker.hasPending && !isDiscardOwnerTurnEnd) {
+      final notTaken = _discardTracker.onTurnEndedWithoutTake();
+      if (notTaken != null) {
+        await logDecisionOutcome(
+          botId: notTaken.discarderId,
+          originalDecision: 'discardCard',
+          outcome: notTaken.outcome,
+          turnsLater: notTaken.turnsLater,
+          outcomeContext: notTaken.outcomeContext,
+        );
+      }
     }
 
     await _logTurnSummary(
@@ -640,7 +648,7 @@ class GameAnalyticsLogger {
     }
   }
 
-  static void _recordActionForTracking({
+  static Future<void> _recordActionForTracking({
     required String playerId,
     required String action,
     String? playerType,
@@ -648,7 +656,7 @@ class GameAnalyticsLogger {
     int? round,
     int? turnNumber,
     String? discardedCardRank,
-  }) {
+  }) async {
     _turnTracker.recordAction(
       playerId: playerId,
       action: action,
@@ -659,11 +667,20 @@ class GameAnalyticsLogger {
     );
 
     if (isDiscardAction(action) && discardedCardRank != null) {
-      _discardTracker.registerDiscard(
+      final superseded = _discardTracker.registerDiscard(
         discarderId: playerId,
         cardRank: discardedCardRank,
         turnNumber: turnNumber ?? 0,
       );
+      if (superseded != null) {
+        await logDecisionOutcome(
+          botId: superseded.discarderId,
+          originalDecision: 'discardCard',
+          outcome: superseded.outcome,
+          turnsLater: superseded.turnsLater,
+          outcomeContext: superseded.outcomeContext,
+        );
+      }
     }
   }
 
