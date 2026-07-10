@@ -1,8 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../constants/hand_layout_constants.dart';
 import '../models/player.dart';
 import '../models/card.dart';
 import '../theme/balatro_theme.dart';
+import 'card_animation_host.dart';
 import 'playing_card_widget.dart';
 
 /// Reusable hand display widget that matches single-player styling exactly
@@ -17,6 +19,8 @@ class GameHandDisplay extends StatelessWidget {
   final VoidCallback? onReturnToHand;
   final bool isCurrentPlayerTurn; // Control opacity and interactions
   final bool showHighlights; // Control if highlights should be visible
+  final GlobalKey? handStackKey;
+  final ScrollController? handScrollController;
 
   const GameHandDisplay({
     super.key,
@@ -29,6 +33,8 @@ class GameHandDisplay extends StatelessWidget {
     this.onReturnToHand,
     this.isCurrentPlayerTurn = true,
     this.showHighlights = true,
+    this.handStackKey,
+    this.handScrollController,
   });
 
   @override
@@ -82,48 +88,59 @@ class GameHandDisplay extends StatelessWidget {
                   },
                 ),
                 child: SingleChildScrollView(
+                  controller: handScrollController,
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 5,
                   ),
                   child: SizedBox(
-                    width: player.currentHand.isNotEmpty
-                        ? (player.currentHand.length - 1) * 50.0 + 70.0
-                        : 70.0,
+                    width: HandLayoutConstants.handStackWidth(
+                      player.currentHand.length,
+                    ),
                     height:
                         120, // Increased height to accommodate selection animation
                     child: Stack(
+                      key: handStackKey,
                       clipBehavior: Clip
                           .none, // Allow cards to move outside bounds when selected
                       children: player.currentHand.asMap().entries.map((entry) {
                         final index = entry.key;
                         final card = entry.value;
+                        final hideDuringAnimation =
+                            CardAnimationScope.shouldHideHandCard(
+                              context,
+                              index,
+                            );
 
                         return Positioned(
-                          left: index * 50.0,
+                          left: HandLayoutConstants.handCardLeft(index),
                           bottom:
                               5, // Position cards from bottom, leaving space at top for selection animation
                           child: GestureDetector(
-                            onTap: onCardTap != null
+                            onTap: onCardTap != null && !hideDuringAnimation
                                 ? () => onCardTap!(index)
                                 : null,
-                            onDoubleTap: onCardDoubleTap != null
+                            onDoubleTap:
+                                onCardDoubleTap != null && !hideDuringAnimation
                                 ? () => onCardDoubleTap!(index)
                                 : null,
-                            child: PlayingCardWidget(
-                              key: ValueKey(
-                                'hand-${card.rank}-${card.suit}-$index-${viewingPlayerMelds?.id ?? "you"}',
+                            child: Opacity(
+                              opacity: hideDuringAnimation ? 0 : 1,
+                              child: PlayingCardWidget(
+                                key: ValueKey(
+                                  'hand-${card.rank}-${card.suit}-$index-${viewingPlayerMelds?.id ?? "you"}',
+                                ),
+                                card: card,
+                                width: HandLayoutConstants.cardWidth,
+                                height: HandLayoutConstants.cardHeight,
+                                isSelected: selectedCardIndices.contains(index),
+                                isPlayable: isCardPlayable?.call(card) ?? false,
+                                isNewlyDrawn:
+                                    showHighlights &&
+                                    index < player.currentHand.length &&
+                                    player.isCardIndexNewlyDrawn(index),
                               ),
-                              card: card,
-                              width: 70,
-                              height: 98,
-                              isSelected: selectedCardIndices.contains(index),
-                              isPlayable: isCardPlayable?.call(card) ?? false,
-                              isNewlyDrawn:
-                                  showHighlights &&
-                                  index < player.currentHand.length &&
-                                  player.isCardIndexNewlyDrawn(index),
                             ),
                           ),
                         );

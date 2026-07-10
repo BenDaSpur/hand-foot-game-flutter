@@ -291,6 +291,21 @@ class GameConfig {
   /// Animation duration for card movements and UI transitions
   static const Duration animationDuration = Duration(milliseconds: 200);
 
+  /// Duration for cards flying between deck/discard and hand
+  static const Duration cardFlyDuration = Duration(milliseconds: 350);
+
+  /// Duration for center-screen card reveal fan
+  static const Duration cardRevealDuration = Duration(milliseconds: 500);
+
+  /// Pause after reveal so the player can read drawn cards
+  static const Duration cardRevealPause = Duration(milliseconds: 500);
+
+  /// Stagger delay between sequential card flights
+  static const Duration cardStaggerDelay = Duration(milliseconds: 120);
+
+  /// Duration for meld cards flying during discard unlock
+  static const Duration cardMeldFlyDuration = Duration(milliseconds: 400);
+
   /// Bot decision-making delay for realistic gameplay pacing
   static const Duration botDecisionDelay = Duration(milliseconds: 800);
 

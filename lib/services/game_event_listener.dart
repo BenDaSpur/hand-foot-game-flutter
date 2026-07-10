@@ -66,6 +66,11 @@ class GameEventListener {
       eventData: {
         'from_deck': event.fromDeck,
         'drawSource': event.fromDeck ? 'deck' : 'discard',
+        'card_count': event.cards.length,
+        'card_ranks': event.cards.map((card) => card.rank.name).toList(),
+        'card_suits': event.cards
+            .map((card) => card.suit?.name ?? 'joker')
+            .toList(),
         'card_rank': event.card.rank.name,
         'card_suit': event.card.suit?.name ?? 'joker',
         'player_name': event.player?.name ?? 'unknown',
@@ -104,8 +109,12 @@ class GameEventListener {
       playerType: event.player?.type,
       eventData: {
         'drawSource': 'unlock',
-        'cards_taken': event.cardsTaken.length,
-        'card_ranks': event.cardsTaken.map((c) => c.rank.name).toList(),
+        'cards_taken': event.handPickupCards.length,
+        'hand_pickup_count': event.handPickupCards.length,
+        'melded_count': event.meldedCards.length,
+        'meld_index': event.meldIndex,
+        'card_ranks': event.handPickupCards.map((c) => c.rank.name).toList(),
+        'melded_ranks': event.meldedCards.map((c) => c.rank.name).toList(),
         'player_name': event.player?.name ?? 'unknown',
       },
     );

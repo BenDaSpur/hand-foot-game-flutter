@@ -86,15 +86,20 @@ class GameController implements GameInterface {
 
   @override
   bool drawFromDeck() {
-    final player = _gameState.currentPlayer;
+    final handSizeBefore = _gameState.currentPlayer.currentHand.length;
     final result = _gameState.drawFromDeck();
 
-    if (result && player.currentHand.isNotEmpty) {
-      // Get the last card drawn (newest in hand)
-      final drawnCard = player.currentHand.last;
-      _eventBus.publish(
-        CardDrawnEvent(card: drawnCard, fromDeck: true, player: player),
-      );
+    if (result) {
+      final player = _gameState.currentPlayer;
+      final drawnCards = _cardsFromNewlyDrawnIndices(player);
+      if (drawnCards.isEmpty && player.currentHand.length > handSizeBefore) {
+        drawnCards.addAll(player.currentHand.sublist(handSizeBefore));
+      }
+      if (drawnCards.isNotEmpty) {
+        _eventBus.publish(
+          CardDrawnEvent(cards: drawnCards, fromDeck: true, player: player),
+        );
+      }
     }
 
     return result;
@@ -103,13 +108,11 @@ class GameController implements GameInterface {
   @override
   bool drawFromDiscardPile() {
     final player = _gameState.currentPlayer;
-    final topDiscard = _gameState.topDiscard;
+    final unlockContext = _captureDiscardUnlockContext(player);
     final result = _gameState.drawFromDiscard();
 
-    if (result && topDiscard != null) {
-      _eventBus.publish(
-        CardDrawnEvent(card: topDiscard, fromDeck: false, player: player),
-      );
+    if (result) {
+      _publishDiscardUnlockedEvent(player, unlockContext);
     }
 
     return result;
@@ -118,23 +121,70 @@ class GameController implements GameInterface {
   @override
   bool unlockDiscardPile() {
     final player = _gameState.currentPlayer;
-    final cardsBefore = _gameState.discardPile.length;
+    final unlockContext = _captureDiscardUnlockContext(player);
     final result = _gameState.unlockDiscard();
 
     if (result) {
-      // Calculate how many cards were taken
-      final cardsAfter = _gameState.discardPile.length;
-      final cardsTaken = cardsBefore - cardsAfter;
-      final takenCards = _gameState.currentPlayer.currentHand
-          .take(cardsTaken)
-          .toList();
-
-      _eventBus.publish(
-        DiscardPileUnlockedEvent(cardsTaken: takenCards, player: player),
-      );
+      _publishDiscardUnlockedEvent(player, unlockContext);
     }
 
     return result;
+  }
+
+  _DiscardUnlockContext _captureDiscardUnlockContext(Player player) {
+    final topCard = _gameState.topDiscard;
+    if (topCard == null) {
+      return const _DiscardUnlockContext(
+        matchingCards: [],
+        meldIndex: -1,
+        topDiscard: null,
+      );
+    }
+
+    final matchingCards = player.currentHand
+        .where((card) => card.rank == topCard.rank && !card.isWild)
+        .take(2)
+        .toList();
+    final existingMeldIndex = player.findMeldByRank(topCard.rank);
+
+    return _DiscardUnlockContext(
+      matchingCards: matchingCards,
+      meldIndex: existingMeldIndex,
+      topDiscard: topCard,
+    );
+  }
+
+  void _publishDiscardUnlockedEvent(
+    Player player,
+    _DiscardUnlockContext unlockContext,
+  ) {
+    final handPickupCards = _cardsFromNewlyDrawnIndices(player);
+
+    final meldIndex = unlockContext.meldIndex != -1
+        ? unlockContext.meldIndex
+        : player.melds.length - 1;
+    final meldedCards = unlockContext.topDiscard == null
+        ? <PlayingCard>[]
+        : [...unlockContext.matchingCards, unlockContext.topDiscard!];
+
+    _eventBus.publish(
+      DiscardPileUnlockedEvent(
+        handPickupCards: handPickupCards,
+        meldedCards: meldedCards,
+        meldIndex: meldIndex,
+        player: player,
+      ),
+    );
+  }
+
+  List<PlayingCard> _cardsFromNewlyDrawnIndices(Player player) {
+    final cards = <PlayingCard>[];
+    for (final index in player.newlyDrawnCardIndices) {
+      if (index >= 0 && index < player.currentHand.length) {
+        cards.add(player.currentHand[index]);
+      }
+    }
+    return cards;
   }
 
   @override
@@ -634,4 +684,16 @@ class GameController implements GameInterface {
   void dispose() {
     // Cleanup resources if needed
   }
+}
+
+class _DiscardUnlockContext {
+  final List<PlayingCard> matchingCards;
+  final int meldIndex;
+  final PlayingCard? topDiscard;
+
+  const _DiscardUnlockContext({
+    required this.matchingCards,
+    required this.meldIndex,
+    required this.topDiscard,
+  });
 }

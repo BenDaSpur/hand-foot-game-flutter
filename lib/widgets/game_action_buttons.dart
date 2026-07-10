@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../config/game_config.dart';
+import 'card_animation_host.dart';
 
 /// Bot personality types (simplified for message selection)
 enum _BotStyle { conservative, aggressive, bookBuilder, adaptive }
@@ -362,11 +363,13 @@ class GameActionButtons extends StatelessWidget {
 
     // Build buttons based on turn phase with compact sizing for mobile
     final buttons = <Widget>[];
+    final isAnimating =
+        CardAnimationScope.maybeOf(context)?.isAnimating ?? false;
 
     if (gameState.turnPhase == TurnPhase.draw) {
       buttons.add(
         _buildCompactButton(
-          onPressed: onDrawFromDeck,
+          onPressed: isAnimating ? null : onDrawFromDeck,
           text: 'Draw from deck',
           context: context,
         ),
@@ -374,7 +377,7 @@ class GameActionButtons extends StatelessWidget {
       if (onUnlockDiscard != null) {
         buttons.add(
           _buildCompactButton(
-            onPressed: onUnlockDiscard,
+            onPressed: isAnimating ? null : onUnlockDiscard,
             text: 'Take Discard',
             context: context,
           ),
@@ -385,7 +388,7 @@ class GameActionButtons extends StatelessWidget {
     if (gameState.turnPhase == TurnPhase.meld) {
       buttons.add(
         _buildCompactButton(
-          onPressed: onShowAdvancedMeldSelector,
+          onPressed: isAnimating ? null : onShowAdvancedMeldSelector,
           text: 'Play Cards',
           backgroundColor: const Color(
             0xFF16c79a,
@@ -395,7 +398,7 @@ class GameActionButtons extends StatelessWidget {
       );
       buttons.add(
         _buildCompactButton(
-          onPressed: _hasSelectedCard ? onDiscard : null,
+          onPressed: isAnimating ? null : (_hasSelectedCard ? onDiscard : null),
           text: _discardButtonText,
           backgroundColor:
               _discardButtonColor ??
@@ -406,7 +409,7 @@ class GameActionButtons extends StatelessWidget {
       if (selectedCardIndices.isNotEmpty) {
         buttons.add(
           _buildCompactButton(
-            onPressed: onClearSelection,
+            onPressed: isAnimating ? null : onClearSelection,
             text: 'Clear',
             backgroundColor: Colors.grey,
             context: context,
