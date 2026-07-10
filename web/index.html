@@ -50,6 +50,34 @@
     <title>Hand & Foot Card Game</title>
     <link rel="manifest" href="manifest.json" />
 
+    <!-- Prevent mobile browser long-press menus (Find in Page, text selection) -->
+    <style>
+      html,
+      body,
+      flt-glass-pane,
+      flt-scene-host,
+      canvas {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+
+      /* Keep native text entry usable in multiplayer lobby / dialogs */
+      input,
+      textarea,
+      [contenteditable="true"] {
+        -webkit-touch-callout: default;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+      }
+    </style>
+
     <!-- Preload critical resources -->
     <link rel="preload" href="flutter_bootstrap.js" as="script" />
   </head>
@@ -77,6 +105,40 @@
     </div>
 
     <script>
+      // Block browser long-press / right-click menus during gameplay.
+      // Allow text selection only in real form fields (multiplayer lobby).
+      function isEditableTarget(target) {
+        if (!target || !target.tagName) {
+          return false;
+        }
+        const tag = target.tagName.toLowerCase();
+        return (
+          tag === "input" ||
+          tag === "textarea" ||
+          target.isContentEditable
+        );
+      }
+
+      document.addEventListener(
+        "contextmenu",
+        function (event) {
+          if (!isEditableTarget(event.target)) {
+            event.preventDefault();
+          }
+        },
+        { passive: false }
+      );
+
+      document.addEventListener(
+        "selectstart",
+        function (event) {
+          if (!isEditableTarget(event.target)) {
+            event.preventDefault();
+          }
+        },
+        { passive: false }
+      );
+
       // Hide loading screen when Flutter is ready
       window.addEventListener("flutter-first-frame", function () {
         const loading = document.getElementById("loading");

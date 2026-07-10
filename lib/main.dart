@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/main_menu_screen.dart';
@@ -9,6 +10,16 @@ import 'theme/balatro_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Prevent mobile browser long-press menus (Find in Page, text selection)
+  // from interrupting card taps during gameplay.
+  if (kIsWeb) {
+    try {
+      await BrowserContextMenu.disableContextMenu();
+    } catch (e) {
+      debugPrint('Failed to disable browser context menu: $e');
+    }
+  }
 
   // Skip font preloading during integration tests to avoid binding conflicts
   if (!kIsWeb) {
