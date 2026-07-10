@@ -2746,7 +2746,23 @@ class EnhancedBotAI {
 
     // Large foot hand: every personality must meld (not just adaptive at 10+)
     if (handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
-      return _forceFootPhaseMeld(bot, context, prioritizeMissingBookType: true);
+      final forced = _forceFootPhaseMeld(
+        bot,
+        context,
+        prioritizeMissingBookType: true,
+      );
+      if (forced != null) {
+        return forced;
+      }
+
+      // Foot hoarding fallback (session_17836311659865986): any meld beats drawing again
+      final anyMelds = _getCachedPossibleMelds(bot, context);
+      if (anyMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, anyMelds),
+        );
+      }
     }
 
     return null;
@@ -2813,15 +2829,41 @@ class EnhancedBotAI {
       }
     }
 
-    final cardsToAdd = _filterWildCardAdditions(
+    var cardsToAdd = _filterWildCardAdditions(
       _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
       bot,
     );
+
+    // Alex-style foot failure: hoarding on dirty books while clean book still missing
+    if (prioritizeMissingBookType && needsClean && bot.hasDirtyBook) {
+      cardsToAdd = cardsToAdd.where((addition) {
+        final meldIndex = addition['meldIndex'] as int;
+        final card = addition['card'] as PlayingCard;
+        final meld = bot.melds[meldIndex];
+        if (meld.cards.length >= GameConfig.bookSize) {
+          return false;
+        }
+        if (card.isWild) {
+          return false;
+        }
+        return !meld.cards.any((existing) => existing.isWild);
+      }).toList();
+    }
+
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
-    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    var possibleMelds = _getCachedPossibleMelds(bot, context);
+    if (prioritizeMissingBookType && needsClean && bot.hasDirtyBook) {
+      final cleanOnly = possibleMelds
+          .where((meld) => !meld.any((card) => card.isWild))
+          .toList();
+      if (cleanOnly.isNotEmpty) {
+        possibleMelds = cleanOnly;
+      }
+    }
+
     if (possibleMelds.isNotEmpty) {
       return BotDecision(
         action: 'createMeld',

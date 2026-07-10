@@ -118,6 +118,59 @@ void main() {
       },
     );
 
+    test(
+      'adaptive bot avoids inflating dirty books when clean book still needed',
+      () {
+        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+
+        dealBotFoot([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ]);
+
+        bot.melds.addAll([
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+          ])!,
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          ])!,
+        ]);
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        expect(decision.action, isNot('noMeld'));
+        if (decision.action == 'createMeld') {
+          final meld = decision.data as List<PlayingCard>;
+          expect(meld.any((c) => c.isWild), isFalse);
+        } else if (decision.action == 'addToMeld') {
+          final addition = decision.data as Map<String, dynamic>;
+          final card = addition['card'] as PlayingCard;
+          expect(card.isWild, isFalse);
+        }
+      },
+    );
+
     test('bot on foot melds aggressively when human threatens go-out', () {
       human.hasPickedUpFoot = true;
       human.foot.clear();
