@@ -18,6 +18,7 @@ import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../widgets/game_action_buttons.dart';
+import '../widgets/game_session_info_menu.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
 import '../services/analytics_batcher.dart';
@@ -1723,12 +1724,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     case 'how_to_play':
                       _dialogManager.showHowToPlayDialog();
                       break;
+                    case GameSessionInfoMenu.copyValue:
+                      GameSessionInfoMenu.copyToClipboard(
+                        context,
+                        _soloSessionInfo(gameState),
+                      );
+                      break;
                     case 'main_menu':
                       _returnToMainMenu();
                       break;
                   }
                 },
                 itemBuilder: (BuildContext context) => [
+                  ...GameSessionInfoMenu.buildItems(
+                    _soloSessionInfo(gameState),
+                  ),
                   const PopupMenuItem<String>(
                     value: 'new_game',
                     child: Row(
@@ -2193,6 +2203,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  GameSessionInfo _soloSessionInfo(GameState gameState) {
+    return GameSessionInfo(
+      analyticsSessionId: _analyticsSessionId,
+      gameSeed: gameState.deck.seed?.toString(),
     );
   }
 

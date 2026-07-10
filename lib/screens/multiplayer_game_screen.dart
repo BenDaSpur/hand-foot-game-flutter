@@ -5,6 +5,7 @@ import '../models/game_state.dart';
 import '../game/enhanced_multiplayer_controller.dart';
 import '../widgets/compact_player_scores.dart';
 import '../widgets/game_app_bar.dart';
+import '../widgets/game_session_info_menu.dart';
 import '../widgets/game_action_buttons.dart';
 import '../widgets/melds_section.dart';
 import '../widgets/collapsible_recent_actions.dart';
@@ -413,6 +414,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
               isMultiplayer: true,
               connectionStream: _gameController.connectionStream,
               isOnline: _gameController.isOnline,
+              sessionInfo: GameSessionInfo(
+                gameId: _gameController.gameId,
+                playerId: _gameController.userId,
+              ),
               onLeaveGame: () => Navigator.pop(context),
             ),
             body: Column(
