@@ -354,13 +354,16 @@ class GameActionButtons extends StatelessWidget {
     final buttons = <Widget>[];
     final isAnimating =
         CardAnimationScope.maybeOf(context)?.isAnimating ?? false;
+    final isPhone = GameResponsiveLayout.isPhone(
+      MediaQuery.of(context).size.width,
+    );
 
     if (gameState.turnPhase == TurnPhase.draw) {
       buttons.add(
         _buildCompactButton(
           onPressed: isAnimating ? null : onDrawFromDeck,
           text: 'Draw from deck',
-          context: context,
+          isPhone: isPhone,
         ),
       );
       if (onUnlockDiscard != null) {
@@ -368,7 +371,7 @@ class GameActionButtons extends StatelessWidget {
           _buildCompactButton(
             onPressed: isAnimating ? null : onUnlockDiscard,
             text: 'Take Discard',
-            context: context,
+            isPhone: isPhone,
           ),
         );
       }
@@ -379,20 +382,20 @@ class GameActionButtons extends StatelessWidget {
         _buildCompactButton(
           onPressed: isAnimating ? null : onShowAdvancedMeldSelector,
           text: 'Play Cards',
+          isPhone: isPhone,
           backgroundColor: const Color(
             0xFF16c79a,
           ), // Neon green for meld action
-          context: context,
         ),
       );
       buttons.add(
         _buildCompactButton(
           onPressed: isAnimating ? null : (_hasSelectedCard ? onDiscard : null),
           text: _discardButtonText,
+          isPhone: isPhone,
           backgroundColor:
               _discardButtonColor ??
               const Color(0xFFe94560), // Neon pink for discard
-          context: context,
         ),
       );
       if (selectedCardIndices.isNotEmpty) {
@@ -400,16 +403,12 @@ class GameActionButtons extends StatelessWidget {
           _buildCompactButton(
             onPressed: isAnimating ? null : onClearSelection,
             text: 'Clear',
+            isPhone: isPhone,
             backgroundColor: Colors.grey,
-            context: context,
           ),
         );
       }
     }
-
-    final isPhone = GameResponsiveLayout.isPhone(
-      MediaQuery.of(context).size.width,
-    );
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -435,13 +434,9 @@ class GameActionButtons extends StatelessWidget {
   Widget _buildCompactButton({
     required VoidCallback? onPressed,
     required String text,
-    required BuildContext context,
+    required bool isPhone,
     Color? backgroundColor,
   }) {
-    final isPhone = GameResponsiveLayout.isPhone(
-      MediaQuery.of(context).size.width,
-    );
-
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(

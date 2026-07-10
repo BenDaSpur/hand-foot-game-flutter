@@ -15,11 +15,6 @@ class HandLayoutConstants {
     return GameResponsiveLayout.cardSizesForWidth(width);
   }
 
-  static double handStackWidth(int cardCount, [GameCardSizes? sizes]) {
-    final s = sizes ?? GameCardSizes.tabletPlus;
-    return s.handStackWidth(cardCount);
-  }
-
   static double handCardLeft(int index, [GameCardSizes? sizes]) {
     final s = sizes ?? GameCardSizes.tabletPlus;
     return s.handCardLeft(index);

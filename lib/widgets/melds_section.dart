@@ -30,7 +30,7 @@ class MeldsSection extends StatelessWidget {
   });
 
   String _getMeldsHeaderText(Player player) {
-    if (player.name == 'You') {
+    if (player.id == humanPlayer.id) {
       return 'Your Melds';
     }
     return '${player.name}\'s Melds';

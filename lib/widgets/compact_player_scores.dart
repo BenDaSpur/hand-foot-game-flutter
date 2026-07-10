@@ -116,7 +116,7 @@ class _PlayerChip extends StatelessWidget {
                 children: [
                   Icon(
                     _leadingIcon(),
-                    size: 11,
+                    size: UIConstants.playerScoresIconSize,
                     color: Colors.white.withValues(alpha: 0.85),
                   ),
                   const SizedBox(width: 3),
@@ -162,7 +162,7 @@ class _PlayerChip extends StatelessWidget {
                     child: Text(
                       player.hasPickedUpFoot ? 'FT' : 'HD',
                       style: const TextStyle(
-                        fontSize: 8,
+                        fontSize: UIConstants.playerScoresHandFootFontSize,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
@@ -173,7 +173,7 @@ class _PlayerChip extends StatelessWidget {
                     Text(
                       '${player.melds.length}m',
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: UIConstants.playerScoresMeldFontSize,
                         color: Colors.white.withValues(alpha: 0.6),
                       ),
                     ),

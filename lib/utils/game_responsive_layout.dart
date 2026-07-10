@@ -90,6 +90,7 @@ class GameResponsiveLayout {
   GameResponsiveLayout._();
 
   static const double smallPhoneBreakpoint = 360;
+  static const double compactPhoneBreakpoint = 400;
   static const double normalPhoneBreakpoint = 430;
 
   static bool isPhone(double width) {
@@ -106,7 +107,7 @@ class GameResponsiveLayout {
   }
 
   static bool isSmallMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width <= 400.0;
+    return MediaQuery.of(context).size.width <= compactPhoneBreakpoint;
   }
 
   static GameCardSizes cardSizesForWidth(double width) {
@@ -141,10 +142,10 @@ class GameResponsiveLayout {
   static int getGridCrossAxisCount(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
 
-    if (screenWidth <= 360.0) {
+    if (screenWidth <= smallPhoneBreakpoint) {
       return 4;
     }
-    if (screenWidth <= 400.0) {
+    if (screenWidth <= compactPhoneBreakpoint) {
       return 5;
     }
 

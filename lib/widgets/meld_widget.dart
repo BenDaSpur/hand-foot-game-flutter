@@ -4,6 +4,25 @@ import '../theme/balatro_theme.dart';
 import '../utils/game_responsive_layout.dart';
 import 'playing_card_widget.dart';
 
+class _MeldLayout {
+  static const double phoneOuterMargin = 4;
+  static const double tabletOuterMargin = 8;
+  static const double phonePadding = 6;
+  static const double tabletPadding = 8;
+  static const double borderRadius = 12;
+  static const double badgeBorderRadius = 4;
+  static const double activeBorderWidth = 2;
+  static const double inactiveBorderWidth = 1;
+  static const double titleFontSize = 13;
+  static const double badgeFontSize = 11;
+  static const double bookBadgeFontSize = 9;
+  static const double addButtonFontSize = 9;
+  static const double headerSpacing = 6;
+  static const double bookSpacing = 4;
+  static const double cardsTopSpacing = 6;
+  static const double cardWrapSpacing = 3;
+}
+
 class MeldWidget extends StatelessWidget {
   final Meld meld;
   final bool canAddCards;
@@ -40,7 +59,9 @@ class MeldWidget extends StatelessWidget {
     final isPhone = GameResponsiveLayout.isPhone(
       MediaQuery.of(context).size.width,
     );
-    final outerMargin = isPhone ? 4.0 : 8.0;
+    final outerMargin = isPhone
+        ? _MeldLayout.phoneOuterMargin
+        : _MeldLayout.tabletOuterMargin;
 
     Color borderColor;
     Color backgroundColor;
@@ -59,14 +80,18 @@ class MeldWidget extends StatelessWidget {
       onTap: onTap != null ? () => onTap!(meldIndex) : null,
       child: Container(
         margin: EdgeInsets.all(outerMargin),
-        padding: EdgeInsets.all(isPhone ? 6 : 8),
+        padding: EdgeInsets.all(
+          isPhone ? _MeldLayout.phonePadding : _MeldLayout.tabletPadding,
+        ),
         decoration: BoxDecoration(
           color: backgroundColor,
           border: Border.all(
             color: borderColor,
-            width: canAcceptSelectedCard || canAddCards ? 2 : 1,
+            width: canAcceptSelectedCard || canAddCards
+                ? _MeldLayout.activeBorderWidth
+                : _MeldLayout.inactiveBorderWidth,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(_MeldLayout.borderRadius),
           boxShadow: canAcceptSelectedCard
               ? [
                   BoxShadow(
@@ -85,49 +110,53 @@ class MeldWidget extends StatelessWidget {
                   child: Text(
                     meld.toString(),
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: _MeldLayout.titleFontSize,
                       fontWeight: FontWeight.bold,
                       color: BalatroTheme.primaryText,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: _MeldLayout.headerSpacing),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
+                    horizontal: _MeldLayout.headerSpacing,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
                     color: _getMeldTypeColor(),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(
+                      _MeldLayout.badgeBorderRadius,
+                    ),
                   ),
                   child: Text(
                     '${meld.pointValue} pts',
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: _MeldLayout.badgeFontSize,
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 if (meld.isBook) ...[
-                  const SizedBox(width: 4),
+                  SizedBox(width: _MeldLayout.bookSpacing),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
+                      horizontal: _MeldLayout.headerSpacing,
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
                       color: meld.isClean
                           ? BalatroTheme.neonGreen
                           : BalatroTheme.neonPink,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(
+                        _MeldLayout.badgeBorderRadius,
+                      ),
                     ),
                     child: Text(
                       meld.isClean ? 'CLEAN' : 'DIRTY',
                       style: const TextStyle(
-                        fontSize: 9,
+                        fontSize: _MeldLayout.bookBadgeFontSize,
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -135,26 +164,28 @@ class MeldWidget extends StatelessWidget {
                   ),
                 ],
                 if (canAddCards && compatibleCardsInHand > 0) ...[
-                  const SizedBox(width: 6),
+                  SizedBox(width: _MeldLayout.headerSpacing),
                   GestureDetector(
                     onTap: onSelectAllCards != null
                         ? () => onSelectAllCards!(meldIndex)
                         : null,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
+                        horizontal: _MeldLayout.headerSpacing,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
                         color: BalatroTheme.neonBlue,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(
+                          _MeldLayout.badgeBorderRadius,
+                        ),
                       ),
                       child: Text(
                         compatibleCardsAreWilds
                             ? '+$compatibleCardsInHand wilds'
                             : '+$compatibleCardsInHand',
                         style: const TextStyle(
-                          fontSize: 9,
+                          fontSize: _MeldLayout.addButtonFontSize,
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
@@ -164,10 +195,10 @@ class MeldWidget extends StatelessWidget {
                 ],
               ],
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: _MeldLayout.cardsTopSpacing),
             Wrap(
-              spacing: 3,
-              runSpacing: 3,
+              spacing: _MeldLayout.cardWrapSpacing,
+              runSpacing: _MeldLayout.cardWrapSpacing,
               children: () {
                 final sortedCards = [...meld.cards];
                 sortedCards.sort(
