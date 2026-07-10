@@ -1735,7 +1735,24 @@ class EnhancedBotAI {
     if (!_isInHumanAccumulationWindow(bot, context)) {
       return false;
     }
-    return !_shouldExecuteDumpStrategy(bot, context);
+    if (_shouldExecuteDumpStrategy(bot, context)) {
+      return false;
+    }
+
+    // Allow trimming melds that drop hand below accumulation window (e.g. 8→5)
+    final controller = context.controller as GameController?;
+    if (controller != null) {
+      final melds = _getCachedPossibleMelds(bot, context);
+      if (melds.isNotEmpty) {
+        final bestMeld = _meldAnalyzer.findBestMeld(melds, bot: bot);
+        final handAfterMeld = bot.currentHand.length - bestMeld.length;
+        if (handAfterMeld < BotConfig.humanAccumulationMinHand) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   /// Strategic holding decision: Should bot hold cards instead of melding immediately?
