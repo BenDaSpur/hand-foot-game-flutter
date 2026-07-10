@@ -12,7 +12,7 @@ import '../models/meld.dart';
 import 'firebase_constants.dart';
 import 'device_service.dart';
 
-// Import Firebase options - GitHub Pages will overwrite this file with production config
+// Import Firebase options - production builds inject config via Vercel or CI secrets
 import '../firebase_options.dart';
 
 /// Firebase service for handling multiplayer game state synchronization
@@ -47,7 +47,7 @@ class FirebaseService {
     }
 
     try {
-      // Use Firebase options (stub by default, overwritten with production on GitHub Pages)
+      // Use Firebase options (stub by default, overwritten in production builds)
       final options = DefaultFirebaseOptions.currentPlatform;
 
       final configType = options.projectId.contains('stub')

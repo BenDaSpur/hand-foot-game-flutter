@@ -250,6 +250,9 @@ class BotConfig {
   /// Bonus for discarding low ranks (4–8 are top human discard targets)
   static const int humanLowRankDiscardBonus = 25;
 
+  /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
+  static const String botAiVersion = '2026.07-human-patterns';
+
   // Prevent instantiation
   BotConfig._();
 }

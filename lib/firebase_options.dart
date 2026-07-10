@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart'
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
 /// IMPORTANT: This is a STUB configuration for development.
-/// Production configs are injected by GitHub Actions from secrets.
+/// Production configs are injected by Vercel builds or GitHub Actions from secrets.
 /// For local testing, use the scripts/generate_firebase_config.sh script.
 ///
 /// Example:

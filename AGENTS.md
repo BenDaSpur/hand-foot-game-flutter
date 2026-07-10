@@ -19,6 +19,7 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 
 ### Running the app (dev mode)
 - Run on web: `flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080` (serves at `http://localhost:8080`). Use a browser to reach it; the `web-server` device has no auto-launched Chrome. The first web build takes ~30–60s to compile before the URL is served.
+- Production web app: **https://playhandfoot.com** (Vercel; see `docs/DEPLOYMENT.md` and `vercel.json`).
 - Solo play (`PLAY SOLO`) is fully offline and needs no backend. `main.dart` catches Firebase init failures and continues, so the app runs without Firebase credentials.
 
 ### Multiplayer / Firebase (optional)

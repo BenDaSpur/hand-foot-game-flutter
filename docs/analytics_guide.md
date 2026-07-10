@@ -61,6 +61,8 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
     "conservative": 1
   },
   gameSeed: 123456, // For reproducible game analysis
+  appVersion: "1.0.0",
+  botAiVersion: "2026.07-human-patterns",
   finalScores: [1250, 980, 750],
   winnerId: "player_1",
   sessionDuration: 1800,
@@ -84,6 +86,9 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   botId: "bot_1",
   botPersonality: "aggressive",
   decision: "takePile",
+  drawSource: "discard",
+  appVersion: "1.0.0",
+  botAiVersion: "2026.07-human-patterns",
   reasoning: "Pile contains valuable cards for book completion",
   confidence: 0.8,
   gameSeed: 123456, // Same seed for reproducible analysis
@@ -103,11 +108,54 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   eventType: "meld_created",
   playerId: "player_1",
   playerType: "human",
+  drawSource: "deck",  // deck | discard | unlock (when applicable)
+  appVersion: "1.0.0",
+  botAiVersion: "2026.07-human-patterns",
   success: true,
   eventData: {
     cardCount: 5,
     pointValue: 150
   }
+}
+```
+
+### turn_summaries
+```firestore
+{
+  sessionId: "session_1640995200000",
+  timestamp: timestamp,
+  turnNumber: 12,
+  playerId: "player_1",
+  playerType: "human",
+  round: 2,
+  actionCount: 4,
+  drawSources: ["deck"],
+  meldsCreated: 1,
+  discardedRank: "five",
+  handSizeAtEnd: 11,
+  nextPlayerId: "bot_1",
+  appVersion: "1.0.0",
+  botAiVersion: "2026.07-human-patterns"
+}
+```
+
+### decision_outcomes
+```firestore
+{
+  sessionId: "session_1640995200000",
+  timestamp: timestamp,
+  recordType: "outcome",
+  botId: "bot_1",
+  originalDecision: "discardCard",
+  outcome: "opponent_took_discard",  // or opponent_unlocked | discard_not_taken
+  turnsLater: 0,
+  outcomeContext: {
+    cardRank: "seven",
+    discarderId: "bot_1",
+    takerId: "player_1"
+  },
+  appVersion: "1.0.0",
+  botAiVersion: "2026.07-human-patterns"
 }
 ```
 
