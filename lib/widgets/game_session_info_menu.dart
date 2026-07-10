@@ -35,12 +35,10 @@ class GameSessionInfo {
       lines.add('Firestore: ${FirebaseConstants.gamesCollection}/$gameId');
     }
 
-    final sessionId =
-        analyticsSessionId ?? GameAnalyticsLogger.currentSessionId;
-    if (sessionId != null) {
-      lines.add('Session: $sessionId');
+    if (analyticsSessionId != null) {
+      lines.add('Session: $analyticsSessionId');
       lines.add(
-        'Firestore: ${GameAnalyticsLogger.gameSessionsCollection}/$sessionId',
+        'Firestore: ${GameAnalyticsLogger.gameSessionsCollection}/$analyticsSessionId',
       );
     }
 
@@ -136,9 +134,6 @@ class _SessionInfoPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sessionId =
-        info.analyticsSessionId ?? GameAnalyticsLogger.currentSessionId;
-
     return SizedBox(
       width: GameSessionInfoMenu._panelWidth,
       child: Container(
@@ -178,11 +173,11 @@ class _SessionInfoPanel extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
-            if (sessionId != null) ...[
+            if (info.analyticsSessionId != null) ...[
               const Text('Analytics session', style: _labelStyle),
               const SizedBox(height: 2),
               Text(
-                sessionId,
+                info.analyticsSessionId!,
                 style: _monoValueStyle,
                 maxLines: 2,
                 softWrap: true,

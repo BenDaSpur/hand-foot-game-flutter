@@ -16,6 +16,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onHowToPlay;
   final VoidCallback? onLeaveGame;
   final GameSessionInfo? sessionInfo;
+  final List<Widget> additionalActions;
 
   const GameAppBar({
     super.key,
@@ -30,6 +31,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onHowToPlay,
     this.onLeaveGame,
     this.sessionInfo,
+    this.additionalActions = const [],
   });
 
   @override
@@ -54,6 +56,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       actions: [
+        ...additionalActions,
         // Round indicator
         Container(
           margin: const EdgeInsets.all(8),
@@ -222,9 +225,8 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ],
               ),
             ),
-            if (sessionInfo != null) ...[
+            if (sessionInfo != null)
               ...GameSessionInfoMenu.buildItems(sessionInfo!),
-            ],
           ],
         ),
       ],
