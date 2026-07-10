@@ -3,6 +3,7 @@ import '../game/events/game_event.dart';
 import '../game/events/game_event_bus.dart';
 import '../utils/debug_logger.dart';
 import 'game_analytics_logger.dart';
+import 'analytics_batcher.dart';
 
 /// Service that listens to game events and handles logging and analytics.
 ///
@@ -38,6 +39,11 @@ class GameEventListener {
     _subscriptions.add(
       _eventBus.subscribeToType<TurnEndedEvent>(_handleTurnEnded),
     );
+    _subscriptions.add(
+      _eventBus.subscribeToType<DiscardPileUnlockedEvent>(
+        _handleDiscardPileUnlocked,
+      ),
+    );
   }
 
   /// Handle any game event for general logging
@@ -51,12 +57,15 @@ class GameEventListener {
   void _handleCardDrawn(CardDrawnEvent event) {
     if (_isDisposed) return;
 
+    GameAnalyticsLogger.handleCardDrawnForOutcomes(event);
+
     GameAnalyticsLogger.logGameEvent(
       eventType: 'card_drawn',
       playerId: event.player?.id ?? 'unknown',
       playerType: event.player?.type,
       eventData: {
         'from_deck': event.fromDeck,
+        'drawSource': event.fromDeck ? 'deck' : 'discard',
         'card_rank': event.card.rank.name,
         'card_suit': event.card.suit?.name ?? 'joker',
         'player_name': event.player?.name ?? 'unknown',
@@ -78,6 +87,25 @@ class GameEventListener {
           0,
           (sum, card) => sum + card.pointValue,
         ),
+        'player_name': event.player?.name ?? 'unknown',
+      },
+    );
+  }
+
+  /// Handle discard pile unlocked events for analytics
+  void _handleDiscardPileUnlocked(DiscardPileUnlockedEvent event) {
+    if (_isDisposed) return;
+
+    GameAnalyticsLogger.handleDiscardPileUnlockedForOutcomes(event);
+
+    GameAnalyticsLogger.logGameEvent(
+      eventType: 'discard_pile_unlocked',
+      playerId: event.player?.id ?? 'unknown',
+      playerType: event.player?.type,
+      eventData: {
+        'drawSource': 'unlock',
+        'cards_taken': event.cardsTaken.length,
+        'card_ranks': event.cardsTaken.map((c) => c.rank.name).toList(),
         'player_name': event.player?.name ?? 'unknown',
       },
     );
@@ -117,7 +145,9 @@ class GameEventListener {
   void _handleTurnEnded(TurnEndedEvent event) {
     if (_isDisposed) return;
 
-    // Could track turn duration, actions per turn, etc.
+    GameAnalyticsLogger.finalizeTurn(event);
+    AnalyticsBatcher.flushOnTurnCompletion();
+
     DebugLogger.debug(
       'Turn ended: ${event.player?.name} -> ${event.nextPlayer?.name ?? "none"}',
     );

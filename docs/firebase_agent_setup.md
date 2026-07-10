@@ -36,7 +36,7 @@ dart run scripts/export_analytics.dart --days 7 --include-raw
 
 ## Firestore analytics (important)
 
-Analytics collections (`game_sessions`, `bot_decisions`, `game_events`, `performance_metrics`) are **write-only** from the client SDK. Agents must read via:
+Analytics collections (`game_sessions`, `bot_decisions`, `game_events`, `performance_metrics`, `turn_summaries`, `decision_outcomes`) are **write-only** from the client SDK. Agents must read via:
 
 - OAuth credentials in `.firebase/firebase-tools-credentials.json`, or
 - Firebase MCP after login, or
@@ -45,7 +45,18 @@ Analytics collections (`game_sessions`, `bot_decisions`, `game_events`, `perform
 ```bash
 node scripts/query_analytics_session.js --scores 3325,1140,1185
 node scripts/query_analytics_session.js --session <sessionId> --foot-only
+node scripts/query_analytics_session.js --session <sessionId> --turn-summaries --decision-outcomes
 ```
+
+### New analytics fields (2026 quick wins)
+
+| Field | Collections | Values |
+|-------|-------------|--------|
+| `appVersion` | all | e.g. `1.0.0` (sync with pubspec.yaml) |
+| `botAiVersion` | all | e.g. `2026.07-human-patterns` — bump when bot AI changes |
+| `drawSource` | `game_events`, `bot_decisions` | `deck`, `discard`, `unlock` |
+| `turn_summaries` | per completed turn | `actionCount`, `drawSources`, `meldsCreated`, `discardedRank` |
+| `decision_outcomes` | after discards | `opponent_took_discard`, `opponent_unlocked`, `discard_not_taken` |
 
 ## Token expiry
 
