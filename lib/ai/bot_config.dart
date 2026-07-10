@@ -230,6 +230,9 @@ class BotConfig {
   /// Protection score to avoid discarding wilds
   static const int wildProtection = 200;
 
+  /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
+  static const String botAiVersion = '2026.07-human-patterns';
+
   // Prevent instantiation
   BotConfig._();
 }

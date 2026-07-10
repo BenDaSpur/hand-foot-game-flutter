@@ -20,6 +20,8 @@ import '../widgets/compact_player_scores.dart';
 import '../widgets/game_action_buttons.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
+import '../services/analytics_batcher.dart';
+import '../services/analytics_fields.dart';
 import 'main_menu_screen.dart';
 import '../utils/debug_logger.dart';
 import 'managers/bot_turn_manager.dart';
@@ -79,6 +81,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   String? _analyticsSessionId;
   int _totalTurns = 0;
   int _actionSequenceNumber = 0; // Track action sequence within game
+  Map<String, BotPersonality> _sessionBotPersonalities = {};
 
   // Manager instances for better code organization
   late BotTurnManager _botTurnManager;
@@ -218,6 +221,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           final players = ref.read(leaderboardProvider);
           _dialogManager.showGameEndDialog(winner, players);
         }
+        _endAnalyticsSession();
       },
       onRoundEnd: () {
         // Clear UI selections and reset for next round
@@ -598,6 +602,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     DebugLogger.debug('Handling round transition - calculating scores');
 
     try {
+      await _logRoundEndAnalytics();
+
       // Brief pause to show scores
       await Future.delayed(const Duration(seconds: 2));
       if (_disposed || !mounted) {
@@ -974,9 +980,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
+    final cardsBeforeUnlock = gameState.discardPile.length;
     if (controller.unlockDiscardPile()) {
       // UI will update via Riverpod reactivity when DiscardPileUnlockedEvent fires
       debugPrint('DEBUG: Discard pile unlocked successfully');
+      _logHumanAction(
+        action: 'unlockDiscardPile',
+        reasoning: 'Human unlocked discard pile',
+        context: {'cardsTaken': cardsBeforeUnlock},
+      );
     } else {
       debugPrint('DEBUG: unlockDiscardPile returned false unexpectedly');
       _dialogManager.showErrorDialog(
@@ -1266,6 +1278,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               reasoning: 'Human discarded ${_selectedCards.first.compactName}',
               context: {
                 'card': _selectedCards.first.compactName,
+                'cardRank': _selectedCards.first.rank.name,
                 'transitioningToFoot': !humanPlayer.hasPickedUpFoot,
               },
             );
@@ -1320,6 +1333,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           reasoning: 'Human discarded ${_selectedCards.first.compactName}',
           context: {
             'card': _selectedCards.first.compactName,
+            'cardRank': _selectedCards.first.rank.name,
             'goingOut': willBeEmpty,
           },
         );
@@ -2259,6 +2273,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
 
       _actionSequenceNumber = 0; // Reset sequence counter for new game
+      _totalTurns = 0;
+      _sessionBotPersonalities = botPersonalities;
       _analyticsSessionId = await GameAnalyticsLogger.startGameSession(
         players: gameState.players,
         gameState: gameState,
@@ -2331,6 +2347,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         eventData: {
           'reasoning': reasoning,
           'context': context,
+          'drawSource': drawSourceFromAction(action),
 
           // Sequencing information
           'actionSequence': _actionSequenceNumber,
@@ -2407,6 +2424,79 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       );
     } catch (e) {
       DebugLogger.warning('Failed to log human action: $e');
+    }
+  }
+
+  /// Log per-bot performance metrics at round end.
+  Future<void> _logRoundEndAnalytics() async {
+    if (_analyticsSessionId == null) {
+      return;
+    }
+
+    try {
+      final controller = _gameController;
+      if (controller == null) {
+        return;
+      }
+
+      final gameState = controller.gameState;
+      final personalities = _sessionBotPersonalities.isNotEmpty
+          ? _sessionBotPersonalities
+          : GameAnalyticsLogger.sessionBotPersonalities;
+
+      for (final player in gameState.players.where(
+        (p) => p.type == PlayerType.bot,
+      )) {
+        final personality = personalities[player.id] ?? BotPersonality.adaptive;
+        await GameAnalyticsLogger.logBotPerformanceMetrics(
+          botId: player.id,
+          personality: personality,
+          gameState: gameState,
+          performanceMetrics: {
+            'roundScore': player.score.toDouble(),
+            'handSize': player.currentHand.length.toDouble(),
+            'meldCount': player.melds.length.toDouble(),
+          },
+        );
+      }
+
+      await AnalyticsBatcher.flushAllBatches();
+    } catch (e) {
+      DebugLogger.warning('Failed to log round-end analytics: $e');
+    }
+  }
+
+  /// End analytics session when the game completes.
+  Future<void> _endAnalyticsSession() async {
+    if (_analyticsSessionId == null) {
+      return;
+    }
+
+    try {
+      final controller = _gameController;
+      final gameState =
+          controller?.gameState ?? ref.read(currentGameStateProvider);
+      if (gameState == null) {
+        return;
+      }
+
+      final winner = ref.read(gameWinnerProvider);
+      final personalities = _sessionBotPersonalities.isNotEmpty
+          ? _sessionBotPersonalities
+          : GameAnalyticsLogger.sessionBotPersonalities;
+
+      await GameAnalyticsLogger.endGameSession(
+        gameState: gameState,
+        winnerId: winner?.id,
+        totalTurns: _totalTurns,
+        botPersonalities: personalities,
+      );
+      await AnalyticsBatcher.flushAllBatches();
+
+      _analyticsSessionId = null;
+      _sessionBotPersonalities = {};
+    } catch (e) {
+      DebugLogger.warning('Failed to end analytics session: $e');
     }
   }
 }
