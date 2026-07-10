@@ -66,9 +66,10 @@ class GameSessionInfoMenu {
 
   static List<PopupMenuEntry<String>> buildItems(GameSessionInfo info) {
     return [
+      const PopupMenuDivider(),
       PopupMenuItem<String>(
         enabled: false,
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
         child: _SessionInfoPanel(info: info),
       ),
       const PopupMenuItem<String>(
@@ -82,7 +83,6 @@ class GameSessionInfoMenu {
           ],
         ),
       ),
-      const PopupMenuDivider(),
     ];
   }
 

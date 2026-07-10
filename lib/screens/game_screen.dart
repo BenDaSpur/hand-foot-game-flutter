@@ -1736,9 +1736,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   }
                 },
                 itemBuilder: (BuildContext context) => [
-                  ...GameSessionInfoMenu.buildItems(
-                    _soloSessionInfo(gameState),
-                  ),
                   const PopupMenuItem<String>(
                     value: 'new_game',
                     child: Row(
@@ -1801,6 +1798,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         Text('Main Menu'),
                       ],
                     ),
+                  ),
+                  ...GameSessionInfoMenu.buildItems(
+                    _soloSessionInfo(gameState),
                   ),
                 ],
               ),

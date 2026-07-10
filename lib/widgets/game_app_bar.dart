@@ -145,9 +145,6 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
             }
           },
           itemBuilder: (BuildContext context) => [
-            if (sessionInfo != null) ...[
-              ...GameSessionInfoMenu.buildItems(sessionInfo!),
-            ],
             if (!isMultiplayer) ...[
               const PopupMenuItem<String>(
                 value: 'new_game',
@@ -225,6 +222,9 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ],
               ),
             ),
+            if (sessionInfo != null) ...[
+              ...GameSessionInfoMenu.buildItems(sessionInfo!),
+            ],
           ],
         ),
       ],
