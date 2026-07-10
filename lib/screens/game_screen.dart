@@ -103,6 +103,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _isBotTurnInProgress = false;
   final List<Player> _botTurnQueue = [];
 
+  bool _isCardAnimationActive = false;
+
   // Keyboard shortcuts
   final FocusNode _focusNode = FocusNode();
 
@@ -1548,7 +1550,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   /// Handle keyboard shortcuts for desktop users
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     // Only handle key down events
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    if (_isCardAnimationActive) {
+      return KeyEventResult.ignored;
+    }
 
     // Only handle shortcuts during human turn
     final currentPlayer = ref.read(currentPlayerProvider);
@@ -1712,6 +1720,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             handStackKey: _handStackKey,
             meldAreaKey: _meldAreaKey,
             handScrollController: _handScrollController,
+            onAnimationStateChanged: (isAnimating) {
+              if (_isCardAnimationActive != isAnimating) {
+                setState(() {
+                  _isCardAnimationActive = isAnimating;
+                });
+              }
+            },
             child: Column(
               children: [
                 // Mobile-optimized status bar

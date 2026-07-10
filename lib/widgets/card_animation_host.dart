@@ -23,6 +23,10 @@ class CardAnimationScope extends InheritedWidget {
     return context.dependOnInheritedWidgetOfExactType<CardAnimationScope>();
   }
 
+  static bool animationActive(BuildContext context) {
+    return maybeOf(context)?.isAnimating ?? false;
+  }
+
   static bool shouldHideHandCard(BuildContext context, int index) {
     final scope = maybeOf(context);
     if (scope == null) {
@@ -48,6 +52,7 @@ class CardAnimationHost extends StatefulWidget {
   final GlobalKey handStackKey;
   final GlobalKey meldAreaKey;
   final ScrollController handScrollController;
+  final ValueChanged<bool>? onAnimationStateChanged;
 
   const CardAnimationHost({
     super.key,
@@ -59,6 +64,7 @@ class CardAnimationHost extends StatefulWidget {
     required this.meldAreaKey,
     required this.handScrollController,
     this.localHumanPlayer,
+    this.onAnimationStateChanged,
   });
 
   @override
@@ -103,7 +109,9 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
   }
 
   void _handleCardDrawn(CardDrawnEvent event) {
-    if (!_shouldAnimateFor(event.player) || !event.fromDeck) {
+    if (!_shouldAnimateFor(event.player) ||
+        !event.fromDeck ||
+        event.cards.isEmpty) {
       return;
     }
     _startRequest(
@@ -136,14 +144,22 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
   List<int> _indicesForCards(Player player, List<PlayingCard> cards) {
     final indices = <int>[];
     for (final card in cards) {
-      for (int i = 0; i < player.currentHand.length; i++) {
-        if (identical(player.currentHand[i], card)) {
-          indices.add(i);
+      for (
+        int cardIndex = 0;
+        cardIndex < player.currentHand.length;
+        cardIndex++
+      ) {
+        if (identical(player.currentHand[cardIndex], card)) {
+          indices.add(cardIndex);
           break;
         }
       }
     }
     return indices;
+  }
+
+  void _notifyAnimationState(bool isAnimating) {
+    widget.onAnimationStateChanged?.call(isAnimating);
   }
 
   void _startRequest(CardAnimationRequest request) {
@@ -157,6 +173,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
       _activeRequest = request;
       _requestVersion++;
     });
+    _notifyAnimationState(true);
   }
 
   void _completeAnimation() {
@@ -168,6 +185,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
       _hiddenHandIndices = {};
       _activeRequest = null;
     });
+    _notifyAnimationState(false);
   }
 
   void _skipAnimation() {

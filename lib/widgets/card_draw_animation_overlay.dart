@@ -361,16 +361,18 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       if (!mounted) {
         return;
       }
-      final updated = List<_FlyingCardVisual>.from(_visuals);
-      if (index < updated.length) {
-        updated[index] = updated[index].copyWith(
-          position: Offset.lerp(start, target, animation.value)!,
-          scale: 1 + (endScale - 1) * animation.value,
-          rotation: (1 - animation.value) * 0.08,
-          showBack: showBack && animation.value < 0.55,
-        );
-        _visuals = updated;
-      }
+      setState(() {
+        final updated = List<_FlyingCardVisual>.from(_visuals);
+        if (index < updated.length) {
+          updated[index] = updated[index].copyWith(
+            position: Offset.lerp(start, target, animation.value)!,
+            scale: 1 + (endScale - 1) * animation.value,
+            rotation: (1 - animation.value) * 0.08,
+            showBack: showBack && animation.value < 0.55,
+          );
+          _visuals = updated;
+        }
+      });
     });
 
     await controller.forward();

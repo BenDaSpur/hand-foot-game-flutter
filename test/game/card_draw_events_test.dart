@@ -7,6 +7,14 @@ import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
   group('Card draw events', () {
+    test('CardDrawnEvent.card returns null for empty cards list', () {
+      final player = Player(id: 'human', name: 'You', type: PlayerType.human);
+      final event = CardDrawnEvent(cards: [], fromDeck: true, player: player);
+
+      expect(event.card, isNull);
+      expect(event.cards, isEmpty);
+    });
+
     test('CardDrawnEvent publishes all drawn cards from deck', () async {
       final eventBus = GameEventBus();
       final capturedEvents = <GameEvent>[];
@@ -34,6 +42,7 @@ void main() {
       expect(event.fromDeck, isTrue);
       expect(event.cards, hasLength(2));
       expect(event.card, equals(event.cards.last));
+      expect(event.card, isNotNull);
       expect(event.cards.every(human.currentHand.contains), isTrue);
     });
 

@@ -29,7 +29,7 @@ class CardDrawnEvent extends GameEvent {
   final bool fromDeck; // true if from deck, false if from discard pile
 
   /// Backward-compatible accessor for single-card consumers.
-  PlayingCard get card => cards.last;
+  PlayingCard? get card => cards.isEmpty ? null : cards.last;
 
   CardDrawnEvent({
     required this.cards,
