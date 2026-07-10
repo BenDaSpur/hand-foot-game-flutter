@@ -130,6 +130,67 @@ void main() {
       expect(melded, isTrue);
       expect(botPlayer.melds.first.cards.length, greaterThan(meldSizeBefore));
     });
+
+    test('endRoundForBot ends round and is idempotent', () {
+      _setupBotToGoOut(botPlayer);
+      var stateChangedCount = 0;
+      turnManager = BotTurnManager(
+        gameController: gameController,
+        botAI: EnhancedBotAI(seed: 454749),
+        onStateChanged: () {
+          stateChangedCount++;
+        },
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+            }) {},
+      );
+
+      turnManager.endRoundForBot(botPlayer);
+
+      expect(gameController.gameState.phase, GamePhase.roundEnd);
+      expect(gameController.gameState.round, 2);
+      expect(stateChangedCount, 1);
+
+      turnManager.endRoundForBot(botPlayer);
+
+      expect(gameController.gameState.phase, GamePhase.roundEnd);
+      expect(gameController.gameState.round, 2);
+      expect(stateChangedCount, 1);
+    });
+
+    test('goOut decision ends round through endRoundForBot', () {
+      _setupBotToGoOut(botPlayer);
+
+      final success = turnManager.executeBotDecision(
+        BotDecision(action: 'goOut'),
+        botPlayer,
+      );
+
+      expect(success, isTrue);
+      expect(gameController.gameState.phase, GamePhase.roundEnd);
+      expect(gameController.gameState.round, 2);
+    });
+
+    test('error recovery ends round when bot can go out', () {
+      _setupBotToGoOut(botPlayer);
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      gameController.gameState.turnPhase = TurnPhase.draw;
+
+      final success = turnManager.executeBotDecision(
+        BotDecision(action: 'error'),
+        botPlayer,
+      );
+
+      expect(success, isTrue);
+      expect(gameController.gameState.phase, GamePhase.roundEnd);
+      expect(gameController.gameState.round, 2);
+    });
   });
 
   group('EnhancedBotAI error propagation', () {
@@ -161,4 +222,35 @@ void main() {
       expect(decision.action, equals('error'));
     });
   });
+}
+
+void _setupBotToGoOut(Player player) {
+  player.hand.clear();
+  player.foot.clear();
+  player.melds.clear();
+
+  player.melds.add(
+    Meld.createMeld([
+      const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+      const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+      const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+      const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+      const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+      const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+    ])!,
+  );
+  player.melds.add(
+    Meld.createMeld([
+      const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+      const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+      const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+      const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+      const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+      const PlayingCard(rank: CardRank.joker),
+    ])!,
+  );
+  player.hasPlayedDown = true;
+  player.hasPickedUpFoot = true;
 }

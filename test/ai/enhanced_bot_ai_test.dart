@@ -21,7 +21,7 @@ void main() {
         Player(id: '2', name: 'Bot', type: PlayerType.bot),
       ];
 
-      gameController = GameController(players: players);
+      gameController = GameController(players: players, seed: 42);
       gameController.initializeGame();
       botPlayer = players[1];
     });

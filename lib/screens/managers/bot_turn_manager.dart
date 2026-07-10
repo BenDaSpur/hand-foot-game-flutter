@@ -59,6 +59,24 @@ class BotTurnManager {
     required this.logBotDecision,
   });
 
+  /// End the round when a bot goes out, publishing events for UI transition.
+  void endRoundForBot(Player botPlayer, {String? actionMessage}) {
+    final gameState = gameController.gameState;
+    if (gameState.phase == GamePhase.roundEnd ||
+        gameState.phase == GamePhase.gameEnd) {
+      return;
+    }
+
+    if (actionMessage != null) {
+      gameState.recentActions.add(
+        GameAction(message: actionMessage, playerName: botPlayer.name),
+      );
+    }
+
+    gameController.endRoundForPlayer(botPlayer);
+    onStateChanged();
+  }
+
   /// Helper method to assign bot personalities consistently
   void assignBotPersonalities() {
     final botPlayers = gameController.gameState.players
@@ -153,7 +171,19 @@ class BotTurnManager {
 
   /// SIMPLIFIED: Process bot turn iteratively to prevent stack overflow
   Future<void> processBotTurn(Player botPlayer) async {
-    if (_isProcessingBotTurn) return;
+    if (_isProcessingBotTurn) {
+      return;
+    }
+
+    final initialPhase = gameController.gameState.phase;
+    if (initialPhase == GamePhase.roundEnd ||
+        initialPhase == GamePhase.gameEnd) {
+      DebugLogger.debug(
+        'Skipping bot turn for ${botPlayer.name} - round/game already ended',
+      );
+      return;
+    }
+
     _isProcessingBotTurn = true;
 
     try {
@@ -301,7 +331,7 @@ class BotTurnManager {
           if (!success && gameState.deck.isEmpty) {
             // Handle empty deck - end round early
             DebugLogger.debug('Deck empty during bot draw - ending round');
-            gameState.endRound();
+            endRoundForBot(botPlayer);
             return true;
           }
           break;
@@ -392,7 +422,10 @@ class BotTurnManager {
 
         case 'goOut':
           if (botPlayer.canGoOut) {
-            gameState.endRound();
+            endRoundForBot(
+              botPlayer,
+              actionMessage: '🎉 went out and ended the round!',
+            );
             success = true;
           } else if (botPlayer.canGoOutWithBooks &&
               botPlayer.currentHand.length == 1) {
@@ -482,7 +515,7 @@ class BotTurnManager {
         DebugLogger.debug('Bot ${player.name} picked up foot after melding');
       } else if (player.hasPickedUpFoot && player.canGoOut) {
         // Player went out
-        gameController.gameState.endRound();
+        endRoundForBot(player);
         DebugLogger.debug('Bot ${player.name} went out by melding');
       }
     }
@@ -502,7 +535,7 @@ class BotTurnManager {
     if (player.hasPickedUpFoot &&
         player.currentHand.isEmpty &&
         player.canGoOut) {
-      gameController.gameState.endRound();
+      endRoundForBot(player);
       DebugLogger.debug('Bot ${player.name} went out by discard');
     }
   }
@@ -555,7 +588,7 @@ class BotTurnManager {
         );
       }
       if (botPlayer.canGoOut) {
-        gameState.endRound();
+        endRoundForBot(botPlayer);
         onStateChanged();
         return;
       }
@@ -606,7 +639,7 @@ class BotTurnManager {
             if (!drawn && gameState.deck.isEmpty) {
               // Deck is empty - end round
               DebugLogger.debug('Ending round due to empty deck');
-              gameState.endRound();
+              endRoundForBot(botPlayer);
               return;
             }
           }
@@ -726,8 +759,10 @@ class BotTurnManager {
           DebugLogger.debug(
             'Bot ${botPlayer.name} forcing go out - empty hand with required books',
           );
-          gameState.endRound();
-          onStateChanged();
+          endRoundForBot(
+            botPlayer,
+            actionMessage: '🎉 went out and ended the round!',
+          );
           return;
         } else {
           // Bot has empty hand but can't go out - this is a critical game logic error
@@ -811,13 +846,10 @@ class BotTurnManager {
 
     // Option 3: Check if bot can go out (end round)
     if (botPlayer.canGoOut) {
-      gameController.gameState.recentActions.add(
-        GameAction(
-          message: 'went out and ended the round!',
-          playerName: playerName,
-        ),
+      endRoundForBot(
+        botPlayer,
+        actionMessage: '🎉 went out and ended the round!',
       );
-      gameController.gameState.endRound();
       return;
     }
 
@@ -907,13 +939,10 @@ class BotTurnManager {
 
       // STEP 5: Check if bot can go out (end game)
       if (botPlayer.canGoOut) {
-        gameState.recentActions.add(
-          GameAction(
-            message: 'went out and ended the round!',
-            playerName: botPlayer.name,
-          ),
+        endRoundForBot(
+          botPlayer,
+          actionMessage: '🎉 went out and ended the round!',
         );
-        gameState.endRound();
         return;
       }
 
