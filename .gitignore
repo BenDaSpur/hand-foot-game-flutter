@@ -33,6 +33,9 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Flutter SDK clone used by Vercel install step (scripts/vercel_build.sh)
+/flutter/
+
 # Symbolication related
 app.*.symbols
 
@@ -52,7 +55,7 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
 # IMPORTANT: lib/firebase_options.dart is tracked as STUB config only
-# Real production configs are injected by GitHub Actions from secrets
+# Real production configs are injected by Vercel builds or GitHub Actions from secrets
 # For local testing, use scripts/generate_firebase_config.sh
 
 # Prevent accidental commit of real Firebase configs

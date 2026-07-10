@@ -492,7 +492,7 @@ jobs:
           - **macOS**: Download and extract the macOS archive
           - **Linux**: Download and extract the Linux archive  
           - **Web**: Host the web archive on any web server
-          - **🌐 Play Online**: [GitHub Pages](https://bendaspur.github.io/hand-foot-game-flutter/)
+          - **🌐 Play Online**: [playhandfoot.com](https://playhandfoot.com)
 
           ### 🎯 Game Features
           - Smart AI opponents with strategic gameplay
