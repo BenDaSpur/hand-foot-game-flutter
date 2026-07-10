@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
+
 import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
@@ -1939,7 +1941,9 @@ class EnhancedBotAI {
         return true;
       }
       if (_opponentOnFootPressure(context, bot) &&
-          handSize <= BotConfig.handToFootRushOpponentOnFootThreshold + 2) {
+          handSize <=
+              BotConfig.handToFootRushOpponentOnFootThreshold +
+                  BotConfig.handToFootRushAggressiveOpponentPressureMargin) {
         return true;
       }
     }
@@ -2220,7 +2224,9 @@ class EnhancedBotAI {
         return true;
       }
       if (_opponentOnFootPressure(context, bot) &&
-          handSize <= BotConfig.handToFootRushOpponentOnFootThreshold + 2) {
+          handSize <=
+              BotConfig.handToFootRushOpponentOnFootThreshold +
+                  BotConfig.handToFootRushAggressiveOpponentPressureMargin) {
         return true;
       }
     }
@@ -3509,6 +3515,17 @@ class EnhancedBotAI {
   }
 
   // Getters for testing and debugging
+
+  @visibleForTesting
+  bool shouldRushHandToFoot(Player bot, BotGameContext context) {
+    return _shouldRushHandToFoot(bot, context);
+  }
+
+  @visibleForTesting
+  BotDecision? makeHandToFootRushDecision(Player bot, BotGameContext context) {
+    return _makeHandToFootRushDecision(bot, context);
+  }
+
   Map<String, OpponentAnalysis> get opponentAnalysis =>
       _gameAnalyzer.opponentAnalysis;
   BotPersonalityManager get personalityManager => _personalityManager;

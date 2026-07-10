@@ -1,11 +1,14 @@
+@Tags(['aggressive_hand_to_foot_rush'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_config.dart';
+import 'package:hand_foot_game_flutter/ai/bot_game_context.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
-import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
@@ -13,126 +16,315 @@ void main() {
     late EnhancedBotAI botAI;
     late GameController gameController;
     late Player human;
-    late Player bob;
+    late Player bot;
+
+    const unmeldedRanks = <CardRank>[
+      CardRank.four,
+      CardRank.five,
+      CardRank.six,
+      CardRank.seven,
+      CardRank.eight,
+      CardRank.nine,
+      CardRank.ten,
+      CardRank.jack,
+      CardRank.queen,
+      CardRank.ace,
+    ];
+
+    const unmeldedSuits = <Suit>[
+      Suit.hearts,
+      Suit.spades,
+      Suit.clubs,
+      Suit.diamonds,
+    ];
+
+    List<PlayingCard> unmeldedHand(int count) {
+      return List<PlayingCard>.generate(
+        count,
+        (index) => PlayingCard(
+          suit: unmeldedSuits[index % unmeldedSuits.length],
+          rank: unmeldedRanks[index % unmeldedRanks.length],
+        ),
+      );
+    }
+
+    void setOpponentOnFoot({required int footCardCount}) {
+      human.hasPickedUpFoot = true;
+      human.dealFoot(unmeldedHand(footCardCount));
+    }
+
+    void configureBot({
+      required BotPersonality personality,
+      required int handSize,
+      bool opponentOnFoot = false,
+      int opponentFootCards = 7,
+    }) {
+      botAI.assignPersonality(bot.id, personality);
+      bot.hand.clear();
+      bot.melds.clear();
+      bot.hand.addAll(unmeldedHand(handSize));
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      human.hasPickedUpFoot = false;
+      human.foot.clear();
+      if (opponentOnFoot) {
+        setOpponentOnFoot(footCardCount: opponentFootCards);
+      }
+      gameController.gameState.currentPlayerIndex = 1;
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
+    }
+
+    BotGameContext context() =>
+        BotGameContext(gameController.gameState, gameController);
 
     setUp(() {
       botAI = EnhancedBotAI(seed: 577904);
       human = Player(id: 'human', name: 'You', type: PlayerType.human);
-      bob = Player(id: 'bob', name: 'Bob', type: PlayerType.bot);
-      gameController = GameController(players: [human, bob], seed: 577904);
+      bot = Player(id: 'bot', name: 'Bot', type: PlayerType.bot);
+      gameController = GameController(players: [human, bot], seed: 577904);
       gameController.initializeGame();
-      botAI.assignPersonality(bob.id, BotPersonality.aggressive);
-      bob.hasPlayedDown = true;
-      gameController.gameState.currentPlayerIndex = 1;
-      gameController.gameState.turnPhase = TurnPhase.meld;
-      gameController.gameState.hasDrawnFromDeck = true;
     });
 
-    test('melds instead of holding when opponent is on foot with 7 cards', () {
-      human.hasPickedUpFoot = true;
-      human.dealFoot([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-      ]);
+    group('shouldRushHandToFoot boundaries', () {
+      test('critical hand size rushes at 4 but not 5', () {
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootCriticalHandSize,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isTrue,
+          reason:
+              'critical threshold should rush at ${BotConfig.handToFootCriticalHandSize}',
+        );
 
-      bob.hand.clear();
-      bob.hand.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-      ]);
-      bob.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-        ])!,
-      );
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootCriticalHandSize + 1,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isFalse,
+          reason:
+              'critical threshold should not rush above ${BotConfig.handToFootCriticalHandSize}',
+        );
+      });
 
-      expect(bob.currentHand.length, 7);
-      expect(human.hasPickedUpFoot, isTrue);
+      test('opponent-on-foot pressure rushes at 8 but not 9', () {
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
+          opponentOnFoot: true,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isTrue,
+          reason:
+              'opponent foot pressure should rush at ${BotConfig.handToFootRushOpponentOnFootThreshold}',
+        );
 
-      final decision = botAI.makeDecision(bob, gameController);
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
+          opponentOnFoot: true,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isFalse,
+          reason:
+              'opponent foot pressure should not rush above ${BotConfig.handToFootRushOpponentOnFootThreshold}',
+        );
+      });
 
-      expect(decision.action, isNot('noMeld'));
-      expect(
-        decision.action,
-        anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
+      test(
+        'aggressive personality rushes at 6 but not 7 without opponent pressure',
+        () {
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold,
+          );
+          expect(
+            botAI.shouldRushHandToFoot(bot, context()),
+            isTrue,
+            reason:
+                'aggressive bots should rush at ${BotConfig.handToFootRushAggressiveThreshold}',
+          );
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
+          );
+          expect(
+            botAI.shouldRushHandToFoot(bot, context()),
+            isFalse,
+            reason:
+                'aggressive bots should not rush above ${BotConfig.handToFootRushAggressiveThreshold} without pressure',
+          );
+        },
       );
     });
 
-    test('melds aggressively with 3 cards when opponent is on foot', () {
-      human.hasPickedUpFoot = true;
-      human.dealFoot([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-      ]);
+    group('makeHandToFootRushDecision', () {
+      test('returns discard rush action below threshold, null above', () {
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootCriticalHandSize,
+        );
 
-      bob.hand.clear();
-      bob.hand.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-      ]);
-      bob.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-        ])!,
-      );
+        final rushDecision = botAI.makeHandToFootRushDecision(bot, context());
+        expect(rushDecision, isNotNull);
+        expect(rushDecision!.action, equals('discard'));
+        expect(rushDecision.data, isA<PlayingCard>());
 
-      final decision = botAI.makeDecision(bob, gameController);
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootCriticalHandSize + 1,
+        );
+        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+      });
 
-      expect(decision.action, isNot('noMeld'));
-      expect(
-        decision.action,
-        anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
-      );
+      test('opponent pressure boundary returns rush discard at 8 only', () {
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
+          opponentOnFoot: true,
+        );
+
+        final rushAtThreshold = botAI.makeHandToFootRushDecision(
+          bot,
+          context(),
+        );
+        expect(rushAtThreshold, isNotNull);
+        expect(rushAtThreshold!.action, equals('discard'));
+
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
+          opponentOnFoot: true,
+        );
+        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+      });
+
+      test('aggressive boundary returns rush discard at 6 only', () {
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: BotConfig.handToFootRushAggressiveThreshold,
+        );
+
+        final rushAtThreshold = botAI.makeHandToFootRushDecision(
+          bot,
+          context(),
+        );
+        expect(rushAtThreshold, isNotNull);
+        expect(rushAtThreshold!.action, equals('discard'));
+
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
+        );
+        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+      });
     });
 
-    test('aggressive bot with 5 cards melds without opponent on foot', () {
-      bob.hand.clear();
-      bob.hand.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-      ]);
-      bob.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-        ])!,
+    group('makeDecision integration', () {
+      test('uses hand-to-foot rush below opponent threshold, not above', () {
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
+          opponentOnFoot: true,
+        );
+
+        expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
+        final belowThresholdDecision = botAI.makeDecision(bot, gameController);
+        expect(belowThresholdDecision.action, equals('discard'));
+        expect(belowThresholdDecision.data, isA<PlayingCard>());
+
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
+          opponentOnFoot: true,
+        );
+
+        final aboveThresholdDecision = botAI.makeDecision(bot, gameController);
+        expect(
+          botAI.makeHandToFootRushDecision(bot, context()),
+          isNull,
+          reason: 'rush hook must be inactive above opponent threshold',
+        );
+        expect(
+          aboveThresholdDecision.action,
+          isNot('noMeld'),
+          reason: 'foot transition may still act above rush threshold',
+        );
+      });
+
+      test(
+        'aggressive bot rushes via makeDecision at 6 but rush hook is null at 7',
+        () {
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold,
+          );
+
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
+          final belowThresholdDecision = botAI.makeDecision(
+            bot,
+            gameController,
+          );
+          expect(belowThresholdDecision.action, equals('discard'));
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
+          );
+
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+          final aboveThresholdDecision = botAI.makeDecision(
+            bot,
+            gameController,
+          );
+          expect(
+            aboveThresholdDecision.action,
+            isNot('noMeld'),
+            reason:
+                'foot transition may still discard above aggressive rush threshold',
+          );
+        },
       );
 
-      expect(bob.currentHand.length, 5);
-      expect(
-        bob.currentHand.length,
-        lessThanOrEqualTo(BotConfig.handToFootRushAggressiveThreshold),
-      );
+      test(
+        'critical hand rushes via makeDecision at 4 but rush hook is null at 5',
+        () {
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootCriticalHandSize,
+          );
 
-      final decision = botAI.makeDecision(bob, gameController);
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
+          final belowThresholdDecision = botAI.makeDecision(
+            bot,
+            gameController,
+          );
+          expect(belowThresholdDecision.action, equals('discard'));
 
-      expect(decision.action, isNot('noMeld'));
-      expect(
-        decision.action,
-        anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootCriticalHandSize + 1,
+          );
+
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+          final aboveThresholdDecision = botAI.makeDecision(
+            bot,
+            gameController,
+          );
+          expect(
+            aboveThresholdDecision.action,
+            isNot('noMeld'),
+            reason:
+                'foot transition may still discard above critical rush threshold',
+          );
+        },
       );
     });
   });

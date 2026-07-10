@@ -40,6 +40,9 @@ class BotConfig {
   /// Never stall on hand pile at or below this size — melt or discard to foot
   static const int handToFootCriticalHandSize = 4;
 
+  /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
+  static const int handToFootRushAggressiveOpponentPressureMargin = 2;
+
   /// Emergency at this large hand size
   static const int largeHandEmergencyThreshold = 10;
 
