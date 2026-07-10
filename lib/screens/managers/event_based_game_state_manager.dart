@@ -17,6 +17,7 @@ class EventBasedGameStateManager {
   final Function() onTurnEnd; // Separate callback for turn end events
   final Function() onGameEnd;
   final Function() onRoundEnd;
+  final Function() onRoundEndDetected;
 
   final List<StreamSubscription> _subscriptions = [];
   bool _isDisposed = false;
@@ -28,6 +29,7 @@ class EventBasedGameStateManager {
     required this.onTurnEnd,
     required this.onGameEnd,
     required this.onRoundEnd,
+    required this.onRoundEndDetected,
   }) {
     _subscribeToEvents();
   }
@@ -96,17 +98,19 @@ class EventBasedGameStateManager {
   }
 
   void _handleRoundEnd() {
-    if (gameController.gameState.phase == GamePhase.roundEnd) {
-      DebugLogger.debug('Handling round end from event');
+    final phase = gameController.gameState.phase;
+    if (phase == GamePhase.gameEnd) {
+      DebugLogger.debug('Handling game end from round ended event');
+      onGameEnd();
+      return;
+    }
 
-      // Check if game should end
-      if (gameController.gameState.phase == GamePhase.gameEnd) {
-        onGameEnd();
-        return;
-      }
-
-      // Round transition will be handled by RoundStartedEvent
+    if (phase == GamePhase.roundEnd) {
+      DebugLogger.debug(
+        'Handling round end from event - triggering transition',
+      );
       onStateChanged();
+      onRoundEndDetected();
     }
   }
 

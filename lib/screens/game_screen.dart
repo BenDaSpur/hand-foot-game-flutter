@@ -89,6 +89,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   // Prevent multiple game end dialogs
   bool _gameEndDialogShown = false;
+  bool _isRoundTransitionInProgress = false;
 
   // Queue for bot turn processing to ensure one at a time
   bool _isBotTurnInProgress = false;
@@ -223,6 +224,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _selectedCardIndices.clear();
         _viewingPlayerMelds = null;
         processCurrentPlayerTurn();
+      },
+      onRoundEndDetected: () {
+        _handleRoundTransition().catchError((error) {
+          DebugLogger.error(
+            'Error handling round transition from event: $error',
+          );
+        });
       },
     );
 
@@ -444,13 +452,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         .then((_) {
           _isBotTurnInProgress = false;
           DebugLogger.debug('Bot ${botPlayer.name} completed turn');
-          // Check if next player is also a bot - read directly from controller
-          if (mounted &&
-              controller.gameState.currentPlayer.type == PlayerType.bot) {
-            final nextPlayer = controller.gameState.currentPlayer;
-            DebugLogger.debug(
-              'Next player ${nextPlayer.name} is also a bot - processing immediately',
-            );
+          if (mounted) {
             processCurrentPlayerTurn();
           }
         })
@@ -485,6 +487,22 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           players.sort((a, b) => b.score.compareTo(a.score));
           _dialogManager.showGameEndDialog(winner, players);
         }
+        return;
+      }
+
+      // Handle round end before any turn processing — a bot who went out is
+      // still the current player, which otherwise triggers stuck-bot recovery.
+      if (gameState.phase == GamePhase.roundEnd) {
+        DebugLogger.debug(
+          'Round has ended - handling transition (Round ${gameState.round})',
+        );
+        _handleRoundTransition().catchError((error) {
+          DebugLogger.error('Error handling round transition: $error');
+        });
+        return;
+      }
+
+      if (_isRoundTransitionInProgress) {
         return;
       }
 
@@ -535,17 +553,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return;
       }
 
-      // Check for round end condition first
-      if (gameState.phase == GamePhase.roundEnd) {
-        DebugLogger.debug(
-          'Round has ended - handling transition (Round ${gameState.round})',
-        );
-        _handleRoundTransition().catchError((error) {
-          DebugLogger.error('Error handling round transition: $error');
-        });
-        return;
-      }
-
       // Human turn: Do nothing, wait for UI input
       if (currentPlayer.type == PlayerType.human ||
           currentPlayer.name == 'You') {
@@ -574,65 +581,66 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   /// Handle complete round transition with proper state management
   Future<void> _handleRoundTransition() async {
-    final gameState = ref.read(currentGameStateProvider);
-    if (gameState?.phase != GamePhase.roundEnd) return;
-
-    DebugLogger.debug('Handling round transition - calculating scores');
-
-    // Brief pause to show scores
-    await Future.delayed(const Duration(seconds: 2));
-    if (_disposed || !mounted) return;
-
-    // Check if game should end (phase set to gameEnd by endRound() logic)
-    final updatedState = ref.read(currentGameStateProvider);
-    if (updatedState?.phase == GamePhase.gameEnd) {
-      final players = ref.read(leaderboardProvider);
-      final scores = players.map((p) => p.score).toList();
-      final highestScore = scores.isEmpty
-          ? 0
-          : scores.reduce((a, b) => a > b ? a : b);
-
-      DebugLogger.debug(
-        'Game end condition met - highest score: $highestScore',
-      );
-      final winner = ref.read(gameWinnerProvider);
-      if (winner != null) {
-        _dialogManager.showGameEndDialog(winner, players);
-      }
+    if (_isRoundTransitionInProgress) {
       return;
     }
 
-    // Continue to next round
+    final controller = _gameController;
+    if (controller == null) {
+      return;
+    }
+
+    if (controller.gameState.phase != GamePhase.roundEnd) {
+      return;
+    }
+
+    _isRoundTransitionInProgress = true;
+    DebugLogger.debug('Handling round transition - calculating scores');
+
     try {
-      final controller = _gameController;
-      if (controller != null) {
-        controller.nextRound();
-        final newState = ref.read(currentGameStateProvider);
-        DebugLogger.debug('Advanced to round ${newState?.round ?? 0}');
+      // Brief pause to show scores
+      await Future.delayed(const Duration(seconds: 2));
+      if (_disposed || !mounted) {
+        return;
+      }
 
-        if (mounted) {
-          // UI will update automatically via provider reactivity
-
-          // Clear any UI selections
-          _selectedCardIndices.clear();
-          _viewingPlayerMelds = null;
-
-          // Save game state after round transition (fire and forget)
-          _persistenceManager.saveGameState().catchError((error) {
-            DebugLogger.error(
-              'Error saving game state after round transition: $error',
-            );
-          });
-
-          // Resume game flow
-          processCurrentPlayerTurn();
+      if (controller.gameState.phase == GamePhase.gameEnd) {
+        final players = ref.read(leaderboardProvider);
+        final winner = ref.read(gameWinnerProvider);
+        if (winner != null) {
+          _dialogManager.showGameEndDialog(winner, players);
         }
+        return;
+      }
+
+      if (controller.gameState.phase != GamePhase.roundEnd) {
+        return;
+      }
+
+      controller.nextRound();
+      DebugLogger.debug('Advanced to round ${controller.gameState.round}');
+
+      if (mounted) {
+        _selectedCardIndices.clear();
+        _viewingPlayerMelds = null;
+
+        _persistenceManager.saveGameState().catchError((error) {
+          DebugLogger.error(
+            'Error saving game state after round transition: $error',
+          );
+        });
+
+        processCurrentPlayerTurn();
       }
     } catch (e) {
       DebugLogger.error('Error during round transition: $e');
-      _dialogManager.showErrorDialog(
-        'Error advancing to next round: ${e.toString()}',
-      );
+      if (mounted) {
+        _dialogManager.showErrorDialog(
+          'Error advancing to next round: ${e.toString()}',
+        );
+      }
+    } finally {
+      _isRoundTransitionInProgress = false;
     }
   }
 

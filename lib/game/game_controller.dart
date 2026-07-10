@@ -142,25 +142,83 @@ class GameController implements GameInterface {
     return _gameState.canUnlockDiscard();
   }
 
+  /// Ends the current round when a player goes out and publishes UI events.
+  /// Safe to call multiple times — no-ops if the round already ended.
+  void endRoundForPlayer(Player player) {
+    if (_gameState.phase == GamePhase.roundEnd ||
+        _gameState.phase == GamePhase.gameEnd) {
+      return;
+    }
+
+    final roundBefore = _gameState.round;
+    _gameState.endRound();
+    _publishRoundOrGameEndEvents(player, roundBefore);
+  }
+
+  void _publishRoundOrGameEndEvents(Player player, int roundBefore) {
+    if (_gameState.phase == GamePhase.roundEnd) {
+      _eventBus.publish(
+        PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+      );
+
+      final roundScores = <Player, int>{};
+      for (final p in _gameState.players) {
+        roundScores[p] = p.score;
+      }
+      _eventBus.publish(
+        RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+      );
+    } else if (_gameState.phase == GamePhase.gameEnd) {
+      _eventBus.publish(
+        PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+      );
+
+      final roundScores = <Player, int>{};
+      for (final p in _gameState.players) {
+        roundScores[p] = p.score;
+      }
+      _eventBus.publish(
+        RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+      );
+
+      if (_gameState.winner != null) {
+        final finalScores = <Player, int>{};
+        for (final p in _gameState.players) {
+          finalScores[p] = p.score;
+        }
+        _eventBus.publish(
+          GameEndedEvent(winner: _gameState.winner!, finalScores: finalScores),
+        );
+      }
+    }
+  }
+
   @override
   bool discardCard(PlayingCard card) {
     final player = _gameState.currentPlayer;
+    final phaseBefore = _gameState.phase;
+    final roundBefore = _gameState.round;
     final result = _gameState.discard(card);
     _gameState.validateGameState();
 
     if (result) {
       _eventBus.publish(CardDiscardedEvent(card: card, player: player));
 
-      // Check if turn ended (player changed or phase changed)
-      final newPlayer = _gameState.currentPlayer;
-      if (newPlayer.id != player.id || _gameState.turnPhase == TurnPhase.draw) {
-        _eventBus.publish(
-          TurnEndedEvent(
-            turnNumber: _gameState.currentPlayerIndex,
-            nextPlayer: newPlayer,
-            player: player,
-          ),
-        );
+      if (_gameState.phase != phaseBefore) {
+        _publishRoundOrGameEndEvents(player, roundBefore);
+      } else {
+        // Check if turn ended (player changed or phase changed)
+        final newPlayer = _gameState.currentPlayer;
+        if (newPlayer.id != player.id ||
+            _gameState.turnPhase == TurnPhase.draw) {
+          _eventBus.publish(
+            TurnEndedEvent(
+              turnNumber: _gameState.currentPlayerIndex,
+              nextPlayer: newPlayer,
+              player: player,
+            ),
+          );
+        }
       }
     }
 
