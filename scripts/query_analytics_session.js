@@ -15,7 +15,7 @@ const PROJECT_ID =
   process.env.FIREBASE_PROJECT_ID || 'hand-foot-game-flutter';
 
 function parseArgs(argv) {
-  const args = { scores: null, session: null, footOnly: false, limit: 5 };
+  const args = { scores: null, session: null, footOnly: false, limit: 5, recent: false };
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--scores' && argv[i + 1]) {
       args.scores = argv[++i].split(',').map((s) => parseInt(s.trim(), 10));
@@ -25,6 +25,8 @@ function parseArgs(argv) {
       args.footOnly = true;
     } else if (argv[i] === '--limit' && argv[i + 1]) {
       args.limit = parseInt(argv[++i], 10);
+    } else if (argv[i] === '--recent') {
+      args.recent = true;
     }
   }
   return args;
@@ -143,9 +145,19 @@ async function listCollection(accessToken, collection, pageSize = 300) {
   return all;
 }
 
-async function runStructuredQuery(accessToken, collection, field, op, value) {
-  const body = JSON.stringify({
-    structuredQuery: {
+async function runStructuredQuery(
+  accessToken,
+  collection,
+  field,
+  op,
+  value,
+  limit = 500,
+) {
+  const all = [];
+  let lastDoc = null;
+
+  while (true) {
+    const structuredQuery = {
       from: [{ collectionId: collection }],
       where: {
         fieldFilter: {
@@ -154,27 +166,70 @@ async function runStructuredQuery(accessToken, collection, field, op, value) {
           value,
         },
       },
-      limit: 20,
-    },
-  });
+      limit,
+    };
+    if (lastDoc) {
+      structuredQuery.startAt = {
+        values: [{ referenceValue: lastDoc.name }],
+        before: false,
+      };
+    }
 
-  const result = await httpsRequest(
-    {
-      hostname: 'firestore.googleapis.com',
-      path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`,
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
+    const body = JSON.stringify({ structuredQuery });
+    const result = await httpsRequest(
+      {
+        hostname: 'firestore.googleapis.com',
+        path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`,
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
       },
-    },
-    body,
-  );
+      body,
+    );
 
-  return result
-    .filter((row) => row.document)
-    .map((row) => docToObject(row.document));
+    const docs = result
+      .filter((row) => row.document)
+      .map((row) => row.document);
+    if (docs.length === 0) {
+      break;
+    }
+
+    all.push(...docs.map(docToObject));
+    if (docs.length < limit) {
+      break;
+    }
+
+    console.warn(
+      `Warning: structured query for ${collection} hit limit ${limit}; fetching more...`,
+    );
+    lastDoc = docs[docs.length - 1];
+  }
+
+  return all;
+}
+
+async function fetchBySessionId(
+  accessToken,
+  collection,
+  sessionId,
+  structuredLimit,
+) {
+  let docs = await runStructuredQuery(
+    accessToken,
+    collection,
+    'sessionId',
+    'EQUAL',
+    { stringValue: sessionId },
+    structuredLimit,
+  );
+  if (docs.length === 0) {
+    const allDocs = await listCollection(accessToken, collection, 500);
+    docs = allDocs.filter((d) => d.sessionId === sessionId);
+  }
+  return docs;
 }
 
 function scoresMatch(sessionScores, targetScores) {
@@ -207,6 +262,9 @@ async function main() {
     if (!match) {
       match = sessions.find((s) => s.status === 'completed');
     }
+    if (!match && args.recent) {
+      match = sessions[0];
+    }
     if (!match) {
       console.error('No matching session found');
       process.exit(1);
@@ -217,8 +275,12 @@ async function main() {
   }
 
   console.log('\nFetching bot_decisions for session...');
-  const allDecisions = await listCollection(accessToken, 'bot_decisions', 500);
-  let decisions = allDecisions.filter((d) => d.sessionId === sessionId);
+  let decisions = await fetchBySessionId(
+    accessToken,
+    'bot_decisions',
+    sessionId,
+    1000,
+  );
   if (args.footOnly) {
     decisions = decisions.filter((d) => d.botHasPickedUpFoot === true);
   }
@@ -232,10 +294,13 @@ async function main() {
   }
 
   console.log('\nFetching game_events for session...');
-  const allEvents = await listCollection(accessToken, 'game_events', 500);
-  const events = allEvents
-    .filter((e) => e.sessionId === sessionId)
-    .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+  let events = await fetchBySessionId(
+    accessToken,
+    'game_events',
+    sessionId,
+    500,
+  );
+  events.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
   console.log(`Found ${events.length} game events`);
   for (const e of events.slice(-30)) {
     console.log(`- ${e.eventType} | ${e.playerId} | ${JSON.stringify(e.eventData || {})}`);
