@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export PATH="$PWD/flutter/bin:$PATH"
+export PUB_CACHE="$PWD/.pub-cache"
 
 if [ -n "${FIREBASE_WEB_CONFIG:-}" ]; then
   echo "Injecting production Firebase config from FIREBASE_WEB_CONFIG"
