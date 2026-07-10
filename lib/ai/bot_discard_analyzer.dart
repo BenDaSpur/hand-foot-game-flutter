@@ -88,12 +88,37 @@ class BotDiscardAnalyzer {
       score -= opponentNeedScore; // Reduce score if opponents need it
     }
 
-    // 5. STRATEGIC: Don't discard cards we have multiples of (meld potential)
+    // 5. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
     final sameRankCount = bot.currentHand
         .where((c) => c.rank == card.rank && !c.isWild)
         .length;
+    final handSize = bot.currentHand.length;
     if (sameRankCount >= 2) {
-      score -= BotConfig.duplicateBonus * sameRankCount;
+      if (handSize >= BotConfig.humanLargeHandDiscardThreshold &&
+          _isHumanPreferredDiscardRank(card.rank)) {
+        var protectedNearBook = false;
+        for (final meld in bot.melds) {
+          if (meld.cards.length >= 5 && _cardFitsMeld(card, meld)) {
+            protectedNearBook = true;
+            break;
+          }
+        }
+        if (!protectedNearBook) {
+          score += BotConfig.humanLowRankDiscardBonus * sameRankCount;
+        } else {
+          score -= BotConfig.duplicateBonus;
+        }
+      } else {
+        score -= BotConfig.duplicateBonus * sameRankCount;
+      }
+    }
+
+    // Human pattern: singleton low ranks on oversized hands
+    if (!card.isWild &&
+        handSize >= BotConfig.humanLargeHandDiscardThreshold &&
+        _isHumanPreferredDiscardRank(card.rank) &&
+        sameRankCount <= 1) {
+      score += BotConfig.humanLowRankDiscardBonus;
     }
 
     // 6. MELD FIT: Don't discard cards that fit existing melds
@@ -152,6 +177,15 @@ class BotDiscardAnalyzer {
     }
 
     return needScore;
+  }
+
+  /// Ranks humans discard most while trimming large hands (analytics).
+  bool _isHumanPreferredDiscardRank(CardRank rank) {
+    return rank == CardRank.four ||
+        rank == CardRank.five ||
+        rank == CardRank.six ||
+        rank == CardRank.seven ||
+        rank == CardRank.eight;
   }
 
   /// Check if a card can be added to a meld.

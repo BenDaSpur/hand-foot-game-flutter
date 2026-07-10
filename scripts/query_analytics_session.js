@@ -5,7 +5,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
+const {
+  httpsRequest,
+  getAccessToken,
+} = require('./analytics_http_common');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CREDS_PATH =
@@ -47,66 +50,6 @@ function parseArgs(argv) {
 function loadCreds() {
   const raw = fs.readFileSync(CREDS_PATH, 'utf8');
   return JSON.parse(raw);
-}
-
-function httpsRequest(options, body) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(JSON.parse(data || '{}'));
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    if (body) req.write(body);
-    req.end();
-  });
-}
-
-async function refreshAccessToken(creds) {
-  const refreshToken = creds.tokens?.refresh_token;
-  if (!refreshToken) throw new Error('No refresh_token in credentials file');
-
-  const body = new URLSearchParams({
-    client_id:
-      '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-    client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
-    refresh_token: refreshToken,
-    grant_type: 'refresh_token',
-  }).toString();
-
-  const result = await httpsRequest(
-    {
-      hostname: 'oauth2.googleapis.com',
-      path: '/token',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    },
-    body,
-  );
-
-  creds.tokens.access_token = result.access_token;
-  creds.tokens.expires_at = Date.now() + result.expires_in * 1000;
-  fs.writeFileSync(CREDS_PATH, JSON.stringify(creds, null, '\t'), {
-    mode: 0o600,
-  });
-  return result.access_token;
-}
-
-async function getAccessToken(creds) {
-  const expiresAt = creds.tokens?.expires_at || 0;
-  if (creds.tokens?.access_token && Date.now() < expiresAt - 60000) {
-    return creds.tokens.access_token;
-  }
-  return refreshAccessToken(creds);
 }
 
 function firestoreValueToJs(v) {
@@ -254,7 +197,7 @@ function scoresMatch(sessionScores, targetScores) {
 async function main() {
   const args = parseArgs(process.argv);
   const creds = loadCreds();
-  const accessToken = await getAccessToken(creds);
+  const accessToken = await getAccessToken(creds, CREDS_PATH);
 
   let sessionId = args.session;
 

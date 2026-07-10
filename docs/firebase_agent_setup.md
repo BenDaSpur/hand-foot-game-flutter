@@ -48,6 +48,8 @@ node scripts/query_analytics_session.js --session <sessionId> --foot-only
 node scripts/query_analytics_session.js --session <sessionId> --turn-summaries --decision-outcomes
 ```
 
+Node analytics scripts (`query_analytics_session.js`, `analyze_human_decisions.js`) refresh OAuth tokens via `scripts/analytics_http_common.js`. Set **`FIREBASE_OAUTH_CLIENT_SECRET`** in your gitignored `.env` or shell environment (never commit it). Rotate any secret that was previously committed to the repository.
+
 ### New analytics fields (2026 quick wins)
 
 | Field | Collections | Values |

@@ -26,7 +26,7 @@ class BotConfig {
   static const int aggressiveFootTransitionThreshold = 10;
 
   /// Start pressure to transition when hand reaches this size
-  static const int handSizePressureThreshold = 12;
+  static const int handSizePressureThreshold = 15;
 
   /// Emergency transition at this card count
   static const int emergencyTransitionThreshold = 8;
@@ -229,6 +229,26 @@ class BotConfig {
 
   /// Protection score to avoid discarding wilds
   static const int wildProtection = 200;
+
+  // ===== HUMAN PLAY PATTERNS (analytics: 87 sessions, 4590 human events) =====
+
+  /// Humans accumulate before burst-melding; hold window lower bound
+  static const int humanAccumulationMinHand = 8;
+
+  /// Stop accumulating and start burst-melding above this size
+  static const int humanAccumulationMaxHand = 14;
+
+  /// Trigger multi-meld burst strategy (660 meld actions had 15+ cards in hand)
+  static const int humanBurstMeldHandThreshold = 15;
+
+  /// Minimum dump potential to burst at threshold hand size
+  static const double humanBurstDumpPotential = 0.45;
+
+  /// Humans average ~16.6 cards when discarding — trim large hands aggressively
+  static const int humanLargeHandDiscardThreshold = 14;
+
+  /// Bonus for discarding low ranks (4–8 are top human discard targets)
+  static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
   static const String botAiVersion = '2026.07-human-patterns';

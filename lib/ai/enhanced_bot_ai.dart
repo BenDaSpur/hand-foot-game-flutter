@@ -373,6 +373,17 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
+    // Human analytics: prefer deck draws while accumulating (0 unlock events in 87 sessions)
+    if (_isInHumanAccumulationWindow(bot, context) &&
+        gameState.discardPile.isNotEmpty) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Accumulation phase - drawing from deck (human pattern)',
+      );
+      return BotDecision(action: 'drawFromDeck');
+    }
+
     // Evaluate discard pile opportunity - ALLOW PRE-PLAY-DOWN for valuable piles
     if (gameState.discardPile.isNotEmpty) {
       try {
@@ -591,15 +602,50 @@ class EnhancedBotAI {
 
     // NEW: Check if we can play ALL cards to immediately see foot
     if (bot.hasPlayedDown && !bot.hasPickedUpFoot) {
-      final canPlayAllDecision = _checkCanPlayAllCards(bot, context);
-      if (canPlayAllDecision != null) {
-        return canPlayAllDecision;
+      if (!_isInHumanAccumulationWindow(bot, context)) {
+        final canPlayAllDecision = _checkCanPlayAllCards(bot, context);
+        if (canPlayAllDecision != null) {
+          return canPlayAllDecision;
+        }
       }
+    }
+
+    // Handle play-down if not yet played down
+    if (!bot.hasPlayedDown) {
+      return _handlePlayDownDecision(bot, context);
+    }
+
+    // Human pattern: accumulate before foot transition / incremental melds
+    if (_shouldAccumulateHandLikeHuman(bot, context)) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Human-style accumulation: holding ${bot.currentHand.length} cards before burst',
+      );
+      return BotDecision(action: 'noMeld');
+    }
+
+    // Personality/time-pressure holding outside the human accumulation window
+    if (!_isInHumanAccumulationWindow(bot, context) &&
+        _shouldHoldCardsStrategically(bot, context)) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Strategic hold: personality/time-pressure limits',
+      );
+      return BotDecision(action: 'noMeld');
+    }
+
+    // Human pattern: burst-meld at 15+ before foot-transition discard paths
+    if (_shouldExecuteDumpStrategy(bot, context)) {
+      return _executeDumpStrategy(bot, context);
     }
 
     // Check for foot transition decisions
     final controllerForFoot = context.controller as GameController?;
-    if (controllerForFoot == null) return BotDecision(action: 'noMeld');
+    if (controllerForFoot == null) {
+      return BotDecision(action: 'noMeld');
+    }
     final footTransitionDecision = _footTransitionManager.handleFootTransition(
       bot,
       controllerForFoot,
@@ -618,12 +664,6 @@ class EnhancedBotAI {
       return _handleCompetitiveThreat(bot, context);
     }
 
-    // Handle play-down if not yet played down
-    if (!bot.hasPlayedDown) {
-      return _handlePlayDownDecision(bot, context);
-    }
-
-    // AGGRESSIVE FIX: Dramatically reduce strategic holding to prevent accumulation
     // Opponents on foot are racing to go out — stop hoarding and melt hand down
     if (_opponentOnFootPressure(context, bot)) {
       if (!bot.hasPickedUpFoot && _shouldExecuteDumpStrategy(bot, context)) {
@@ -645,26 +685,6 @@ class EnhancedBotAI {
           data: _meldAnalyzer.findBestMeld(rushMelds, bot: bot),
         );
       }
-    }
-
-    // Only hold with small hands when no opponent foot pressure
-    if (handSize <= 6 && _shouldHoldCardsStrategically(bot, context)) {
-      final humanPlayers = context.players.where(
-        (p) => p.type == PlayerType.human,
-      );
-      final humanThreat = humanPlayers.any(
-        (h) => h.hasPickedUpFoot && h.currentHand.length <= 10,
-      );
-
-      if (!humanThreat) {
-        return BotDecision(action: 'noMeld');
-      }
-      // Otherwise, continue to meld building instead of holding
-    }
-
-    // If ready to dump everything, execute all possible melds
-    if (_shouldExecuteDumpStrategy(bot, context)) {
-      return _executeDumpStrategy(bot, context);
     }
 
     // Look for meld opportunities (fallback for conservative play)
@@ -1707,6 +1727,45 @@ class EnhancedBotAI {
         sortedHand.first; // Fallback to first card
   }
 
+  /// Whether the bot is in the human-style hand-building window (draw/discards, few melds).
+  bool _isInHumanAccumulationWindow(Player bot, BotGameContext context) {
+    if (!bot.hasPlayedDown || _opponentOnFootPressure(context, bot)) {
+      return false;
+    }
+    final handSize = bot.currentHand.length;
+    if (bot.hasPickedUpFoot &&
+        handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
+      return false;
+    }
+    return handSize >= BotConfig.humanAccumulationMinHand &&
+        handSize <= BotConfig.humanAccumulationMaxHand;
+  }
+
+  /// Human analytics: accumulate in 8–14 range unless bursting at threshold.
+  bool _shouldAccumulateHandLikeHuman(Player bot, BotGameContext context) {
+    if (!_isInHumanAccumulationWindow(bot, context)) {
+      return false;
+    }
+    if (_shouldExecuteDumpStrategy(bot, context)) {
+      return false;
+    }
+
+    // Allow trimming melds that drop hand below accumulation window (e.g. 8→5)
+    final controller = context.controller as GameController?;
+    if (controller != null) {
+      final melds = _getCachedPossibleMelds(bot, context);
+      if (melds.isNotEmpty) {
+        final bestMeld = _meldAnalyzer.findBestMeld(melds, bot: bot);
+        final handAfterMeld = bot.currentHand.length - bestMeld.length;
+        if (handAfterMeld < BotConfig.humanAccumulationMinHand) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   /// Strategic holding decision: Should bot hold cards instead of melding immediately?
   /// This implements the superior "accumulate-and-dump" strategy for better discard pile unlocking
   /// Enhanced with personality-based holding tolerance and time-based pressure
@@ -1806,25 +1865,32 @@ class EnhancedBotAI {
       return false; // Don't hold - prioritize discarding to go out
     }
 
-    // Post-play-down: Execute if we can dump a good portion of our hand
-    final dumpPotential = _calculateDumpPotential(bot, context);
-    if (dumpPotential >= 0.6 && handSize >= 4) {
-      return true; // Reduced from 80% to 60%
+    // Human pattern: burst-meld at ~15+ cards (matches 660 analytics events)
+    if (handSize >= BotConfig.humanBurstMeldHandThreshold &&
+        bot.hasPlayedDown) {
+      final burstPotential = _calculateDumpPotential(bot, context);
+      if (burstPotential >= BotConfig.humanBurstDumpPotential) {
+        return true;
+      }
+      if (handSize >= BotConfig.humanBurstMeldHandThreshold + 2) {
+        return true;
+      }
     }
 
     // ENHANCED: Under competitive pressure, dump much more aggressively
+    final dumpPotential = _calculateDumpPotential(bot, context);
     final maxOpponentScore = gameState.players
         .where((p) => p.id != bot.id)
         .map((p) => p.score)
         .fold(0, (max, score) => score > max ? score : max);
 
     final competitivePressureThreshold = maxOpponentScore >= 6500
-        ? 6
-        : 9; // Much more aggressive when under pressure
+        ? BotConfig.humanBurstMeldHandThreshold - 2
+        : BotConfig.humanBurstMeldHandThreshold;
 
-    // AGGRESSIVE FIX: Execute dump strategy much earlier to prevent accumulation
-    if (handSize >= competitivePressureThreshold) {
-      return true; // Dump much earlier when under competitive pressure
+    // Burst when hand reaches human-style threshold (analytics: ~15 cards)
+    if (handSize >= competitivePressureThreshold && bot.hasPlayedDown) {
+      return true;
     }
 
     // NEW: Be more aggressive if on hand pile with wilds and close to foot
@@ -1907,8 +1973,9 @@ class EnhancedBotAI {
     // Priority 2: Create new melds with enhanced book balance strategy
     final handSize = bot.currentHand.length;
 
-    // AGGRESSIVE MODE: Use maximal meld combination for large hands during dump
-    if (handSize >= 12 && bot.hasPlayedDown) {
+    // Human-style burst: multi-meld when hand is large enough
+    if (handSize >= BotConfig.humanBurstMeldHandThreshold &&
+        bot.hasPlayedDown) {
       final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
         bot,
         controller,
@@ -2318,16 +2385,16 @@ class EnhancedBotAI {
 
     switch (personality) {
       case BotPersonality.conservative:
-        baseLimit = 10; // Reduced from 14 - much more aggressive
+        baseLimit = 15; // Human avg discard hand ~16.6
         break;
       case BotPersonality.aggressive:
-        baseLimit = 8; // Reduced from 10 - very aggressive
+        baseLimit = 14;
         break;
       case BotPersonality.bookBuilder:
-        baseLimit = 9; // Reduced from 12 - more aggressive
+        baseLimit = 15;
         break;
       case BotPersonality.adaptive:
-        baseLimit = 7; // Reduced from 9 after seeing 17-card failures
+        baseLimit = 14;
         break;
     }
 
