@@ -2580,6 +2580,10 @@ class EnhancedBotAI {
     // Must draw before melding — pressure tactics cannot skip the draw phase.
     if (gameState.turnPhase == TurnPhase.draw) {
       if (!gameState.hasDrawnFromDeck) {
+        // Prefer discard pile when unlockable to speed up the game.
+        if (gameState.discardPile.length >= 4 && context.canUnlockDiscard()) {
+          return BotDecision(action: 'drawFromDiscard');
+        }
         return BotDecision(action: 'drawFromDeck');
       }
       return null;
@@ -2650,14 +2654,6 @@ class EnhancedBotAI {
       if (cleanBooks == 0 || dirtyBooks == 0) {
         // Rush to complete missing book type
         return _rushToCompleteRequiredBooks(bot, context);
-      }
-    }
-
-    // Take discard pile aggressively to speed up game
-    if (gameState.turnPhase == TurnPhase.draw &&
-        gameState.discardPile.length >= 4) {
-      if (context.canUnlockDiscard()) {
-        return BotDecision(action: 'drawFromDiscard');
       }
     }
 
