@@ -15,7 +15,15 @@ const PROJECT_ID =
   process.env.FIREBASE_PROJECT_ID || 'hand-foot-game-flutter';
 
 function parseArgs(argv) {
-  const args = { scores: null, session: null, footOnly: false, limit: 5, recent: false };
+  const args = {
+    scores: null,
+    session: null,
+    footOnly: false,
+    limit: 5,
+    recent: false,
+    turnSummaries: false,
+    decisionOutcomes: false,
+  };
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--scores' && argv[i + 1]) {
       args.scores = argv[++i].split(',').map((s) => parseInt(s.trim(), 10));
@@ -27,6 +35,10 @@ function parseArgs(argv) {
       args.limit = parseInt(argv[++i], 10);
     } else if (argv[i] === '--recent') {
       args.recent = true;
+    } else if (argv[i] === '--turn-summaries') {
+      args.turnSummaries = true;
+    } else if (argv[i] === '--decision-outcomes') {
+      args.decisionOutcomes = true;
     }
   }
   return args;
@@ -288,8 +300,10 @@ async function main() {
 
   console.log(`Found ${decisions.length} bot decisions`);
   for (const d of decisions.slice(-args.limit * 10)) {
+    const drawSource = d.drawSource ? ` drawSource=${d.drawSource}` : '';
+    const version = d.botAiVersion ? ` ai=${d.botAiVersion}` : '';
     console.log(
-      `- [R${d.round}] ${d.botId} (${d.botPersonality}): ${d.decision} | foot=${d.botHasPickedUpFoot} hand=${d.botHandSize} books=${d.botBookCount} | ${d.reasoning}`,
+      `- [R${d.round}] ${d.botId} (${d.botPersonality}): ${d.decision}${drawSource}${version} | foot=${d.botHasPickedUpFoot} hand=${d.botHandSize} books=${d.botBookCount} | ${d.reasoning}`,
     );
   }
 
@@ -303,7 +317,46 @@ async function main() {
   events.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
   console.log(`Found ${events.length} game events`);
   for (const e of events.slice(-30)) {
-    console.log(`- ${e.eventType} | ${e.playerId} | ${JSON.stringify(e.eventData || {})}`);
+    const drawSource = e.drawSource ? ` drawSource=${e.drawSource}` : '';
+    console.log(
+      `- ${e.eventType}${drawSource} | ${e.playerId} | ${JSON.stringify(e.eventData || {})}`,
+    );
+  }
+
+  if (args.turnSummaries) {
+    console.log('\nFetching turn_summaries for session...');
+    const turns = await fetchBySessionId(
+      accessToken,
+      'turn_summaries',
+      sessionId,
+      500,
+    );
+    turns.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+    console.log(`Found ${turns.length} turn summaries`);
+    for (const t of turns.slice(-args.limit * 5)) {
+      console.log(
+        `- turn ${t.turnNumber} ${t.playerId} (${t.playerType}): actions=${t.actionCount} melds=${t.meldsCreated} draws=${JSON.stringify(t.drawSources || [])} discard=${t.discardedRank || 'none'}`,
+      );
+    }
+  }
+
+  if (args.decisionOutcomes) {
+    console.log('\nFetching decision_outcomes for session...');
+    const outcomes = await fetchBySessionId(
+      accessToken,
+      'decision_outcomes',
+      sessionId,
+      500,
+    );
+    outcomes.sort((a, b) =>
+      (a.timestamp || '').localeCompare(b.timestamp || ''),
+    );
+    console.log(`Found ${outcomes.length} decision outcomes`);
+    for (const o of outcomes.slice(-args.limit * 5)) {
+      console.log(
+        `- ${o.originalDecision} -> ${o.outcome} (${o.turnsLater} turns) | ${JSON.stringify(o.outcomeContext || {})}`,
+      );
+    }
   }
 }
 

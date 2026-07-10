@@ -5,9 +5,14 @@ import 'package:flutter/foundation.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../ai/bot_personality.dart';
+import '../ai/bot_config.dart';
+import '../config/analytics_metadata.dart';
+import '../game/events/game_event.dart';
 import 'firebase_service.dart';
 import 'device_service.dart';
 import 'analytics_batcher.dart';
+import 'analytics_fields.dart';
+import 'analytics_trackers.dart';
 
 /// Comprehensive game analytics logging service for bot performance analysis
 class GameAnalyticsLogger {
@@ -36,6 +41,8 @@ class GameAnalyticsLogger {
   static const String botDecisionsCollection = 'bot_decisions';
   static const String gameEventsCollection = 'game_events';
   static const String performanceMetricsCollection = 'performance_metrics';
+  static const String turnSummariesCollection = 'turn_summaries';
+  static const String decisionOutcomesCollection = 'decision_outcomes';
 
   // Privacy settings
   static bool _analyticsEnabled = true;
@@ -44,6 +51,16 @@ class GameAnalyticsLogger {
       false; // Disable reads for write-only mode
   static String? _currentSessionId;
   static DateTime? _sessionStartTime;
+  static Map<String, BotPersonality> _sessionBotPersonalities = {};
+  static final TurnTracker _turnTracker = TurnTracker();
+  static final DiscardOutcomeTracker _discardTracker = DiscardOutcomeTracker();
+
+  static Map<String, dynamic> _versionFields() {
+    return {
+      'appVersion': AnalyticsMetadata.appVersion,
+      'botAiVersion': BotConfig.botAiVersion,
+    };
+  }
 
   /// Initialize analytics logging with privacy controls
   static Future<void> initialize({
@@ -52,6 +69,12 @@ class GameAnalyticsLogger {
   }) async {
     _analyticsEnabled = analyticsEnabled;
     _detailedLoggingEnabled = detailedLoggingEnabled;
+
+    try {
+      await AnalyticsMetadata.initialize();
+    } catch (e) {
+      _logger.warning('Failed to load app version metadata: $e');
+    }
 
     if (_analyticsEnabled) {
       _logger.info(
@@ -74,6 +97,11 @@ class GameAnalyticsLogger {
       final sessionId = _generateSessionId();
       _currentSessionId = sessionId;
       _sessionStartTime = DateTime.now();
+      _sessionBotPersonalities = Map<String, BotPersonality>.from(
+        botPersonalities ?? {},
+      );
+      _turnTracker.reset();
+      _discardTracker.clear();
 
       // Count bots by personality
       final botPersonalityCount = <String, int>{};
@@ -103,7 +131,7 @@ class GameAnalyticsLogger {
         'initialRound': gameState.round,
         'gameSeed': gameState.deck.seed, // Include seed for reproducibility
         'status': 'active',
-        'version': '1.0.0', // App version for tracking changes over time
+        ..._versionFields(),
       };
 
       final fs = firestore;
@@ -198,9 +226,17 @@ class GameAnalyticsLogger {
 
       _currentSessionId = null;
       _sessionStartTime = null;
+      _sessionBotPersonalities = {};
+      _turnTracker.reset();
+      _discardTracker.clear();
     } catch (e) {
       _logger.warning('Failed to end analytics session: $e');
     }
+  }
+
+  /// Bot personalities for the active session (for round-end metrics).
+  static Map<String, BotPersonality> get sessionBotPersonalities {
+    return Map<String, BotPersonality>.unmodifiable(_sessionBotPersonalities);
   }
 
   /// Log a detailed bot decision for analysis
@@ -227,10 +263,12 @@ class GameAnalyticsLogger {
         'botId': botId,
         'botPersonality': personality.name,
         'decision': decision,
+        'drawSource': drawSourceFromAction(decision),
         'reasoning': reasoning,
         'confidence': confidence,
         'alternativeActions': alternativeActions,
         'riskAssessment': riskAssessment,
+        ..._versionFields(),
 
         // Game context
         'round': gameState.round,
@@ -312,6 +350,19 @@ class GameAnalyticsLogger {
         turnCompletion: true, // Flush faster on turn completion
       );
 
+      await _recordActionForTracking(
+        playerId: botId,
+        action: decision,
+        playerType: PlayerType.bot.name,
+        handSize: botPlayer.currentHand.length,
+        round: gameState.round,
+        turnNumber: (decisionContext?['turnNumber'] as num?)?.toInt(),
+        discardedCardRank:
+            isDiscardAction(decision) && gameState.discardPile.isNotEmpty
+            ? gameState.discardPile.last.rank.name
+            : null,
+      );
+
       if (kDebugMode) {
         _logger.fine(
           '🤖 Logged bot decision: $decision for $botId ($personality)',
@@ -346,9 +397,11 @@ class GameAnalyticsLogger {
         'eventType': eventType,
         'playerId': playerId,
         'playerType': playerType?.name,
+        'drawSource': drawSourceFromAction(eventType),
         'success': success,
         'errorMessage': errorMessage,
         'eventData': sanitizedEventData,
+        ..._versionFields(),
       };
 
       // Use batching for game events (high frequency)
@@ -358,6 +411,25 @@ class GameAnalyticsLogger {
         priority: false, // Game events can be batched
         turnCompletion: true, // Flush faster on turn completion
       );
+
+      final handSize = _extractHandSizeFromEventData(sanitizedEventData);
+      final round = _extractRoundFromEventData(sanitizedEventData);
+      final discardedCardRank = _extractDiscardedRankFromEventData(
+        eventType,
+        sanitizedEventData,
+      );
+
+      if (!shouldSkipEventBusTurnTracking(eventType)) {
+        await _recordActionForTracking(
+          playerId: playerId,
+          action: eventType,
+          playerType: playerType?.name,
+          handSize: handSize,
+          round: round,
+          turnNumber: _extractTurnNumberFromEventData(sanitizedEventData),
+          discardedCardRank: discardedCardRank,
+        );
+      }
 
       if (kDebugMode) {
         _logger.fine('🎯 Logged game event: $eventType for $playerId');
@@ -386,6 +458,7 @@ class GameAnalyticsLogger {
         'botId': botId,
         'personality': personality.name,
         'round': gameState.round,
+        ..._versionFields(),
 
         // Performance metrics
         'metrics': performanceMetrics,
@@ -431,17 +504,19 @@ class GameAnalyticsLogger {
       final outcomeData = {
         'sessionId': _currentSessionId,
         'timestamp': FieldValue.serverTimestamp(),
+        'recordType': 'outcome',
         'botId': botId,
         'originalDecision': originalDecision,
         'outcome': outcome,
         'turnsLater': turnsLater,
         'outcomeScore': outcomeScore,
         'outcomeContext': outcomeContext,
+        ..._versionFields(),
       };
 
       // Use batching for decision outcomes (low frequency but can be batched)
       await AnalyticsBatcher.addToBatch(
-        collection: botDecisionsCollection,
+        collection: decisionOutcomesCollection,
         data: outcomeData,
         priority: false, // Decision outcomes can be batched
       );
@@ -454,6 +529,234 @@ class GameAnalyticsLogger {
     } catch (e) {
       _logger.warning('Failed to log decision outcome: $e');
     }
+  }
+
+  /// Finalize turn analytics: write turn summary and resolve pending discards.
+  static Future<void> finalizeTurn(TurnEndedEvent event) async {
+    if (!_analyticsEnabled || _currentSessionId == null) {
+      return;
+    }
+
+    final endingPlayerId = event.player?.id;
+    final isDiscardOwnerTurnEnd =
+        endingPlayerId != null && endingPlayerId == _discardTracker.discarderId;
+    if (_discardTracker.hasPending && !isDiscardOwnerTurnEnd) {
+      final notTaken = _discardTracker.onTurnEndedWithoutTake();
+      if (notTaken != null) {
+        await logDecisionOutcome(
+          botId: notTaken.discarderId,
+          originalDecision: 'discardCard',
+          outcome: notTaken.outcome,
+          turnsLater: notTaken.turnsLater,
+          outcomeContext: notTaken.outcomeContext,
+        );
+      }
+    }
+
+    await _logTurnSummary(
+      turnNumber: event.turnNumber,
+      player: event.player,
+      nextPlayer: event.nextPlayer,
+    );
+
+    _turnTracker.reset();
+  }
+
+  /// Resolve discard outcomes when an opponent draws from the discard pile.
+  static Future<void> handleCardDrawnForOutcomes(CardDrawnEvent event) async {
+    if (!_analyticsEnabled || _currentSessionId == null) {
+      return;
+    }
+
+    final takerId = event.player?.id;
+    if (takerId == null) {
+      return;
+    }
+
+    final result = _discardTracker.onOpponentTookDiscard(
+      takerId: takerId,
+      fromDeck: event.fromDeck,
+    );
+    if (result != null) {
+      await logDecisionOutcome(
+        botId: result.discarderId,
+        originalDecision: 'discardCard',
+        outcome: result.outcome,
+        turnsLater: result.turnsLater,
+        outcomeContext: result.outcomeContext,
+      );
+    }
+  }
+
+  /// Resolve discard outcomes when an opponent unlocks the discard pile.
+  static Future<void> handleDiscardPileUnlockedForOutcomes(
+    DiscardPileUnlockedEvent event,
+  ) async {
+    if (!_analyticsEnabled || _currentSessionId == null) {
+      return;
+    }
+
+    final takerId = event.player?.id;
+    if (takerId == null) {
+      return;
+    }
+
+    final result = _discardTracker.onOpponentUnlocked(takerId: takerId);
+    if (result != null) {
+      await logDecisionOutcome(
+        botId: result.discarderId,
+        originalDecision: 'discardCard',
+        outcome: result.outcome,
+        turnsLater: result.turnsLater,
+        outcomeContext: result.outcomeContext,
+      );
+    }
+  }
+
+  static Future<void> _logTurnSummary({
+    required int turnNumber,
+    Player? player,
+    Player? nextPlayer,
+  }) async {
+    if (_turnTracker.actionCount == 0 && _turnTracker.playerId == null) {
+      return;
+    }
+
+    try {
+      final summaryData = {
+        'sessionId': _currentSessionId,
+        'timestamp': FieldValue.serverTimestamp(),
+        ..._versionFields(),
+        ..._turnTracker.toSummary(
+          turnNumber: turnNumber,
+          nextPlayerId: nextPlayer?.id,
+          nextPlayerType: nextPlayer?.type.name,
+        ),
+        'playerName': player?.name,
+        'nextPlayerName': nextPlayer?.name,
+      };
+
+      await AnalyticsBatcher.addToBatch(
+        collection: turnSummariesCollection,
+        data: summaryData,
+        priority: false,
+        turnCompletion: true,
+      );
+
+      if (kDebugMode) {
+        _logger.fine(
+          '📋 Logged turn summary: turn $turnNumber for ${player?.name}',
+        );
+      }
+    } catch (e) {
+      _logger.warning('Failed to log turn summary: $e');
+    }
+  }
+
+  static Future<void> _recordActionForTracking({
+    required String playerId,
+    required String action,
+    String? playerType,
+    int? handSize,
+    int? round,
+    int? turnNumber,
+    String? discardedCardRank,
+  }) async {
+    _turnTracker.recordAction(
+      playerId: playerId,
+      action: action,
+      playerType: playerType,
+      handSize: handSize,
+      round: round,
+      discardedCardRank: discardedCardRank,
+    );
+
+    if (isDiscardAction(action) && discardedCardRank != null) {
+      final superseded = _discardTracker.registerDiscard(
+        discarderId: playerId,
+        cardRank: discardedCardRank,
+        turnNumber: turnNumber ?? 0,
+      );
+      if (superseded != null) {
+        await logDecisionOutcome(
+          botId: superseded.discarderId,
+          originalDecision: 'discardCard',
+          outcome: superseded.outcome,
+          turnsLater: superseded.turnsLater,
+          outcomeContext: superseded.outcomeContext,
+        );
+      }
+    }
+  }
+
+  static int? _extractHandSizeFromEventData(Map<String, dynamic>? eventData) {
+    if (eventData == null) {
+      return null;
+    }
+    final handSize = eventData['handSize'];
+    if (handSize is int) {
+      return handSize;
+    }
+    if (handSize is num) {
+      return handSize.toInt();
+    }
+    return null;
+  }
+
+  static int? _extractRoundFromEventData(Map<String, dynamic>? eventData) {
+    if (eventData == null) {
+      return null;
+    }
+    final round = eventData['round'];
+    if (round is int) {
+      return round;
+    }
+    if (round is num) {
+      return round.toInt();
+    }
+    return null;
+  }
+
+  static int? _extractTurnNumberFromEventData(Map<String, dynamic>? eventData) {
+    if (eventData == null) {
+      return null;
+    }
+    final turnNumber = eventData['turnNumber'];
+    if (turnNumber is int) {
+      return turnNumber;
+    }
+    if (turnNumber is num) {
+      return turnNumber.toInt();
+    }
+    return null;
+  }
+
+  static String? _extractDiscardedRankFromEventData(
+    String eventType,
+    Map<String, dynamic>? eventData,
+  ) {
+    if (!isDiscardAction(eventType) || eventData == null) {
+      return null;
+    }
+
+    final cardRank = eventData['cardRank'];
+    if (cardRank is String) {
+      return cardRank;
+    }
+
+    final context = eventData['context'];
+    if (context is Map<String, dynamic>) {
+      final contextRank = context['cardRank'];
+      if (contextRank is String) {
+        return contextRank;
+      }
+      final card = context['card'];
+      if (card is String && card.isNotEmpty) {
+        return card.split(' ').first;
+      }
+    }
+
+    return null;
   }
 
   /// Get bot performance analytics (for debugging/development)
