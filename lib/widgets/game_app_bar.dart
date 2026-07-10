@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
 import '../models/game_state.dart';
 import '../screens/main_menu_screen.dart';
+import 'game_session_info_menu.dart';
 
 class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
   final GameState gameState;
@@ -14,6 +15,8 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onLoadGame;
   final VoidCallback? onHowToPlay;
   final VoidCallback? onLeaveGame;
+  final GameSessionInfo? sessionInfo;
+  final List<Widget> additionalActions;
 
   const GameAppBar({
     super.key,
@@ -27,6 +30,8 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onLoadGame,
     this.onHowToPlay,
     this.onLeaveGame,
+    this.sessionInfo,
+    this.additionalActions = const [],
   });
 
   @override
@@ -51,6 +56,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       actions: [
+        ...additionalActions,
         // Round indicator
         Container(
           margin: const EdgeInsets.all(8),
@@ -130,6 +136,11 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                 break;
               case 'leave_game':
                 onLeaveGame?.call();
+                break;
+              case GameSessionInfoMenu.copyValue:
+                if (sessionInfo != null) {
+                  GameSessionInfoMenu.copyToClipboard(context, sessionInfo!);
+                }
                 break;
               case 'main_menu':
                 _returnToMainMenu(context);
@@ -214,6 +225,8 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ],
               ),
             ),
+            if (sessionInfo != null)
+              ...GameSessionInfoMenu.buildItems(sessionInfo!),
           ],
         ),
       ],

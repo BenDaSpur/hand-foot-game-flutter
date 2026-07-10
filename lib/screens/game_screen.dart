@@ -18,6 +18,8 @@ import '../widgets/mobile_status_bar.dart';
 import '../widgets/collapsible_recent_actions.dart';
 import '../widgets/compact_player_scores.dart';
 import '../widgets/game_action_buttons.dart';
+import '../widgets/game_app_bar.dart';
+import '../widgets/game_session_info_menu.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
 import '../services/analytics_batcher.dart';
@@ -1657,22 +1659,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [BalatroTheme.neonPink, BalatroTheme.glowColor],
-              ).createShader(bounds),
-              child: Text(
-                'HAND & FOOT',
-                style: Theme.of(
-                  context,
-                ).textTheme.displayMedium?.copyWith(color: Colors.white),
-              ),
-            ),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            actions: [
-              // Scoreboard button
+          appBar: GameAppBar(
+            gameState: gameState,
+            isMultiplayer: false,
+            sessionInfo: _soloSessionInfo(gameState),
+            additionalActions: [
               IconButton(
                 icon: const Icon(
                   Icons.leaderboard,
@@ -1683,118 +1674,25 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   _dialogManager.showScoreboard();
                 },
               ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BalatroTheme.glowDecoration(
-                  glowColor: BalatroTheme.neonGreen,
-                  backgroundColor: BalatroTheme.darkPurple,
-                ),
-                child: Text(
-                  'ROUND ${gameState.round}',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: BalatroTheme.neonGreen,
-                  ),
-                ),
-              ),
-              PopupMenuButton<String>(
-                onSelected: (String value) {
-                  switch (value) {
-                    case 'new_game':
-                      _dialogManager.showNewGameConfirmation(_startNewGame);
-                      break;
-                    case 'copy_seed':
-                      _persistenceManager.copySeedToClipboard(context);
-                      break;
-                    case 'export_game':
-                      _persistenceManager.copyGameStateToClipboard(context);
-                      break;
-                    case 'load_game':
-                      _dialogManager.showLoadGameDialog(
-                        (inputText) => _persistenceManager.loadGameFromJson(
-                          inputText,
-                          context,
-                        ),
-                      );
-                      break;
-                    case 'how_to_play':
-                      _dialogManager.showHowToPlayDialog();
-                      break;
-                    case 'main_menu':
-                      _returnToMainMenu();
-                      break;
-                  }
-                },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem<String>(
-                    value: 'new_game',
-                    child: Row(
-                      children: [
-                        Icon(Icons.refresh, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('New Game'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem<String>(
-                    value: 'copy_seed',
-                    child: Row(
-                      children: [
-                        Icon(Icons.copy, color: Colors.orange),
-                        SizedBox(width: 8),
-                        Text('Copy Seed'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'export_game',
-                    child: Row(
-                      children: [
-                        Icon(Icons.download, color: Colors.green),
-                        SizedBox(width: 8),
-                        Text('Export Game'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'load_game',
-                    child: Row(
-                      children: [
-                        Icon(Icons.upload, color: Colors.blue),
-                        SizedBox(width: 8),
-                        Text('Load Game'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem<String>(
-                    value: 'how_to_play',
-                    child: Row(
-                      children: [
-                        Icon(Icons.help_outline, color: Colors.purple),
-                        SizedBox(width: 8),
-                        Text('How to Play'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem<String>(
-                    value: 'main_menu',
-                    child: Row(
-                      children: [
-                        Icon(Icons.home, color: BalatroTheme.neonBlue),
-                        SizedBox(width: 8),
-                        Text('Main Menu'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
             ],
+            onNewGame: () {
+              _dialogManager.showNewGameConfirmation(_startNewGame);
+            },
+            onCopySeed: () {
+              _persistenceManager.copySeedToClipboard(context);
+            },
+            onExportGame: () {
+              _persistenceManager.copyGameStateToClipboard(context);
+            },
+            onLoadGame: () {
+              _dialogManager.showLoadGameDialog(
+                (inputText) =>
+                    _persistenceManager.loadGameFromJson(inputText, context),
+              );
+            },
+            onHowToPlay: () {
+              _dialogManager.showHowToPlayDialog();
+            },
           ),
           body: Column(
             children: [
@@ -2193,6 +2091,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  GameSessionInfo _soloSessionInfo(GameState gameState) {
+    return GameSessionInfo(
+      analyticsSessionId:
+          _analyticsSessionId ?? GameAnalyticsLogger.currentSessionId,
+      gameSeed: gameState.deck.seed?.toString(),
     );
   }
 
