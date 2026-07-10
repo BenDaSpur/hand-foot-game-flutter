@@ -14,7 +14,11 @@ void main() async {
   // Prevent mobile browser long-press menus (Find in Page, text selection)
   // from interrupting card taps during gameplay.
   if (kIsWeb) {
-    await BrowserContextMenu.disableContextMenu();
+    try {
+      await BrowserContextMenu.disableContextMenu();
+    } catch (e) {
+      debugPrint('Failed to disable browser context menu: $e');
+    }
   }
 
   // Skip font preloading during integration tests to avoid binding conflicts
