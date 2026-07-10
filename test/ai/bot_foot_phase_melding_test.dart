@@ -157,6 +157,9 @@ void main() {
           ])!,
         ]);
 
+        expect(bot.hasDirtyBook, isTrue);
+        expect(bot.hasCleanBook, isFalse);
+
         final decision = botAI.makeDecision(bot, gameController);
 
         expect(decision.action, isNot('noMeld'));

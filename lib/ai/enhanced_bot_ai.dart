@@ -2252,6 +2252,26 @@ class EnhancedBotAI {
     return result;
   }
 
+  /// When dirty books exist but a clean book is still required, only add naturals
+  /// to incomplete, non-wild melds — never inflate dirty piles toward completion.
+  List<Map<String, dynamic>> _filterCleanBookPriorityAdditions(
+    Player bot,
+    List<Map<String, dynamic>> additions,
+  ) {
+    return additions.where((addition) {
+      final meldIndex = addition['meldIndex'] as int;
+      final card = addition['card'] as PlayingCard;
+      final meld = bot.melds[meldIndex];
+      if (meld.cards.length >= GameConfig.bookSize) {
+        return false;
+      }
+      if (card.isWild) {
+        return false;
+      }
+      return !meld.cards.any((existing) => existing.isWild);
+    }).toList();
+  }
+
   /// Helper method to randomly select from a list of equally good options
   /// Adds decision variability to make bot behavior less predictable
   T? _selectRandomly<T>(List<T> options) {
@@ -2732,8 +2752,11 @@ class EnhancedBotAI {
       return bookRush;
     }
 
-    // Opponent close to going out — stop hoarding and melt the foot hand
-    if (_opponentThreateningGoOut(context.gameState, bot)) {
+    // Opponent close to going out or large foot hand — melt aggressively
+    final needsForcedMeld =
+        _opponentThreateningGoOut(context.gameState, bot) ||
+        handSize >= BotConfig.footPhaseAggressiveMeldingThreshold;
+    if (needsForcedMeld) {
       final forced = _forceFootPhaseMeld(
         bot,
         context,
@@ -2744,18 +2767,8 @@ class EnhancedBotAI {
       }
     }
 
-    // Large foot hand: every personality must meld (not just adaptive at 10+)
+    // Large foot hand: any meld beats drawing again
     if (handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
-      final forced = _forceFootPhaseMeld(
-        bot,
-        context,
-        prioritizeMissingBookType: true,
-      );
-      if (forced != null) {
-        return forced;
-      }
-
-      // Foot hoarding fallback (session_17836311659865986): any meld beats drawing again
       final anyMelds = _getCachedPossibleMelds(bot, context);
       if (anyMelds.isNotEmpty) {
         return BotDecision(
@@ -2781,9 +2794,16 @@ class EnhancedBotAI {
 
     final needsClean = !bot.hasCleanBook;
     final needsDirty = !bot.hasDirtyBook;
+    final shouldPreferCleanOverDirty =
+        prioritizeMissingBookType && needsClean && bot.hasDirtyBook;
+
+    final filteredAdditions = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+      bot,
+    );
 
     // Have dirty books but need clean — build a naturals-only lane, not more dirty piles
-    if (prioritizeMissingBookType && needsClean && bot.hasDirtyBook) {
+    if (shouldPreferCleanOverDirty) {
       final cleanMelds = _getCachedPossibleMelds(
         bot,
         context,
@@ -2800,16 +2820,10 @@ class EnhancedBotAI {
         );
       }
 
-      final naturalAdditions =
-          _filterWildCardAdditions(
-            _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
-            bot,
-          ).where((addition) {
-            final meldIndex = addition['meldIndex'] as int;
-            final meld = bot.melds[meldIndex];
-            return meld.cards.length < GameConfig.bookSize &&
-                !meld.cards.any((card) => card.isWild);
-          }).toList();
+      final naturalAdditions = _filterCleanBookPriorityAdditions(
+        bot,
+        filteredAdditions,
+      );
       if (naturalAdditions.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: naturalAdditions.first);
       }
@@ -2829,33 +2843,16 @@ class EnhancedBotAI {
       }
     }
 
-    var cardsToAdd = _filterWildCardAdditions(
-      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
-      bot,
-    );
-
-    // Alex-style foot failure: hoarding on dirty books while clean book still missing
-    if (prioritizeMissingBookType && needsClean && bot.hasDirtyBook) {
-      cardsToAdd = cardsToAdd.where((addition) {
-        final meldIndex = addition['meldIndex'] as int;
-        final card = addition['card'] as PlayingCard;
-        final meld = bot.melds[meldIndex];
-        if (meld.cards.length >= GameConfig.bookSize) {
-          return false;
-        }
-        if (card.isWild) {
-          return false;
-        }
-        return !meld.cards.any((existing) => existing.isWild);
-      }).toList();
-    }
+    var cardsToAdd = shouldPreferCleanOverDirty
+        ? _filterCleanBookPriorityAdditions(bot, filteredAdditions)
+        : filteredAdditions;
 
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
     var possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (prioritizeMissingBookType && needsClean && bot.hasDirtyBook) {
+    if (shouldPreferCleanOverDirty) {
       final cleanOnly = possibleMelds
           .where((meld) => !meld.any((card) => card.isWild))
           .toList();

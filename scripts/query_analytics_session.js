@@ -145,9 +145,19 @@ async function listCollection(accessToken, collection, pageSize = 300) {
   return all;
 }
 
-async function runStructuredQuery(accessToken, collection, field, op, value, limit = 500) {
-  const body = JSON.stringify({
-    structuredQuery: {
+async function runStructuredQuery(
+  accessToken,
+  collection,
+  field,
+  op,
+  value,
+  limit = 500,
+) {
+  const all = [];
+  let lastDoc = null;
+
+  while (true) {
+    const structuredQuery = {
       from: [{ collectionId: collection }],
       where: {
         fieldFilter: {
@@ -157,26 +167,69 @@ async function runStructuredQuery(accessToken, collection, field, op, value, lim
         },
       },
       limit,
-    },
-  });
+    };
+    if (lastDoc) {
+      structuredQuery.startAt = {
+        values: [{ referenceValue: lastDoc.name }],
+        before: false,
+      };
+    }
 
-  const result = await httpsRequest(
-    {
-      hostname: 'firestore.googleapis.com',
-      path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`,
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
+    const body = JSON.stringify({ structuredQuery });
+    const result = await httpsRequest(
+      {
+        hostname: 'firestore.googleapis.com',
+        path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`,
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
       },
-    },
-    body,
-  );
+      body,
+    );
 
-  return result
-    .filter((row) => row.document)
-    .map((row) => docToObject(row.document));
+    const docs = result
+      .filter((row) => row.document)
+      .map((row) => row.document);
+    if (docs.length === 0) {
+      break;
+    }
+
+    all.push(...docs.map(docToObject));
+    if (docs.length < limit) {
+      break;
+    }
+
+    console.warn(
+      `Warning: structured query for ${collection} hit limit ${limit}; fetching more...`,
+    );
+    lastDoc = docs[docs.length - 1];
+  }
+
+  return all;
+}
+
+async function fetchBySessionId(
+  accessToken,
+  collection,
+  sessionId,
+  structuredLimit,
+) {
+  let docs = await runStructuredQuery(
+    accessToken,
+    collection,
+    'sessionId',
+    'EQUAL',
+    { stringValue: sessionId },
+    structuredLimit,
+  );
+  if (docs.length === 0) {
+    const allDocs = await listCollection(accessToken, collection, 500);
+    docs = allDocs.filter((d) => d.sessionId === sessionId);
+  }
+  return docs;
 }
 
 function scoresMatch(sessionScores, targetScores) {
@@ -212,9 +265,6 @@ async function main() {
     if (!match && args.recent) {
       match = sessions[0];
     }
-    if (!match && sessions.length > 0) {
-      match = sessions[0];
-    }
     if (!match) {
       console.error('No matching session found');
       process.exit(1);
@@ -225,18 +275,12 @@ async function main() {
   }
 
   console.log('\nFetching bot_decisions for session...');
-  let decisions = await runStructuredQuery(
+  let decisions = await fetchBySessionId(
     accessToken,
     'bot_decisions',
-    'sessionId',
-    'EQUAL',
-    { stringValue: sessionId },
+    sessionId,
     1000,
   );
-  if (decisions.length === 0) {
-    const allDecisions = await listCollection(accessToken, 'bot_decisions', 500);
-    decisions = allDecisions.filter((d) => d.sessionId === sessionId);
-  }
   if (args.footOnly) {
     decisions = decisions.filter((d) => d.botHasPickedUpFoot === true);
   }
@@ -250,18 +294,12 @@ async function main() {
   }
 
   console.log('\nFetching game_events for session...');
-  let events = await runStructuredQuery(
+  let events = await fetchBySessionId(
     accessToken,
     'game_events',
-    'sessionId',
-    'EQUAL',
-    { stringValue: sessionId },
+    sessionId,
     500,
   );
-  if (events.length === 0) {
-    const allEvents = await listCollection(accessToken, 'game_events', 500);
-    events = allEvents.filter((e) => e.sessionId === sessionId);
-  }
   events.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
   console.log(`Found ${events.length} game events`);
   for (const e of events.slice(-30)) {
