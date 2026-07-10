@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event_bus.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
@@ -6,40 +8,79 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
-  group('Bot go out round transition regression', () {
-    test('endRoundForPlayer advances to roundEnd and increments round', () {
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
-      final controller = GameController(players: [human, rita]);
-      controller.initializeGame();
+  group('GameController round transition regression', () {
+    test(
+      'endRoundForPlayer advances to roundEnd and publishes RoundEndedEvent',
+      () async {
+        final eventBus = GameEventBus();
+        final roundEndedEvents = <RoundEndedEvent>[];
+        final subscription = eventBus.subscribe((event) {
+          if (event is RoundEndedEvent) {
+            roundEndedEvents.add(event);
+          }
+        });
+        addTearDown(subscription.cancel);
 
-      _setupPlayerToGoOut(rita);
-      controller.gameState.currentPlayerIndex = 1;
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+        final controller = GameController(
+          players: [human, rita],
+          eventBus: eventBus,
+        );
+        controller.initializeGame();
 
-      controller.endRoundForPlayer(rita);
+        _setupPlayerToGoOut(rita);
+        controller.gameState.currentPlayerIndex = 1;
 
-      expect(controller.gameState.phase, GamePhase.roundEnd);
-      expect(controller.gameState.round, 2);
-    });
+        controller.endRoundForPlayer(rita);
+        await Future<void>.delayed(Duration.zero);
 
-    test('discardCard going out ends the round', () {
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
-      final controller = GameController(players: [human, rita]);
-      controller.initializeGame();
+        expect(controller.gameState.phase, GamePhase.roundEnd);
+        expect(controller.gameState.round, 2);
+        expect(roundEndedEvents, hasLength(1));
+        expect(roundEndedEvents.single.roundNumber, 1);
+        expect(roundEndedEvents.single.roundScores[rita], rita.score);
+        expect(roundEndedEvents.single.roundScores[human], human.score);
+      },
+    );
 
-      _setupPlayerToGoOut(rita);
-      rita.foot.add(const PlayingCard(suit: Suit.hearts, rank: CardRank.ace));
-      controller.gameState.currentPlayerIndex = 1;
-      controller.gameState.turnPhase = TurnPhase.discard;
+    test(
+      'discardCard going out ends the round and publishes RoundEndedEvent',
+      () async {
+        final eventBus = GameEventBus();
+        final roundEndedEvents = <RoundEndedEvent>[];
+        final subscription = eventBus.subscribe((event) {
+          if (event is RoundEndedEvent) {
+            roundEndedEvents.add(event);
+          }
+        });
+        addTearDown(subscription.cancel);
 
-      final success = controller.discardCard(rita.foot.first);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+        final controller = GameController(
+          players: [human, rita],
+          eventBus: eventBus,
+        );
+        controller.initializeGame();
 
-      expect(success, isTrue);
-      expect(controller.gameState.phase, GamePhase.roundEnd);
-    });
+        _setupPlayerToGoOut(rita);
+        rita.foot.add(const PlayingCard(suit: Suit.hearts, rank: CardRank.ace));
+        controller.gameState.currentPlayerIndex = 1;
+        controller.gameState.turnPhase = TurnPhase.discard;
 
-    test('nextRound clears melds and deals fresh cards after bot goes out', () {
+        final success = controller.discardCard(rita.foot.first);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(success, isTrue);
+        expect(controller.gameState.phase, GamePhase.roundEnd);
+        expect(roundEndedEvents, hasLength(1));
+        expect(roundEndedEvents.single.roundNumber, 1);
+        expect(roundEndedEvents.single.roundScores[rita], rita.score);
+      },
+    );
+
+    test('nextRound clears melds and deals fresh cards for all players', () {
       final human = Player(id: '1', name: 'You', type: PlayerType.human);
       final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
       final alex = Player(id: '3', name: 'Alex', type: PlayerType.bot);
@@ -49,6 +90,14 @@ void main() {
       _setupPlayerToGoOut(rita);
       human.hasPlayedDown = true;
       human.hasPickedUpFoot = true;
+      human.hand.clear();
+      human.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+        ])!,
+      );
       for (int i = 0; i < 11; i++) {
         human.foot.add(
           const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
@@ -61,6 +110,7 @@ void main() {
       expect(controller.gameState.phase, GamePhase.roundEnd);
       expect(controller.gameState.round, 2);
       expect(rita.melds, isNotEmpty);
+      expect(human.melds, isNotEmpty);
 
       controller.nextRound();
 
@@ -70,28 +120,96 @@ void main() {
       expect(human.melds, isEmpty);
       expect(rita.hand.length, 11);
       expect(rita.foot.length, 11);
+      expect(human.hand.length, 11);
+      expect(human.foot.length, 11);
       expect(rita.hasPlayedDown, isFalse);
       expect(rita.hasPickedUpFoot, isFalse);
+      expect(human.hasPlayedDown, isFalse);
+      expect(human.hasPickedUpFoot, isFalse);
     });
 
-    test('endRoundForPlayer is idempotent when round already ended', () {
+    test('endRoundForPlayer is idempotent when round already ended', () async {
+      final eventBus = GameEventBus();
+      final roundEndedEvents = <RoundEndedEvent>[];
+      final subscription = eventBus.subscribe((event) {
+        if (event is RoundEndedEvent) {
+          roundEndedEvents.add(event);
+        }
+      });
+      addTearDown(subscription.cancel);
+
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
       final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
       final controller = GameController(
-        players: [
-          Player(id: '1', name: 'You', type: PlayerType.human),
-          rita,
-        ],
+        players: [human, rita],
+        eventBus: eventBus,
       );
       controller.initializeGame();
       _setupPlayerToGoOut(rita);
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.discard;
 
       controller.endRoundForPlayer(rita);
-      expect(controller.gameState.round, 2);
+      await Future<void>.delayed(Duration.zero);
+
+      final snapshot = _RoundEndSnapshot.capture(controller, roundEndedEvents);
 
       controller.endRoundForPlayer(rita);
-      expect(controller.gameState.round, 2);
+      await Future<void>.delayed(Duration.zero);
+
+      snapshot.assertUnchanged(controller, roundEndedEvents);
     });
   });
+}
+
+class _RoundEndSnapshot {
+  final GamePhase phase;
+  final int round;
+  final List<int> scores;
+  final int currentPlayerIndex;
+  final TurnPhase turnPhase;
+  final int recentActionCount;
+  final int roundEndedEventCount;
+
+  _RoundEndSnapshot({
+    required this.phase,
+    required this.round,
+    required this.scores,
+    required this.currentPlayerIndex,
+    required this.turnPhase,
+    required this.recentActionCount,
+    required this.roundEndedEventCount,
+  });
+
+  factory _RoundEndSnapshot.capture(
+    GameController controller,
+    List<RoundEndedEvent> roundEndedEvents,
+  ) {
+    final gameState = controller.gameState;
+    return _RoundEndSnapshot(
+      phase: gameState.phase,
+      round: gameState.round,
+      scores: gameState.players.map((player) => player.score).toList(),
+      currentPlayerIndex: gameState.currentPlayerIndex,
+      turnPhase: gameState.turnPhase,
+      recentActionCount: gameState.recentActions.length,
+      roundEndedEventCount: roundEndedEvents.length,
+    );
+  }
+
+  void assertUnchanged(
+    GameController controller,
+    List<RoundEndedEvent> roundEndedEvents,
+  ) {
+    final gameState = controller.gameState;
+    expect(gameState.phase, phase);
+    expect(gameState.round, round);
+    expect(gameState.players.map((player) => player.score).toList(), scores);
+    expect(gameState.currentPlayerIndex, currentPlayerIndex);
+    expect(gameState.turnPhase, turnPhase);
+    expect(gameState.recentActions.length, recentActionCount);
+    expect(roundEndedEvents.length, roundEndedEventCount);
+  }
 }
 
 void _setupPlayerToGoOut(Player player) {

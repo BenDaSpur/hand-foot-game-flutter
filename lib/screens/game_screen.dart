@@ -605,10 +605,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
 
       if (controller.gameState.phase == GamePhase.gameEnd) {
-        final players = ref.read(leaderboardProvider);
-        final winner = ref.read(gameWinnerProvider);
-        if (winner != null) {
-          _dialogManager.showGameEndDialog(winner, players);
+        if (!_gameEndDialogShown) {
+          final winner = ref.read(gameWinnerProvider);
+          if (winner != null) {
+            _gameEndDialogShown = true;
+            final players = ref.read(leaderboardProvider);
+            _dialogManager.showGameEndDialog(winner, players);
+          }
         }
         return;
       }

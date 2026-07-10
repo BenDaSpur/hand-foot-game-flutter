@@ -292,45 +292,7 @@ class GameController implements GameInterface {
 
       // Check if player went out (round or game ended)
       if (_gameState.phase != phaseBefore) {
-        if (_gameState.phase == GamePhase.roundEnd) {
-          _eventBus.publish(
-            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-          );
-
-          // Calculate round scores
-          final roundScores = <Player, int>{};
-          for (final p in _gameState.players) {
-            roundScores[p] = p.score;
-          }
-          _eventBus.publish(
-            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-          );
-        } else if (_gameState.phase == GamePhase.gameEnd) {
-          _eventBus.publish(
-            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-          );
-
-          final roundScores = <Player, int>{};
-          for (final p in _gameState.players) {
-            roundScores[p] = p.score;
-          }
-          _eventBus.publish(
-            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-          );
-
-          if (_gameState.winner != null) {
-            final finalScores = <Player, int>{};
-            for (final p in _gameState.players) {
-              finalScores[p] = p.score;
-            }
-            _eventBus.publish(
-              GameEndedEvent(
-                winner: _gameState.winner!,
-                finalScores: finalScores,
-              ),
-            );
-          }
-        }
+        _publishRoundOrGameEndEvents(player, roundBefore);
       }
     }
 
@@ -393,44 +355,7 @@ class GameController implements GameInterface {
 
       // Check if player went out (round or game ended)
       if (_gameState.phase != phaseBefore) {
-        if (_gameState.phase == GamePhase.roundEnd) {
-          _eventBus.publish(
-            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-          );
-
-          final roundScores = <Player, int>{};
-          for (final p in _gameState.players) {
-            roundScores[p] = p.score;
-          }
-          _eventBus.publish(
-            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-          );
-        } else if (_gameState.phase == GamePhase.gameEnd) {
-          _eventBus.publish(
-            PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-          );
-
-          final roundScores = <Player, int>{};
-          for (final p in _gameState.players) {
-            roundScores[p] = p.score;
-          }
-          _eventBus.publish(
-            RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-          );
-
-          if (_gameState.winner != null) {
-            final finalScores = <Player, int>{};
-            for (final p in _gameState.players) {
-              finalScores[p] = p.score;
-            }
-            _eventBus.publish(
-              GameEndedEvent(
-                winner: _gameState.winner!,
-                finalScores: finalScores,
-              ),
-            );
-          }
-        }
+        _publishRoundOrGameEndEvents(player, roundBefore);
       }
     }
 
