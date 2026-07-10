@@ -1,14 +1,14 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import '../constants/hand_layout_constants.dart';
+import '../constants/ui_constants.dart';
 import '../models/player.dart';
 import '../models/card.dart';
 import '../theme/balatro_theme.dart';
+import '../utils/game_responsive_layout.dart';
 import 'card_animation_host.dart';
 import 'playing_card_widget.dart';
 
-/// Reusable hand display widget that matches single-player styling exactly
-/// Used by both single-player and multiplayer screens for consistency
+/// Reusable hand display for solo and multiplayer with responsive card sizing.
 class GameHandDisplay extends StatelessWidget {
   final Player player;
   final List<int> selectedCardIndices;
@@ -17,8 +17,8 @@ class GameHandDisplay extends StatelessWidget {
   final bool Function(PlayingCard)? isCardPlayable;
   final Player? viewingPlayerMelds;
   final VoidCallback? onReturnToHand;
-  final bool isCurrentPlayerTurn; // Control opacity and interactions
-  final bool showHighlights; // Control if highlights should be visible
+  final bool isCurrentPlayerTurn;
+  final bool showHighlights;
   final GlobalKey? handStackKey;
   final ScrollController? handScrollController;
 
@@ -39,35 +39,32 @@ class GameHandDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // EXACT SINGLE-PLAYER HAND LAYOUT WITH PROPER OPACITY: Copy the structure exactly
+    final sizes = GameResponsiveLayout.handSizes(context);
+    final stackHeight =
+        sizes.handHeight + sizes.selectionLift + UIConstants.smallSpacing;
+
     return Opacity(
-      opacity: isCurrentPlayerTurn ? 1.0 : 0.7, // Same as single-player logic
+      opacity: isCurrentPlayerTurn ? 1.0 : 0.7,
       child: Container(
-        height: 165, // Increased from 155 to give more space for selected cards
-        padding: const EdgeInsets.fromLTRB(
-          8,
-          20,
-          8,
-          10,
-        ), // Extra top padding for selection animation
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Hand title (same as single-player)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               child: GestureDetector(
                 onTap: onReturnToHand,
                 child: Text(
                   () {
                     if (viewingPlayerMelds != null &&
                         viewingPlayerMelds != player) {
-                      return 'Viewing ${viewingPlayerMelds!.name}\'s cards - Tap here to return to your hand';
+                      return 'Viewing ${viewingPlayerMelds!.name} — tap to return';
                     }
-                    return 'Your Hand (${player.currentHand.length} cards)';
+                    return 'Your Hand (${player.currentHand.length})';
                   }(),
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color:
                         viewingPlayerMelds != null &&
@@ -75,11 +72,13 @@ class GameHandDisplay extends StatelessWidget {
                         ? BalatroTheme.neonYellow
                         : Colors.white,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
-            // Hand cards (EXACT single-player layout)
-            Expanded(
+            SizedBox(
+              height: stackHeight,
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
                   dragDevices: {
@@ -90,20 +89,13 @@ class GameHandDisplay extends StatelessWidget {
                 child: SingleChildScrollView(
                   controller: handScrollController,
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: SizedBox(
-                    width: HandLayoutConstants.handStackWidth(
-                      player.currentHand.length,
-                    ),
-                    height:
-                        120, // Increased height to accommodate selection animation
+                    width: sizes.handStackWidth(player.currentHand.length),
+                    height: stackHeight,
                     child: Stack(
                       key: handStackKey,
-                      clipBehavior: Clip
-                          .none, // Allow cards to move outside bounds when selected
+                      clipBehavior: Clip.none,
                       children: player.currentHand.asMap().entries.map((entry) {
                         final index = entry.key;
                         final card = entry.value;
@@ -114,9 +106,8 @@ class GameHandDisplay extends StatelessWidget {
                             );
 
                         return Positioned(
-                          left: HandLayoutConstants.handCardLeft(index),
-                          bottom:
-                              5, // Position cards from bottom, leaving space at top for selection animation
+                          left: sizes.handCardLeft(index),
+                          bottom: 0,
                           child: GestureDetector(
                             onTap: onCardTap != null && !hideDuringAnimation
                                 ? () => onCardTap!(index)
@@ -132,8 +123,8 @@ class GameHandDisplay extends StatelessWidget {
                                   'hand-${card.rank}-${card.suit}-$index-${viewingPlayerMelds?.id ?? "you"}',
                                 ),
                                 card: card,
-                                width: HandLayoutConstants.cardWidth,
-                                height: HandLayoutConstants.cardHeight,
+                                width: sizes.handWidth,
+                                height: sizes.handHeight,
                                 isSelected: selectedCardIndices.contains(index),
                                 isPlayable: isCardPlayable?.call(card) ?? false,
                                 isNewlyDrawn:
@@ -152,7 +143,7 @@ class GameHandDisplay extends StatelessWidget {
             ),
           ],
         ),
-      ), // Close Container
-    ); // Close Opacity
+      ),
+    );
   }
 }

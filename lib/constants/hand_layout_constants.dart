@@ -1,4 +1,7 @@
+import '../utils/game_responsive_layout.dart';
+
 /// Shared layout constants for the human player's hand and draw animations.
+/// Legacy static values match tablet+ sizes; use [forWidth] for responsive sizing.
 class HandLayoutConstants {
   HandLayoutConstants._();
 
@@ -7,14 +10,13 @@ class HandLayoutConstants {
   static const double cardOffset = 50;
   static const double selectionLift = 12;
 
-  static double handStackWidth(int cardCount) {
-    if (cardCount <= 0) {
-      return cardWidth;
-    }
-    return (cardCount - 1) * cardOffset + cardWidth;
+  /// Responsive layout derived from screen width.
+  static GameCardSizes forWidth(double width) {
+    return GameResponsiveLayout.cardSizesForWidth(width);
   }
 
-  static double handCardLeft(int index) {
-    return index * cardOffset;
+  static double handCardLeft(int index, [GameCardSizes? sizes]) {
+    final s = sizes ?? GameCardSizes.tabletPlus;
+    return s.handCardLeft(index);
   }
 }

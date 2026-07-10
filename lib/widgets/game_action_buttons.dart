@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
-import '../config/game_config.dart';
+import '../utils/game_responsive_layout.dart';
 import 'card_animation_host.dart';
 
 /// Bot personality types (simplified for message selection)
@@ -285,77 +285,66 @@ class GameActionButtons extends StatelessWidget {
         bot,
         gameState,
       );
+      final isPhone = GameResponsiveLayout.isPhone(
+        MediaQuery.of(context).size.width,
+      );
 
       return Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        padding: EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: isPhone ? 6 : 12,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Bot name and phase
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(Colors.amber),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '${bot.name}\'s Turn',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.amber,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(Colors.amber),
+              ),
             ),
-            const SizedBox(height: 8),
-            // Phase indicator
+            const SizedBox(width: 8),
+            Text(
+              '${bot.name}\'s Turn',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Colors.amber,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: _getPhaseColor().withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: _getPhaseColor(), width: 1),
               ),
               child: Text(
                 _getPhaseLabel(),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                style: TextStyle(
                   color: _getPhaseColor(),
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            // Thinking message with speech bubble style
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('💭', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      '"$thinkingMessage"',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white70,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
+            if (!isPhone) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '"$thinkingMessage"',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
                   ),
-                ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       );
@@ -365,13 +354,16 @@ class GameActionButtons extends StatelessWidget {
     final buttons = <Widget>[];
     final isAnimating =
         CardAnimationScope.maybeOf(context)?.isAnimating ?? false;
+    final isPhone = GameResponsiveLayout.isPhone(
+      MediaQuery.of(context).size.width,
+    );
 
     if (gameState.turnPhase == TurnPhase.draw) {
       buttons.add(
         _buildCompactButton(
           onPressed: isAnimating ? null : onDrawFromDeck,
           text: 'Draw from deck',
-          context: context,
+          isPhone: isPhone,
         ),
       );
       if (onUnlockDiscard != null) {
@@ -379,7 +371,7 @@ class GameActionButtons extends StatelessWidget {
           _buildCompactButton(
             onPressed: isAnimating ? null : onUnlockDiscard,
             text: 'Take Discard',
-            context: context,
+            isPhone: isPhone,
           ),
         );
       }
@@ -390,20 +382,20 @@ class GameActionButtons extends StatelessWidget {
         _buildCompactButton(
           onPressed: isAnimating ? null : onShowAdvancedMeldSelector,
           text: 'Play Cards',
+          isPhone: isPhone,
           backgroundColor: const Color(
             0xFF16c79a,
           ), // Neon green for meld action
-          context: context,
         ),
       );
       buttons.add(
         _buildCompactButton(
           onPressed: isAnimating ? null : (_hasSelectedCard ? onDiscard : null),
           text: _discardButtonText,
+          isPhone: isPhone,
           backgroundColor:
               _discardButtonColor ??
               const Color(0xFFe94560), // Neon pink for discard
-          context: context,
         ),
       );
       if (selectedCardIndices.isNotEmpty) {
@@ -411,17 +403,19 @@ class GameActionButtons extends StatelessWidget {
           _buildCompactButton(
             onPressed: isAnimating ? null : onClearSelection,
             text: 'Clear',
+            isPhone: isPhone,
             backgroundColor: Colors.grey,
-            context: context,
           ),
         );
       }
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 10 : 16,
+        vertical: isPhone ? 8 : 12,
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: buttons
             .map(
               (button) => Expanded(
@@ -440,28 +434,29 @@ class GameActionButtons extends StatelessWidget {
   Widget _buildCompactButton({
     required VoidCallback? onPressed,
     required String text,
-    required BuildContext context,
+    required bool isPhone,
     Color? backgroundColor,
   }) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < GameConfig.tabletPortraitBreakpoint;
-
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: backgroundColor,
+        disabledBackgroundColor: Colors.grey.shade800,
         padding: EdgeInsets.symmetric(
-          vertical: isSmallScreen ? 8 : 12,
-          horizontal: isSmallScreen ? 8 : 16,
+          vertical: isPhone ? 10 : 12,
+          horizontal: isPhone ? 6 : 16,
         ),
-        minimumSize: Size.zero,
+        minimumSize: Size(isPhone ? 0 : 64, 44),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        elevation: isPhone ? 2 : 4,
       ),
       child: Text(
         text,
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontSize: isSmallScreen ? 12 : 14),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: isPhone ? 13 : 14,
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

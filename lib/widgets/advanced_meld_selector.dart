@@ -5,89 +5,7 @@ import '../models/player.dart';
 import '../models/meld.dart';
 import '../widgets/playing_card_widget.dart';
 import '../config/game_config.dart';
-
-// Helper class for responsive UI calculations
-class _ResponsiveHelper {
-  static bool isMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width <=
-        GameConfig.tabletPortraitBreakpoint;
-  }
-
-  static bool isSmallMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width <= 400.0;
-  }
-
-  static int getGridCrossAxisCount(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    // Special handling for very small phones
-    if (screenWidth <= 360.0) {
-      return 4; // Minimum for very small phones
-    }
-    if (screenWidth <= 400.0) {
-      return 5; // Small phones
-    }
-
-    if (screenWidth > GameConfig.ultraWideBreakpoint) {
-      return GameConfig.gridCrossAxisCounts['ultra_wide']!;
-    }
-    if (screenWidth > GameConfig.desktopBreakpoint) {
-      return GameConfig.gridCrossAxisCounts['desktop']!;
-    }
-    if (screenWidth > GameConfig.tabletLandscapeBreakpoint) {
-      return GameConfig.gridCrossAxisCounts['tablet_landscape']!;
-    }
-    if (screenWidth > GameConfig.tabletPortraitBreakpoint) {
-      return GameConfig.gridCrossAxisCounts['tablet_portrait']!;
-    }
-    return GameConfig.gridCrossAxisCounts['mobile']!;
-  }
-
-  static double getCardWidth(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = getGridCrossAxisCount(context);
-
-    // Use mobile-optimized modal width for small screens
-    final modalWidthRatio = isMobile(context)
-        ? GameConfig.mobileModalWidthRatio
-        : GameConfig.modalWidthRatio;
-
-    final availableWidth =
-        screenWidth * modalWidthRatio - (isMobile(context) ? 20 : 40);
-    final totalSpacing = GameConfig.cardSpacing * (crossAxisCount - 1);
-    final cardWidthFromGrid = (availableWidth - totalSpacing) / crossAxisCount;
-
-    // More aggressive sizing for mobile devices
-    final maxWidth = isSmallMobile(context) ? 80.0 : 100.0;
-    final minWidth = isSmallMobile(context) ? 45.0 : GameConfig.minCardWidth;
-
-    return cardWidthFromGrid.clamp(minWidth, maxWidth);
-  }
-
-  static double getCardHeight(BuildContext context) {
-    return getCardWidth(context) / GameConfig.cardAspectRatio;
-  }
-
-  static double getOptimizedAspectRatio(BuildContext context) {
-    // Calculate the actual aspect ratio based on our responsive card sizing
-    // This ensures GridView cells fit the cards tightly with minimal padding
-    final cardWidth = getCardWidth(context);
-    final cardHeight = getCardHeight(context);
-    return cardWidth / cardHeight;
-  }
-
-  static EdgeInsets getModalPadding(BuildContext context) {
-    return EdgeInsets.all(isMobile(context) ? 12.0 : 20.0);
-  }
-
-  static double getModalBorderRadius(BuildContext context) {
-    return isMobile(context) ? 16.0 : 20.0;
-  }
-
-  static double getFontSize(BuildContext context, double baseSize) {
-    return isSmallMobile(context) ? baseSize - 2 : baseSize;
-  }
-}
+import '../utils/game_responsive_layout.dart';
 
 /// Advanced meld selection widget for multi-meld play-downs with wild card assignment control
 /// This version uses indices to avoid card object reference issues
@@ -171,7 +89,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
         widget.player.hasPlayedDown ||
         totalPoints >= widget.playDownRequirement;
 
-    final isMobile = _ResponsiveHelper.isMobile(context);
+    final isMobile = GameResponsiveLayout.isMobile(context);
     final modalWidthRatio = isMobile
         ? GameConfig.mobileModalWidthRatio
         : GameConfig.modalWidthRatio;
@@ -195,7 +113,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             ],
           ),
           borderRadius: BorderRadius.circular(
-            _ResponsiveHelper.getModalBorderRadius(context),
+            GameResponsiveLayout.getModalBorderRadius(context),
           ),
           border: Border.all(
             color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
@@ -209,7 +127,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             ),
           ],
         ),
-        padding: _ResponsiveHelper.getModalPadding(context),
+        padding: GameResponsiveLayout.getModalPadding(context),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: SizedBox(
@@ -251,7 +169,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 ? 'Multi-Meld Manager'
                 : 'Multi-Meld Play-Down',
             style: TextStyle(
-              fontSize: _ResponsiveHelper.getFontSize(context, 22),
+              fontSize: GameResponsiveLayout.getFontSize(context, 22),
               fontWeight: FontWeight.bold,
               color: Colors.white,
               shadows: [
@@ -319,12 +237,12 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
               Text(
                 'Proposed Melds (${proposedMeldIndices.length})',
                 style: TextStyle(
-                  fontSize: _ResponsiveHelper.getFontSize(context, 18),
+                  fontSize: GameResponsiveLayout.getFontSize(context, 18),
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              _ResponsiveHelper.isSmallMobile(context)
+              GameResponsiveLayout.isSmallMobile(context)
                   ? ElevatedButton(
                       onPressed: _canCreateNewMeld() ? _createNewMeld : null,
                       style: ElevatedButton.styleFrom(
@@ -394,7 +312,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
 
   Widget _buildMeldCard(int meldIndex) {
     final meldData = _getMeldData(meldIndex);
-    final isMobile = _ResponsiveHelper.isMobile(context);
+    final isMobile = GameResponsiveLayout.isMobile(context);
 
     return Card(
       margin: EdgeInsets.only(bottom: isMobile ? 8 : 12),
@@ -467,7 +385,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
-            fontSize: _ResponsiveHelper.getFontSize(context, 16),
+            fontSize: GameResponsiveLayout.getFontSize(context, 16),
           ),
         ),
         if (meldData.willAddToExisting)
@@ -475,7 +393,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             'Will add to existing ${meldData.meldCards.isNotEmpty ? meldData.meldCards.first.rank.name : ''} meld',
             style: TextStyle(
               color: Colors.blue,
-              fontSize: _ResponsiveHelper.getFontSize(context, 12),
+              fontSize: GameResponsiveLayout.getFontSize(context, 12),
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -509,7 +427,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
               ? const Color(0xFF10B981)
               : const Color(0xFFEF4444),
           fontWeight: FontWeight.bold,
-          fontSize: _ResponsiveHelper.getFontSize(context, 12),
+          fontSize: GameResponsiveLayout.getFontSize(context, 12),
         ),
       ),
     );
@@ -537,7 +455,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   Widget _buildMeldCardChip(int meldIndex, int cardIndex, PlayingCard card) {
-    final isMobile = _ResponsiveHelper.isMobile(context);
+    final isMobile = GameResponsiveLayout.isMobile(context);
     final cardSize = isMobile ? 32.0 : 40.0;
     final cardHeight = isMobile ? 44.8 : 56.0;
 
@@ -597,7 +515,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           Text(
             'Available Cards (${availableCardIndices.length})',
             style: TextStyle(
-              fontSize: _ResponsiveHelper.getFontSize(context, 18),
+              fontSize: GameResponsiveLayout.getFontSize(context, 18),
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
@@ -607,10 +525,10 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             child: GridView.builder(
               physics: const BouncingScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _ResponsiveHelper.getGridCrossAxisCount(
+                crossAxisCount: GameResponsiveLayout.getGridCrossAxisCount(
                   context,
                 ),
-                childAspectRatio: _ResponsiveHelper.getOptimizedAspectRatio(
+                childAspectRatio: GameResponsiveLayout.getOptimizedAspectRatio(
                   context,
                 ),
                 crossAxisSpacing: GameConfig.cardSpacing,
@@ -649,8 +567,8 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   Widget _buildActionButtons(bool meetsRequirement) {
-    final isMobile = _ResponsiveHelper.isMobile(context);
-    final isSmallMobile = _ResponsiveHelper.isSmallMobile(context);
+    final isMobile = GameResponsiveLayout.isMobile(context);
+    final isSmallMobile = GameResponsiveLayout.isSmallMobile(context);
 
     if (isMobile) {
       // Stack buttons vertically on mobile for better touch targets
@@ -687,7 +605,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                             ? 'Select Cards'
                             : 'Need ${widget.playDownRequirement - _calculateTotalPoints()} more'),
                   style: TextStyle(
-                    fontSize: _ResponsiveHelper.getFontSize(context, 16),
+                    fontSize: GameResponsiveLayout.getFontSize(context, 16),
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
@@ -710,7 +628,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
               child: Text(
                 'Cancel',
                 style: TextStyle(
-                  fontSize: _ResponsiveHelper.getFontSize(context, 16),
+                  fontSize: GameResponsiveLayout.getFontSize(context, 16),
                 ),
               ),
             ),
@@ -1046,8 +964,8 @@ class _MobileCardWidget extends StatelessWidget {
                 child: PlayingCardWidget(
                   // Parent widget already has a unique key, so we don't need one here
                   card: card,
-                  width: _ResponsiveHelper.getCardWidth(context),
-                  height: _ResponsiveHelper.getCardHeight(context),
+                  width: GameResponsiveLayout.getModalCardWidth(context),
+                  height: GameResponsiveLayout.getModalCardHeight(context),
                   isSelected: isSelected,
                 ),
               ),

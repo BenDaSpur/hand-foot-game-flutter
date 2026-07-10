@@ -1,6 +1,27 @@
 import 'package:flutter/material.dart';
 import '../models/meld.dart';
+import '../theme/balatro_theme.dart';
+import '../utils/game_responsive_layout.dart';
 import 'playing_card_widget.dart';
+
+class _MeldLayout {
+  static const double phoneOuterMargin = 4;
+  static const double tabletOuterMargin = 8;
+  static const double phonePadding = 6;
+  static const double tabletPadding = 8;
+  static const double borderRadius = 12;
+  static const double badgeBorderRadius = 4;
+  static const double activeBorderWidth = 2;
+  static const double inactiveBorderWidth = 1;
+  static const double titleFontSize = 13;
+  static const double badgeFontSize = 11;
+  static const double bookBadgeFontSize = 9;
+  static const double addButtonFontSize = 9;
+  static const double headerSpacing = 6;
+  static const double bookSpacing = 4;
+  static const double cardsTopSpacing = 6;
+  static const double cardWrapSpacing = 3;
+}
 
 class MeldWidget extends StatelessWidget {
   final Meld meld;
@@ -12,6 +33,8 @@ class MeldWidget extends StatelessWidget {
   final int meldIndex;
   final int compatibleCardsInHand;
   final bool compatibleCardsAreWilds;
+  final double? cardWidth;
+  final double? cardHeight;
 
   const MeldWidget({
     super.key,
@@ -24,73 +47,116 @@ class MeldWidget extends StatelessWidget {
     this.canAcceptSelectedCard = false,
     this.compatibleCardsInHand = 0,
     this.compatibleCardsAreWilds = false,
+    this.cardWidth,
+    this.cardHeight,
   });
 
   @override
   Widget build(BuildContext context) {
+    final sizes = GameResponsiveLayout.cardSizes(context);
+    final meldW = cardWidth ?? sizes.meldWidth;
+    final meldH = cardHeight ?? sizes.meldHeight;
+    final isPhone = GameResponsiveLayout.isPhone(
+      MediaQuery.of(context).size.width,
+    );
+    final outerMargin = isPhone
+        ? _MeldLayout.phoneOuterMargin
+        : _MeldLayout.tabletOuterMargin;
+
+    Color borderColor;
+    Color backgroundColor;
+    if (canAcceptSelectedCard) {
+      borderColor = BalatroTheme.neonBlue;
+      backgroundColor = BalatroTheme.neonBlue.withValues(alpha: 0.15);
+    } else if (canAddCards) {
+      borderColor = BalatroTheme.neonGreen;
+      backgroundColor = BalatroTheme.neonGreen.withValues(alpha: 0.1);
+    } else {
+      borderColor = BalatroTheme.cardBorder.withValues(alpha: 0.6);
+      backgroundColor = BalatroTheme.darkPurple.withValues(alpha: 0.85);
+    }
+
     return GestureDetector(
       onTap: onTap != null ? () => onTap!(meldIndex) : null,
       child: Container(
-        margin: const EdgeInsets.all(8),
-        padding: const EdgeInsets.all(8),
+        margin: EdgeInsets.all(outerMargin),
+        padding: EdgeInsets.all(
+          isPhone ? _MeldLayout.phonePadding : _MeldLayout.tabletPadding,
+        ),
         decoration: BoxDecoration(
-          color: canAcceptSelectedCard ? Colors.blue[50] : Colors.grey[100],
+          color: backgroundColor,
           border: Border.all(
-            color: canAcceptSelectedCard
-                ? Colors.blue
-                : canAddCards
-                ? Colors.green
-                : Colors.grey,
-            width: canAcceptSelectedCard || canAddCards ? 2 : 1,
+            color: borderColor,
+            width: canAcceptSelectedCard || canAddCards
+                ? _MeldLayout.activeBorderWidth
+                : _MeldLayout.inactiveBorderWidth,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(_MeldLayout.borderRadius),
+          boxShadow: canAcceptSelectedCard
+              ? [
+                  BoxShadow(
+                    color: BalatroTheme.neonBlue.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text(
-                  meld.toString(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Text(
+                    meld.toString(),
+                    style: const TextStyle(
+                      fontSize: _MeldLayout.titleFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: BalatroTheme.primaryText,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: _MeldLayout.headerSpacing),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
+                    horizontal: _MeldLayout.headerSpacing,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
                     color: _getMeldTypeColor(),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(
+                      _MeldLayout.badgeBorderRadius,
+                    ),
                   ),
                   child: Text(
                     '${meld.pointValue} pts',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: _MeldLayout.badgeFontSize,
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 if (meld.isBook) ...[
-                  const SizedBox(width: 4),
+                  SizedBox(width: _MeldLayout.bookSpacing),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
+                      horizontal: _MeldLayout.headerSpacing,
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: meld.isClean ? Colors.green : Colors.red,
-                      borderRadius: BorderRadius.circular(4),
+                      color: meld.isClean
+                          ? BalatroTheme.neonGreen
+                          : BalatroTheme.neonPink,
+                      borderRadius: BorderRadius.circular(
+                        _MeldLayout.badgeBorderRadius,
+                      ),
                     ),
                     child: Text(
-                      meld.isClean ? 'CLEAN BOOK' : 'DIRTY BOOK',
+                      meld.isClean ? 'CLEAN' : 'DIRTY',
                       style: const TextStyle(
-                        fontSize: 10,
+                        fontSize: _MeldLayout.bookBadgeFontSize,
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -98,26 +164,28 @@ class MeldWidget extends StatelessWidget {
                   ),
                 ],
                 if (canAddCards && compatibleCardsInHand > 0) ...[
-                  const SizedBox(width: 8),
+                  SizedBox(width: _MeldLayout.headerSpacing),
                   GestureDetector(
                     onTap: onSelectAllCards != null
                         ? () => onSelectAllCards!(meldIndex)
                         : null,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
+                        horizontal: _MeldLayout.headerSpacing,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(4),
+                        color: BalatroTheme.neonBlue,
+                        borderRadius: BorderRadius.circular(
+                          _MeldLayout.badgeBorderRadius,
+                        ),
                       ),
                       child: Text(
                         compatibleCardsAreWilds
-                            ? 'Select $compatibleCardsInHand wilds'
-                            : 'Select $compatibleCardsInHand',
+                            ? '+$compatibleCardsInHand wilds'
+                            : '+$compatibleCardsInHand',
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: _MeldLayout.addButtonFontSize,
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
@@ -127,10 +195,10 @@ class MeldWidget extends StatelessWidget {
                 ],
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: _MeldLayout.cardsTopSpacing),
             Wrap(
-              spacing: 4,
-              runSpacing: 4,
+              spacing: _MeldLayout.cardWrapSpacing,
+              runSpacing: _MeldLayout.cardWrapSpacing,
               children: () {
                 final sortedCards = [...meld.cards];
                 sortedCards.sort(
@@ -143,8 +211,8 @@ class MeldWidget extends StatelessWidget {
                       (entry) => PlayingCardWidget(
                         key: ValueKey('meld-$meldIndex-${entry.key}'),
                         card: entry.value,
-                        width: 40,
-                        height: 56,
+                        width: meldW,
+                        height: meldH,
                         isInMeld: true,
                       ),
                     )
@@ -160,9 +228,9 @@ class MeldWidget extends StatelessWidget {
   Color _getMeldTypeColor() {
     switch (meld.type) {
       case MeldType.natural:
-        return Colors.green;
+        return BalatroTheme.neonGreen;
       case MeldType.mixed:
-        return Colors.orange;
+        return BalatroTheme.neonOrange;
     }
   }
 }
