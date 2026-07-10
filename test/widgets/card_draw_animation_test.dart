@@ -1,3 +1,4 @@
+@Tags(['card_animation'])
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
@@ -21,7 +22,7 @@ void main() {
       required GlobalKey meldAreaKey,
       required ScrollController scrollController,
       required VoidCallback onComplete,
-      VoidCallback? onSkip,
+      required VoidCallback onSkip,
     }) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -55,7 +56,7 @@ void main() {
                     meldAreaKey: meldAreaKey,
                     handScrollController: scrollController,
                     onComplete: onComplete,
-                    onSkip: onSkip ?? () {},
+                    onSkip: onSkip,
                   ),
                 ],
               ),
@@ -118,6 +119,7 @@ void main() {
         final meldAreaKey = GlobalKey();
         final scrollController = ScrollController();
         var completed = false;
+        var skipped = false;
 
         await pumpOverlayHarness(
           tester,
@@ -137,18 +139,34 @@ void main() {
           onComplete: () {
             completed = true;
           },
+          onSkip: () {
+            skipped = true;
+          },
         );
 
-        await tester.pump(GameConfig.cardFlyDuration ~/ 2);
-        expect(find.byType(CardBackWidget), findsWidgets);
+        await tester.pump();
+        expect(find.byType(CardBackWidget), findsNWidgets(2));
 
-        await tester.pump(GameConfig.cardFlyDuration);
-        await tester.pump(GameConfig.cardRevealPause ~/ 2);
-        expect(find.byType(PlayingCardWidget), findsWidgets);
+        // Hand scroll runs before the staggered fly-in loop.
+        await tester.pump(GameConfig.cardRevealDuration);
+        await tester.pump();
+
+        await tester.pump(GameConfig.cardFlyDuration ~/ 2);
+
+        await tester.pump(
+          GameConfig.cardFlyDuration * 2 + GameConfig.cardStaggerDelay,
+        );
+        await tester.pump();
+
+        await tester.pump(GameConfig.cardRevealPause);
+        await tester.pump();
+
+        expect(find.byType(PlayingCardWidget), findsNWidgets(2));
 
         await tester.tapAt(const Offset(400, 300));
         await tester.pump();
 
+        expect(skipped, isTrue);
         expect(completed, isTrue);
         scrollController.dispose();
       },
@@ -163,6 +181,7 @@ void main() {
       final meldAreaKey = GlobalKey();
       final scrollController = ScrollController();
       var completed = false;
+      var skipped = false;
 
       await pumpOverlayHarness(
         tester,
@@ -188,14 +207,18 @@ void main() {
         onComplete: () {
           completed = true;
         },
+        onSkip: () {
+          skipped = true;
+        },
       );
 
       await tester.pump(GameConfig.cardMeldFlyDuration ~/ 2);
-      expect(find.byType(PlayingCardWidget), findsWidgets);
+      expect(find.byType(PlayingCardWidget), findsNWidgets(3));
 
       await tester.tapAt(const Offset(400, 300));
       await tester.pump();
 
+      expect(skipped, isTrue);
       expect(completed, isTrue);
       scrollController.dispose();
     });
