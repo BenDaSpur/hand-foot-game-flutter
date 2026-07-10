@@ -28,6 +28,32 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 - **Analytics queries:** `node scripts/query_analytics_session.js --scores 3325,1140,1185 --foot-only` (analytics collections are client write-only; OAuth required to read).
 - Without Firebase credentials, solo vs. bots still works — sufficient for core gameplay.
 
+### Investigating game data (use Firebase MCP)
+
+When a user asks about a **session**, **bot behavior**, **foot transitions**, **scores**, or other **production analytics**, use **Firebase MCP first** — do not guess from code alone.
+
+1. **Check MCP is ready** — `GetMcpTools` with server `Firebase`. If status is `loading`, wait and retry.
+2. **Authenticate / set project**
+   - `firebase_get_environment` — confirm `Authenticated User` and `Active Project ID`
+   - If unauthenticated: `firebase_login` (user pastes auth code), then `firebase_update_environment` with `project_dir: /workspace` and `active_project: <FIREBASE_PROJECT_ID>`
+   - If Cloud Agent injected `FIREBASE_TOOLS_CREDENTIALS_JSON`, copy it to `~/.config/configstore/firebase-tools.json`, then run `./scripts/refresh_firebase_agent_credentials.sh`
+3. **Query Firestore analytics** (preferred script after MCP auth):
+
+```bash
+node scripts/query_analytics_session.js --session <sessionId> --turn-summaries --decision-outcomes
+node scripts/query_analytics_session.js --session <sessionId> --foot-only
+node scripts/query_analytics_session.js --scores 3325,1140,1185
+```
+
+4. **Collections to use**
+   - `game_sessions` — seed, players, final scores, `botPerformance.hasPickedUpFoot`
+   - `bot_decisions` — per-turn AI choices, hand size, foot status, reasoning
+   - `game_events` / `turn_summaries` — turn-by-turn state snapshots
+
+5. **Repro hints** — `gameSeed` + `botAiVersion` on session docs allow correlating analytics with deterministic local tests.
+
+See `docs/firebase_agent_setup.md` and `docs/analytics_guide.md` for full details. Never commit or paste OAuth tokens, `.env`, or credential JSON.
+
 ### Testing
 - `flutter test` runs the full unit/widget suite (~750 tests) and passes headlessly with no extra setup. Tests skip Firebase automatically under `FLUTTER_TEST`.
 - `flutter analyze` must be clean (zero issues) — the repo enforces this.

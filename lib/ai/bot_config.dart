@@ -31,6 +31,18 @@ class BotConfig {
   /// Emergency transition at this card count
   static const int emergencyTransitionThreshold = 8;
 
+  /// Rush hand→foot when any opponent is on foot and hand is at or below this size
+  static const int handToFootRushOpponentOnFootThreshold = 8;
+
+  /// Aggressive bots rush hand→foot at or below this size even without opponent pressure
+  static const int handToFootRushAggressiveThreshold = 6;
+
+  /// Never stall on hand pile at or below this size — melt or discard to foot
+  static const int handToFootCriticalHandSize = 4;
+
+  /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
+  static const int handToFootRushAggressiveOpponentPressureMargin = 2;
+
   /// Emergency at this large hand size
   static const int largeHandEmergencyThreshold = 10;
 
@@ -251,7 +263,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-human-patterns';
+  static const String botAiVersion = '2026.07-hand-foot-rush';
 
   // Prevent instantiation
   BotConfig._();
