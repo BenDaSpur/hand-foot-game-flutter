@@ -73,6 +73,55 @@ void main() {
       },
     );
 
+    test(
+      'holds accumulation through 14-card boundary with high meld potential',
+      () {
+        final bot = controller.gameState.players.firstWhere(
+          (p) => p.id == 'bot1',
+        );
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand.clear();
+        bot.hand.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        ]);
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          ])!,
+        );
+
+        controller.gameState.currentPlayerIndex = 1;
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+
+        expect(
+          decision.action,
+          'noMeld',
+          reason:
+              '14-card boundary should still accumulate before burst threshold',
+        );
+        expect(bot.currentHand.length, 14);
+      },
+    );
+
     test('prefers low-rank discard on large hands even with duplicates', () {
       final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
       bot.hasPlayedDown = true;

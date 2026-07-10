@@ -4,7 +4,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
+const {
+  httpsRequest,
+  getAccessToken,
+} = require('./analytics_http_common');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CREDS_PATH =
@@ -16,56 +19,24 @@ function loadCreds() {
   return JSON.parse(fs.readFileSync(CREDS_PATH, 'utf8'));
 }
 
-function httpsRequest(options, body) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(JSON.parse(data || '{}'));
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    if (body) req.write(body);
-    req.end();
-  });
-}
-
-async function refreshAccessToken(creds) {
-  const refreshToken = creds.tokens?.refresh_token;
-  const body = new URLSearchParams({
-    client_id:
-      '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-    client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
-    refresh_token: refreshToken,
-    grant_type: 'refresh_token',
-  }).toString();
-  const result = await httpsRequest(
-    {
-      hostname: 'oauth2.googleapis.com',
-      path: '/token',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    },
-    body,
-  );
-  creds.tokens.access_token = result.access_token;
-  creds.tokens.expires_at = Date.now() + result.expires_in * 1000;
-  return result.access_token;
-}
-
-async function getAccessToken(creds) {
-  if (creds.tokens?.access_token && Date.now() < (creds.tokens.expires_at || 0) - 60000) {
-    return creds.tokens.access_token;
+function classifyDiscardTier(parsed) {
+  if (parsed.isWild) {
+    return 'wild';
   }
-  return refreshAccessToken(creds);
+  if (parsed.isThree) {
+    return 'three';
+  }
+  if (parsed.points >= 20) {
+    return 'high';
+  }
+  if (parsed.points >= 10) {
+    return 'mid';
+  }
+  return 'low';
+}
+
+function percentOf(count, total) {
+  return total === 0 ? 0 : (count / total) * 100;
 }
 
 function firestoreValueToJs(v) {
@@ -176,6 +147,7 @@ async function main() {
         rank: parsed.rank,
         points: parsed.points,
         isWild: parsed.isWild,
+        isThree: parsed.isThree,
         handSize: data.handSize,
         sameRankInHand: rankInHand(hand, card),
         hasPlayedDown: data.hasPlayedDown,
@@ -239,16 +211,27 @@ async function main() {
 
   for (const d of discards) {
     discardByRank[d.rank] = (discardByRank[d.rank] || 0) + 1;
-    if (d.isWild) discardPoints.wild++;
-    else if (d.points >= 20) discardPoints.high++;
-    else if (d.points >= 10) discardPoints.mid++;
-    else discardPoints.low++;
+    const tier = classifyDiscardTier({
+      isWild: d.isWild,
+      isThree: d.isThree,
+      points: d.points,
+    });
+    discardPoints[tier]++;
     if (d.sameRankInHand >= 2) discardWithMeldPotential++;
     if (d.sameRankInHand >= 3 && d.bookCount > 0) discardWhileBuildingBook++;
   }
 
+  const discardWithMeldPotentialPct = percentOf(
+    discardWithMeldPotential,
+    discards.length,
+  );
+
   console.log('By point tier:', discardPoints);
-  console.log('Discarding rank with 2+ same in hand:', discardWithMeldPotential, `(${((discardWithMeldPotential / discards.length) * 100).toFixed(1)}%)`);
+  console.log(
+    'Discarding rank with 2+ same in hand:',
+    discardWithMeldPotential,
+    `(${discardWithMeldPotentialPct.toFixed(1)}%)`,
+  );
   console.log('Top discarded ranks:', Object.entries(discardByRank).sort((a, b) => b[1] - a[1]).slice(0, 10));
 
   const avgHandAtDiscard =
@@ -307,7 +290,7 @@ async function main() {
     discardStats: {
       total: discards.length,
       discardPoints,
-      discardWithMeldPotentialPct: (discardWithMeldPotential / discards.length) * 100,
+      discardWithMeldPotentialPct,
       avgHandSize: avgHandAtDiscard,
       topRanks: Object.entries(discardByRank).sort((a, b) => b[1] - a[1]).slice(0, 8),
     },

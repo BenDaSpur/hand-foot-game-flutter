@@ -47,6 +47,8 @@ node scripts/query_analytics_session.js --scores 3325,1140,1185
 node scripts/query_analytics_session.js --session <sessionId> --foot-only
 ```
 
+Node analytics scripts (`query_analytics_session.js`, `analyze_human_decisions.js`) refresh OAuth tokens via `scripts/analytics_http_common.js`. Set **`FIREBASE_OAUTH_CLIENT_SECRET`** in your gitignored `.env` or shell environment (never commit it). Rotate any secret that was previously committed to the repository.
+
 ## Token expiry
 
 Access tokens last ~1 hour. The `refresh_token` in the credentials file is long-lived. If queries fail with 401:

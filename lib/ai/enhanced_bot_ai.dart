@@ -625,6 +625,17 @@ class EnhancedBotAI {
       return BotDecision(action: 'noMeld');
     }
 
+    // Personality/time-pressure holding outside the human accumulation window
+    if (!_isInHumanAccumulationWindow(bot, context) &&
+        _shouldHoldCardsStrategically(bot, context)) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Strategic hold: personality/time-pressure limits',
+      );
+      return BotDecision(action: 'noMeld');
+    }
+
     // Check for foot transition decisions
     final controllerForFoot = context.controller as GameController?;
     if (controllerForFoot == null) {
@@ -1866,14 +1877,8 @@ class EnhancedBotAI {
       }
     }
 
-    // Post-play-down: burst when hand is full and most cards are meldable
-    final dumpPotential = _calculateDumpPotential(bot, context);
-    if (handSize >= BotConfig.humanAccumulationMaxHand &&
-        dumpPotential >= BotConfig.humanBurstDumpPotential) {
-      return true;
-    }
-
     // ENHANCED: Under competitive pressure, dump much more aggressively
+    final dumpPotential = _calculateDumpPotential(bot, context);
     final maxOpponentScore = gameState.players
         .where((p) => p.id != bot.id)
         .map((p) => p.score)
