@@ -156,40 +156,27 @@ class GameController implements GameInterface {
   }
 
   void _publishRoundOrGameEndEvents(Player player, int roundBefore) {
-    if (_gameState.phase == GamePhase.roundEnd) {
-      _eventBus.publish(
-        PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-      );
+    final phase = _gameState.phase;
+    if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
+      return;
+    }
 
-      final roundScores = <Player, int>{};
-      for (final p in _gameState.players) {
-        roundScores[p] = p.score;
-      }
-      _eventBus.publish(
-        RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-      );
-    } else if (_gameState.phase == GamePhase.gameEnd) {
-      _eventBus.publish(
-        PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-      );
+    _eventBus.publish(
+      PlayerWentOutEvent(roundNumber: roundBefore, player: player),
+    );
 
-      final roundScores = <Player, int>{};
-      for (final p in _gameState.players) {
-        roundScores[p] = p.score;
-      }
-      _eventBus.publish(
-        RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-      );
+    final roundScores = <Player, int>{};
+    for (final p in _gameState.players) {
+      roundScores[p] = p.score;
+    }
+    _eventBus.publish(
+      RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+    );
 
-      if (_gameState.winner != null) {
-        final finalScores = <Player, int>{};
-        for (final p in _gameState.players) {
-          finalScores[p] = p.score;
-        }
-        _eventBus.publish(
-          GameEndedEvent(winner: _gameState.winner!, finalScores: finalScores),
-        );
-      }
+    if (phase == GamePhase.gameEnd && _gameState.winner != null) {
+      _eventBus.publish(
+        GameEndedEvent(winner: _gameState.winner!, finalScores: roundScores),
+      );
     }
   }
 
