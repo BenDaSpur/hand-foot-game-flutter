@@ -186,11 +186,16 @@ void main() {
         // Make decision
         final decision = botAI.makeDecision(botPlayer, gameController);
 
-        // Should create melds to clear hand
+        // Should create melds to clear the entire hand
         expect(
           decision.action,
-          equals('createMeld'),
-          reason: 'Bot should create melds with all cards to see foot',
+          equals('createMultipleMelds'),
+          reason: 'Bot should meld all cards to see foot',
+        );
+        final melds = decision.data as List<List<PlayingCard>>;
+        expect(
+          melds.expand((meld) => meld).length,
+          equals(botPlayer.currentHand.length),
         );
       });
 

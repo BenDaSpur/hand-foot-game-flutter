@@ -2146,56 +2146,134 @@ class EnhancedBotAI {
   /// Check if bot can play ALL cards to immediately transition to foot
   BotDecision? _checkCanPlayAllCards(Player bot, BotGameContext context) {
     final handSize = bot.currentHand.length;
-    if (handSize == 0) return null;
+    if (handSize == 0) {
+      return null;
+    }
 
-    // Get all cards we can potentially play
-    final possibleMelds = _getCachedPossibleMelds(bot, context);
     final controller = context.controller as GameController?;
-    if (controller == null) return null;
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
-      bot,
-      controller,
-    );
-
-    // Calculate total playable cards
-    int totalPlayableCards = 0;
-    Set<PlayingCard> usedCards = {};
-
-    // Count cards that can be added to existing melds
-    for (final addition in cardsToAdd) {
-      final card = addition['card'] as PlayingCard;
-      if (!usedCards.contains(card)) {
-        usedCards.add(card);
-        totalPlayableCards++;
-      }
+    if (controller == null) {
+      return null;
     }
 
-    // Count cards that can form new melds (avoiding double-counting)
-    for (final meld in possibleMelds) {
-      int newCardsInMeld = 0;
-      for (final card in meld) {
-        if (!usedCards.contains(card)) {
-          usedCards.add(card);
-          newCardsInMeld++;
-        }
-      }
-      totalPlayableCards += newCardsInMeld;
-    }
-
-    // If we can play ALL cards, execute the strategy
-    if (totalPlayableCards >= handSize) {
-      // Prioritize adding to existing melds first
+    if (handSize == 1) {
+      final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+        bot,
+        controller,
+      );
       if (cardsToAdd.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
       }
-      // Then create new melds
-      if (possibleMelds.isNotEmpty) {
-        final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds, bot: bot);
-        return BotDecision(action: 'createMeld', data: bestMeld);
+    }
+
+    final meldIndexPlan = _findCompleteHandMeldIndexPlan(bot);
+    if (meldIndexPlan == null) {
+      return null;
+    }
+
+    final meldCards = meldIndexPlan
+        .map(
+          (indices) => indices.map((index) => bot.currentHand[index]).toList(),
+        )
+        .toList();
+
+    if (meldCards.length == 1) {
+      return BotDecision(action: 'createMeld', data: meldCards.first);
+    }
+
+    return BotDecision(action: 'createMultipleMelds', data: meldCards);
+  }
+
+  /// Builds index-based new-meld candidates, preserving duplicate-deck cards.
+  List<List<int>> _buildNewMeldIndexCandidates(Player bot) {
+    final hand = bot.currentHand;
+    final cardsByRank = <CardRank, List<int>>{};
+    final wildIndices = <int>[];
+
+    for (int i = 0; i < hand.length; i++) {
+      final card = hand[i];
+      if (card.isWild) {
+        wildIndices.add(i);
+      } else if (card.rank != CardRank.three) {
+        cardsByRank.putIfAbsent(card.rank, () => []).add(i);
       }
     }
 
-    return null;
+    final candidates = <List<int>>[];
+    for (final entry in cardsByRank.entries) {
+      final naturalIndices = entry.value;
+      if (naturalIndices.length >= GameConfig.minTotalCardsForMeld) {
+        candidates.add(List<int>.from(naturalIndices));
+        continue;
+      }
+
+      if (naturalIndices.length >= GameConfig.minNaturalCardsForMeld &&
+          wildIndices.isNotEmpty) {
+        final wildsNeeded =
+            GameConfig.minTotalCardsForMeld - naturalIndices.length;
+        final availableWilds = wildIndices.take(wildsNeeded).toList();
+        if (availableWilds.length == wildsNeeded) {
+          candidates.add([...naturalIndices, ...availableWilds]);
+        }
+      }
+    }
+
+    return candidates;
+  }
+
+  /// Returns disjoint meld index groups that consume the entire hand, if any.
+  List<List<int>>? _findCompleteHandMeldIndexPlan(Player bot) {
+    final handSize = bot.currentHand.length;
+    if (handSize == 0) {
+      return null;
+    }
+
+    final candidates = _buildNewMeldIndexCandidates(bot);
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    final usedIndices = <int>{};
+    final selectedMelds = <List<int>>[];
+    List<List<int>>? completePlan;
+
+    bool search(int candidateStart) {
+      if (usedIndices.length == handSize) {
+        completePlan = selectedMelds
+            .map((indices) => List<int>.from(indices))
+            .toList();
+        return true;
+      }
+
+      for (int i = candidateStart; i < candidates.length; i++) {
+        final meldIndices = candidates[i];
+        if (meldIndices.any(usedIndices.contains)) {
+          continue;
+        }
+
+        final cards = meldIndices
+            .map((index) => bot.currentHand[index])
+            .toList();
+        if (Meld.createMeld(cards) == null) {
+          continue;
+        }
+
+        selectedMelds.add(meldIndices);
+        usedIndices.addAll(meldIndices);
+        if (search(i + 1)) {
+          return true;
+        }
+        usedIndices.removeAll(meldIndices);
+        selectedMelds.removeLast();
+      }
+
+      return false;
+    }
+
+    if (!search(0)) {
+      return null;
+    }
+
+    return completePlan;
   }
 
   /// True when the bot should melt its hand pile down to pick up foot urgently.

@@ -163,6 +163,38 @@ void main() {
           );
         },
       );
+
+      test(
+        'aggressive with opponent on foot rushes at margin threshold but not above',
+        () {
+          final rushAtMargin =
+              BotConfig.handToFootRushOpponentOnFootThreshold +
+              BotConfig.handToFootRushAggressiveOpponentPressureMargin;
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: rushAtMargin,
+            opponentOnFoot: true,
+          );
+          expect(
+            botAI.shouldRushHandToFoot(bot, context()),
+            isTrue,
+            reason:
+                'aggressive bots should rush at opponent margin $rushAtMargin',
+          );
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: rushAtMargin + 1,
+            opponentOnFoot: true,
+          );
+          expect(
+            botAI.shouldRushHandToFoot(bot, context()),
+            isFalse,
+            reason: 'aggressive bots should not rush above opponent margin',
+          );
+        },
+      );
     });
 
     group('makeHandToFootRushDecision', () {
@@ -222,6 +254,32 @@ void main() {
         configureBot(
           personality: BotPersonality.aggressive,
           handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
+        );
+        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+      });
+
+      test('aggressive opponent margin returns rush discard at 10 only', () {
+        final rushAtMargin =
+            BotConfig.handToFootRushOpponentOnFootThreshold +
+            BotConfig.handToFootRushAggressiveOpponentPressureMargin;
+
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: rushAtMargin,
+          opponentOnFoot: true,
+        );
+
+        final rushAtThreshold = botAI.makeHandToFootRushDecision(
+          bot,
+          context(),
+        );
+        expect(rushAtThreshold, isNotNull);
+        expect(rushAtThreshold!.action, equals('discard'));
+
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: rushAtMargin + 1,
+          opponentOnFoot: true,
         );
         expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
       });
