@@ -6,8 +6,12 @@ class AnalyticsMetadata {
 
   /// Loads [appVersion] from the platform package metadata.
   static Future<void> initialize() async {
-    final info = await PackageInfo.fromPlatform();
-    _appVersion = info.version;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _appVersion = info.version;
+    } catch (_) {
+      _appVersion = null;
+    }
   }
 
   /// App version for cross-session analytics.

@@ -67,9 +67,14 @@ class GameAnalyticsLogger {
     bool analyticsEnabled = true,
     bool detailedLoggingEnabled = false,
   }) async {
-    await AnalyticsMetadata.initialize();
     _analyticsEnabled = analyticsEnabled;
     _detailedLoggingEnabled = detailedLoggingEnabled;
+
+    try {
+      await AnalyticsMetadata.initialize();
+    } catch (e) {
+      _logger.warning('Failed to load app version metadata: $e');
+    }
 
     if (_analyticsEnabled) {
       _logger.info(
