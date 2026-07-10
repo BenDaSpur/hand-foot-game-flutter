@@ -518,6 +518,12 @@ class EnhancedBotAI {
       return BotDecision(action: 'noMeld');
     }
 
+    // PRIORITY 0a: Rush hand pile → foot before opponents go out
+    final handToFootRush = _makeHandToFootRushDecision(bot, context);
+    if (handToFootRush != null) {
+      return handToFootRush;
+    }
+
     // PRIORITY 0b: Foot phase — melt large hands and complete book pairs (all personalities)
     final footPhaseDecision = _handleFootPhaseMeldDecision(bot, context);
     if (footPhaseDecision != null) {
@@ -638,7 +644,10 @@ class EnhancedBotAI {
 
     // Human pattern: burst-meld at 15+ before foot-transition discard paths
     if (_shouldExecuteDumpStrategy(bot, context)) {
-      return _executeDumpStrategy(bot, context);
+      final dumpDecision = _executeDumpStrategy(bot, context);
+      if (dumpDecision.action != 'noMeld') {
+        return dumpDecision;
+      }
     }
 
     // Check for foot transition decisions
@@ -1785,6 +1794,17 @@ class EnhancedBotAI {
     // Don't hold if hand exceeds personality-based limit (adjusted for time pressure)
     if (handSize >= personalityHoldingLimit) return false;
 
+    // Never hold a tiny hand pile — finish the transition
+    if (!bot.hasPickedUpFoot) {
+      if (handSize <= BotConfig.handToFootCriticalHandSize) {
+        return false;
+      }
+      if (personality == BotPersonality.aggressive &&
+          handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+        return false;
+      }
+    }
+
     // Race to foot when opponents are already on foot (human-style tempo play)
     if (_opponentOnFootPressure(context, bot) && !bot.hasPickedUpFoot) {
       return false;
@@ -1897,6 +1917,31 @@ class EnhancedBotAI {
     if (stillOnHandPile && wildCards.isNotEmpty && handSize <= 10) {
       // If we have wilds and are close to foot, dump everything we can
       if (dumpPotential >= 0.5) return true; // Even lower threshold with wilds
+    }
+
+    final personality = _personalityManager.getPersonality(bot.id);
+
+    // Never stall on a tiny hand pile
+    if (stillOnHandPile && handSize <= BotConfig.handToFootCriticalHandSize) {
+      return true;
+    }
+
+    // Opponent on foot — race to pick up foot before they go out
+    if (stillOnHandPile &&
+        _opponentOnFootPressure(context, bot) &&
+        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+      return true;
+    }
+
+    // Aggressive bots transition earlier, especially under foot pressure
+    if (stillOnHandPile && personality == BotPersonality.aggressive) {
+      if (handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+        return true;
+      }
+      if (_opponentOnFootPressure(context, bot) &&
+          handSize <= BotConfig.handToFootRushOpponentOnFootThreshold + 2) {
+        return true;
+      }
     }
 
     // Execute if we can go directly to foot
@@ -2144,6 +2189,100 @@ class EnhancedBotAI {
         final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds, bot: bot);
         return BotDecision(action: 'createMeld', data: bestMeld);
       }
+    }
+
+    return null;
+  }
+
+  /// True when the bot should melt its hand pile down to pick up foot urgently.
+  bool _shouldRushHandToFoot(Player bot, BotGameContext context) {
+    if (!bot.hasPlayedDown || bot.hasPickedUpFoot) {
+      return false;
+    }
+
+    final handSize = bot.currentHand.length;
+    if (handSize == 0) {
+      return false;
+    }
+
+    if (handSize <= BotConfig.handToFootCriticalHandSize) {
+      return true;
+    }
+
+    if (_opponentOnFootPressure(context, bot) &&
+        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+      return true;
+    }
+
+    final personality = _personalityManager.getPersonality(bot.id);
+    if (personality == BotPersonality.aggressive) {
+      if (handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+        return true;
+      }
+      if (_opponentOnFootPressure(context, bot) &&
+          handSize <= BotConfig.handToFootRushOpponentOnFootThreshold + 2) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Melt the hand pile aggressively to reach foot before opponents go out.
+  BotDecision? _makeHandToFootRushDecision(Player bot, BotGameContext context) {
+    if (!_shouldRushHandToFoot(bot, context)) {
+      return null;
+    }
+
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      'RUSH HAND→FOOT with ${bot.currentHand.length} cards',
+    );
+
+    final playAllDecision = _checkCanPlayAllCards(bot, context);
+    if (playAllDecision != null) {
+      return playAllDecision;
+    }
+
+    if (_shouldExecuteDumpStrategy(bot, context)) {
+      final dumpDecision = _executeDumpStrategy(bot, context);
+      if (dumpDecision.action != 'noMeld') {
+        return dumpDecision;
+      }
+    }
+
+    final controller = context.controller as GameController?;
+    if (controller == null) {
+      return null;
+    }
+
+    final cardsToAdd = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+      bot,
+    );
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    if (possibleMelds.isNotEmpty) {
+      return BotDecision(
+        action: 'createMeld',
+        data: _meldAnalyzer.findBestMeld(
+          possibleMelds,
+          bot: bot,
+          preferLarger: true,
+        ),
+      );
+    }
+
+    final footTransition = _footTransitionManager.handleFootTransition(
+      bot,
+      controller,
+    );
+    if (footTransition != null) {
+      return footTransition;
     }
 
     return null;
