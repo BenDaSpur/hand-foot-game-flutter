@@ -2577,6 +2577,14 @@ class EnhancedBotAI {
     GameState gameState,
     Player human,
   ) {
+    // Must draw before melding — pressure tactics cannot skip the draw phase.
+    if (gameState.turnPhase == TurnPhase.draw) {
+      if (!gameState.hasDrawnFromDeck) {
+        return BotDecision(action: 'drawFromDeck');
+      }
+      return null;
+    }
+
     // Strategy: Play down immediately, rush to foot, go out ASAP to prevent human accumulation
 
     if (!bot.hasPlayedDown) {
