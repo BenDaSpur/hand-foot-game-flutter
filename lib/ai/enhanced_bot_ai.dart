@@ -3449,18 +3449,27 @@ class EnhancedBotAI {
         case 'goOut':
           return bot.canGoOut && bot.hasPickedUpFoot;
         case 'createMeld':
-          return decision.data is List<PlayingCard> &&
-              (decision.data as List<PlayingCard>).isNotEmpty;
+          if (decision.data is! List<PlayingCard>) {
+            return false;
+          }
+          final meldCards = decision.data as List<PlayingCard>;
+          return meldCards.isNotEmpty &&
+              BotEndGameManager.isSafeCreateMeld(bot, meldCards);
         case 'createMultipleMelds':
           return decision.data is List<List<PlayingCard>> &&
               (decision.data as List<List<PlayingCard>>).isNotEmpty;
         case 'addToMeld':
-          if (decision.data is! Map<String, dynamic>) return false;
+          if (decision.data is! Map<String, dynamic>) {
+            return false;
+          }
           final data = decision.data as Map<String, dynamic>;
           final meldIndex = data['meldIndex'] as int?;
-          return meldIndex != null &&
-              meldIndex >= 0 &&
-              meldIndex < bot.melds.length;
+          if (meldIndex == null ||
+              meldIndex < 0 ||
+              meldIndex >= bot.melds.length) {
+            return false;
+          }
+          return BotEndGameManager.isSafeAddToMeld(bot, data);
         case 'discard':
           return decision.data is PlayingCard &&
               bot.hasHandCard(decision.data as PlayingCard);

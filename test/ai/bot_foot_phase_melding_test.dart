@@ -296,6 +296,7 @@ void main() {
         expect(card.rank, equals(CardRank.seven));
         expect(card.isWild, isFalse);
       },
+      tags: ['clean_book_regression'],
     );
   });
 }

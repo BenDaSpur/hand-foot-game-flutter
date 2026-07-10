@@ -81,6 +81,17 @@ void main() {
         const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
       ];
       botPlayer.melds.add(Meld.createMeld(sixQueens)!);
+      botPlayer.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: null, rank: CardRank.joker),
+        ])!,
+      );
 
       botPlayer.hand.clear();
       botPlayer.foot.clear();
@@ -98,12 +109,15 @@ void main() {
       );
       expect(additions, isNotEmpty);
 
+      final safeAddition = additions.firstWhere(
+        (addition) => BotEndGameManager.isSafeAddToMeld(botPlayer, addition),
+      );
+
       final decision = endGameManager.handleEndGame(botPlayer, controller);
       expect(decision, isNotNull);
       expect(decision!.action, 'addToMeld');
       final chosen = decision.data as Map<String, dynamic>;
-      // Delegates to [BotMeldAnalyzer.findCardsToAddToExistingMelds] — same top pick
-      expect(chosen['card'], same(additions.first['card'] as PlayingCard));
+      expect(chosen['card'], same(safeAddition['card'] as PlayingCard));
     });
   });
 

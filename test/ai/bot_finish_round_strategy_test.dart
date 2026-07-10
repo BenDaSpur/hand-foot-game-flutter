@@ -110,44 +110,51 @@ void main() {
       expect(decision!.action, equals('goOut'));
     });
 
-    test('does not aggressively finish when only dirty books exist', () {
-      botPlayer.melds.clear();
-      botPlayer.melds.add(dirtyBook());
-      botPlayer.melds.add(
-        Meld(
-          rank: CardRank.queen,
-          cards: [
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          ],
-          type: MeldType.mixed,
-        ),
-      );
-      botPlayer.hand.clear();
-      botPlayer.foot.clear();
-      botPlayer.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-      ]);
+    test(
+      'does not aggressively finish when only dirty books exist',
+      () {
+        botPlayer.melds.clear();
+        botPlayer.melds.add(dirtyBook());
+        botPlayer.melds.add(
+          Meld(
+            rank: CardRank.queen,
+            cards: [
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            ],
+            type: MeldType.mixed,
+          ),
+        );
+        botPlayer.hand.clear();
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+        ]);
 
-      expect(botPlayer.hasDirtyBook, isTrue);
-      expect(botPlayer.hasCleanBook, isFalse);
-      expect(botPlayer.canGoOutWithBooks, isFalse);
+        expect(botPlayer.hasDirtyBook, isTrue);
+        expect(botPlayer.hasCleanBook, isFalse);
+        expect(botPlayer.canGoOutWithBooks, isFalse);
 
-      gameController.gameState.turnPhase = TurnPhase.meld;
-      gameController.gameState.hasDrawnFromDeck = true;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+        gameController.gameState.hasDrawnFromDeck = true;
 
-      final decision = endGameManager.handleEndGame(botPlayer, gameController);
+        final decision = endGameManager.handleEndGame(
+          botPlayer,
+          gameController,
+        );
 
-      expect(decision, isNotNull);
-      expect(decision!.action, isNot('discard'));
-      expect(decision.action, isNot('goOut'));
-    });
+        expect(decision, isNotNull);
+        expect(decision!.action, isNot('discard'));
+        expect(decision.action, isNot('goOut'));
+      },
+      tags: ['clean_book_regression'],
+    );
 
     test(
       'builds clean book lane when dirty books exist but clean is missing',
@@ -182,6 +189,72 @@ void main() {
         final addition = decision.data as Map<String, dynamic>;
         expect((addition['card'] as PlayingCard).rank, equals(CardRank.seven));
       },
+      tags: ['clean_book_regression'],
+    );
+
+    test(
+      'rejects meld that leaves a single card without both book types',
+      () {
+        botPlayer.melds.clear();
+        botPlayer.melds.add(dirtyBook());
+        botPlayer.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          ])!,
+        );
+        botPlayer.hand.clear();
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
+          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+        ]);
+
+        gameController.gameState.turnPhase = TurnPhase.meld;
+        gameController.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(botPlayer, gameController);
+
+        expect(decision.action, isNot('addToMeld'));
+      },
+      tags: ['clean_book_regression'],
+    );
+
+    test(
+      'allows meld that completes clean book even when one card remains',
+      () {
+        botPlayer.melds.clear();
+        botPlayer.melds.add(dirtyBook());
+        botPlayer.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          ])!,
+        );
+        botPlayer.hand.clear();
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+        ]);
+
+        gameController.gameState.turnPhase = TurnPhase.meld;
+        gameController.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(botPlayer, gameController);
+
+        expect(decision.action, equals('addToMeld'));
+        final addition = decision.data as Map<String, dynamic>;
+        expect((addition['card'] as PlayingCard).rank, equals(CardRank.seven));
+      },
+      tags: ['clean_book_regression'],
     );
 
     test('post-playdown transition triggers on hand pile with 8+ cards', () {

@@ -173,17 +173,9 @@ void main() {
           botPlayer,
           gameController,
         );
-        // End game manager may not create melds if not in optimal position
-        // It focuses on completing existing melds and going out, or returning null
-        if (decision != null) {
-          expect(decision.action, anyOf(['createMeld', 'discard']));
-          if (decision.action == 'createMeld') {
-            final meldCards = decision.data as List<PlayingCard>;
-            expect(meldCards.length, greaterThanOrEqualTo(3));
-            // The meld may not be all aces depending on the end game manager's logic
-            expect(meldCards.isNotEmpty, isTrue);
-          }
-        }
+        // Without existing books, a 4-card ace meld would leave one stranded card.
+        expect(decision, isNotNull);
+        expect(decision!.action, equals('noMeld'));
       });
     });
 
