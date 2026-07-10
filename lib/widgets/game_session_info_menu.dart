@@ -62,73 +62,28 @@ class GameSessionInfo {
 /// Shared menu section for session / Firestore lookup info (solo + multiplayer).
 class GameSessionInfoMenu {
   static const String copyValue = 'copy_session_info';
+  static const double _panelWidth = 252;
 
   static List<PopupMenuEntry<String>> buildItems(GameSessionInfo info) {
-    final sessionId =
-        info.analyticsSessionId ?? GameAnalyticsLogger.currentSessionId;
-
     return [
-      const PopupMenuItem<String>(
+      PopupMenuItem<String>(
         enabled: false,
-        height: 28,
-        child: Text(
-          'SESSION INFO',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.8,
-            color: BalatroTheme.neonBlue,
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        child: _SessionInfoPanel(info: info),
       ),
-      if (info.gameId != null) _infoLine('Game', info.gameId!, monospace: true),
-      if (sessionId != null) _infoLine('Session', _truncate(sessionId)),
-      _infoLine(
-        'App',
-        '${AnalyticsMetadata.appVersion} · ${BotConfig.botAiVersion}',
-      ),
-      if (info.gameSeed != null) _infoLine('Seed', info.gameSeed!),
-      const PopupMenuDivider(),
       const PopupMenuItem<String>(
         value: copyValue,
+        height: 40,
         child: Row(
           children: [
             Icon(Icons.copy_all, color: BalatroTheme.neonBlue, size: 18),
-            SizedBox(width: 8),
-            Text('Copy Session Info'),
+            SizedBox(width: 10),
+            Text('Copy IDs'),
           ],
         ),
       ),
       const PopupMenuDivider(),
     ];
-  }
-
-  static PopupMenuItem<String> _infoLine(
-    String label,
-    String value, {
-    bool monospace = false,
-  }) {
-    return PopupMenuItem<String>(
-      enabled: false,
-      height: 34,
-      child: Text(
-        '$label: $value',
-        style: TextStyle(
-          fontSize: 11,
-          color: Colors.white70,
-          fontFamily: monospace ? 'monospace' : null,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-
-  static String _truncate(String value, {int maxLength = 22}) {
-    if (value.length <= maxLength) {
-      return value;
-    }
-    return '${value.substring(0, maxLength)}…';
   }
 
   static Future<void> copyToClipboard(
@@ -148,6 +103,98 @@ class GameSessionInfoMenu {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+class _SessionInfoPanel extends StatelessWidget {
+  final GameSessionInfo info;
+
+  const _SessionInfoPanel({required this.info});
+
+  static const TextStyle _labelStyle = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.4,
+    color: Colors.white38,
+  );
+
+  static const TextStyle _valueStyle = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: Colors.white,
+    height: 1.25,
+  );
+
+  static const TextStyle _monoValueStyle = TextStyle(
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: Colors.white70,
+    height: 1.3,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionId =
+        info.analyticsSessionId ?? GameAnalyticsLogger.currentSessionId;
+
+    return SizedBox(
+      width: GameSessionInfoMenu._panelWidth,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: BalatroTheme.neonBlue.withValues(alpha: 0.22),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'SUPPORT REFERENCE',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+                color: BalatroTheme.neonBlue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (info.gameId != null) ...[
+              const Text('Game ID', style: _labelStyle),
+              const SizedBox(height: 2),
+              Text(
+                info.gameId!,
+                style: _valueStyle.copyWith(
+                  fontFamily: 'monospace',
+                  fontSize: 18,
+                  color: BalatroTheme.neonGreen,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (sessionId != null) ...[
+              const Text('Analytics session', style: _labelStyle),
+              const SizedBox(height: 2),
+              Text(
+                sessionId,
+                style: _monoValueStyle,
+                maxLines: 2,
+                softWrap: true,
+              ),
+              const SizedBox(height: 8),
+            ],
+            const Text('Versions', style: _labelStyle),
+            const SizedBox(height: 2),
+            Text('App ${AnalyticsMetadata.appVersion}', style: _valueStyle),
+            Text('Bot ${BotConfig.botAiVersion}', style: _monoValueStyle),
+          ],
+        ),
       ),
     );
   }
