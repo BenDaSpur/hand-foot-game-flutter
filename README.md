@@ -4,7 +4,7 @@
 
 A beautiful Flutter implementation of the classic Hand & Foot card game featuring intelligent AI opponents and a stunning Balatro-inspired neon aesthetic.
 
-🎮 **[Play Now](https://bendaspur.github.io/hand-foot-game-flutter/)** | 📥 **[Download](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
+🎮 **[Play Now](https://playhandfoot.com)** | 📥 **[Download](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
 
 ## ✨ Features
 
@@ -28,7 +28,7 @@ A beautiful Flutter implementation of the classic Hand & Foot card game featurin
 
 **[📥 Download Latest Release](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
 
-Available for: Android (APK) | Windows | macOS | Linux | Web
+Available for: **Web** ([playhandfoot.com](https://playhandfoot.com)) | Android (APK) | Windows | macOS | Linux
 
 ## 🚀 Development Setup
 
