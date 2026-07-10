@@ -10,8 +10,11 @@ if [ -n "${FIREBASE_WEB_CONFIG:-}" ]; then
     echo "Error: Firebase config does not contain expected DefaultFirebaseOptions class"
     exit 1
   fi
+elif [ -n "${FIREBASE_WEB_API_KEY:-}" ]; then
+  echo "Generating Firebase config from FIREBASE_* environment variables"
+  bash scripts/generate_firebase_options_from_env.sh lib/firebase_options.dart
 else
-  echo "FIREBASE_WEB_CONFIG not set — using stub config (solo play only)"
+  echo "No Firebase config env vars set — using stub config (solo play only)"
 fi
 
 BUILD_NUMBER="${VERCEL_GIT_COMMIT_SHA:-local}"

@@ -33,13 +33,37 @@ These are defined in [`vercel.json`](../vercel.json) so dashboard and repo stay 
 
 ### Environment variables
 
-Configure in **Vercel → Project → Settings → Environment Variables**:
+Configure in **Vercel → Project → Settings → Environment Variables**.
 
-| Variable | Scope | Purpose |
-|----------|-------|---------|
-| `FIREBASE_WEB_CONFIG` | Production (and Preview if multiplayer should work on previews) | Base64-encoded contents of `lib/firebase_options.dart` — same value as GitHub Actions secret `FIREBASE_WEB_CONFIG` |
+**Option A — individual vars (recommended if already set in Vercel):**
 
-Without `FIREBASE_WEB_CONFIG`, **PLAY SOLO** still works (stub Firebase + graceful init). **CREATE GAME** / **JOIN GAME** require the production config.
+| Variable | Required for web multiplayer | Notes |
+|----------|------------------------------|-------|
+| `FIREBASE_PROJECT_ID` | Yes | Firebase project ID |
+| `FIREBASE_WEB_API_KEY` | Yes | Web API key from Firebase console |
+| `FIREBASE_WEB_APP_ID` | Yes | Web app ID |
+| `FIREBASE_MESSAGING_SENDER_ID` | Yes | Usually same as project number |
+| `FIREBASE_STORAGE_BUCKET` | Yes | From Firebase console |
+| `FIREBASE_WEB_MEASUREMENT_ID` | Recommended | Analytics |
+| `FIREBASE_ANDROID_*`, `FIREBASE_IOS_*`, `FIREBASE_MACOS_*` | No for web-only Vercel builds | Used if generating full multi-platform config |
+
+At build time, [`scripts/vercel_build.sh`](../scripts/vercel_build.sh) calls [`scripts/generate_firebase_options_from_env.sh`](../scripts/generate_firebase_options_from_env.sh) when `FIREBASE_WEB_API_KEY` is set.
+
+**Option B — single base64 blob (legacy / GitHub Actions parity):**
+
+| Variable | Purpose |
+|----------|---------|
+| `FIREBASE_WEB_CONFIG` | Base64-encoded full `lib/firebase_options.dart` file |
+
+If both are set, `FIREBASE_WEB_CONFIG` takes precedence.
+
+**Not needed on Vercel for the web app build:**
+
+- `FIREBASE_CREDENTIALS_FILE` — agent/CLI OAuth only (local analytics queries)
+- `FIREBASE_AUTH_EMAIL` — documentation / agent setup only
+- `FIREBASE_PROJECT_NUMBER` — not used in `firebase_options.dart` (same value as messaging sender ID)
+
+Without web Firebase vars, **PLAY SOLO** still works (stub Firebase + graceful init). **CREATE GAME** / **JOIN GAME** require the production config.
 
 ### Domain and DNS
 
