@@ -29,17 +29,31 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return android;
+        {
+          return android;
+        }
       case TargetPlatform.iOS:
-        return ios;
+        {
+          return ios;
+        }
       case TargetPlatform.macOS:
-        return macos;
+        {
+          return macos;
+        }
       case TargetPlatform.windows:
-        return web;
+        {
+          return web;
+        }
+      case TargetPlatform.linux:
+        {
+          return web;
+        }
       default:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for this platform.',
-        );
+        {
+          throw UnsupportedError(
+            'DefaultFirebaseOptions have not been configured for this platform.',
+          );
+        }
     }
   }
 

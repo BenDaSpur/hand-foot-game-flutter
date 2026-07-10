@@ -8,7 +8,7 @@ The repo includes [`vercel.json`](../vercel.json) and [`scripts/vercel_build.sh`
 
 ### Deployment flow
 
-```
+```text
 Push to GitHub → Vercel build → Clone Flutter 3.32.8 → flutter pub get
   → Inject Firebase config (if set) → flutter build web → Serve build/web
 ```
@@ -105,7 +105,9 @@ To test with production Firebase locally, use [`scripts/setup_local_firebase.sh`
 
 **Multiplayer does not work on playhandfoot.com**
 
-- Verify `FIREBASE_WEB_CONFIG` is set in Vercel (Production environment).
+- Verify Firebase config in Vercel (Production). Either option is valid:
+  - **Option A:** `FIREBASE_WEB_CONFIG` (base64-encoded `lib/firebase_options.dart`), or
+  - **Option B:** all required individual vars: `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_API_KEY`, `FIREBASE_WEB_APP_ID`, `FIREBASE_MESSAGING_SENDER_ID`, and `FIREBASE_STORAGE_BUCKET`
 - Confirm `playhandfoot.com` is in Firebase **Authorized domains**.
 - Re-deploy after changing env vars.
 
