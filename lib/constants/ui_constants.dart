@@ -1,6 +1,12 @@
 /// UI constants for consistent layout and sizing across the app
 class UIConstants {
-  // Mobile status bar
+  // Mobile game board zones
+  static const double compactHeaderCollapsedHeight = 72.0;
+  static const double compactHeaderExpandedHeight = 120.0;
+  static const double bottomDockMinHeight = 180.0;
+  static const double handLabelHeight = 28.0;
+
+  // Mobile status bar (legacy — compact header replaces on phone)
   static const double statusBarExpandedHeight = 120.0;
   static const double statusBarCollapsedHeight = 60.0;
   static const double statusBarPadding = 12.0;
@@ -18,12 +24,13 @@ class UIConstants {
   static const double smallScreenBreakpoint = 600.0;
 
   // Player scores
-  static const double playerScoresHeight = 60.0;
-  static const double playerScoresIconSize = 10.0;
-  static const double playerScoresNameFontSize = 10.0;
-  static const double playerScoresScoreFontSize = 11.0;
-  static const double playerScoresMeldFontSize = 8.0;
-  static const double playerScoresHandFootFontSize = 8.0;
+  static const double playerScoresHeight = 52.0;
+  static const double playerScoresMinWidth = 72.0;
+  static const double playerScoresIconSize = 12.0;
+  static const double playerScoresNameFontSize = 11.0;
+  static const double playerScoresScoreFontSize = 13.0;
+  static const double playerScoresMeldFontSize = 9.0;
+  static const double playerScoresHandFootFontSize = 9.0;
 
   // General spacing
   static const double defaultMargin = 8.0;

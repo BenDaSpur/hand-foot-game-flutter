@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
+import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
 
 class CollapsibleRecentActions extends StatelessWidget {
@@ -23,29 +24,34 @@ class CollapsibleRecentActions extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: UIConstants.defaultMargin),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border.all(color: Colors.grey[300]!),
+        color: BalatroTheme.darkPurple.withValues(alpha: 0.8),
+        border: Border.all(
+          color: BalatroTheme.glowColor.withValues(alpha: 0.3),
+        ),
         borderRadius: BorderRadius.circular(UIConstants.defaultBorderRadius),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header with toggle
           InkWell(
             onTap: onToggle,
             child: Container(
               padding: const EdgeInsets.all(UIConstants.defaultPadding),
               child: Row(
                 children: [
-                  Icon(Icons.history, size: 16, color: Colors.grey[700]),
+                  const Icon(
+                    Icons.history,
+                    size: 16,
+                    color: BalatroTheme.glowColor,
+                  ),
                   const SizedBox(width: UIConstants.mediumSpacing),
                   Expanded(
                     child: Text(
                       isExpanded ? 'Recent Actions' : _getLastActionPreview(),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
-                        color: Colors.grey[700],
+                        color: BalatroTheme.secondaryText,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -53,16 +59,14 @@ class CollapsibleRecentActions extends StatelessWidget {
                   Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
-                    color: Colors.grey[700],
+                    color: BalatroTheme.glowColor,
                   ),
                 ],
               ),
             ),
           ),
-
-          // Expandable actions list
           if (isExpanded) ...[
-            const Divider(height: 1),
+            const Divider(color: BalatroTheme.glowColor, height: 1),
             Container(
               constraints: const BoxConstraints(
                 maxHeight: UIConstants.recentActionsMaxHeight,
@@ -85,12 +89,12 @@ class CollapsibleRecentActions extends StatelessWidget {
                     ),
                     child: Text(
                       action.toString(),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: UIConstants.recentActionsFontSize,
-                        color: Colors.grey[700],
+                        color: BalatroTheme.secondaryText,
                         height: UIConstants.recentActionsLineHeight,
                       ),
-                      softWrap: true, // Enable word wrapping
+                      softWrap: true,
                     ),
                   );
                 },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../models/card.dart';
+import '../theme/balatro_theme.dart';
 import '../widgets/meld_widget.dart';
 
 class MeldsSection extends StatelessWidget {
@@ -13,7 +14,7 @@ class MeldsSection extends StatelessWidget {
   final Function(int) onSelectAllCardsForMeld;
   final bool Function(int) canAddCardToMeld;
   final ({int count, bool areWilds}) Function(int) getCompatibleCardsInfo;
-  final String? currentUserId; // For multiplayer support
+  final String? currentUserId;
 
   const MeldsSection({
     super.key,
@@ -25,16 +26,15 @@ class MeldsSection extends StatelessWidget {
     required this.onSelectAllCardsForMeld,
     required this.canAddCardToMeld,
     required this.getCompatibleCardsInfo,
-    this.currentUserId, // Optional - for multiplayer
+    this.currentUserId,
   });
 
-  /// Get the appropriate header text for the melds section
   String _getMeldsHeaderText(Player player) {
     final playerName = player.name;
     if (playerName == 'You') {
-      return 'Your Melds:';
+      return 'Your Melds';
     } else {
-      return '$playerName\'s Melds:';
+      return '$playerName\'s Melds';
     }
   }
 
@@ -43,89 +43,96 @@ class MeldsSection extends StatelessWidget {
     final currentPlayer = gameState.currentPlayer;
     final player = viewingPlayerMelds ?? humanPlayer;
 
-    return Expanded(
-      flex: 2,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Text(
-                    _getMeldsHeaderText(player),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Row(
+              children: [
+                Text(
+                  _getMeldsHeaderText(player),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: BalatroTheme.primaryText,
                   ),
-                  if (viewingPlayerMelds != null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: TextButton(
-                        onPressed: () => onViewPlayerMelds(null),
-                        child: const Text('Back to yours'),
+                ),
+                if (viewingPlayerMelds != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: TextButton(
+                      onPressed: () => onViewPlayerMelds(null),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Back to yours',
+                        style: TextStyle(
+                          color: BalatroTheme.glowColor,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            if (player.melds.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('No melds yet'),
-              )
-            else
-              ...(() {
-                // Sort melds by face value (CardRank)
-                final indexedMelds = player.melds.asMap().entries.toList();
-                indexedMelds.sort((a, b) {
-                  // Special handling for Aces - put them at the end
-                  final aRank = a.value.rank;
-                  final bRank = b.value.rank;
+          ),
+          if (player.melds.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'No melds yet',
+                style: TextStyle(color: BalatroTheme.secondaryText),
+              ),
+            )
+          else
+            ...(() {
+              final indexedMelds = player.melds.asMap().entries.toList();
+              indexedMelds.sort((a, b) {
+                final aRank = a.value.rank;
+                final bRank = b.value.rank;
 
-                  if (aRank == CardRank.ace && bRank != CardRank.ace) {
-                    return 1; // a (ace) comes after b
-                  }
-                  if (bRank == CardRank.ace && aRank != CardRank.ace) {
-                    return -1; // b (ace) comes after a
-                  }
+                if (aRank == CardRank.ace && bRank != CardRank.ace) {
+                  return 1;
+                }
+                if (bRank == CardRank.ace && aRank != CardRank.ace) {
+                  return -1;
+                }
 
-                  // For non-ace cards or both aces, use normal index comparison
-                  return aRank.index.compareTo(bRank.index);
-                });
+                return aRank.index.compareTo(bRank.index);
+              });
 
-                return indexedMelds.map((entry) {
-                  // REUSE SINGLE-PLAYER LOGIC: Adapt human check for multiplayer
-                  final isCurrentUserTurn = currentUserId != null
-                      ? currentPlayer.id == currentUserId
-                      : currentPlayer.type == PlayerType.human;
+              return indexedMelds.map((entry) {
+                final isCurrentUserTurn = currentUserId != null
+                    ? currentPlayer.id == currentUserId
+                    : currentPlayer.type == PlayerType.human;
 
-                  final canAdd =
-                      viewingPlayerMelds == null &&
-                      isCurrentUserTurn &&
-                      gameState.turnPhase == TurnPhase.meld;
+                final canAdd =
+                    viewingPlayerMelds == null &&
+                    isCurrentUserTurn &&
+                    gameState.turnPhase == TurnPhase.meld;
 
-                  final compatibleInfo = canAdd
-                      ? getCompatibleCardsInfo(entry.key)
-                      : (count: 0, areWilds: false);
+                final compatibleInfo = canAdd
+                    ? getCompatibleCardsInfo(entry.key)
+                    : (count: 0, areWilds: false);
 
-                  return MeldWidget(
-                    meld: entry.value,
-                    meldIndex: entry.key,
-                    canAddCards: canAdd,
-                    onTap: canAdd ? onAddCardToMeld : null,
-                    onSelectAllCards: canAdd ? onSelectAllCardsForMeld : null,
-                    canAcceptSelectedCard:
-                        canAdd && canAddCardToMeld(entry.key),
-                    compatibleCardsInHand: compatibleInfo.count,
-                    compatibleCardsAreWilds: compatibleInfo.areWilds,
-                  );
-                });
-              })(),
-          ],
-        ),
+                return MeldWidget(
+                  meld: entry.value,
+                  meldIndex: entry.key,
+                  canAddCards: canAdd,
+                  onTap: canAdd ? onAddCardToMeld : null,
+                  onSelectAllCards: canAdd ? onSelectAllCardsForMeld : null,
+                  canAcceptSelectedCard: canAdd && canAddCardToMeld(entry.key),
+                  compatibleCardsInHand: compatibleInfo.count,
+                  compatibleCardsAreWilds: compatibleInfo.areWilds,
+                );
+              });
+            })(),
+        ],
       ),
     );
   }
