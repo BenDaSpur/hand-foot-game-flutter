@@ -55,10 +55,21 @@ class GameEventListener {
 
   /// Handle card drawn events for analytics
   void _handleCardDrawn(CardDrawnEvent event) {
-    if (_isDisposed) return;
+    if (_isDisposed) {
+      return;
+    }
+
+    if (event.cards.isEmpty) {
+      DebugLogger.debug(
+        'Warning: CardDrawnEvent received with empty cards list for '
+        '${event.player?.name ?? 'unknown'}',
+      );
+      return;
+    }
 
     GameAnalyticsLogger.handleCardDrawnForOutcomes(event);
 
+    final primaryCard = event.card;
     GameAnalyticsLogger.logGameEvent(
       eventType: 'card_drawn',
       playerId: event.player?.id ?? 'unknown',
@@ -66,8 +77,13 @@ class GameEventListener {
       eventData: {
         'from_deck': event.fromDeck,
         'drawSource': event.fromDeck ? 'deck' : 'discard',
-        'card_rank': event.card.rank.name,
-        'card_suit': event.card.suit?.name ?? 'joker',
+        'card_count': event.cards.length,
+        'card_ranks': event.cards.map((card) => card.rank.name).toList(),
+        'card_suits': event.cards
+            .map((card) => card.suit?.name ?? 'joker')
+            .toList(),
+        'card_rank': primaryCard?.rank.name ?? 'unknown',
+        'card_suit': primaryCard?.suit?.name ?? 'joker',
         'player_name': event.player?.name ?? 'unknown',
       },
     );
@@ -104,8 +120,16 @@ class GameEventListener {
       playerType: event.player?.type,
       eventData: {
         'drawSource': 'unlock',
-        'cards_taken': event.cardsTaken.length,
-        'card_ranks': event.cardsTaken.map((c) => c.rank.name).toList(),
+        'cards_taken': event.handPickupCards.length,
+        'hand_pickup_count': event.handPickupCards.length,
+        'melded_count': event.meldedCards.length,
+        'meld_index': event.meldIndex,
+        'card_ranks': event.handPickupCards
+            .map((card) => card.rank.name)
+            .toList(),
+        'melded_ranks': event.meldedCards
+            .map((card) => card.rank.name)
+            .toList(),
         'player_name': event.player?.name ?? 'unknown',
       },
     );

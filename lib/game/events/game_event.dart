@@ -25,11 +25,14 @@ abstract class GameEvent {
 
 /// Event fired when a card is drawn from the deck
 class CardDrawnEvent extends GameEvent {
-  final PlayingCard card;
+  final List<PlayingCard> cards;
   final bool fromDeck; // true if from deck, false if from discard pile
 
+  /// Backward-compatible accessor for single-card consumers.
+  PlayingCard? get card => cards.isEmpty ? null : cards.last;
+
   CardDrawnEvent({
-    required this.card,
+    required this.cards,
     required this.fromDeck,
     required super.player,
     super.timestamp,
@@ -89,10 +92,22 @@ class CardAddedToMeldEvent extends GameEvent {
 
 /// Event fired when discard pile is unlocked
 class DiscardPileUnlockedEvent extends GameEvent {
-  final List<PlayingCard> cardsTaken;
+  /// Up to 5 additional cards added to the player's hand.
+  final List<PlayingCard> handPickupCards;
+
+  /// The 2 matching naturals from hand plus the top discard card melded.
+  final List<PlayingCard> meldedCards;
+
+  /// Index of the meld that received the unlock cards.
+  final int meldIndex;
+
+  /// Backward-compatible alias for hand pickup cards only.
+  List<PlayingCard> get cardsTaken => handPickupCards;
 
   DiscardPileUnlockedEvent({
-    required this.cardsTaken,
+    required this.handPickupCards,
+    required this.meldedCards,
+    required this.meldIndex,
     required super.player,
     super.timestamp,
   });
