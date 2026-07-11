@@ -507,6 +507,15 @@ class BotTurnManager {
     onStateChanged();
   }
 
+  void _finishForcedDiscard(Player botPlayer) {
+    final turnAdvanced = handlePostDiscardState(botPlayer);
+    if (!turnAdvanced) {
+      _completeTurnAndNotify(botPlayer);
+    } else {
+      onStateChanged();
+    }
+  }
+
   /// Handle state after discard action.
   ///
   /// Returns true when play was already advanced (go-out handled or turn changed).
@@ -708,13 +717,7 @@ class BotTurnManager {
         );
 
         // Check for foot pickup after discard
-        final turnAdvanced = handlePostDiscardState(botPlayer);
-        if (!turnAdvanced) {
-          // ADVANCE TURN - this is guaranteed to work
-          _completeTurnAndNotify(botPlayer);
-        } else {
-          onStateChanged();
-        }
+        _finishForcedDiscard(botPlayer);
         return;
       }
 
@@ -741,8 +744,7 @@ class BotTurnManager {
           );
         }
 
-        _completeTurnAndNotify(botPlayer);
-        onStateChanged();
+        _finishForcedDiscard(botPlayer);
         return;
       }
 
@@ -877,20 +879,7 @@ class BotTurnManager {
           ),
         );
 
-        // Check for foot pickup after manual discard
-        if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
-          botPlayer.pickUpFoot();
-          gameState.recentActions.add(
-            GameAction(
-              message: 'picked up foot after emergency discard',
-              playerName: botPlayer.name,
-            ),
-          );
-        }
-
-        // Complete turn legally
-        _completeTurnAndNotify(botPlayer);
-        onStateChanged();
+        _finishForcedDiscard(botPlayer);
         return;
       }
 
@@ -916,15 +905,13 @@ class BotTurnManager {
             ),
           );
 
-          // Complete turn legally
-          _completeTurnAndNotify(botPlayer);
-          onStateChanged();
+          _finishForcedDiscard(botPlayer);
           return;
         }
       }
 
-      // STEP 5: Check if bot can go out (end game)
-      if (botPlayer.canGoOut) {
+      // Empty hand/foot with books already satisfied — go out without discarding.
+      if (botPlayer.currentHand.isEmpty && botPlayer.canGoOut) {
         endRoundForBot(
           botPlayer,
           actionMessage: '🎉 went out and ended the round!',

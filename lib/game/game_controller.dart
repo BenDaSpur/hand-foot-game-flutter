@@ -284,6 +284,24 @@ class GameController implements GameInterface {
     }
   }
 
+  void _publishPostActionEvents({
+    required GamePhase phaseBefore,
+    required int roundBefore,
+    required Player actingPlayer,
+    required Player roundEndingPlayer,
+    required int currentIndexBefore,
+  }) {
+    if (_gameState.phase != phaseBefore) {
+      _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      return;
+    }
+
+    if (_gameState.finalTurnPhaseActive &&
+        _gameState.currentPlayerIndex != currentIndexBefore) {
+      publishTurnEndedEvent(actingPlayer);
+    }
+  }
+
   @override
   bool discardCard(PlayingCard card) {
     final player = _gameState.currentPlayer;
@@ -297,12 +315,17 @@ class GameController implements GameInterface {
     if (result) {
       _eventBus.publish(CardDiscardedEvent(card: card, player: player));
 
-      if (_gameState.phase != phaseBefore) {
-        _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
-      } else if (_gameState.finalTurnPhaseActive &&
-          _gameState.currentPlayerIndex != currentIndexBefore) {
-        publishTurnEndedEvent(player);
-      } else {
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
+      );
+
+      if (_gameState.phase == phaseBefore &&
+          (!_gameState.finalTurnPhaseActive ||
+              _gameState.currentPlayerIndex == currentIndexBefore)) {
         // Check if turn ended (player changed or phase changed)
         final newPlayer = _gameState.currentPlayer;
         if (newPlayer.id != player.id ||
@@ -408,12 +431,13 @@ class GameController implements GameInterface {
       }
 
       // Check if player went out (round or game ended)
-      if (_gameState.phase != phaseBefore) {
-        _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
-      } else if (_gameState.finalTurnPhaseActive &&
-          _gameState.currentPlayerIndex != currentIndexBefore) {
-        publishTurnEndedEvent(player);
-      }
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
+      );
     }
 
     return result;
@@ -476,12 +500,13 @@ class GameController implements GameInterface {
       }
 
       // Check if player went out (round or game ended)
-      if (_gameState.phase != phaseBefore) {
-        _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
-      } else if (_gameState.finalTurnPhaseActive &&
-          _gameState.currentPlayerIndex != currentIndexBefore) {
-        publishTurnEndedEvent(player);
-      }
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
+      );
     }
 
     return result;
