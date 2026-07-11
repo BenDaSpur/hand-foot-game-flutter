@@ -95,6 +95,35 @@ void main() {
       expect(gameState.phase, GamePhase.roundEnd);
       expect(gameState.finalTurnPhaseActive, isFalse);
     });
+
+    test('second go-out during final turn does not reset went-out player', () {
+      final players = [
+        Player(id: '1', name: 'You', type: PlayerType.human),
+        Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        Player(id: '3', name: 'Bob', type: PlayerType.bot),
+      ];
+      final gameState = GameState(
+        players: players,
+        deck: Deck.createHandAndFootDeck(players.length),
+        soloSettings: _withFinalTurnSettings,
+      );
+
+      gameState.phase = GamePhase.playing;
+      _setupPlayerToGoOut(players[0]);
+      gameState.currentPlayerIndex = 0;
+      gameState.handlePlayerWentOut();
+      expect(gameState.playerWhoWentOutIndex, 0);
+      expect(gameState.playersAwaitingFinalTurn, {1, 2});
+
+      gameState.phase = GamePhase.playing;
+      _setupPlayerToGoOut(players[1]);
+      gameState.currentPlayerIndex = 1;
+      gameState.handlePlayerWentOut();
+
+      expect(gameState.playerWhoWentOutIndex, 0);
+      expect(gameState.playersAwaitingFinalTurn, {1, 2});
+      expect(gameState.currentPlayerIndex, 2);
+    });
   });
 }
 

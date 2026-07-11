@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -300,6 +302,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
+    // Configured solo start from setup screen takes priority over saved game.
+    if (widget.settings != null) {
+      _startFreshGame();
+      return;
+    }
+
     // Check if there's a saved game
     final hasSaved = await GameController.hasSavedGame();
 
@@ -346,7 +354,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _startFreshGame() {
     final settings = widget.settings ?? SoloGameSettings.defaults;
-    final players = settings.buildPlayers();
+    final nameSeed =
+        widget.testSeed ?? settings.normalizedPersonalities.join().hashCode;
+    final players = settings.buildPlayers(random: Random(nameSeed));
     final personalities = settings.normalizedPersonalities;
 
     // Debug logging for player setup

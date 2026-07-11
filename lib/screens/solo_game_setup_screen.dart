@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../ai/bot_personality.dart';
 import '../config/bot_configurations.dart';
+import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
@@ -103,7 +104,8 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
                             _buildBotPersonalitiesSection(),
                             const SizedBox(height: 24),
                             _buildRuleToggle(
-                              title: '+100 pts to first player out',
+                              title:
+                                  '+${GameConfig.goingOutBonus} pts to first player out',
                               subtitle:
                                   'Bonus for the player who goes out first each round',
                               value: _settings.enableGoingOutBonus,

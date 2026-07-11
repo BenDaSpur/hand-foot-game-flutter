@@ -19,14 +19,18 @@ class SoloGameSettings {
   final bool enableGoingOutBonus;
   final bool enableFinalTurnAfterGoingOut;
 
-  const SoloGameSettings({
-    required this.botCount,
+  SoloGameSettings({
+    required int botCount,
     required this.botPersonalities,
     required this.enableGoingOutBonus,
     required this.enableFinalTurnAfterGoingOut,
-  }) : assert(botCount >= minBotCount && botCount <= maxBotCount);
+  }) : botCount = _clampBotCount(botCount);
 
-  static const SoloGameSettings defaults = SoloGameSettings(
+  static int _clampBotCount(int count) {
+    return count.clamp(minBotCount, maxBotCount);
+  }
+
+  static final SoloGameSettings defaults = SoloGameSettings(
     botCount: 2,
     botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
     enableGoingOutBonus: true,
@@ -118,7 +122,7 @@ class SoloGameSettings {
         .toList();
 
     return SoloGameSettings(
-      botCount: json['botCount'] as int? ?? defaults.botCount,
+      botCount: _clampBotCount(json['botCount'] as int? ?? defaults.botCount),
       botPersonalities: personalities.isEmpty
           ? defaults.botPersonalities
           : personalities,

@@ -228,6 +228,12 @@ class GameState {
   ///
   /// Returns true if the round ended immediately; false if final-turn phase started.
   bool handlePlayerWentOut() {
+    if (finalTurnPhaseActive) {
+      _logAction('🏆 went out!');
+      nextPlayer();
+      return false;
+    }
+
     playerWhoWentOutIndex = currentPlayerIndex;
 
     if (!soloSettings.enableFinalTurnAfterGoingOut) {

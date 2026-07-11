@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:math';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/config/solo_game_settings.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
@@ -64,9 +65,30 @@ void main() {
       expect(restored.enableFinalTurnAfterGoingOut, isFalse);
     });
 
+    test('fromJson clamps out-of-range botCount', () {
+      final restored = SoloGameSettings.fromJson({'botCount': 99});
+      expect(restored.botCount, SoloGameSettings.maxBotCount);
+    });
+
+    test('copyWith clamps out-of-range botCount', () {
+      final settings = SoloGameSettings.defaults.copyWith(botCount: 0);
+      expect(settings.botCount, SoloGameSettings.minBotCount);
+    });
+
     test('previewBotNames returns one name per bot', () {
       final settings = SoloGameSettings.defaults.copyWith(botCount: 3);
       expect(settings.previewBotNames, hasLength(3));
+    });
+
+    test('buildPlayers uses preview-name seed for deterministic names', () {
+      final settings = SoloGameSettings.defaults;
+      final nameSeed = settings.normalizedPersonalities.join().hashCode;
+      final players = settings.buildPlayers(random: Random(nameSeed));
+      final botNames = players
+          .where((p) => p.type == PlayerType.bot)
+          .map((p) => p.name)
+          .toList();
+      expect(botNames, settings.previewBotNames);
     });
   });
 }
