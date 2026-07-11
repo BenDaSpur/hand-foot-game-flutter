@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/firebase_service.dart';
 import 'package:hand_foot_game_flutter/services/firebase_constants.dart';
+import 'package:hand_foot_game_flutter/models/multiplayer_result.dart';
 
 void main() {
   group('FirebaseService Analytics', () {
@@ -261,7 +262,7 @@ void main() {
 
   group('Multiplayer typed results', () {
     test(
-      'createGameWithResult returns typed failure for invalid input',
+      'createGameWithResult returns notConfigured in stub Firebase environment',
       () async {
         final result = await FirebaseService.createGameWithResult(
           hostPlayerName: '',
@@ -269,13 +270,13 @@ void main() {
         );
 
         expect(result.isSuccess, isFalse);
-        expect(result.failureReason, isNotNull);
+        expect(result.failureReason, MultiplayerFailureReason.notConfigured);
         expect(FirebaseService.lastOperationError, isNotEmpty);
       },
     );
 
     test(
-      'joinGameWithResult returns typed failure for invalid game ID',
+      'joinGameWithResult returns notConfigured in stub Firebase environment',
       () async {
         final result = await FirebaseService.joinGameWithResult(
           gameId: 'bad',
@@ -283,7 +284,7 @@ void main() {
         );
 
         expect(result.isSuccess, isFalse);
-        expect(result.failureReason, isNotNull);
+        expect(result.failureReason, MultiplayerFailureReason.notConfigured);
         expect(FirebaseService.lastOperationError, isNotEmpty);
       },
     );

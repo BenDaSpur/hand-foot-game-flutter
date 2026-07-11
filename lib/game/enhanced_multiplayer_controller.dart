@@ -143,7 +143,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       await MultiplayerResumeService.saveActiveGame(
         gameId: gameId,
         playerName: playerName,
-        isHost: false,
+        isHost: isHost,
       );
 
       return controller;
@@ -165,7 +165,17 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     if (_isDisposed) {
       return false;
     }
-    return await _networkAdapter.leaveGame(gameId);
+
+    var leaveSuccess = false;
+    try {
+      await _queueNetworkOperation(() async {
+        leaveSuccess = await _networkAdapter.leaveGame(gameId);
+      });
+      return leaveSuccess;
+    } catch (e) {
+      DebugLogger.error('Failed to leave game: $e');
+      return false;
+    }
   }
 
   Future<void> _startListening() async {

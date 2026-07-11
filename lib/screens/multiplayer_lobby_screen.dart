@@ -473,9 +473,11 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
         await _joinGame();
       }
     } catch (e) {
-      _showErrorDialog(
-        'Failed to ${widget.mode == LobbyMode.create ? 'create' : 'join'} game. Please try again.',
-      );
+      final message = e.toString();
+      final displayMessage = message.startsWith('Exception: ')
+          ? message.substring('Exception: '.length)
+          : message;
+      _showErrorDialog(displayMessage);
     }
 
     setState(() => _isLoading = false);

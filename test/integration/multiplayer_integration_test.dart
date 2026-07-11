@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/firebase_service.dart';
 import 'package:hand_foot_game_flutter/services/device_service.dart';
 import 'package:hand_foot_game_flutter/game/game_controller_factory.dart';
+import 'package:hand_foot_game_flutter/game/enhanced_multiplayer_controller.dart';
 import 'package:hand_foot_game_flutter/services/firebase_constants.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
@@ -10,20 +11,25 @@ import 'package:hand_foot_game_flutter/models/deck.dart';
 void main() {
   group('Mock multiplayer success path', () {
     test('create and join with mock adapter succeeds end-to-end', () async {
-      final hostController =
-          await GameControllerFactory.createTestMultiplayerGame(
-            hostPlayerName: 'Host',
-            maxPlayers: 2,
-          );
+      EnhancedMultiplayerController? hostController;
+      EnhancedMultiplayerController? guestController;
+      addTearDown(() {
+        hostController?.dispose();
+        guestController?.dispose();
+      });
+
+      hostController = await GameControllerFactory.createTestMultiplayerGame(
+        hostPlayerName: 'Host',
+        maxPlayers: 2,
+      );
 
       expect(hostController, isNotNull);
       expect(hostController!.isHost, isTrue);
 
-      final guestController =
-          await GameControllerFactory.joinTestMultiplayerGame(
-            gameId: hostController.gameId,
-            playerName: 'Guest',
-          );
+      guestController = await GameControllerFactory.joinTestMultiplayerGame(
+        gameId: hostController.gameId,
+        playerName: 'Guest',
+      );
 
       expect(guestController, isNotNull);
       expect(guestController!.isHost, isFalse);
@@ -56,9 +62,6 @@ void main() {
 
       final hostLeft = await hostController.leaveGame();
       expect(hostLeft, isTrue);
-
-      hostController.dispose();
-      guestController.dispose();
     });
   });
 

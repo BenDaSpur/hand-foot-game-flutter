@@ -377,7 +377,7 @@ class FirebaseService {
   /// Delete a game (host only)
   static Future<bool> deleteGame(String gameId) async {
     try {
-      final userId = await getDeviceUserId();
+      final userId = await getMultiplayerUserId();
       if (userId == null) return false;
 
       final gameDoc = await _firestore
@@ -409,7 +409,7 @@ class FirebaseService {
   /// Remove player from game lobby
   static Future<bool> leaveGame(String gameId) async {
     try {
-      final userId = await getDeviceUserId();
+      final userId = await getMultiplayerUserId();
       if (userId == null) return false;
 
       final gameDoc = await _firestore
@@ -774,7 +774,7 @@ class FirebaseService {
   /// Start a game (host only)
   static Future<bool> startGame(String gameId) async {
     try {
-      final userId = await getDeviceUserId();
+      final userId = await getMultiplayerUserId();
       if (userId == null) return false;
 
       final gameDoc = await _firestore

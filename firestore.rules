@@ -62,9 +62,18 @@ service cloud.firestore {
 
   function isPlayerJoining(oldData, newData) {
     return oldData.status == 'waiting'
+      && oldData.hostId == newData.hostId
+      && oldData.maxPlayers == newData.maxPlayers
+      && oldData.status == newData.status
+      && gameStateUnchanged(oldData, newData)
       && newData.players.size() == oldData.players.size() + 1
+      && newData.players.size() <= newData.maxPlayers
       && request.auth.uid in getPlayerIds(newData)
       && !(request.auth.uid in getPlayerIds(oldData));
+  }
+
+  function gameStateUnchanged(oldData, newData) {
+    return oldData.get('gameState', null) == newData.get('gameState', null);
   }
   
   function getPlayerIds(gameData) {

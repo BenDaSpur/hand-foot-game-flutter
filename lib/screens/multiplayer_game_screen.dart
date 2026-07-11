@@ -427,7 +427,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                 gameId: _gameController.gameId,
                 playerId: _gameController.userId,
               ),
-              onLeaveGame: _leaveAndExit,
+              onLeaveGame: _cleanupAndExit,
             ),
             body: CardAnimationHost(
               eventBus: gameEventBus,
