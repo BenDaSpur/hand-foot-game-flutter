@@ -68,6 +68,7 @@ service cloud.firestore {
       && gameStateUnchanged(oldData, newData)
       && newData.players.size() == oldData.players.size() + 1
       && newData.players.size() <= newData.maxPlayers
+      && getPlayerIds(newData).hasAll(getPlayerIds(oldData))
       && request.auth.uid in getPlayerIds(newData)
       && !(request.auth.uid in getPlayerIds(oldData));
   }
