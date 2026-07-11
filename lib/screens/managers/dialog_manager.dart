@@ -343,6 +343,21 @@ class DialogManager {
     );
   }
 
+  /// Show scoreboard after a round ends and wait until the user dismisses it.
+  Future<void> showRoundEndScoreboard() {
+    final completedRound = gameController.gameState.round - 1;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => ScoreboardModal(
+        gameState: gameController.gameState,
+        completedRoundNumber: completedRound < 1 ? 1 : completedRound,
+        showContinueButton: true,
+      ),
+    );
+  }
+
   /// Show emergency round end dialog
   void showEmergencyRoundEndDialog() {
     EmergencyRoundEndDialog.show(

@@ -7,8 +7,15 @@ import '../theme/balatro_theme.dart';
 
 class ScoreboardModal extends StatefulWidget {
   final GameState gameState;
+  final int? completedRoundNumber;
+  final bool showContinueButton;
 
-  const ScoreboardModal({super.key, required this.gameState});
+  const ScoreboardModal({
+    super.key,
+    required this.gameState,
+    this.completedRoundNumber,
+    this.showContinueButton = false,
+  });
 
   @override
   State<ScoreboardModal> createState() => _ScoreboardModalState();
@@ -16,6 +23,9 @@ class ScoreboardModal extends StatefulWidget {
 
 class _ScoreboardModalState extends State<ScoreboardModal> {
   int? expandedPlayerIndex;
+
+  int get _displayRoundNumber =>
+      widget.completedRoundNumber ?? widget.gameState.round;
 
   Map<String, dynamic> _calculateScoreBreakdown(int playerIndex) {
     int meldPoints = 0;
@@ -41,7 +51,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     final currentRoundTotal = meldPoints;
 
     // Calculate previous rounds score (only if not first round)
-    final previousRoundsTotal = widget.gameState.round > 1
+    final previousRoundsTotal = _displayRoundNumber > 1
         ? player.score - currentRoundTotal
         : 0;
 
@@ -97,7 +107,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     final accessibilityLabel =
         '$displayName, '
         'Total score: ${breakdown['gameTotal']}, '
-        'Round ${widget.gameState.round} score: ${breakdown['currentRoundTotal']}, '
+        'Round $_displayRoundNumber score: ${breakdown['currentRoundTotal']}, '
         '${canGoOut ? 'Can go out, ' : ''}'
         '${isCurrentPlayer ? 'Current player' : ''}';
 
@@ -213,7 +223,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                     ),
 
                   // Show previous rounds if any (and not first round)
-                  if (widget.gameState.round > 1 &&
+                  if (_displayRoundNumber > 1 &&
                       breakdown['previousRoundsTotal'] != 0)
                     _buildScoreRow(
                       'Previous Rounds',
@@ -409,7 +419,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     final leaderName = _displayNameForPlayer(leaderIndex, duplicateNames);
 
     return Semantics(
-      label: 'Scoreboard for Round ${widget.gameState.round}',
+      label: 'Scoreboard for Round $_displayRoundNumber',
       child: Dialog(
         backgroundColor: Colors.transparent,
         child: Container(
@@ -449,7 +459,9 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                   children: [
                     Flexible(
                       child: Text(
-                        '🏆 Scoreboard - Round ${widget.gameState.round}',
+                        widget.showContinueButton
+                            ? '🏆 Round $_displayRoundNumber Complete'
+                            : '🏆 Scoreboard - Round $_displayRoundNumber',
                         style: Theme.of(context).textTheme.displayMedium
                             ?.copyWith(color: Colors.white),
                         overflow: TextOverflow.ellipsis,
@@ -518,6 +530,32 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                   },
                 ),
               ),
+
+              if (widget.showContinueButton)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: BalatroTheme.neonGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Continue to Next Round',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -464,6 +464,31 @@ void main() {
         expect(find.textContaining('Clean Books'), findsAtLeastNWidgets(1));
         expect(find.textContaining('This Round'), findsAtLeastNWidgets(1));
       });
+
+      testWidgets(
+        'shows continue button and completed round title at round end',
+        (WidgetTester tester) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Material(
+                child: MediaQuery(
+                  data: const MediaQueryData(size: Size(800, 600)),
+                  child: ScoreboardModal(
+                    gameState: gameState,
+                    completedRoundNumber: 1,
+                    showContinueButton: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          await tester.pumpAndSettle();
+
+          expect(find.text('🏆 Round 1 Complete'), findsOneWidget);
+          expect(find.text('Continue to Next Round'), findsOneWidget);
+        },
+      );
     });
   });
 }

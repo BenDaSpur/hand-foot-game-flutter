@@ -234,11 +234,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         processCurrentPlayerTurn();
       },
       onRoundEndDetected: () {
-        _handleRoundTransition().catchError((error) {
-          DebugLogger.error(
-            'Error handling round transition from event: $error',
-          );
-        });
+        _triggerRoundTransition('event');
       },
     );
 
@@ -543,9 +539,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         DebugLogger.debug(
           'Round has ended - handling transition (Round ${gameState.round})',
         );
-        _handleRoundTransition().catchError((error) {
-          DebugLogger.error('Error handling round transition: $error');
-        });
+        _triggerRoundTransition('');
         return;
       }
 
@@ -609,8 +603,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _botTurnManager
             .resetProcessingState(); // Clear any stuck bot processing flag
         if (mounted) {
-          // UI will update automatically via provider reactivity
-          _gameStateManager.checkForRoundTransition();
+          if (controller.gameState.phase == GamePhase.roundEnd) {
+            _triggerRoundTransition('human turn');
+          }
         }
         return;
       }
@@ -624,6 +619,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       DebugLogger.error('Error in processCurrentPlayerTurn: $e');
       _handleCriticalError(e);
     }
+  }
+
+  /// Fire-and-forget round transition with source-tagged error logging.
+  void _triggerRoundTransition(String source) {
+    _handleRoundTransition().catchError((error) {
+      final message = source.isEmpty
+          ? 'Error handling round transition: $error'
+          : 'Error handling round transition from $source: $error';
+      DebugLogger.error(message);
+    });
   }
 
   /// Handle complete round transition with proper state management
@@ -646,9 +651,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     try {
       await _logRoundEndAnalytics();
+      if (_disposed || !mounted) {
+        return;
+      }
 
-      // Brief pause to show scores
-      await Future.delayed(const Duration(seconds: 2));
+      await _dialogManager.showRoundEndScoreboard();
       if (_disposed || !mounted) {
         return;
       }
