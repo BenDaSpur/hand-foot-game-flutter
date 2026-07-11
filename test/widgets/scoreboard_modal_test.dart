@@ -344,6 +344,73 @@ void main() {
         expect(find.textContaining('Player '), findsNothing);
       });
 
+      testWidgets('disambiguates duplicate player names with index suffix', (
+        WidgetTester tester,
+      ) async {
+        final duplicateNamePlayers = [
+          Player(
+            id: '1',
+            name: 'Guest',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1500,
+          ),
+          Player(
+            id: '2',
+            name: 'Guest',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1200,
+          ),
+          Player(
+            id: '3',
+            name: 'You',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 900,
+          ),
+        ];
+
+        final duplicateNameGameState = GameState(
+          players: duplicateNamePlayers,
+          deck: Deck.createHandAndFootDeck(3),
+          currentPlayerIndex: 0,
+          phase: GamePhase.playing,
+          round: 2,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Material(
+              child: MediaQuery(
+                data: const MediaQueryData(size: Size(800, 1200)),
+                child: ScoreboardModal(gameState: duplicateNameGameState),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Leader: Guest (1) (1500 points)'), findsOneWidget);
+        expect(find.text('Guest (1)'), findsOneWidget);
+        expect(find.text('Guest (2)'), findsOneWidget);
+
+        await tester.scrollUntilVisible(
+          find.text('You'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('You'), findsOneWidget);
+        expect(find.text('Guest'), findsNothing);
+      });
+
       testWidgets('displays score breakdown components', (
         WidgetTester tester,
       ) async {
