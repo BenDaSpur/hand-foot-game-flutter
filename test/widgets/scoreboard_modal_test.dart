@@ -342,6 +342,21 @@ void main() {
         );
         expect(find.text('Bot 2'), findsOneWidget);
         expect(find.textContaining('Player '), findsNothing);
+
+        expect(
+          find.bySemanticsLabel('You, Total score: 1370, Round 2 score: 0, '),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel('Bot 1, Total score: 1325, Round 2 score: 0, '),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel(
+            'Bot 2, Total score: 370, Round 2 score: 0, Current player',
+          ),
+          findsOneWidget,
+        );
       });
 
       testWidgets('disambiguates duplicate player names with index suffix', (
@@ -355,7 +370,7 @@ void main() {
             hand: [],
             foot: [],
             melds: [],
-            score: 1500,
+            score: 1200,
           ),
           Player(
             id: '2',
@@ -364,7 +379,7 @@ void main() {
             hand: [],
             foot: [],
             melds: [],
-            score: 1200,
+            score: 1500,
           ),
           Player(
             id: '3',
@@ -398,7 +413,7 @@ void main() {
 
         await tester.pumpAndSettle();
 
-        expect(find.text('Leader: Guest (1) (1500 points)'), findsOneWidget);
+        expect(find.text('Leader: Guest (2) (1500 points)'), findsOneWidget);
         expect(find.text('Guest (1)'), findsOneWidget);
         expect(find.text('Guest (2)'), findsOneWidget);
 
@@ -409,6 +424,23 @@ void main() {
         );
         expect(find.text('You'), findsOneWidget);
         expect(find.text('Guest'), findsNothing);
+
+        expect(
+          find.bySemanticsLabel(
+            'Guest (1), Total score: 1200, Round 2 score: 0, Current player',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel(
+            'Guest (2), Total score: 1500, Round 2 score: 0, ',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel('You, Total score: 900, Round 2 score: 0, '),
+          findsOneWidget,
+        );
       });
 
       testWidgets('displays score breakdown components', (
