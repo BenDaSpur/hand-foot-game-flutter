@@ -7,6 +7,7 @@ import '../models/game_state.dart';
 import '../config/game_config.dart';
 import '../models/multiplayer_errors.dart';
 import '../services/multiplayer_resume_service.dart';
+import '../services/firebase_service.dart';
 import '../utils/debug_logger.dart';
 import 'game_controller.dart';
 import 'network_adapter.dart';
@@ -116,6 +117,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       );
       if (!success) return null;
 
+      final gameData = await FirebaseService.getGame(gameId);
+      final isHost = gameData?['hostId'] == userId;
+
       // Create temporary player for local game controller
       final tempPlayer = Player(
         id: userId,
@@ -130,7 +134,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
         currentUserId: userId,
         gameController: gameController,
         networkAdapter: networkAdapter,
-        isHost: false,
+        isHost: isHost,
       );
 
       await controller._startListening();
@@ -153,6 +157,15 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   Future<bool> startMultiplayerGame() async {
     if (!_isHost) return false;
     return await _networkAdapter.startGame(gameId);
+  }
+
+  /// Leave the multiplayer game and clean up Firestore lobby/player records.
+  @override
+  Future<bool> leaveGame() async {
+    if (_isDisposed) {
+      return false;
+    }
+    return await _networkAdapter.leaveGame(gameId);
   }
 
   Future<void> _startListening() async {
@@ -413,6 +426,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       localGameState.recentActions,
       newGameState.recentActions,
     );
+
+    // Keep deck in sync after draws (authoritative server state)
+    localGameState.deck.replaceCards(newGameState.deck.cards);
   }
 
   void _replaceCollectionAtomically<T>(List<T> targetList, List<T> newData) {

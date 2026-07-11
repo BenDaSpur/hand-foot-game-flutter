@@ -325,5 +325,51 @@ void main() {
         expect(controller!.getCurrentUserPlayer()!.name, 'PlayerB');
       },
     );
+
+    test('FIX: deck syncs on incremental game state updates', () async {
+      mockAdapter.mockUserId = 'player1';
+      mockAdapter.mockGameId = 'DECK-SYNC';
+
+      controller = await EnhancedMultiplayerController.createGame(
+        hostPlayerName: 'Player1',
+        maxPlayers: 2,
+        networkAdapter: mockAdapter,
+      );
+
+      final initialDeck = Deck.createHandAndFootDeck(2, seed: 12345);
+      final initialState = GameState(
+        players: [
+          Player(id: 'player1', name: 'Player1', type: PlayerType.human),
+          Player(id: 'player2', name: 'Player2', type: PlayerType.human),
+        ],
+        deck: initialDeck,
+        phase: GamePhase.playing,
+        turnPhase: TurnPhase.draw,
+      );
+
+      await controller!.initializeFromServerState(initialState);
+      final initialDeckSize = controller!.gameState.deck.size;
+      expect(initialDeckSize, greaterThan(0));
+
+      final updatedDeck = Deck.createHandAndFootDeck(2, seed: 12345);
+      updatedDeck.drawCard();
+      updatedDeck.drawCard();
+
+      final updatedState = GameState(
+        players: initialState.players,
+        deck: updatedDeck,
+        phase: GamePhase.playing,
+        turnPhase: TurnPhase.meld,
+        currentPlayerIndex: 1,
+      );
+      updatedState.hasDrawnFromDeck = true;
+
+      mockAdapter.simulateGameStateUpdate(updatedState);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(controller!.gameState.deck.size, initialDeckSize - 2);
+      expect(controller!.gameState.turnPhase, TurnPhase.meld);
+      expect(controller!.gameState.currentPlayerIndex, 1);
+    });
   });
 }

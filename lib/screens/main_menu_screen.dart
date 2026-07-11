@@ -19,6 +19,7 @@ class MainMenuScreen extends StatefulWidget {
 class _MainMenuScreenState extends State<MainMenuScreen> {
   bool _isLoading = false;
   bool _hasSavedSinglePlayerGame = false;
+  bool _multiplayerAvailable = false;
   Map<String, dynamic>? _rejoinableGame;
 
   @override
@@ -26,6 +27,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     super.initState();
     _checkForSavedSinglePlayerGame();
     _checkForRejoinableMultiplayerGame();
+    _multiplayerAvailable = FirebaseService.isMultiplayerAvailable;
   }
 
   /// Check for rejoinable multiplayer games
@@ -146,7 +148,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           ),
                           const SizedBox(height: 20),
                         ],
-                        if (_rejoinableGame != null) ...[
+                        if (_rejoinableGame != null &&
+                            _multiplayerAvailable) ...[
                           _buildMenuButton(
                             icon: Icons.wifi,
                             label: 'REJOIN GAME',
@@ -167,15 +170,23 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         _buildMenuButton(
                           icon: Icons.group_add,
                           label: 'CREATE GAME',
-                          description: 'Host a multiplayer game',
-                          onPressed: _createMultiplayerGame,
+                          description: _multiplayerAvailable
+                              ? 'Host a multiplayer game'
+                              : 'Multiplayer requires Firebase configuration',
+                          onPressed: _multiplayerAvailable
+                              ? _createMultiplayerGame
+                              : _showMultiplayerUnavailable,
                         ),
                         const SizedBox(height: 20),
                         _buildMenuButton(
                           icon: Icons.group,
                           label: 'JOIN GAME',
-                          description: 'Join an existing game',
-                          onPressed: _joinMultiplayerGame,
+                          description: _multiplayerAvailable
+                              ? 'Join an existing game'
+                              : 'Multiplayer requires Firebase configuration',
+                          onPressed: _multiplayerAvailable
+                              ? _joinMultiplayerGame
+                              : _showMultiplayerUnavailable,
                         ),
                         const SizedBox(height: 40),
                         _buildInfoButton(),
@@ -724,6 +735,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showMultiplayerUnavailable() {
+    _showErrorDialog(
+      'Multiplayer requires Firebase configuration. Solo play works offline.',
     );
   }
 

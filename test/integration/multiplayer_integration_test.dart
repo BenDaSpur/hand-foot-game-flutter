@@ -3,8 +3,55 @@ import 'package:hand_foot_game_flutter/services/firebase_service.dart';
 import 'package:hand_foot_game_flutter/services/device_service.dart';
 import 'package:hand_foot_game_flutter/game/game_controller_factory.dart';
 import 'package:hand_foot_game_flutter/services/firebase_constants.dart';
+import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/models/game_state.dart';
+import 'package:hand_foot_game_flutter/models/deck.dart';
 
 void main() {
+  group('Mock multiplayer success path', () {
+    test('create and join with mock adapter succeeds end-to-end', () async {
+      final hostController = await GameControllerFactory.createTestMultiplayerGame(
+        hostPlayerName: 'Host',
+        maxPlayers: 2,
+      );
+
+      expect(hostController, isNotNull);
+      expect(hostController!.isHost, isTrue);
+
+      final guestController = await GameControllerFactory.joinTestMultiplayerGame(
+        gameId: hostController.gameId,
+        playerName: 'Guest',
+      );
+
+      expect(guestController, isNotNull);
+      expect(guestController!.isHost, isFalse);
+
+      final started = await hostController.startMultiplayerGame();
+      expect(started, isTrue);
+
+      final serverState = GameState(
+        players: [
+          Player(id: hostController.userId, name: 'Host', type: PlayerType.human),
+          Player(id: guestController.userId, name: 'Guest', type: PlayerType.human),
+        ],
+        deck: Deck(),
+        phase: GamePhase.playing,
+      );
+
+      await hostController.initializeFromServerState(serverState);
+      await guestController.initializeFromServerState(serverState);
+
+      expect(hostController.gameState.players.length, 2);
+      expect(guestController.gameState.players.length, 2);
+
+      final hostLeft = await hostController.leaveGame();
+      expect(hostLeft, isTrue);
+
+      hostController.dispose();
+      guestController.dispose();
+    });
+  });
+
   group('Multiplayer Integration Tests', () {
     test('complete game creation flow', () async {
       expect(() async {

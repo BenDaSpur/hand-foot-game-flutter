@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:logging/logging.dart';
@@ -9,6 +10,7 @@ import '../models/player.dart';
 import '../models/deck.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
+import '../models/multiplayer_result.dart';
 import 'firebase_constants.dart';
 import 'device_service.dart';
 
@@ -32,6 +34,22 @@ class FirebaseService {
       FirebaseConstants.maxGamesPerUserPerHour;
   static const int maxGamesPerUserPerDay =
       FirebaseConstants.maxGamesPerUserPerDay;
+
+  static bool _firebaseCoreInitialized = false;
+  static bool _isAuthenticated = false;
+  static String? lastOperationError;
+
+  /// True when Firebase options point at a real project (not the public stub).
+  static bool get isConfigured {
+    try {
+      return !DefaultFirebaseOptions.currentPlatform.projectId.contains('stub');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// True when Firebase is configured and the user has an anonymous auth session.
+  static bool get isMultiplayerAvailable => isConfigured && _isAuthenticated;
 
   /// Initialize Firebase with proper configuration
   static Future<void> initialize() async {
@@ -60,7 +78,12 @@ class FirebaseService {
       );
 
       await Firebase.initializeApp(options: options);
+      _firebaseCoreInitialized = true;
       _logger.info('🚀 Firebase core initialized successfully');
+
+      if (isConfigured) {
+        await ensureAuthenticated();
+      }
 
       // Explicitly initialize analytics for web
       if (kIsWeb) {
@@ -78,6 +101,35 @@ class FirebaseService {
       // Don't throw - allow app to continue without Firebase
       // This handles cases where Firebase isn't properly configured
       rethrow; // Let main.dart handle the error gracefully
+    }
+  }
+
+  /// Ensure the user is signed in anonymously for Firestore security rules.
+  static Future<bool> ensureAuthenticated() async {
+    if (!_firebaseCoreInitialized || !isConfigured) {
+      _isAuthenticated = false;
+      return false;
+    }
+
+    try {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser != null) {
+        _isAuthenticated = true;
+        return true;
+      }
+
+      await auth.signInAnonymously();
+      _isAuthenticated = auth.currentUser != null;
+      if (_isAuthenticated) {
+        _logger.info(
+          'Signed in anonymously for multiplayer: ${auth.currentUser!.uid.substring(0, 8)}...',
+        );
+      }
+      return _isAuthenticated;
+    } catch (e) {
+      _logger.warning('Anonymous authentication failed: $e');
+      _isAuthenticated = false;
+      return false;
     }
   }
 
@@ -427,17 +479,20 @@ class FirebaseService {
     }
   }
 
-  /// Get device-based user identification for multiplayer games
-  /// This replaces anonymous authentication with a more secure device-based approach
-  static Future<String?> getDeviceUserId() async {
-    try {
-      final deviceId = await DeviceService.getDeviceId();
-      _logger.info('Using device ID: ${deviceId.substring(0, 8)}...');
-      return deviceId;
-    } catch (e) {
-      _logger.severe('Failed to get device user ID: $e');
+  /// Get Firebase Auth UID for multiplayer player identity (matches Firestore rules).
+  static Future<String?> getMultiplayerUserId() async {
+    if (!isConfigured) {
       return null;
     }
+    if (!await ensureAuthenticated()) {
+      return null;
+    }
+    return FirebaseAuth.instance.currentUser?.uid;
+  }
+
+  /// Backwards-compatible alias — returns Firebase Auth UID, not device ID.
+  static Future<String?> getDeviceUserId() {
+    return getMultiplayerUserId();
   }
 
   /// Get device name for display purposes
@@ -455,22 +510,59 @@ class FirebaseService {
     required String hostPlayerName,
     required int maxPlayers,
   }) async {
+    final result = await createGameWithResult(
+      hostPlayerName: hostPlayerName,
+      maxPlayers: maxPlayers,
+    );
+    return result.gameId;
+  }
+
+  /// Create a game and return a typed result for UI error handling.
+  static Future<CreateGameResult> createGameWithResult({
+    required String hostPlayerName,
+    required int maxPlayers,
+  }) async {
+    lastOperationError = null;
     try {
-      final userId = await getDeviceUserId();
+      if (!isConfigured) {
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.notConfigured,
+        );
+        return const CreateGameResult(
+          failureReason: MultiplayerFailureReason.notConfigured,
+        );
+      }
+
+      final userId = await getMultiplayerUserId();
       if (userId == null) {
-        _logger.warning('Cannot create game: failed to get device ID');
-        return null;
+        _logger.warning('Cannot create game: failed to authenticate');
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.notAuthenticated,
+        );
+        return const CreateGameResult(
+          failureReason: MultiplayerFailureReason.notAuthenticated,
+        );
       }
 
       // Validate inputs
       if (!_isValidPlayerName(hostPlayerName)) {
         _logger.warning('Invalid player name: $hostPlayerName');
-        return null;
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.invalidInput,
+        );
+        return const CreateGameResult(
+          failureReason: MultiplayerFailureReason.invalidInput,
+        );
       }
 
       if (!_isValidPlayerCount(maxPlayers)) {
         _logger.warning('Invalid max players: $maxPlayers');
-        return null;
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.invalidInput,
+        );
+        return const CreateGameResult(
+          failureReason: MultiplayerFailureReason.invalidInput,
+        );
       }
 
       // Check rate limiting
@@ -480,14 +572,24 @@ class FirebaseService {
           'game_creation_rate_limited',
           parameters: {'user_id': userId},
         );
-        return null;
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.rateLimited,
+        );
+        return const CreateGameResult(
+          failureReason: MultiplayerFailureReason.rateLimited,
+        );
       }
 
       // Generate short, user-friendly game ID
       final gameId = await _generateShortGameId();
       if (gameId == null) {
         _logger.warning('Failed to generate unique game ID');
-        return null;
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.unknown,
+        );
+        return const CreateGameResult(
+          failureReason: MultiplayerFailureReason.unknown,
+        );
       }
 
       // Create initial game state with host player
@@ -511,15 +613,21 @@ class FirebaseService {
 
       _logger.info('Created game: $gameId');
       await logGameCreated(maxPlayers: maxPlayers);
-      return gameId;
+      return CreateGameResult(gameId: gameId);
     } catch (e) {
       _logger.severe('Failed to create game: $e');
       await logGameEvent(
         'game_creation_failed',
         parameters: {'error': e.toString()},
       );
-      return null;
+      final reason = _failureReasonFromException(e);
+      _setLastOperationError(reason);
+      return CreateGameResult(failureReason: reason);
     }
+  }
+
+  static void _setLastOperationError(MultiplayerFailureReason reason) {
+    lastOperationError = multiplayerFailureMessage(reason);
   }
 
   /// Join an existing game with validation
@@ -527,11 +635,38 @@ class FirebaseService {
     required String gameId,
     required String playerName,
   }) async {
+    final result = await joinGameWithResult(
+      gameId: gameId,
+      playerName: playerName,
+    );
+    return result.isSuccess;
+  }
+
+  /// Join or rejoin a game and return a typed result for UI error handling.
+  static Future<JoinGameResult> joinGameWithResult({
+    required String gameId,
+    required String playerName,
+  }) async {
+    lastOperationError = null;
     try {
-      final userId = await getDeviceUserId();
+      if (!isConfigured) {
+        lastOperationError = multiplayerFailureMessage(
+          MultiplayerFailureReason.notConfigured,
+        );
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.notConfigured,
+        );
+      }
+
+      final userId = await getMultiplayerUserId();
       if (userId == null) {
-        _logger.warning('Cannot join game: failed to get device ID');
-        return false;
+        _logger.warning('Cannot join game: failed to authenticate');
+        _setLastOperationError(MultiplayerFailureReason.notAuthenticated);
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.notAuthenticated,
+        );
       }
 
       // Normalize game ID (convert short codes to uppercase)
@@ -542,12 +677,20 @@ class FirebaseService {
       // Validate inputs
       if (!_isValidGameId(normalizedGameId)) {
         _logger.warning('Invalid game ID: $gameId');
-        return false;
+        _setLastOperationError(MultiplayerFailureReason.invalidInput);
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.invalidInput,
+        );
       }
 
       if (!_isValidPlayerName(playerName)) {
         _logger.warning('Invalid player name: $playerName');
-        return false;
+        _setLastOperationError(MultiplayerFailureReason.invalidInput);
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.invalidInput,
+        );
       }
 
       final gameDoc = await _firestore
@@ -556,7 +699,11 @@ class FirebaseService {
           .get();
       if (!gameDoc.exists) {
         _logger.warning('Game not found: $gameId');
-        return false;
+        _setLastOperationError(MultiplayerFailureReason.gameNotFound);
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.gameNotFound,
+        );
       }
 
       final gameData = gameDoc.data()!;
@@ -564,15 +711,40 @@ class FirebaseService {
         gameData['players'] ?? [],
       );
       final maxPlayers = gameData['maxPlayers'] as int;
+      final status = gameData['status'] as String?;
+
+      // Rejoin: player already in the game (waiting or playing)
+      final existingPlayerIndex = players.indexWhere(
+        (player) => player['id'] == userId,
+      );
+      if (existingPlayerIndex >= 0) {
+        if (players[existingPlayerIndex]['name'] != playerName) {
+          players[existingPlayerIndex]['name'] = playerName;
+          await _firestore
+              .collection(gamesCollection)
+              .doc(normalizedGameId)
+              .update({'players': players});
+        }
+        _logger.info('Rejoined game: $normalizedGameId as $playerName');
+        return const JoinGameResult(success: true);
+      }
 
       if (players.length >= maxPlayers) {
         _logger.warning('Game is full: $gameId');
-        return false;
+        _setLastOperationError(MultiplayerFailureReason.gameFull);
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.gameFull,
+        );
       }
 
-      if (gameData['status'] != FirebaseConstants.gameStatusWaiting) {
-        _logger.warning('Game is not accepting players: $gameId');
-        return false;
+      if (status != FirebaseConstants.gameStatusWaiting) {
+        _logger.warning('Game is not accepting new players: $gameId');
+        _setLastOperationError(MultiplayerFailureReason.gameNotAccepting);
+        return const JoinGameResult(
+          success: false,
+          failureReason: MultiplayerFailureReason.gameNotAccepting,
+        );
       }
 
       // Add new player
@@ -590,10 +762,12 @@ class FirebaseService {
 
       _logger.info('Joined game: $normalizedGameId as $playerName');
       await logGameJoined();
-      return true;
+      return const JoinGameResult(success: true);
     } catch (e) {
       _logger.severe('Failed to join game: $e');
-      return false;
+      final reason = _failureReasonFromException(e);
+      _setLastOperationError(reason);
+      return JoinGameResult(success: false, failureReason: reason);
     }
   }
 
@@ -659,9 +833,9 @@ class FirebaseService {
         'lastUpdated': FieldValue.serverTimestamp(),
       };
 
-      // If game has ended, mark for cleanup
+      // If game has ended, mark for cleanup (must match Firestore rules: playing -> finished)
       if (gameState.phase == GamePhase.gameEnd) {
-        updateData['status'] = FirebaseConstants.gameStatusCompleted;
+        updateData['status'] = FirebaseConstants.gameStatusFinished;
         updateData['completedAt'] = FieldValue.serverTimestamp();
 
         // Schedule automatic cleanup after 1 hour
@@ -705,7 +879,7 @@ class FirebaseService {
 
       final completedGames = await _firestore
           .collection(gamesCollection)
-          .where('status', isEqualTo: FirebaseConstants.gameStatusCompleted)
+          .where('status', isEqualTo: FirebaseConstants.gameStatusFinished)
           .where('completedAt', isLessThan: cutoffTime)
           .limit(50) // Process in batches
           .get();
@@ -1127,5 +1301,26 @@ class FirebaseService {
         .catchError((error) {
           _logger.warning('Failed to cleanup old limit entries: $error');
         });
+  }
+
+  static MultiplayerFailureReason _failureReasonFromException(Object e) {
+    final message = e.toString().toLowerCase();
+    if (message.contains('permission-denied') ||
+        message.contains('permission denied')) {
+      return MultiplayerFailureReason.permissionDenied;
+    }
+    return MultiplayerFailureReason.unknown;
+  }
+
+  /// Exposed for unit tests verifying Firestore serialization round-trips.
+  @visibleForTesting
+  static Map<String, dynamic> gameStateToMapForTesting(GameState gameState) {
+    return _gameStateToMap(gameState);
+  }
+
+  /// Exposed for unit tests verifying Firestore deserialization round-trips.
+  @visibleForTesting
+  static GameState gameStateFromMapForTesting(Map<String, dynamic> data) {
+    return _gameStateFromMap(data);
   }
 }

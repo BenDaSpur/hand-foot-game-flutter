@@ -4,7 +4,6 @@ import 'dart:async';
 import '../theme/balatro_theme.dart';
 import '../services/firebase_service.dart';
 import '../services/firebase_constants.dart';
-import '../services/device_service.dart';
 import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../models/game_state.dart';
@@ -59,8 +58,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   void _generateUserId() async {
-    // Use device-based ID for better persistence and security
-    _currentUserId = await DeviceService.getDeviceId();
+    _currentUserId = await FirebaseService.getMultiplayerUserId();
   }
 
   @override
@@ -495,7 +493,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       _isHost = true;
       _startListeningToLobby();
     } else {
-      throw Exception('Failed to create game');
+      throw Exception(
+        FirebaseService.lastOperationError ?? 'Failed to create game',
+      );
     }
   }
 
@@ -512,10 +512,12 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     if (controller != null) {
       _gameController = controller;
       _currentGameId = _gameController!.gameId;
-      _isHost = false;
+      _isHost = controller.isHost;
       _startListeningToLobby();
     } else {
-      throw Exception('Failed to join game');
+      throw Exception(
+        FirebaseService.lastOperationError ?? 'Failed to join game',
+      );
     }
   }
 

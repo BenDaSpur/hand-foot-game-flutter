@@ -205,6 +205,24 @@ void main() {
       });
     });
 
+    group('Leave Game', () {
+      test('should call network adapter leaveGame', () async {
+        mockAdapter._mockUserId = 'test-user';
+        mockAdapter._mockGameId = 'TEST123';
+
+        controller = await EnhancedMultiplayerController.createGame(
+          hostPlayerName: 'TestHost',
+          maxPlayers: 4,
+          networkAdapter: mockAdapter,
+        );
+
+        final result = await controller!.leaveGame();
+
+        expect(result, isTrue);
+        expect(mockAdapter.leaveGameCalled, isTrue);
+      });
+    });
+
     group('Disposal', () {
       test('should clean up resources properly', () async {
         mockAdapter._mockUserId = 'test-user';
@@ -232,6 +250,7 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
   String? _mockUserId;
   String? _mockGameId;
   bool _mockJoinSuccess = false;
+  bool leaveGameCalled = false;
   int syncCalls = 0;
   bool isDisposed = false;
 
@@ -261,6 +280,12 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
     await Future.delayed(
       const Duration(milliseconds: 10),
     ); // Simulate network delay
+    return true;
+  }
+
+  @override
+  Future<bool> leaveGame(String gameId) async {
+    leaveGameCalled = true;
     return true;
   }
 

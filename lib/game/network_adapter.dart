@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../models/game_state.dart';
 import '../services/firebase_service.dart';
 
@@ -93,15 +94,18 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
     required String hostPlayerName,
     required int maxPlayers,
   }) {
-    return FirebaseService.createGame(
+    return FirebaseService.createGameWithResult(
       hostPlayerName: hostPlayerName,
       maxPlayers: maxPlayers,
-    );
+    ).then((result) => result.gameId);
   }
 
   @override
   Future<bool> joinGame({required String gameId, required String playerName}) {
-    return FirebaseService.joinGame(gameId: gameId, playerName: playerName);
+    return FirebaseService.joinGameWithResult(
+      gameId: gameId,
+      playerName: playerName,
+    ).then((result) => result.isSuccess);
   }
 
   @override
@@ -121,7 +125,7 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
 
   @override
   Future<String?> getCurrentUserId() {
-    return FirebaseService.getDeviceUserId();
+    return FirebaseService.getMultiplayerUserId();
   }
 
   @override
@@ -501,5 +505,11 @@ class MockNetworkAdapter implements NetworkAdapter {
   void simulateReconnection() {
     _isConnected = true;
     _connectionController.add(true);
+  }
+
+  /// Push a game state update to listeners (for unit tests).
+  @visibleForTesting
+  void simulateGameStateUpdate(GameState? state) {
+    _gameStateController.add(state);
   }
 }

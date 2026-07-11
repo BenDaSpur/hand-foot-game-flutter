@@ -259,12 +259,40 @@ void main() {
     });
   });
 
+  group('Multiplayer typed results', () {
+    test(
+      'createGameWithResult returns typed failure for invalid input',
+      () async {
+        final result = await FirebaseService.createGameWithResult(
+          hostPlayerName: '',
+          maxPlayers: 4,
+        );
+
+        expect(result.isSuccess, isFalse);
+        expect(result.failureReason, isNotNull);
+        expect(FirebaseService.lastOperationError, isNotEmpty);
+      },
+    );
+
+    test(
+      'joinGameWithResult returns typed failure for invalid game ID',
+      () async {
+        final result = await FirebaseService.joinGameWithResult(
+          gameId: 'bad',
+          playerName: 'TestPlayer',
+        );
+
+        expect(result.isSuccess, isFalse);
+        expect(result.failureReason, isNotNull);
+        expect(FirebaseService.lastOperationError, isNotEmpty);
+      },
+    );
+  });
+
   group('Data Serialization', () {
-    // TODO: Add tests for serialization methods once we have mock Firebase setup
-    // These tests would verify the _gameStateToMap and _gameStateFromMap methods
-    test('placeholder for serialization tests', () {
-      // This would require setting up mock Firestore and game state objects
-      expect(true, true); // Placeholder
+    test('serialization helpers are exposed for testing', () {
+      expect(FirebaseService.gameStateToMapForTesting, isNotNull);
+      expect(FirebaseService.gameStateFromMapForTesting, isNotNull);
     });
   });
 }
