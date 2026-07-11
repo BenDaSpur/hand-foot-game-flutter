@@ -277,6 +277,172 @@ void main() {
         expect(find.text('Leader: Player 3 (2000 points)'), findsOneWidget);
       });
 
+      testWidgets('displays actual player names instead of index labels', (
+        WidgetTester tester,
+      ) async {
+        final namedPlayers = [
+          Player(
+            id: '1',
+            name: 'You',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1370,
+          ),
+          Player(
+            id: '2',
+            name: 'Bot 1',
+            type: PlayerType.bot,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1325,
+          ),
+          Player(
+            id: '3',
+            name: 'Bot 2',
+            type: PlayerType.bot,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 370,
+          ),
+        ];
+
+        final namedGameState = GameState(
+          players: namedPlayers,
+          deck: Deck.createHandAndFootDeck(3),
+          currentPlayerIndex: 2,
+          phase: GamePhase.playing,
+          round: 2,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Material(
+              child: MediaQuery(
+                data: const MediaQueryData(size: Size(800, 1200)),
+                child: ScoreboardModal(gameState: namedGameState),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Leader: You (1370 points)'), findsOneWidget);
+        expect(find.text('You'), findsOneWidget);
+        expect(find.text('Bot 1'), findsOneWidget);
+
+        await tester.scrollUntilVisible(
+          find.text('Bot 2'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Bot 2'), findsOneWidget);
+        expect(find.textContaining('Player '), findsNothing);
+
+        expect(
+          find.bySemanticsLabel('You, Total score: 1370, Round 2 score: 0, '),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel('Bot 1, Total score: 1325, Round 2 score: 0, '),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel(
+            'Bot 2, Total score: 370, Round 2 score: 0, Current player',
+          ),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('disambiguates duplicate player names with index suffix', (
+        WidgetTester tester,
+      ) async {
+        final duplicateNamePlayers = [
+          Player(
+            id: '1',
+            name: 'Guest',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1200,
+          ),
+          Player(
+            id: '2',
+            name: 'Guest',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1500,
+          ),
+          Player(
+            id: '3',
+            name: 'You',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 900,
+          ),
+        ];
+
+        final duplicateNameGameState = GameState(
+          players: duplicateNamePlayers,
+          deck: Deck.createHandAndFootDeck(3),
+          currentPlayerIndex: 0,
+          phase: GamePhase.playing,
+          round: 2,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Material(
+              child: MediaQuery(
+                data: const MediaQueryData(size: Size(800, 1200)),
+                child: ScoreboardModal(gameState: duplicateNameGameState),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Leader: Guest (2) (1500 points)'), findsOneWidget);
+        expect(find.text('Guest (1)'), findsOneWidget);
+        expect(find.text('Guest (2)'), findsOneWidget);
+
+        await tester.scrollUntilVisible(
+          find.text('You'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('You'), findsOneWidget);
+        expect(find.text('Guest'), findsNothing);
+
+        expect(
+          find.bySemanticsLabel(
+            'Guest (1), Total score: 1200, Round 2 score: 0, Current player',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel(
+            'Guest (2), Total score: 1500, Round 2 score: 0, ',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.bySemanticsLabel('You, Total score: 900, Round 2 score: 0, '),
+          findsOneWidget,
+        );
+      });
+
       testWidgets('displays score breakdown components', (
         WidgetTester tester,
       ) async {

@@ -63,7 +63,27 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     return Colors.grey;
   }
 
-  Widget _buildPlayerScoreCard(int playerIndex) {
+  Set<String> _duplicatePlayerNames() {
+    final nameCounts = <String, int>{};
+    for (final player in widget.gameState.players) {
+      nameCounts[player.name] = (nameCounts[player.name] ?? 0) + 1;
+    }
+
+    return nameCounts.entries
+        .where((entry) => entry.value > 1)
+        .map((entry) => entry.key)
+        .toSet();
+  }
+
+  String _displayNameForPlayer(int playerIndex, Set<String> duplicateNames) {
+    final player = widget.gameState.players[playerIndex];
+    if (duplicateNames.contains(player.name)) {
+      return '${player.name} (${playerIndex + 1})';
+    }
+    return player.name;
+  }
+
+  Widget _buildPlayerScoreCard(int playerIndex, Set<String> duplicateNames) {
     final breakdown = _calculateScoreBreakdown(playerIndex);
     final isCurrentPlayer = playerIndex == widget.gameState.currentPlayerIndex;
     final player = widget.gameState.players[playerIndex];
@@ -71,10 +91,11 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     final canGoOut =
         widget.gameState.phase == GamePhase.playing && player.canGoOut;
     final isExpanded = expandedPlayerIndex == playerIndex;
+    final displayName = _displayNameForPlayer(playerIndex, duplicateNames);
 
     // Build accessibility label
     final accessibilityLabel =
-        'Player ${playerIndex + 1}, '
+        '$displayName, '
         'Total score: ${breakdown['gameTotal']}, '
         'Round ${widget.gameState.round} score: ${breakdown['currentRoundTotal']}, '
         '${canGoOut ? 'Can go out, ' : ''}'
@@ -124,7 +145,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                           children: [
                             Flexible(
                               child: Text(
-                                'Player ${playerIndex + 1}',
+                                displayName,
                                 style: Theme.of(context)
                                     .textTheme
                                     .headlineMedium
@@ -383,6 +404,9 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
             widget.gameState.players[a].score,
           ),
         );
+    final duplicateNames = _duplicatePlayerNames();
+    final leaderIndex = sortedPlayers[0];
+    final leaderName = _displayNameForPlayer(leaderIndex, duplicateNames);
 
     return Semantics(
       label: 'Scoreboard for Round ${widget.gameState.round}',
@@ -467,7 +491,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Leader: Player ${sortedPlayers[0] + 1} (${widget.gameState.players[sortedPlayers[0]].score} points)',
+                        'Leader: $leaderName (${widget.gameState.players[leaderIndex].score} points)',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -486,7 +510,10 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildPlayerScoreCard(sortedPlayers[index]),
+                      child: _buildPlayerScoreCard(
+                        sortedPlayers[index],
+                        duplicateNames,
+                      ),
                     );
                   },
                 ),
