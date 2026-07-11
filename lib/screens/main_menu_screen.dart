@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
+import 'solo_game_setup_screen.dart';
 import 'multiplayer_game_screen.dart';
 import '../services/firebase_service.dart';
 import '../services/game_save_service.dart';
@@ -578,20 +579,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void _startSoloGame() async {
     setState(() => _isLoading = true);
 
-    // Log solo game start - completely optional, never crash singleplayer
-    try {
-      await FirebaseService.logGameEvent(
-        'solo_game_started',
-        parameters: {'game_type': 'solo'},
-      );
-    } catch (e) {
-      // Silently ignore Firebase errors in singleplayer mode
-      // Game must work completely offline
-    }
-
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const GameScreen()),
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const SoloGameSetupScreen()),
       );
     }
 

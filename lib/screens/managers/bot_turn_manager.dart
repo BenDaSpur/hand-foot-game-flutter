@@ -7,29 +7,10 @@ import '../../game/game_controller.dart';
 import '../../ai/enhanced_bot_ai.dart';
 import '../../ai/bot_decision.dart';
 import '../../ai/bot_personality.dart';
+import '../../config/bot_configurations.dart';
 import '../../utils/debug_logger.dart';
 import '../../config/game_config.dart';
 import '../../services/analytics_batcher.dart';
-
-/// Bot configuration for personality assignment
-class BotConfig {
-  final String name;
-  final BotPersonality personality;
-
-  const BotConfig(this.name, this.personality);
-}
-
-/// Shared bot configurations with predefined personality mappings
-const List<BotConfig> kBotConfigurations = [
-  BotConfig('Clara', BotPersonality.conservative),
-  BotConfig('Carl', BotPersonality.conservative),
-  BotConfig('Bob', BotPersonality.aggressive),
-  BotConfig('Rita', BotPersonality.aggressive),
-  BotConfig('Ben', BotPersonality.bookBuilder),
-  BotConfig('Tiana', BotPersonality.bookBuilder),
-  BotConfig('Alex', BotPersonality.adaptive),
-  BotConfig('Sue', BotPersonality.adaptive),
-];
 
 /// Manages all bot-related functionality for the game screen.
 ///
