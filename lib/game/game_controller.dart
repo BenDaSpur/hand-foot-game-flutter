@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../config/game_config.dart';
 import '../models/card.dart';
 import '../models/deck.dart';
 import '../models/player.dart';
@@ -75,15 +76,46 @@ class GameController implements GameInterface {
   // ============= Core Game Flow =============
 
   @override
-  void initializeGame() {
+  void initializeGame({bool dealCards = true}) {
     _gameState.deck.shuffle();
     _gameState.startRound();
+    if (dealCards) {
+      _completeRoundStart(earnedPerfectGrabBonus: false);
+    }
+  }
+
+  /// Shuffles and resets play state for the next round without dealing cards.
+  /// Call [completeRoundStart] after the perfect-grab mini-game finishes.
+  void prepareNewRoundDeal() {
+    if (_gameState.phase == GamePhase.roundEnd) {
+      _gameState.resetForNewRound(dealCardsAfterReset: false);
+    }
+  }
+
+  /// Deals cards and optionally awards the perfect-grab bonus to the human player.
+  void completeRoundStart({required bool earnedPerfectGrabBonus}) {
+    _completeRoundStart(earnedPerfectGrabBonus: earnedPerfectGrabBonus);
+  }
+
+  void _completeRoundStart({required bool earnedPerfectGrabBonus}) {
     _gameState.dealCards();
 
-    // Publish round started event
-    _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
+    if (earnedPerfectGrabBonus) {
+      final humanPlayers = _gameState.players
+          .where((player) => player.type == PlayerType.human)
+          .toList();
+      if (humanPlayers.isEmpty) {
+        DebugLogger.warning(
+          'Perfect grab bonus skipped: no human player in game',
+        );
+      } else {
+        final humanPlayer = humanPlayers.first;
+        humanPlayer.updateScore(GameConfig.perfectGrabBonus);
+        _gameState.logPerfectGrabBonus(humanPlayer.name);
+      }
+    }
 
-    // Auto-save after new game initialization
+    _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
     saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
   }
 
@@ -295,15 +327,13 @@ class GameController implements GameInterface {
   }
 
   @override
-  void nextRound() {
+  void nextRound({bool dealCards = true}) {
     if (_gameState.phase == GamePhase.roundEnd) {
-      _gameState.resetForNewRound();
-
-      // Publish round started event
-      _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
-
-      // Auto-save after round transition
-      saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+      _gameState.resetForNewRound(dealCardsAfterReset: dealCards);
+      if (dealCards) {
+        _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
+        saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+      }
     }
   }
 

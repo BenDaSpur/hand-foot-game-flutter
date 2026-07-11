@@ -22,6 +22,7 @@ import '../widgets/game_action_buttons.dart';
 import '../widgets/game_app_bar.dart';
 import '../widgets/game_session_info_menu.dart';
 import '../widgets/card_animation_host.dart';
+import '../widgets/perfect_grab_mini_game.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
 import '../services/analytics_batcher.dart';
@@ -390,29 +391,66 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     _logSoloGameStarted(settings);
 
-    newController.initializeGame();
+    newController.initializeGame(dealCards: false);
 
     // Initialize managers after game setup
     _initializeManagers();
 
-    // Sort the human player's initial hand
-    final humanPlayer = players.firstWhere((p) => p.type == PlayerType.human);
-    humanPlayer.sortHandByRank();
+    _runPerfectGrabAndStartRound(newController, roundNumber: 1);
+  }
 
-    // Start analytics session tracking
-    _startAnalyticsSession();
-
-    _isInitialized = true;
-
-    // If the first player is human, save the initial game state
-    final gameState = ref.read(currentGameStateProvider);
-    if (gameState?.currentPlayer.type == PlayerType.human) {
-      _persistenceManager.saveGameState().catchError((error) {
-        DebugLogger.error('Error saving initial game state: $error');
-      });
+  Future<void> _runPerfectGrabAndStartRound(
+    GameController controller, {
+    required int roundNumber,
+  }) async {
+    if (_disposed || !mounted) {
+      return;
     }
 
-    processCurrentPlayerTurn();
+    final earnedBonus = await PerfectGrabMiniGame.show(
+      context,
+      roundNumber: roundNumber,
+    );
+    if (_disposed || !mounted) {
+      return;
+    }
+
+    controller.completeRoundStart(earnedPerfectGrabBonus: earnedBonus);
+
+    // Sort the human player's initial hand
+    final humanPlayer = controller.gameState.players.firstWhere(
+      (player) => player.type == PlayerType.human,
+    );
+    humanPlayer.sortHandByRank();
+
+    if (!_isInitialized) {
+      // Start analytics session tracking
+      _startAnalyticsSession();
+      _isInitialized = true;
+
+      // If the first player is human, save the initial game state
+      final gameState = ref.read(currentGameStateProvider);
+      if (gameState?.currentPlayer.type == PlayerType.human) {
+        _persistenceManager.saveGameState().catchError((error) {
+          DebugLogger.error('Error saving initial game state: $error');
+        });
+      }
+    } else {
+      if (mounted) {
+        _selectedCardIndices.clear();
+        _viewingPlayerMelds = null;
+
+        _persistenceManager.saveGameState().catchError((error) {
+          DebugLogger.error(
+            'Error saving game state after round transition: $error',
+          );
+        });
+      }
+    }
+
+    if (mounted) {
+      processCurrentPlayerTurn();
+    }
   }
 
   /// Queue bot turn to process one at a time
@@ -631,21 +669,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return;
       }
 
-      controller.nextRound();
+      final nextRoundNumber = controller.gameState.round;
+      controller.prepareNewRoundDeal();
+      DebugLogger.debug('Prepared deal for round $nextRoundNumber');
+
+      await _runPerfectGrabAndStartRound(
+        controller,
+        roundNumber: nextRoundNumber,
+      );
       DebugLogger.debug('Advanced to round ${controller.gameState.round}');
-
-      if (mounted) {
-        _selectedCardIndices.clear();
-        _viewingPlayerMelds = null;
-
-        _persistenceManager.saveGameState().catchError((error) {
-          DebugLogger.error(
-            'Error saving game state after round transition: $error',
-          );
-        });
-
-        processCurrentPlayerTurn();
-      }
     } catch (e) {
       DebugLogger.error('Error during round transition: $e');
       if (mounted) {

@@ -165,6 +165,13 @@ class GameState {
     _logAction(message, showCardDetails: showCardDetails);
   }
 
+  void logPerfectGrabBonus(String playerName) {
+    _logAction(
+      '🎯 $playerName perfect 22-card grab! +${GameConfig.perfectGrabBonus} bonus points',
+      showCardDetails: false,
+    );
+  }
+
   String _sanitizeMessage(String message) {
     // Remove specific card details from bot actions that shouldn't be visible
     if (message.startsWith('drew:')) {
@@ -939,7 +946,7 @@ class GameState {
     endRound();
   }
 
-  void resetForNewRound() {
+  void resetForNewRound({bool dealCardsAfterReset = true}) {
     if (phase != GamePhase.roundEnd) return;
 
     deck.addCards(discardPile);
@@ -957,7 +964,9 @@ class GameState {
 
     deck.shuffle();
     startRound();
-    dealCards();
+    if (dealCardsAfterReset) {
+      dealCards();
+    }
   }
 
   List<Player> getPlayersInOrder() {
