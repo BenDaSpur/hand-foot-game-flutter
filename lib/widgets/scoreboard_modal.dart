@@ -24,6 +24,9 @@ class ScoreboardModal extends StatefulWidget {
 class _ScoreboardModalState extends State<ScoreboardModal> {
   int? expandedPlayerIndex;
 
+  int get _displayRoundNumber =>
+      widget.completedRoundNumber ?? widget.gameState.round;
+
   Map<String, dynamic> _calculateScoreBreakdown(int playerIndex) {
     int meldPoints = 0;
     int cleanBooks = 0;
@@ -48,7 +51,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     final currentRoundTotal = meldPoints;
 
     // Calculate previous rounds score (only if not first round)
-    final previousRoundsTotal = widget.gameState.round > 1
+    final previousRoundsTotal = _displayRoundNumber > 1
         ? player.score - currentRoundTotal
         : 0;
 
@@ -104,7 +107,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
     final accessibilityLabel =
         '$displayName, '
         'Total score: ${breakdown['gameTotal']}, '
-        'Round ${widget.gameState.round} score: ${breakdown['currentRoundTotal']}, '
+        'Round $_displayRoundNumber score: ${breakdown['currentRoundTotal']}, '
         '${canGoOut ? 'Can go out, ' : ''}'
         '${isCurrentPlayer ? 'Current player' : ''}';
 
@@ -220,7 +223,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                     ),
 
                   // Show previous rounds if any (and not first round)
-                  if (widget.gameState.round > 1 &&
+                  if (_displayRoundNumber > 1 &&
                       breakdown['previousRoundsTotal'] != 0)
                     _buildScoreRow(
                       'Previous Rounds',
@@ -401,9 +404,6 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
       ),
     );
   }
-
-  int get _displayRoundNumber =>
-      widget.completedRoundNumber ?? widget.gameState.round;
 
   @override
   Widget build(BuildContext context) {
