@@ -225,7 +225,9 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       return;
     }
 
-    await _scrollHandToIndices(request.handTargetIndices);
+    final handSizes = GameResponsiveLayout.handSizes(context);
+
+    await _scrollHandToIndices(request.handTargetIndices, handSizes);
 
     final revealPositions = <Offset>[];
     for (int i = 0; i < request.handCards.length; i++) {
@@ -285,7 +287,10 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       if (_skipped || !mounted) {
         return;
       }
-      final handTarget = _handCardCenter(request.handTargetIndices[i]);
+      final handTarget = _handCardCenter(
+        request.handTargetIndices[i],
+        handSizes,
+      );
       if (handTarget == null) {
         continue;
       }
@@ -393,18 +398,16 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     }
   }
 
-  GameCardSizes _handSizes() {
-    return GameResponsiveLayout.handSizes(context);
-  }
-
-  Future<void> _scrollHandToIndices(List<int> indices) async {
+  Future<void> _scrollHandToIndices(
+    List<int> indices,
+    GameCardSizes handSizes,
+  ) async {
     if (indices.isEmpty || !widget.handScrollController.hasClients) {
       return;
     }
-    final sizes = _handSizes();
     final firstIndex = indices.reduce((a, b) => a < b ? a : b);
     final targetOffset =
-        (HandLayoutConstants.handCardLeft(firstIndex, sizes) - 16).clamp(
+        (HandLayoutConstants.handCardLeft(firstIndex, handSizes) - 16).clamp(
           0.0,
           widget.handScrollController.position.maxScrollExtent,
         );
@@ -423,18 +426,17 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     return _widgetCenter(widget.handStackKey);
   }
 
-  Offset? _handCardCenter(int index) {
+  Offset? _handCardCenter(int index, GameCardSizes handSizes) {
     final stackBox =
         widget.handStackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null || !stackBox.hasSize) {
       return null;
     }
-    final sizes = _handSizes();
     final topLeft = stackBox.localToGlobal(Offset.zero);
     return topLeft +
         HandLayoutConstants.handCardCenterInStack(
           index,
-          sizes,
+          handSizes,
           stackBox.size.height,
         );
   }
@@ -470,6 +472,8 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       return const SizedBox.shrink();
     }
 
+    final handSizes = GameResponsiveLayout.handSizes(context);
+
     return Positioned.fill(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -478,19 +482,18 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
           children: [
             if (_showScrim)
               Container(color: Colors.black.withValues(alpha: 0.35)),
-            ..._visuals.map(_buildFlyingCard),
+            ..._visuals.map((visual) => _buildFlyingCard(visual, handSizes)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFlyingCard(_FlyingCardVisual visual) {
-    final sizes = _handSizes();
-    final cardWidth = sizes.handWidth;
-    final cardHeight = sizes.handHeight;
-    final widgetWidth = HandLayoutConstants.handCardWidgetWidth(sizes);
-    final widgetHeight = HandLayoutConstants.handCardWidgetHeight(sizes);
+  Widget _buildFlyingCard(_FlyingCardVisual visual, GameCardSizes handSizes) {
+    final cardWidth = handSizes.handWidth;
+    final cardHeight = handSizes.handHeight;
+    final widgetWidth = HandLayoutConstants.handCardWidgetWidth(handSizes);
+    final widgetHeight = HandLayoutConstants.handCardWidgetHeight(handSizes);
     return Positioned(
       left: visual.position.dx - (widgetWidth / 2),
       top: visual.position.dy - (widgetHeight / 2),

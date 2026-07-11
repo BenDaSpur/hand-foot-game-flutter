@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/game_responsive_layout.dart';
+import '../widgets/playing_card_widget.dart';
 
 /// Shared layout constants for the human player's hand and draw animations.
 /// Legacy static values match tablet+ sizes; use [forWidth] for responsive sizing.
@@ -21,8 +22,8 @@ class HandLayoutConstants {
     return s.handCardLeft(index);
   }
 
-  /// [PlayingCardWidget] applies a 2px margin on every side.
-  static const double cardWidgetMargin = 4.0;
+  /// Total margin applied by [PlayingCardWidget] on both axes.
+  static double get cardWidgetMargin => PlayingCardWidget.cardMargin * 2;
 
   static double handCardWidgetWidth(GameCardSizes sizes) {
     return sizes.handWidth + cardWidgetMargin;
