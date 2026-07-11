@@ -507,8 +507,12 @@ class BotTurnManager {
     onStateChanged();
   }
 
-  /// Handle state after discard action
-  void handlePostDiscardState(Player player) {
+  /// Handle state after discard action.
+  ///
+  /// Returns true when play was already advanced (go-out handled or turn changed).
+  bool handlePostDiscardState(Player player) {
+    final gameState = gameController.gameState;
+
     // Check if player needs to pick up foot
     if (player.currentHand.isEmpty &&
         !player.hasPickedUpFoot &&
@@ -521,9 +525,18 @@ class BotTurnManager {
     if (player.hasPickedUpFoot &&
         player.currentHand.isEmpty &&
         player.canGoOut) {
+      if (gameState.phase == GamePhase.roundEnd ||
+          gameState.phase == GamePhase.gameEnd ||
+          gameState.currentPlayer.id != player.id) {
+        return true;
+      }
+
       endRoundForBot(player);
       DebugLogger.debug('Bot ${player.name} went out by discard');
+      return true;
     }
+
+    return false;
   }
 
   /// Attempt a meld during forced turn completion to shrink hand toward foot.
@@ -695,10 +708,13 @@ class BotTurnManager {
         );
 
         // Check for foot pickup after discard
-        handlePostDiscardState(botPlayer);
-
-        // ADVANCE TURN - this is guaranteed to work
-        _completeTurnAndNotify(botPlayer);
+        final turnAdvanced = handlePostDiscardState(botPlayer);
+        if (!turnAdvanced) {
+          // ADVANCE TURN - this is guaranteed to work
+          _completeTurnAndNotify(botPlayer);
+        } else {
+          onStateChanged();
+        }
         return;
       }
 

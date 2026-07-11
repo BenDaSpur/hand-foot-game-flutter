@@ -6,6 +6,7 @@ import 'meld.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../game/managers/game_rules_engine.dart';
+import '../utils/debug_logger.dart';
 
 enum GamePhase { setup, playing, roundEnd, gameEnd }
 
@@ -238,9 +239,8 @@ class GameState {
       nextIndex = (nextIndex + 1) % playerCount;
     }
 
-    print(
-      'Warning: No player awaiting final turn found; '
-      'awaiting=$playersAwaitingFinalTurn',
+    DebugLogger.warning(
+      'No player awaiting final turn found; awaiting=$playersAwaitingFinalTurn',
     );
   }
 
