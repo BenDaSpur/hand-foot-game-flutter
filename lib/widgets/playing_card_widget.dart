@@ -13,6 +13,8 @@ class PlayingCardWidget extends StatelessWidget {
   final double height;
   final bool isInMeld; // Lighter shadows for meld display
 
+  static const double cardMargin = 2.0;
+
   const PlayingCardWidget({
     super.key,
     required this.card,
@@ -54,7 +56,7 @@ class PlayingCardWidget extends StatelessWidget {
           child: Container(
             width: width,
             height: height,
-            margin: const EdgeInsets.all(2),
+            margin: const EdgeInsets.all(cardMargin),
             decoration: BoxDecoration(
               color: BalatroTheme.cardBackground, // Fallback color
               gradient: BalatroTheme.cardGradient,
