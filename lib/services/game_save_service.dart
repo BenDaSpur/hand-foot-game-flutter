@@ -6,6 +6,7 @@ import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
+import '../config/solo_game_settings.dart';
 
 class GameSaveService {
   static const String _saveKey = 'hand_foot_game_save';
@@ -95,6 +96,10 @@ class GameSaveService {
       'discardPileFrozen': gameState.discardPileFrozen,
       'hasDrawnFromDeck': gameState.hasDrawnFromDeck,
       'hasMelded': gameState.hasMelded,
+      'soloSettings': gameState.soloSettings.toJson(),
+      'finalTurnPhaseActive': gameState.finalTurnPhaseActive,
+      'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
+      'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
     };
   }
 
@@ -143,9 +148,18 @@ class GameSaveService {
           .toList();
 
       final gameSeed = savedData['gameSeed'] as int?;
+      final soloSettings = savedData['soloSettings'] != null
+          ? SoloGameSettings.fromJson(
+              savedData['soloSettings'] as Map<String, dynamic>,
+            )
+          : SoloGameSettings.defaults;
 
       // Create game controller with restored players and seed
-      final gameController = GameController(players: players, seed: gameSeed);
+      final gameController = GameController(
+        players: players,
+        seed: gameSeed,
+        soloSettings: soloSettings,
+      );
 
       // Restore game state
       _restoreGameState(gameController.gameState, savedData);
@@ -200,6 +214,23 @@ class GameSaveService {
     gameState.discardPileFrozen = savedData['discardPileFrozen'] as bool;
     gameState.hasDrawnFromDeck = savedData['hasDrawnFromDeck'] as bool;
     gameState.hasMelded = savedData['hasMelded'] as bool;
+
+    if (savedData['soloSettings'] != null) {
+      gameState.soloSettings = SoloGameSettings.fromJson(
+        savedData['soloSettings'] as Map<String, dynamic>,
+      );
+    }
+    gameState.finalTurnPhaseActive =
+        savedData['finalTurnPhaseActive'] as bool? ?? false;
+    gameState.playerWhoWentOutIndex =
+        savedData['playerWhoWentOutIndex'] as int?;
+    gameState.playersAwaitingFinalTurn.clear();
+    final awaiting = savedData['playersAwaitingFinalTurn'] as List<dynamic>?;
+    if (awaiting != null) {
+      gameState.playersAwaitingFinalTurn.addAll(
+        awaiting.map((value) => value as int),
+      );
+    }
 
     // Find winner if exists
     final winnerId = savedData['winner'] as String?;

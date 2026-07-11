@@ -3,6 +3,7 @@ import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
+import 'package:hand_foot_game_flutter/config/solo_game_settings.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 
 void main() {
@@ -16,7 +17,10 @@ void main() {
         Player(id: '2', name: 'Bot1', type: PlayerType.bot),
         Player(id: '3', name: 'Bot2', type: PlayerType.bot),
       ];
-      gameController = GameController(players: players);
+      gameController = GameController(
+        players: players,
+        soloSettings: SoloGameSettings.immediateRoundEnd,
+      );
       gameController.initializeGame();
       humanPlayer = players[0];
     });

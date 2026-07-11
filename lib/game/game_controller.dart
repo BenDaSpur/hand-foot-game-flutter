@@ -8,6 +8,7 @@ import '../models/meld.dart';
 import '../models/round_score_breakdown.dart';
 import '../services/game_save_service.dart';
 import '../utils/debug_logger.dart';
+import '../config/solo_game_settings.dart';
 import 'game_interface.dart';
 import 'managers/meld_manager.dart';
 import 'managers/game_serializer.dart';
@@ -43,11 +44,13 @@ class GameController implements GameInterface {
     required List<Player> players,
     int? seed,
     GameEventBus? eventBus,
+    SoloGameSettings? soloSettings,
   }) {
     final actualSeed = seed ?? Random().nextInt(1000000);
     final gameState = GameState(
       players: players,
       deck: Deck.createHandAndFootDeck(players.length, seed: actualSeed),
+      soloSettings: soloSettings,
     );
 
     return GameController._internal(
@@ -225,17 +228,24 @@ class GameController implements GameInterface {
   }
 
   /// Ends the current round when a player goes out and publishes UI events.
-  /// Safe to call multiple times — no-ops if the round already ended.
-  void endRoundForPlayer(Player player) {
+  /// Returns true if the round ended immediately; false if final-turn phase started.
+  bool endRoundForPlayer(Player player) {
     if (_gameState.phase == GamePhase.roundEnd ||
         _gameState.phase == GamePhase.gameEnd) {
-      return;
+      return true;
     }
 
     final roundBefore = _gameState.round;
-    _gameState.endRound();
-    _publishRoundOrGameEndEvents(player, roundBefore);
+    final roundEnded = _gameState.handlePlayerWentOut();
+    if (roundEnded) {
+      _publishRoundOrGameEndEvents(player, roundBefore);
+    } else {
+      publishTurnEndedEvent(player);
+    }
+    return roundEnded;
   }
+
+  SoloGameSettings get soloSettings => _gameState.soloSettings;
 
   void _publishRoundOrGameEndEvents(Player player, int roundBefore) {
     final phase = _gameState.phase;
@@ -275,6 +285,11 @@ class GameController implements GameInterface {
 
       if (_gameState.phase != phaseBefore) {
         _publishRoundOrGameEndEvents(player, roundBefore);
+      } else if (_gameState.finalTurnPhaseActive &&
+          _gameState.playerWhoWentOutIndex != null &&
+          _gameState.players[_gameState.playerWhoWentOutIndex!].id ==
+              player.id) {
+        publishTurnEndedEvent(player);
       } else {
         // Check if turn ended (player changed or phase changed)
         final newPlayer = _gameState.currentPlayer;
@@ -360,6 +375,11 @@ class GameController implements GameInterface {
       // Check if player went out (round or game ended)
       if (_gameState.phase != phaseBefore) {
         _publishRoundOrGameEndEvents(player, roundBefore);
+      } else if (_gameState.finalTurnPhaseActive &&
+          _gameState.playerWhoWentOutIndex != null &&
+          _gameState.players[_gameState.playerWhoWentOutIndex!].id ==
+              player.id) {
+        publishTurnEndedEvent(player);
       }
     }
 
@@ -423,6 +443,11 @@ class GameController implements GameInterface {
       // Check if player went out (round or game ended)
       if (_gameState.phase != phaseBefore) {
         _publishRoundOrGameEndEvents(player, roundBefore);
+      } else if (_gameState.finalTurnPhaseActive &&
+          _gameState.playerWhoWentOutIndex != null &&
+          _gameState.players[_gameState.playerWhoWentOutIndex!].id ==
+              player.id) {
+        publishTurnEndedEvent(player);
       }
     }
 

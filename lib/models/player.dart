@@ -401,7 +401,11 @@ class Player {
   }
 
   /// Records the detailed score breakdown for a completed round
-  void recordRoundScoreBreakdown({required int round, required bool wentOut}) {
+  void recordRoundScoreBreakdown({
+    required int round,
+    required bool wentOut,
+    int? goingOutBonusPoints,
+  }) {
     // Prevent duplicate round entries
     if (roundScoreHistory.any((breakdown) => breakdown.round == round)) {
       return;
@@ -410,7 +414,9 @@ class Player {
     final cardPoints =
         calculateMeldValue() - (cleanBookPoints + dirtyBookPoints);
     final penaltyPoints = calculateAllUnplayedCardsValue();
-    final goingOutBonus = wentOut ? GameConfig.goingOutBonus : 0;
+    final goingOutBonus = wentOut
+        ? (goingOutBonusPoints ?? GameConfig.goingOutBonus)
+        : 0;
     final totalRoundScore =
         cardPoints +
         cleanBookPoints +

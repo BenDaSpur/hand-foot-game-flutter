@@ -4,6 +4,7 @@ import 'deck.dart';
 import 'player.dart';
 import 'meld.dart';
 import '../config/game_config.dart';
+import '../config/solo_game_settings.dart';
 import '../game/managers/game_rules_engine.dart';
 
 enum GamePhase { setup, playing, roundEnd, gameEnd }
@@ -63,6 +64,18 @@ class GameState {
   bool _isMultiplayer = false;
   String? _viewerId;
 
+  /// Solo game rule settings (bot count is reflected in [players] length).
+  SoloGameSettings soloSettings;
+
+  /// True while other players take one final turn after someone goes out.
+  bool finalTurnPhaseActive;
+
+  /// Player index who went out this round (used for scoring).
+  int? playerWhoWentOutIndex;
+
+  /// Player indices still owed a final turn after a go-out.
+  final Set<int> playersAwaitingFinalTurn;
+
   GameState({
     required this.players,
     required this.deck,
@@ -76,10 +89,16 @@ class GameState {
     this.discardPileFrozen = false,
     this.hasDrawnFromDeck = false,
     this.hasMelded = false,
+    SoloGameSettings? soloSettings,
+    this.finalTurnPhaseActive = false,
+    this.playerWhoWentOutIndex,
+    Set<int>? playersAwaitingFinalTurn,
     bool isMultiplayer = false,
     String? viewerId,
   }) : discardPile = discardPile ?? [],
        recentActions = recentActions ?? [],
+       soloSettings = soloSettings ?? SoloGameSettings.defaults,
+       playersAwaitingFinalTurn = playersAwaitingFinalTurn ?? {},
        _isMultiplayer = isMultiplayer,
        _viewerId = viewerId;
 
@@ -193,6 +212,74 @@ class GameState {
     currentPlayer.clearNewlyDrawnCards();
   }
 
+  /// Complete the active turn, advance play, and end the round if final turns are done.
+  ///
+  /// Returns true when [endRound] was triggered (round or game ended).
+  bool completeTurn() {
+    final finishedIndex = currentPlayerIndex;
+    nextPlayer();
+
+    if (finalTurnPhaseActive) {
+      playersAwaitingFinalTurn.remove(finishedIndex);
+      if (playersAwaitingFinalTurn.isEmpty) {
+        _logAction('Final turns complete — round ending');
+        endRound();
+        return true;
+      }
+    }
+
+    return phase == GamePhase.roundEnd || phase == GamePhase.gameEnd;
+  }
+
+  /// Handle a player meeting go-out conditions.
+  ///
+  /// Returns true if the round ended immediately; false if final-turn phase started.
+  bool handlePlayerWentOut() {
+    if (finalTurnPhaseActive) {
+      _logAction('🏆 went out!');
+      nextPlayer();
+      return false;
+    }
+
+    playerWhoWentOutIndex = currentPlayerIndex;
+
+    if (!soloSettings.enableFinalTurnAfterGoingOut) {
+      _logAction('🏆 went out and ended the round!');
+      endRound();
+      return true;
+    }
+
+    _logAction('🏆 went out!');
+    finalTurnPhaseActive = true;
+    playersAwaitingFinalTurn.clear();
+    for (var i = 0; i < players.length; i++) {
+      if (i != playerWhoWentOutIndex) {
+        playersAwaitingFinalTurn.add(i);
+      }
+    }
+    for (var i = 0; i < players.length; i++) {
+      if (i != playerWhoWentOutIndex) {
+        playersAwaitingFinalTurn.add(i);
+      }
+    }
+
+    if (playersAwaitingFinalTurn.isEmpty) {
+      _logAction('🏆 went out and ended the round!');
+      endRound();
+      return true;
+    }
+
+    _logAction('Final turns — one last chance for other players');
+    nextPlayer();
+    return false;
+  }
+
+  void _resetFinalTurnState() {
+    finalTurnPhaseActive = false;
+    playerWhoWentOutIndex = null;
+    playersAwaitingFinalTurn.clear();
+  }
+
   void startRound() {
     phase = GamePhase.playing;
     currentPlayerIndex = 0;
@@ -200,6 +287,8 @@ class GameState {
     discardPileFrozen = false;
     hasDrawnFromDeck = false;
     hasMelded = false;
+
+    _resetFinalTurnState();
 
     // Reset stalemate tracking for new round
     _resetStalemateTracking();
@@ -440,9 +529,6 @@ class GameState {
 
       // Check if player has gone out after melding
       if (currentPlayer.canGoOut) {
-        _logAction('🏆 went out and ended the round!');
-
-        // Defensive logging for going out via playMeld
         if (kDebugMode) {
           _logAction(
             'GOING OUT DEBUG (playMeld): footSize=${currentPlayer.foot.length}, '
@@ -451,19 +537,7 @@ class GameState {
           );
         }
 
-        endRound();
-
-        // Defensive check: Verify round actually ended (could be roundEnd or gameEnd if someone won)
-        if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
-          _logAction(
-            'ERROR: endRound() called from playMeld but phase is still $phase!',
-          );
-          print(
-            'Warning: Unexpected phase after endRound() in playMeld, but continuing game',
-          );
-          // Don't throw exception - log warning but continue game gracefully
-        }
-
+        handlePlayerWentOut();
         return true;
       }
 
@@ -508,9 +582,6 @@ class GameState {
 
       // Check if player has gone out after melding
       if (currentPlayer.canGoOut) {
-        _logAction('🏆 went out and ended the round!');
-
-        // Defensive logging for going out via playMeldBypass
         if (kDebugMode) {
           _logAction(
             'GOING OUT DEBUG (playMeldBypass): footSize=${currentPlayer.foot.length}, '
@@ -519,19 +590,7 @@ class GameState {
           );
         }
 
-        endRound();
-
-        // Defensive check: Verify round actually ended (could be roundEnd or gameEnd if someone won)
-        if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
-          _logAction(
-            'ERROR: endRound() called from playMeldBypass but phase is still $phase!',
-          );
-          print(
-            'Warning: Unexpected phase after endRound() in playMeldBypass, but continuing game',
-          );
-          // Don't throw exception - log warning but continue game gracefully
-        }
-
+        handlePlayerWentOut();
         return true;
       }
 
@@ -594,25 +653,12 @@ class GameState {
 
     // Check if player has gone out after adding to meld
     if (currentPlayer.canGoOut) {
-      _logAction('🏆 went out and ended the round!');
-
-      // Defensive logging: Record the going out decision
       if (kDebugMode) {
         _logAction('GOING OUT DEBUG: Pre-op: $preOpState');
         _logAction('GOING OUT DEBUG: Post-op: $postOpState');
       }
 
-      endRound();
-
-      // Defensive check: Verify round actually ended (could be roundEnd or gameEnd if someone won)
-      if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
-        _logAction(
-          'ERROR: endRound() called but phase is still $phase - this should not happen!',
-        );
-        print(
-          'Warning: Unexpected phase after endRound(), but continuing game',
-        );
-      }
+      handlePlayerWentOut();
     } else {
       // Debug: Log why player can't go out when they have empty hands
       if (currentPlayer.currentHand.isEmpty && kDebugMode) {
@@ -664,8 +710,7 @@ class GameState {
       }
 
       if (currentPlayer.canGoOut) {
-        _logAction('🏆 went out and ended the round!');
-        endRound();
+        handlePlayerWentOut();
         return true;
       }
 
@@ -690,7 +735,7 @@ class GameState {
         }
       }
 
-      nextPlayer();
+      completeTurn();
       return true;
     }
     return false;
@@ -772,7 +817,11 @@ class GameState {
     // Calculate penalty points for cards in hand
     for (final player in players) {
       // Record detailed score breakdown for stalemate (no one went out)
-      player.recordRoundScoreBreakdown(round: round, wentOut: false);
+      player.recordRoundScoreBreakdown(
+        round: round,
+        wentOut: false,
+        goingOutBonusPoints: soloSettings.goingOutBonusPoints,
+      );
 
       // Calculate total score including penalties for unplayed cards
       final meldValue = player.calculateMeldValue();
@@ -843,15 +892,18 @@ class GameState {
 
     // Find the player who went out (if any)
     final playersWhoCanGoOut = players.where((p) => p.canGoOut).toList();
-    final playerWhoWentOut = playersWhoCanGoOut.isEmpty
-        ? null
-        : playersWhoCanGoOut.first;
+    final Player? playerWhoWentOut = playerWhoWentOutIndex != null
+        ? players[playerWhoWentOutIndex!]
+        : (playersWhoCanGoOut.isEmpty ? null : playersWhoCanGoOut.first);
+
+    final goingOutBonus = soloSettings.goingOutBonusPoints;
 
     for (final player in players) {
       // Record detailed score breakdown before updating total score
       player.recordRoundScoreBreakdown(
         round: round,
         wentOut: player == playerWhoWentOut,
+        goingOutBonusPoints: goingOutBonus,
       );
 
       // CRITICAL FIX: Include ALL unplayed cards (hand + foot) as negative when round ends
@@ -861,11 +913,13 @@ class GameState {
 
       // Add going out bonus
       if (player == playerWhoWentOut) {
-        roundScore += GameConfig.goingOutBonus;
+        roundScore += goingOutBonus;
       }
 
       player.updateScore(roundScore);
     }
+
+    _resetFinalTurnState();
 
     final highestScore = players
         .map((p) => p.score)

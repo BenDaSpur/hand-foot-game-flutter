@@ -1,12 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_decision.dart';
+import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
+import 'package:hand_foot_game_flutter/config/solo_game_settings.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/screens/managers/bot_turn_manager.dart';
+
+final _immediateRoundEndSettings = SoloGameSettings(
+  botCount: 1,
+  botPersonalities: [BotPersonality.adaptive],
+  enableGoingOutBonus: true,
+  enableFinalTurnAfterGoingOut: false,
+);
 
 void main() {
   group('BotTurnManager execution', () {
@@ -19,7 +28,11 @@ void main() {
         Player(id: 'human', name: 'You', type: PlayerType.human),
         Player(id: 'bot1', name: 'Clara', type: PlayerType.bot),
       ];
-      gameController = GameController(players: players, seed: 454749);
+      gameController = GameController(
+        players: players,
+        seed: 454749,
+        soloSettings: _immediateRoundEndSettings,
+      );
       gameController.initializeGame();
       botPlayer = players[1];
       botPlayer.hasPlayedDown = true;

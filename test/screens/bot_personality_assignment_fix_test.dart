@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
-import 'package:hand_foot_game_flutter/screens/managers/bot_turn_manager.dart';
+import 'package:hand_foot_game_flutter/config/bot_configurations.dart';
 
 /// Simple test for the bot personality assignment functionality
 void main() {

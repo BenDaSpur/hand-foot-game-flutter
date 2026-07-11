@@ -2,6 +2,7 @@ import '../models/player.dart';
 import 'game_controller.dart';
 import 'enhanced_multiplayer_controller.dart';
 import 'network_adapter.dart';
+import '../config/solo_game_settings.dart';
 
 /// Factory for creating game controllers with proper DRY architecture
 /// This centralizes controller creation logic and uses direct controller types
@@ -10,9 +11,15 @@ class GameControllerFactory {
   static GameController createSingleplayerGame({
     required List<Player> players,
     int? seed,
-    dynamic eventBus, // Optional event bus for event-driven architecture
+    dynamic eventBus,
+    SoloGameSettings? soloSettings,
   }) {
-    return GameController(players: players, seed: seed, eventBus: eventBus);
+    return GameController(
+      players: players,
+      seed: seed,
+      eventBus: eventBus,
+      soloSettings: soloSettings,
+    );
   }
 
   /// Create a multiplayer game controller with Firebase backend

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
+import 'package:hand_foot_game_flutter/config/solo_game_settings.dart';
 import 'package:hand_foot_game_flutter/game/events/game_event.dart';
 import 'package:hand_foot_game_flutter/game/events/game_event_bus.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
@@ -6,6 +8,20 @@ import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
+
+final _immediateRoundEndSettings = SoloGameSettings(
+  botCount: 1,
+  botPersonalities: [BotPersonality.adaptive],
+  enableGoingOutBonus: true,
+  enableFinalTurnAfterGoingOut: false,
+);
+
+final _threePlayerImmediateRoundEndSettings = SoloGameSettings(
+  botCount: 2,
+  botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
+  enableGoingOutBonus: true,
+  enableFinalTurnAfterGoingOut: false,
+);
 
 void main() {
   group('GameController round transition regression', () {
@@ -26,6 +42,7 @@ void main() {
         final controller = GameController(
           players: [human, rita],
           eventBus: eventBus,
+          soloSettings: _immediateRoundEndSettings,
         );
         controller.initializeGame();
 
@@ -61,6 +78,7 @@ void main() {
         final controller = GameController(
           players: [human, rita],
           eventBus: eventBus,
+          soloSettings: _immediateRoundEndSettings,
         );
         controller.initializeGame();
 
@@ -84,7 +102,10 @@ void main() {
       final human = Player(id: '1', name: 'You', type: PlayerType.human);
       final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
       final alex = Player(id: '3', name: 'Alex', type: PlayerType.bot);
-      final controller = GameController(players: [human, rita, alex]);
+      final controller = GameController(
+        players: [human, rita, alex],
+        soloSettings: _threePlayerImmediateRoundEndSettings,
+      );
       controller.initializeGame();
 
       _setupPlayerToGoOut(rita);
@@ -143,6 +164,7 @@ void main() {
       final controller = GameController(
         players: [human, rita],
         eventBus: eventBus,
+        soloSettings: _immediateRoundEndSettings,
       );
       controller.initializeGame();
       _setupPlayerToGoOut(rita);

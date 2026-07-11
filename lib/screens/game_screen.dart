@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,9 @@ import '../game/game_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
+import '../config/bot_configurations.dart';
+import '../config/solo_game_settings.dart';
+import '../services/firebase_service.dart';
 import '../widgets/melds_section.dart';
 import '../widgets/game_hand_display.dart';
 import '../widgets/game_board_layout.dart';
@@ -24,6 +28,7 @@ import '../services/game_analytics_logger.dart';
 import '../services/analytics_batcher.dart';
 import '../services/analytics_fields.dart';
 import 'main_menu_screen.dart';
+import 'solo_game_setup_screen.dart';
 import '../utils/debug_logger.dart';
 import 'managers/bot_turn_manager.dart';
 import 'managers/dialog_manager.dart';
@@ -33,31 +38,19 @@ import 'managers/event_based_game_state_manager.dart';
 import '../providers/game_providers.dart';
 import '../providers/computed_providers.dart';
 
-/// Bot configuration for randomized personality assignment
-class BotConfig {
-  final String name;
-  final BotPersonality personality;
-
-  const BotConfig(this.name, this.personality);
-}
-
-/// Shared bot configurations with predefined personality mappings
-const List<BotConfig> kBotConfigurations = [
-  BotConfig('Clara', BotPersonality.conservative),
-  BotConfig('Carl', BotPersonality.conservative),
-  BotConfig('Bob', BotPersonality.aggressive),
-  BotConfig('Rita', BotPersonality.aggressive),
-  BotConfig('Ben', BotPersonality.bookBuilder),
-  BotConfig('Tiana', BotPersonality.bookBuilder),
-  BotConfig('Alex', BotPersonality.adaptive),
-  BotConfig('Sue', BotPersonality.adaptive),
-];
+/// Shared bot configurations live in [kBotConfigurations].
 
 class GameScreen extends ConsumerStatefulWidget {
   final int? testSeed; // For deterministic testing
   final GameController? gameController; // For continuing saved games
+  final SoloGameSettings? settings; // For new solo games from setup screen
 
-  const GameScreen({super.key, this.testSeed, this.gameController});
+  const GameScreen({
+    super.key,
+    this.testSeed,
+    this.gameController,
+    this.settings,
+  });
 
   @override
   ConsumerState<GameScreen> createState() => _GameScreenState();
@@ -310,6 +303,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
+    // Configured solo start from setup screen takes priority over saved game.
+    if (widget.settings != null) {
+      _startFreshGame();
+      return;
+    }
+
     // Check if there's a saved game
     final hasSaved = await GameController.hasSavedGame();
 
@@ -327,7 +326,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  _startFreshGame();
+                  _navigateToSoloSetup();
                 },
                 child: const Text('New Game'),
               ),
@@ -348,27 +347,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _startFreshGame();
   }
 
-  /// Generate random bot configurations with varied personalities and names
-  List<BotConfig> _generateRandomBotConfigurations() {
-    final Random random = Random();
-
-    // Use shared bot configurations
-    final botOptions = List<BotConfig>.from(kBotConfigurations);
-
-    // Shuffle and take first two to ensure no duplicates
-    botOptions.shuffle(random);
-    return botOptions.take(2).toList();
+  void _navigateToSoloSetup() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const SoloGameSetupScreen()),
+    );
   }
 
   void _startFreshGame() {
-    // Randomize bot personalities and names each game for variety
-    final botConfigs = _generateRandomBotConfigurations();
-
-    final players = [
-      Player(id: '1', name: 'You', type: PlayerType.human),
-      Player(id: '2', name: botConfigs[0].name, type: PlayerType.bot),
-      Player(id: '3', name: botConfigs[1].name, type: PlayerType.bot),
-    ];
+    final settings = widget.settings ?? SoloGameSettings.defaults;
+    final nameSeed =
+        widget.testSeed ?? settings.normalizedPersonalities.join().hashCode;
+    final players = settings.buildPlayers(random: Random(nameSeed));
+    final personalities = settings.normalizedPersonalities;
 
     // Debug logging for player setup
     DebugLogger.debug('Setting up fresh game with players:');
@@ -386,15 +376,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       players: players,
       seed: widget.testSeed,
       eventBus: eventBus,
+      soloSettings: settings,
     );
 
     // Store in Riverpod provider for reactive access
     controllerNotifier.setController(newController, eventBus);
 
-    // Use Riverpod provider for bot AI
+    // Assign bot personalities from setup settings
     final botAI = ref.read(botAIProvider);
-    botAI.assignPersonality('2', botConfigs[0].personality);
-    botAI.assignPersonality('3', botConfigs[1].personality);
+    final botPlayers = players.where((p) => p.type == PlayerType.bot).toList();
+    for (var i = 0; i < botPlayers.length; i++) {
+      botAI.assignPersonality(botPlayers[i].id, personalities[i]);
+    }
+
+    _logSoloGameStarted(settings);
 
     newController.initializeGame(dealCards: false);
 
@@ -916,6 +911,25 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
   }
 
+  Future<void> _logSoloGameStarted(SoloGameSettings settings) async {
+    try {
+      await FirebaseService.logGameEvent(
+        'solo_game_started',
+        parameters: {
+          'game_type': 'solo',
+          'botCount': settings.botCount,
+          'botPersonalities': settings.normalizedPersonalities
+              .map((p) => p.name)
+              .join(','),
+          'goingOutBonus': settings.enableGoingOutBonus,
+          'finalTurn': settings.enableFinalTurnAfterGoingOut,
+        },
+      );
+    } catch (_) {
+      // Silently ignore Firebase errors in singleplayer mode
+    }
+  }
+
   Future<void> _startNewGame() async {
     // Clear any saved game when explicitly starting new
     await GameController.clearSavedGame();
@@ -926,8 +940,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _viewingPlayerMelds = null;
     });
 
-    // Start a fresh game directly (not checking for saves)
-    _startFreshGame();
+    _navigateToSoloSetup();
   }
 
   void _onDrawFromDeck() {
