@@ -623,4 +623,184 @@ void main() {
       expect(isDirtyMeld, isTrue);
     });
   });
+
+  group('Advanced Meld Selector - Auto Create Clean Melds', () {
+    late Player testPlayer;
+
+    setUp(() {
+      testPlayer = Player(
+        id: 'clean_auto_test',
+        name: 'Clean Auto Test Player',
+        type: PlayerType.human,
+      );
+    });
+
+    List<List<int>> findNewCleanMeldGroups(
+      List<int> availableCardIndices,
+      List<PlayingCard> hand,
+    ) {
+      final groups = <List<int>>[];
+      final cardsByRank = <CardRank, List<int>>{};
+
+      for (final handIndex in availableCardIndices) {
+        final card = hand[handIndex];
+        if (card.isWild || card.isThree) {
+          continue;
+        }
+        cardsByRank.putIfAbsent(card.rank, () => []).add(handIndex);
+      }
+
+      for (final indices in cardsByRank.values) {
+        if (indices.length >= 3) {
+          groups.add(List<int>.from(indices));
+        }
+      }
+
+      return groups;
+    }
+
+    void createAllCleanMelds({
+      required List<List<int>> proposedMeldIndices,
+      required List<int> availableCardIndices,
+      required List<PlayingCard> hand,
+    }) {
+      final indicesToRemove = <int>{};
+
+      for (final handIndex in List<int>.from(availableCardIndices)) {
+        final card = hand[handIndex];
+        if (card.isWild || card.isThree) {
+          continue;
+        }
+
+        for (final meldIndices in proposedMeldIndices) {
+          final hasWild = meldIndices.any((index) => hand[index].isWild);
+          if (hasWild) {
+            continue;
+          }
+
+          final rank = meldIndices
+              .map((index) => hand[index])
+              .firstWhere((c) => !c.isWild)
+              .rank;
+          if (rank == card.rank) {
+            meldIndices.add(handIndex);
+            indicesToRemove.add(handIndex);
+            break;
+          }
+        }
+      }
+
+      for (final handIndex in indicesToRemove) {
+        availableCardIndices.remove(handIndex);
+      }
+
+      for (final meldIndices in findNewCleanMeldGroups(
+        availableCardIndices,
+        hand,
+      )) {
+        proposedMeldIndices.add(meldIndices);
+        for (final handIndex in meldIndices) {
+          availableCardIndices.remove(handIndex);
+        }
+      }
+    }
+
+    test('should create melds for all clean rank groups in hand', () {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+      ]);
+
+      final proposedMeldIndices = <List<int>>[];
+      final availableCardIndices = List.generate(
+        testPlayer.currentHand.length,
+        (index) => index,
+      );
+
+      createAllCleanMelds(
+        proposedMeldIndices: proposedMeldIndices,
+        availableCardIndices: availableCardIndices,
+        hand: testPlayer.currentHand,
+      );
+
+      expect(proposedMeldIndices.length, equals(3));
+      expect(availableCardIndices, equals([10, 11]));
+
+      final fourMeld = proposedMeldIndices.firstWhere(
+        (meld) => testPlayer.currentHand[meld.first].rank == CardRank.four,
+      );
+      final sevenMeld = proposedMeldIndices.firstWhere(
+        (meld) => testPlayer.currentHand[meld.first].rank == CardRank.seven,
+      );
+      final kingMeld = proposedMeldIndices.firstWhere(
+        (meld) => testPlayer.currentHand[meld.first].rank == CardRank.king,
+      );
+
+      expect(fourMeld, equals([0, 1, 2]));
+      expect(sevenMeld, equals([3, 4, 5]));
+      expect(kingMeld, equals([6, 7, 8, 9]));
+    });
+
+    test('should skip wild cards and 3s when auto-creating clean melds', () {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        const PlayingCard(rank: CardRank.joker),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.three),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.three),
+      ]);
+
+      final proposedMeldIndices = <List<int>>[];
+      final availableCardIndices = List.generate(
+        testPlayer.currentHand.length,
+        (index) => index,
+      );
+
+      createAllCleanMelds(
+        proposedMeldIndices: proposedMeldIndices,
+        availableCardIndices: availableCardIndices,
+        hand: testPlayer.currentHand,
+      );
+
+      expect(proposedMeldIndices.length, equals(1));
+      expect(proposedMeldIndices.first, equals([0, 1, 2]));
+      expect(availableCardIndices, equals([3, 4, 5]));
+    });
+
+    test('should extend existing clean proposed meld with matching cards', () {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+      ]);
+
+      final proposedMeldIndices = <List<int>>[
+        [0, 1, 2],
+      ];
+      final availableCardIndices = [3, 4];
+
+      createAllCleanMelds(
+        proposedMeldIndices: proposedMeldIndices,
+        availableCardIndices: availableCardIndices,
+        hand: testPlayer.currentHand,
+      );
+
+      expect(proposedMeldIndices.length, equals(1));
+      expect(proposedMeldIndices.first, equals([0, 1, 2, 3]));
+      expect(availableCardIndices, equals([4]));
+    });
+  });
 }
