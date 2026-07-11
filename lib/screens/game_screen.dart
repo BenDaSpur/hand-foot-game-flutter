@@ -609,8 +609,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _botTurnManager
             .resetProcessingState(); // Clear any stuck bot processing flag
         if (mounted) {
-          // UI will update automatically via provider reactivity
-          _gameStateManager.checkForRoundTransition();
+          if (controller.gameState.phase == GamePhase.roundEnd) {
+            _handleRoundTransition().catchError((error) {
+              DebugLogger.error(
+                'Error handling round transition from human turn: $error',
+              );
+            });
+          }
         }
         return;
       }
@@ -647,8 +652,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     try {
       await _logRoundEndAnalytics();
 
-      // Brief pause to show scores
-      await Future.delayed(const Duration(seconds: 2));
+      await _dialogManager.showRoundEndScoreboard();
       if (_disposed || !mounted) {
         return;
       }
