@@ -681,6 +681,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
 
     if (isSmallMobile) {
       return ElevatedButton(
+        key: const Key('all_clean_melds_button'),
         onPressed: _hasCleanMeldOptions() ? _createAllCleanMelds : null,
         style: buttonStyle,
         child: const Text('Clean', style: TextStyle(fontSize: 12)),
@@ -688,6 +689,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     }
 
     return ElevatedButton.icon(
+      key: const Key('all_clean_melds_button'),
       onPressed: _hasCleanMeldOptions() ? _createAllCleanMelds : null,
       icon: const Icon(Icons.auto_awesome, size: 18),
       label: const Text('All Clean'),
@@ -788,13 +790,24 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
   }
 
   bool _isCleanNaturalMeldIndices(List<int> meldIndices) {
+    if (meldIndices.isEmpty) {
+      return false;
+    }
+
+    CardRank? expectedRank;
     for (final handIndex in meldIndices) {
       final card = widget.player.currentHand[handIndex];
       if (card.isWild || card.isThree) {
         return false;
       }
+
+      expectedRank ??= card.rank;
+      if (card.rank != expectedRank) {
+        return false;
+      }
     }
-    return meldIndices.isNotEmpty;
+
+    return true;
   }
 
   void _createAllCleanMelds() {
