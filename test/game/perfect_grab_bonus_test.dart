@@ -1,3 +1,6 @@
+@Tags(['perfect_grab'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
