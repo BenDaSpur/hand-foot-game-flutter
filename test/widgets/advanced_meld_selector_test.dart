@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/widgets/advanced_meld_selector.dart';
 
 void main() {
   group('Advanced Meld Selector Multi-Meld State Management', () {
@@ -621,6 +623,235 @@ void main() {
           wildCards.length <= naturalCards.length &&
           naturalCards.length >= 2;
       expect(isDirtyMeld, isTrue);
+    });
+  });
+
+  group('Advanced Meld Selector - Auto Create Clean Melds', () {
+    late Player testPlayer;
+
+    Future<void> pumpMeldSelector(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdvancedMeldSelector(
+              player: testPlayer,
+              playDownRequirement: 60,
+              onCancel: () {},
+              onConfirm: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    void seedMeldSelectorState(
+      WidgetTester tester, {
+      required List<List<int>> proposedMeldIndices,
+      required List<int> availableCardIndices,
+    }) {
+      final finder = find.byType(AdvancedMeldSelector);
+      final state = tester.state<State<StatefulWidget>>(finder);
+      final dynamic selectorState = state;
+      selectorState.proposedMeldIndices
+        ..clear()
+        ..addAll(proposedMeldIndices.map(List<int>.from));
+      selectorState.availableCardIndices
+        ..clear()
+        ..addAll(availableCardIndices);
+      selectorState.selectedAvailableIndices.clear();
+      (tester.element(finder) as StatefulElement).markNeedsBuild();
+    }
+
+    Future<void> tapAllClean(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('all_clean_melds_button')));
+      await tester.pumpAndSettle();
+    }
+
+    Finder proposedMeldsListView() => find.descendant(
+      of: find.byType(AdvancedMeldSelector),
+      matching: find.byType(ListView),
+    );
+
+    Future<void> expectRenderedPreview(
+      WidgetTester tester,
+      String previewKey,
+    ) async {
+      final previewFinder = find.byKey(ValueKey(previewKey));
+      for (
+        var attempt = 0;
+        attempt < 8 && previewFinder.evaluate().isEmpty;
+        attempt++
+      ) {
+        await tester.drag(proposedMeldsListView(), const Offset(0, -150));
+        await tester.pumpAndSettle();
+      }
+      expect(previewFinder, findsOneWidget);
+    }
+
+    List<List<int>> proposedMeldIndicesFromWidget(WidgetTester tester) {
+      final dynamic selectorState = tester.state(
+        find.byType(AdvancedMeldSelector),
+      );
+      return (selectorState.proposedMeldIndices as List)
+          .map((meld) => List<int>.from(meld as List))
+          .toList();
+    }
+
+    List<int> availableCardIndicesFromWidget(WidgetTester tester) {
+      final dynamic selectorState = tester.state(
+        find.byType(AdvancedMeldSelector),
+      );
+      return List<int>.from(selectorState.availableCardIndices as List);
+    }
+
+    setUp(() {
+      testPlayer = Player(
+        id: 'clean_auto_test',
+        name: 'Clean Auto Test Player',
+        type: PlayerType.human,
+      );
+    });
+
+    testWidgets('creates proposed melds for all clean rank groups', (
+      tester,
+    ) async {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+      ]);
+
+      await pumpMeldSelector(tester);
+      await tapAllClean(tester);
+
+      expect(find.text('Proposed Melds (3)'), findsOneWidget);
+      expect(find.text('Available Cards (2)'), findsOneWidget);
+      await expectRenderedPreview(tester, 'preview-0-0');
+      await expectRenderedPreview(tester, 'preview-1-0');
+      await expectRenderedPreview(tester, 'preview-2-0');
+      expect(find.byKey(const ValueKey('mobile_card_10')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_11')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_0')), findsNothing);
+      expect(find.byKey(const ValueKey('mobile_card_6')), findsNothing);
+      expect(
+        proposedMeldIndicesFromWidget(tester),
+        equals([
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8, 9],
+        ]),
+      );
+      expect(availableCardIndicesFromWidget(tester), unorderedEquals([10, 11]));
+    });
+
+    testWidgets('skips wild cards and 3s when auto-creating clean melds', (
+      tester,
+    ) async {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        const PlayingCard(rank: CardRank.joker),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.three),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.three),
+      ]);
+
+      await pumpMeldSelector(tester);
+      await tapAllClean(tester);
+
+      expect(find.text('Proposed Melds (1)'), findsOneWidget);
+      expect(find.text('Available Cards (3)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('preview-0-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_3')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_4')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_5')), findsOneWidget);
+    });
+
+    testWidgets('extends existing clean proposed meld with matching cards', (
+      tester,
+    ) async {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+      ]);
+
+      await pumpMeldSelector(tester);
+      seedMeldSelectorState(
+        tester,
+        proposedMeldIndices: [
+          [0, 1, 2],
+        ],
+        availableCardIndices: [3, 4],
+      );
+      await tester.pumpAndSettle();
+
+      await tapAllClean(tester);
+
+      expect(find.text('Proposed Melds (1)'), findsOneWidget);
+      expect(find.text('Available Cards (1)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('preview-0-3')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_4')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_3')), findsNothing);
+    });
+
+    testWidgets('does not extend mixed-rank proposed melds', (tester) async {
+      testPlayer.currentHand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+      ]);
+
+      await pumpMeldSelector(tester);
+      seedMeldSelectorState(
+        tester,
+        proposedMeldIndices: [
+          [0, 3],
+        ],
+        availableCardIndices: [1, 2, 4, 5, 6],
+      );
+      await tester.pumpAndSettle();
+
+      await tapAllClean(tester);
+
+      expect(find.text('Proposed Melds (2)'), findsOneWidget);
+      expect(find.text('Available Cards (2)'), findsOneWidget);
+      await expectRenderedPreview(tester, 'preview-0-0');
+      await expectRenderedPreview(tester, 'preview-0-1');
+      await expectRenderedPreview(tester, 'preview-1-0');
+      await expectRenderedPreview(tester, 'preview-1-1');
+      await expectRenderedPreview(tester, 'preview-1-2');
+      expect(find.byKey(const ValueKey('mobile_card_4')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_5')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile_card_6')), findsNothing);
+      expect(find.byKey(const ValueKey('preview-0-2')), findsNothing);
+      expect(
+        proposedMeldIndicesFromWidget(tester),
+        equals([
+          [0, 3],
+          [1, 2, 6],
+        ]),
+      );
+      expect(availableCardIndicesFromWidget(tester), equals([4, 5]));
     });
   });
 }

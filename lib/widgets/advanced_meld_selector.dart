@@ -234,51 +234,25 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Proposed Melds (${proposedMeldIndices.length})',
-                style: TextStyle(
-                  fontSize: GameResponsiveLayout.getFontSize(context, 18),
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              Expanded(
+                child: Text(
+                  'Proposed Melds (${proposedMeldIndices.length})',
+                  style: TextStyle(
+                    fontSize: GameResponsiveLayout.getFontSize(context, 18),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-              GameResponsiveLayout.isSmallMobile(context)
-                  ? ElevatedButton(
-                      onPressed: _canCreateNewMeld() ? _createNewMeld : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                        shadowColor: const Color(
-                          0xFF10B981,
-                        ).withValues(alpha: 0.4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        minimumSize: const Size(60, 32),
-                      ),
-                      child: const Text('New', style: TextStyle(fontSize: 12)),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: _canCreateNewMeld() ? _createNewMeld : null,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('New Meld'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                        shadowColor: const Color(
-                          0xFF10B981,
-                        ).withValues(alpha: 0.4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildAllCleanMeldsButton(),
+                  const SizedBox(width: 8),
+                  _buildNewMeldButton(),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -294,7 +268,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                     ),
                     child: const Center(
                       child: Text(
-                        'No melds created yet\nSelect cards and click "New Meld"',
+                        'No melds created yet\nSelect cards, tap "All Clean", or click "New Meld"',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white60, fontSize: 16),
                       ),
@@ -686,8 +660,197 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     );
   }
 
+  Widget _buildAllCleanMeldsButton() {
+    final isSmallMobile = GameResponsiveLayout.isSmallMobile(context);
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF3B82F6),
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: const Color(0xFF374151),
+      disabledForegroundColor: Colors.white54,
+      elevation: 4,
+      shadowColor: const Color(0xFF3B82F6).withValues(alpha: 0.4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isSmallMobile ? 8 : 12),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallMobile ? 10 : 14,
+        vertical: isSmallMobile ? 8 : 10,
+      ),
+      minimumSize: Size(isSmallMobile ? 56 : 0, isSmallMobile ? 32 : 36),
+    );
+
+    if (isSmallMobile) {
+      return ElevatedButton(
+        key: const Key('all_clean_melds_button'),
+        onPressed: _hasCleanMeldOptions() ? _createAllCleanMelds : null,
+        style: buttonStyle,
+        child: const Text('Clean', style: TextStyle(fontSize: 12)),
+      );
+    }
+
+    return ElevatedButton.icon(
+      key: const Key('all_clean_melds_button'),
+      onPressed: _hasCleanMeldOptions() ? _createAllCleanMelds : null,
+      icon: const Icon(Icons.auto_awesome, size: 18),
+      label: const Text('All Clean'),
+      style: buttonStyle,
+    );
+  }
+
+  Widget _buildNewMeldButton() {
+    final isSmallMobile = GameResponsiveLayout.isSmallMobile(context);
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF10B981),
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: const Color(0xFF374151),
+      disabledForegroundColor: Colors.white54,
+      elevation: 4,
+      shadowColor: const Color(0xFF10B981).withValues(alpha: 0.4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isSmallMobile ? 8 : 12),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallMobile ? 12 : 14,
+        vertical: isSmallMobile ? 8 : 10,
+      ),
+      minimumSize: Size(isSmallMobile ? 60 : 0, isSmallMobile ? 32 : 36),
+    );
+
+    if (isSmallMobile) {
+      return ElevatedButton(
+        onPressed: _canCreateNewMeld() ? _createNewMeld : null,
+        style: buttonStyle,
+        child: const Text('New', style: TextStyle(fontSize: 12)),
+      );
+    }
+
+    return ElevatedButton.icon(
+      onPressed: _canCreateNewMeld() ? _createNewMeld : null,
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('New Meld'),
+      style: buttonStyle,
+    );
+  }
+
   bool _canCreateNewMeld() {
     return selectedAvailableIndices.length >= GameConfig.minTotalCardsForMeld;
+  }
+
+  bool _hasCleanMeldOptions() {
+    return _findNewCleanMeldGroups().isNotEmpty ||
+        _hasExtendableCleanProposedMelds();
+  }
+
+  bool _hasExtendableCleanProposedMelds() {
+    for (final handIndex in availableCardIndices) {
+      final card = widget.player.currentHand[handIndex];
+      if (card.isWild || card.isThree) {
+        continue;
+      }
+
+      for (final meldIndices in proposedMeldIndices) {
+        if (_isCleanNaturalMeldIndices(meldIndices) &&
+            _meldNaturalRank(meldIndices) == card.rank) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  List<List<int>> _findNewCleanMeldGroups() {
+    final groups = <List<int>>[];
+    final cardsByRank = <CardRank, List<int>>{};
+
+    for (final handIndex in availableCardIndices) {
+      final card = widget.player.currentHand[handIndex];
+      if (card.isWild || card.isThree) {
+        continue;
+      }
+      cardsByRank.putIfAbsent(card.rank, () => []).add(handIndex);
+    }
+
+    for (final indices in cardsByRank.values) {
+      if (indices.length >= GameConfig.minTotalCardsForMeld) {
+        groups.add(List<int>.from(indices));
+      }
+    }
+
+    return groups;
+  }
+
+  CardRank? _meldNaturalRank(List<int> meldIndices) {
+    for (final handIndex in meldIndices) {
+      final card = widget.player.currentHand[handIndex];
+      if (!card.isWild && !card.isThree) {
+        return card.rank;
+      }
+    }
+    return null;
+  }
+
+  bool _isCleanNaturalMeldIndices(List<int> meldIndices) {
+    if (meldIndices.isEmpty) {
+      return false;
+    }
+
+    CardRank? expectedRank;
+    for (final handIndex in meldIndices) {
+      final card = widget.player.currentHand[handIndex];
+      if (card.isWild || card.isThree) {
+        return false;
+      }
+
+      expectedRank ??= card.rank;
+      if (card.rank != expectedRank) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _createAllCleanMelds() {
+    setState(() {
+      _extendExistingCleanProposedMelds();
+      _createNewCleanMeldGroups();
+      selectedAvailableIndices.clear();
+      _sortAvailableCardIndices();
+    });
+  }
+
+  void _extendExistingCleanProposedMelds() {
+    final indicesToRemove = <int>{};
+
+    for (final handIndex in List<int>.from(availableCardIndices)) {
+      final card = widget.player.currentHand[handIndex];
+      if (card.isWild || card.isThree) {
+        continue;
+      }
+
+      for (int i = 0; i < proposedMeldIndices.length; i++) {
+        final meldIndices = proposedMeldIndices[i];
+        if (_isCleanNaturalMeldIndices(meldIndices) &&
+            _meldNaturalRank(meldIndices) == card.rank) {
+          meldIndices.add(handIndex);
+          indicesToRemove.add(handIndex);
+          break;
+        }
+      }
+    }
+
+    for (final handIndex in indicesToRemove) {
+      availableCardIndices.remove(handIndex);
+    }
+  }
+
+  void _createNewCleanMeldGroups() {
+    for (final meldIndices in _findNewCleanMeldGroups()) {
+      proposedMeldIndices.add(meldIndices);
+      for (final handIndex in meldIndices) {
+        availableCardIndices.remove(handIndex);
+      }
+    }
   }
 
   void _createNewMeld() {
