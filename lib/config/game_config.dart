@@ -67,6 +67,12 @@ class GameConfig {
   /// Bonus points awarded to player who goes out first
   static const int goingOutBonus = 100;
 
+  /// Bonus points for grabbing exactly hand + foot cards at round start
+  static const int perfectGrabBonus = 100;
+
+  /// Target card count for the perfect-grab mini-game (hand + foot)
+  static const int perfectGrabTarget = handSize + footSize; // 22 cards
+
   /// Total points needed to win the game
   static const int winningScore = 8500;
 
