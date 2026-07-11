@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/config/solo_game_settings.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/deck.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
@@ -16,7 +17,11 @@ void main() {
         Player(id: '2', name: 'Player 2', type: PlayerType.bot),
       ];
       final deck = Deck.createHandAndFootDeck(players.length);
-      gameState = GameState(players: players, deck: deck);
+      gameState = GameState(
+        players: players,
+        deck: deck,
+        soloSettings: SoloGameSettings.immediateRoundEnd,
+      );
     });
 
     test('should initialize with correct default values', () {

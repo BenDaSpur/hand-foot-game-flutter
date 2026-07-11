@@ -37,6 +37,14 @@ class SoloGameSettings {
     enableFinalTurnAfterGoingOut: true,
   );
 
+  /// Disables final-turn phase; useful for legacy tests expecting immediate round end.
+  static final SoloGameSettings immediateRoundEnd = SoloGameSettings(
+    botCount: 2,
+    botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
+    enableGoingOutBonus: true,
+    enableFinalTurnAfterGoingOut: false,
+  );
+
   int get goingOutBonusPoints =>
       enableGoingOutBonus ? GameConfig.goingOutBonus : 0;
 

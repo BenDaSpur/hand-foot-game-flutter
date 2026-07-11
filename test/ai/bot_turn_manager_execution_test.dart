@@ -10,7 +10,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/screens/managers/bot_turn_manager.dart';
 
-const _immediateRoundEndSettings = SoloGameSettings(
+final _immediateRoundEndSettings = SoloGameSettings(
   botCount: 1,
   botPersonalities: [BotPersonality.adaptive],
   enableGoingOutBonus: true,

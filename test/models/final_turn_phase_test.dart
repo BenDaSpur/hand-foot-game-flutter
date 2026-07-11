@@ -7,14 +7,14 @@ import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
-const _noFinalTurnSettings = SoloGameSettings(
+final _noFinalTurnSettings = SoloGameSettings(
   botCount: 2,
   botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
   enableGoingOutBonus: true,
   enableFinalTurnAfterGoingOut: false,
 );
 
-const _withFinalTurnSettings = SoloGameSettings(
+final _withFinalTurnSettings = SoloGameSettings(
   botCount: 2,
   botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
   enableGoingOutBonus: true,

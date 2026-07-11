@@ -250,6 +250,18 @@ class GameState {
         playersAwaitingFinalTurn.add(i);
       }
     }
+    for (var i = 0; i < players.length; i++) {
+      if (i != playerWhoWentOutIndex) {
+        playersAwaitingFinalTurn.add(i);
+      }
+    }
+
+    if (playersAwaitingFinalTurn.isEmpty) {
+      _logAction('🏆 went out and ended the round!');
+      endRound();
+      return true;
+    }
+
     _logAction('Final turns — one last chance for other players');
     nextPlayer();
     return false;

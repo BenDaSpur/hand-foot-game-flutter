@@ -9,14 +9,14 @@ import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
-const _immediateRoundEndSettings = SoloGameSettings(
+final _immediateRoundEndSettings = SoloGameSettings(
   botCount: 1,
   botPersonalities: [BotPersonality.adaptive],
   enableGoingOutBonus: true,
   enableFinalTurnAfterGoingOut: false,
 );
 
-const _threePlayerImmediateRoundEndSettings = SoloGameSettings(
+final _threePlayerImmediateRoundEndSettings = SoloGameSettings(
   botCount: 2,
   botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
   enableGoingOutBonus: true,
