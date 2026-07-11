@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../config/game_config.dart';
 import '../constants/hand_layout_constants.dart';
 import '../models/card.dart';
+import '../utils/game_responsive_layout.dart';
 import 'card_back_widget.dart';
 import 'playing_card_widget.dart';
 
@@ -392,13 +393,21 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     }
   }
 
+  GameCardSizes _handSizes() {
+    return GameResponsiveLayout.handSizes(context);
+  }
+
   Future<void> _scrollHandToIndices(List<int> indices) async {
     if (indices.isEmpty || !widget.handScrollController.hasClients) {
       return;
     }
+    final sizes = _handSizes();
     final firstIndex = indices.reduce((a, b) => a < b ? a : b);
-    final targetOffset = (HandLayoutConstants.handCardLeft(firstIndex) - 16)
-        .clamp(0.0, widget.handScrollController.position.maxScrollExtent);
+    final targetOffset =
+        (HandLayoutConstants.handCardLeft(firstIndex, sizes) - 16).clamp(
+          0.0,
+          widget.handScrollController.position.maxScrollExtent,
+        );
     await widget.handScrollController.animateTo(
       targetOffset,
       duration: GameConfig.cardRevealDuration,
@@ -420,12 +429,13 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     if (stackBox == null || !stackBox.hasSize) {
       return null;
     }
+    final sizes = _handSizes();
     final topLeft = stackBox.localToGlobal(Offset.zero);
     return topLeft +
-        Offset(
-          HandLayoutConstants.handCardLeft(index) +
-              HandLayoutConstants.cardWidth / 2,
-          HandLayoutConstants.cardHeight / 2,
+        HandLayoutConstants.handCardCenterInStack(
+          index,
+          sizes,
+          stackBox.size.height,
         );
   }
 
@@ -476,11 +486,14 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
   }
 
   Widget _buildFlyingCard(_FlyingCardVisual visual) {
-    final cardWidth = HandLayoutConstants.cardWidth;
-    final cardHeight = HandLayoutConstants.cardHeight;
+    final sizes = _handSizes();
+    final cardWidth = sizes.handWidth;
+    final cardHeight = sizes.handHeight;
+    final widgetWidth = HandLayoutConstants.handCardWidgetWidth(sizes);
+    final widgetHeight = HandLayoutConstants.handCardWidgetHeight(sizes);
     return Positioned(
-      left: visual.position.dx - (cardWidth / 2),
-      top: visual.position.dy - (cardHeight / 2),
+      left: visual.position.dx - (widgetWidth / 2),
+      top: visual.position.dy - (widgetHeight / 2),
       child: Opacity(
         opacity: visual.opacity,
         child: Transform.rotate(
