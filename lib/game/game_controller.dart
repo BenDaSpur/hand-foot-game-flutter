@@ -98,12 +98,18 @@ class GameController implements GameInterface {
     _gameState.dealCards();
 
     if (earnedPerfectGrabBonus) {
-      final humanPlayer = _gameState.players.firstWhere(
-        (player) => player.type == PlayerType.human,
-        orElse: () => _gameState.players.first,
-      );
-      humanPlayer.updateScore(GameConfig.perfectGrabBonus);
-      _gameState.logPerfectGrabBonus(humanPlayer.name);
+      final humanPlayers = _gameState.players
+          .where((player) => player.type == PlayerType.human)
+          .toList();
+      if (humanPlayers.isEmpty) {
+        DebugLogger.warning(
+          'Perfect grab bonus skipped: no human player in game',
+        );
+      } else {
+        final humanPlayer = humanPlayers.first;
+        humanPlayer.updateScore(GameConfig.perfectGrabBonus);
+        _gameState.logPerfectGrabBonus(humanPlayer.name);
+      }
     }
 
     _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));

@@ -18,10 +18,15 @@ class PerfectGrabMiniGame extends StatefulWidget {
   final int roundNumber;
   final void Function(bool earnedBonus) onComplete;
 
+  /// Fixed deal interval for deterministic widget tests.
+  @visibleForTesting
+  final Duration? fixedDealInterval;
+
   const PerfectGrabMiniGame({
     super.key,
     required this.roundNumber,
     required this.onComplete,
+    this.fixedDealInterval,
   });
 
   static Future<bool> show(BuildContext context, {required int roundNumber}) {
@@ -120,6 +125,10 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
   }
 
   Duration _dealIntervalForCard(int nextCardIndex) {
+    if (widget.fixedDealInterval != null) {
+      return widget.fixedDealInterval!;
+    }
+
     final baseMs = max(
       _minDealInterval.inMilliseconds,
       _baseDealInterval.inMilliseconds -
@@ -193,7 +202,7 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
             const SizedBox(height: 16),
             Expanded(child: _buildBody()),
             const SizedBox(height: 12),
-            if (_phase != _PerfectGrabPhase.result) _buildSkipButton(),
+            ...(_phase != _PerfectGrabPhase.result ? [_buildSkipButton()] : []),
           ],
         ),
       ),
@@ -321,16 +330,16 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
                   height: stackHeight,
                   child: Stack(
                     alignment: Alignment.bottomCenter,
-                    children: [
-                      for (int i = 0; i < visibleCards; i++)
-                        Positioned(
-                          bottom: i * 6.0,
-                          child: CardBackWidget(
-                            width: cardWidth,
-                            height: cardHeight,
-                          ),
+                    children: List.generate(
+                      visibleCards,
+                      (i) => Positioned(
+                        bottom: i * 6.0,
+                        child: CardBackWidget(
+                          width: cardWidth,
+                          height: cardHeight,
                         ),
-                    ],
+                      ),
+                    ),
                   ),
                 ),
               );

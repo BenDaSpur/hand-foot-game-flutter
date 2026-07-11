@@ -73,6 +73,22 @@ void main() {
       }
     });
 
+    test('completeRoundStart skips bonus when no human player exists', () {
+      final botOnlyPlayers = [
+        Player(id: '2', name: 'Bot 1', type: PlayerType.bot),
+        Player(id: '3', name: 'Bot 2', type: PlayerType.bot),
+      ];
+      final botController = GameController(players: botOnlyPlayers, seed: 99);
+      botController.initializeGame(dealCards: false);
+
+      botController.completeRoundStart(earnedPerfectGrabBonus: true);
+
+      for (final player in botOnlyPlayers) {
+        expect(player.score, 0);
+      }
+      expect(botController.gameState.phase, GamePhase.playing);
+    });
+
     test('initializeGame still deals immediately by default for tests', () {
       controller.initializeGame();
 
