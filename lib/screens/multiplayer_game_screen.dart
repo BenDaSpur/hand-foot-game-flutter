@@ -427,7 +427,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                 gameId: _gameController.gameId,
                 playerId: _gameController.userId,
               ),
-              onLeaveGame: () => Navigator.pop(context),
+              onLeaveGame: _cleanupAndExit,
             ),
             body: CardAnimationHost(
               eventBus: gameEventBus,
@@ -766,15 +766,27 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   /// Clean up multiplayer game and return to main menu
-  void _cleanupAndExit() {
-    // Clear active game info (user is intentionally leaving)
-    MultiplayerResumeService.clearActiveGame().catchError((e) {
-      debugPrint('Warning: Failed to clear active game on exit: $e');
-    });
-
+  Future<void> _leaveAndExit() async {
+    await _gameController.leaveGame();
+    await MultiplayerResumeService.clearActiveGame();
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const MainMenuScreen()),
       (route) => false,
     );
+  }
+
+  void _cleanupAndExit() {
+    _leaveAndExit().catchError((e) {
+      debugPrint('Warning: Failed to leave multiplayer game: $e');
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const MainMenuScreen()),
+          (route) => false,
+        );
+      }
+    });
   }
 }

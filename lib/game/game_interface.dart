@@ -66,5 +66,6 @@ abstract class MultiplayerGameInterface extends GameInterface {
 
   // Multiplayer game management
   Future<bool> startMultiplayerGame();
+  Future<bool> leaveGame();
   Player? getCurrentUserPlayer();
 }

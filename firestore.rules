@@ -3,19 +3,21 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Games collection rules
     match /games/{gameId} {
-      // Anyone can read games to browse/join
+      // Authenticated users can read games to browse/join
       allow read: if request.auth != null;
       
-      // Only authenticated users can create games
+      // Only authenticated users can create games (host must match auth uid)
       allow create: if request.auth != null 
-        && request.auth.uid == resource.data.hostId
-        && isValidGameCreation(resource.data);
+        && request.auth.uid == request.resource.data.hostId
+        && isValidGameCreation(request.resource.data);
       
-      // Only host or players in the game can update
-      allow update: if request.auth != null 
-        && (request.auth.uid == resource.data.hostId 
+      // Host, existing players, or a new player joining a waiting lobby may update
+      allow update: if request.auth != null && (
+        ((request.auth.uid == resource.data.hostId 
             || request.auth.uid in getPlayerIds(resource.data))
-        && isValidGameUpdate(resource.data, request.resource.data);
+         && isValidGameUpdate(resource.data, request.resource.data))
+        || isPlayerJoining(resource.data, request.resource.data)
+      );
       
       // Only host can delete games
       allow delete: if request.auth != null 
@@ -56,6 +58,23 @@ service cloud.firestore {
     let playerCountValid = newData.players.size() <= newData.maxPlayers;
     
     return statusValid && hostUnchanged && playerCountValid;
+  }
+
+  function isPlayerJoining(oldData, newData) {
+    return oldData.status == 'waiting'
+      && oldData.hostId == newData.hostId
+      && oldData.maxPlayers == newData.maxPlayers
+      && oldData.status == newData.status
+      && gameStateUnchanged(oldData, newData)
+      && newData.players.size() == oldData.players.size() + 1
+      && newData.players.size() <= newData.maxPlayers
+      && getPlayerIds(newData).hasAll(getPlayerIds(oldData))
+      && request.auth.uid in getPlayerIds(newData)
+      && !(request.auth.uid in getPlayerIds(oldData));
+  }
+
+  function gameStateUnchanged(oldData, newData) {
+    return oldData.get('gameState', null) == newData.get('gameState', null);
   }
   
   function getPlayerIds(gameData) {
