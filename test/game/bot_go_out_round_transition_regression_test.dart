@@ -23,6 +23,13 @@ final _threePlayerImmediateRoundEndSettings = SoloGameSettings(
   enableFinalTurnAfterGoingOut: false,
 );
 
+final _threePlayerFinalTurnSettings = SoloGameSettings(
+  botCount: 2,
+  botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
+  enableGoingOutBonus: true,
+  enableFinalTurnAfterGoingOut: true,
+);
+
 void main() {
   group('GameController round transition regression', () {
     test(
@@ -181,6 +188,48 @@ void main() {
 
       snapshot.assertUnchanged(controller, roundEndedEvents);
     });
+
+    test(
+      'final-turn completion credits original go-out player in PlayerWentOutEvent',
+      () async {
+        final eventBus = GameEventBus();
+        final wentOutEvents = <PlayerWentOutEvent>[];
+        final subscription = eventBus.subscribe((event) {
+          if (event is PlayerWentOutEvent) {
+            wentOutEvents.add(event);
+          }
+        });
+        addTearDown(subscription.cancel);
+
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+        final alex = Player(id: '3', name: 'Alex', type: PlayerType.bot);
+        final controller = GameController(
+          players: [human, rita, alex],
+          eventBus: eventBus,
+          soloSettings: _threePlayerFinalTurnSettings,
+        );
+        controller.initializeGame();
+
+        _setupPlayerToGoOut(human);
+        controller.gameState.currentPlayerIndex = 0;
+        controller.endRoundForPlayer(human);
+
+        expect(controller.gameState.finalTurnPhaseActive, isTrue);
+        expect(controller.gameState.currentPlayer.id, rita.id);
+
+        controller.advanceTurnAfterAction(rita);
+        expect(controller.gameState.currentPlayer.id, alex.id);
+
+        controller.advanceTurnAfterAction(alex);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(controller.gameState.phase, GamePhase.roundEnd);
+        expect(wentOutEvents, hasLength(1));
+        expect(wentOutEvents.single.player, isNotNull);
+        expect(wentOutEvents.single.player!.id, human.id);
+      },
+    );
   });
 }
 

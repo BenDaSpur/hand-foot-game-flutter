@@ -6,6 +6,7 @@ import 'meld.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../game/managers/game_rules_engine.dart';
+import '../utils/debug_logger.dart';
 
 enum GamePhase { setup, playing, roundEnd, gameEnd }
 
@@ -202,7 +203,16 @@ class GameState {
   }
 
   void nextPlayer() {
+    if (finalTurnPhaseActive) {
+      _advanceToNextAwaitingFinalTurnPlayer();
+      return;
+    }
+
     currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+    _beginCurrentPlayerTurn();
+  }
+
+  void _beginCurrentPlayerTurn() {
     turnPhase = TurnPhase.draw;
     hasDrawnFromDeck = false;
     hasMelded = false;
@@ -212,12 +222,33 @@ class GameState {
     currentPlayer.clearNewlyDrawnCards();
   }
 
+  void _advanceToNextAwaitingFinalTurnPlayer() {
+    if (playersAwaitingFinalTurn.isEmpty) {
+      return;
+    }
+
+    final playerCount = players.length;
+    var nextIndex = (currentPlayerIndex + 1) % playerCount;
+
+    for (var i = 0; i < playerCount; i++) {
+      if (playersAwaitingFinalTurn.contains(nextIndex)) {
+        currentPlayerIndex = nextIndex;
+        _beginCurrentPlayerTurn();
+        return;
+      }
+      nextIndex = (nextIndex + 1) % playerCount;
+    }
+
+    DebugLogger.warning(
+      'No player awaiting final turn found; awaiting=$playersAwaitingFinalTurn',
+    );
+  }
+
   /// Complete the active turn, advance play, and end the round if final turns are done.
   ///
   /// Returns true when [endRound] was triggered (round or game ended).
   bool completeTurn() {
     final finishedIndex = currentPlayerIndex;
-    nextPlayer();
 
     if (finalTurnPhaseActive) {
       playersAwaitingFinalTurn.remove(finishedIndex);
@@ -226,8 +257,11 @@ class GameState {
         endRound();
         return true;
       }
+      _advanceToNextAwaitingFinalTurnPlayer();
+      return false;
     }
 
+    nextPlayer();
     return phase == GamePhase.roundEnd || phase == GamePhase.gameEnd;
   }
 
@@ -237,7 +271,13 @@ class GameState {
   bool handlePlayerWentOut() {
     if (finalTurnPhaseActive) {
       _logAction('🏆 went out!');
-      nextPlayer();
+      playersAwaitingFinalTurn.remove(currentPlayerIndex);
+      if (playersAwaitingFinalTurn.isEmpty) {
+        _logAction('Final turns complete — round ending');
+        endRound();
+        return true;
+      }
+      _advanceToNextAwaitingFinalTurnPlayer();
       return false;
     }
 
@@ -257,11 +297,6 @@ class GameState {
         playersAwaitingFinalTurn.add(i);
       }
     }
-    for (var i = 0; i < players.length; i++) {
-      if (i != playerWhoWentOutIndex) {
-        playersAwaitingFinalTurn.add(i);
-      }
-    }
 
     if (playersAwaitingFinalTurn.isEmpty) {
       _logAction('🏆 went out and ended the round!');
@@ -270,7 +305,7 @@ class GameState {
     }
 
     _logAction('Final turns — one last chance for other players');
-    nextPlayer();
+    _advanceToNextAwaitingFinalTurnPlayer();
     return false;
   }
 

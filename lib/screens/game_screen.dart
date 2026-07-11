@@ -875,7 +875,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   void _forceNextTurn() {
     final controller = _gameController;
     if (controller != null) {
-      controller.gameState.nextPlayer();
+      final previousPlayer = controller.gameState.currentPlayer;
+      controller.advanceTurnAfterAction(previousPlayer);
       // UI will update automatically via provider reactivity
       processCurrentPlayerTurn();
     }

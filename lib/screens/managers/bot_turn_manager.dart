@@ -396,8 +396,7 @@ class BotTurnManager {
           DebugLogger.debug(
             'Bot ${botPlayer.name} requesting emergency turn end',
           );
-          gameState.nextPlayer();
-          gameController.publishTurnEndedEvent(botPlayer);
+          _completeTurnAndNotify(botPlayer);
           success = true;
           break;
 
@@ -502,8 +501,27 @@ class BotTurnManager {
     }
   }
 
-  /// Handle state after discard action
-  void handlePostDiscardState(Player player) {
+  void _completeTurnAndNotify(Player previousPlayer) {
+    gameController.advanceTurnAfterAction(previousPlayer);
+    AnalyticsBatcher.flushOnTurnCompletion();
+    onStateChanged();
+  }
+
+  void _finishForcedDiscard(Player botPlayer) {
+    final turnAdvanced = handlePostDiscardState(botPlayer);
+    if (!turnAdvanced) {
+      _completeTurnAndNotify(botPlayer);
+    } else {
+      onStateChanged();
+    }
+  }
+
+  /// Handle state after discard action.
+  ///
+  /// Returns true when play was already advanced (go-out handled or turn changed).
+  bool handlePostDiscardState(Player player) {
+    final gameState = gameController.gameState;
+
     // Check if player needs to pick up foot
     if (player.currentHand.isEmpty &&
         !player.hasPickedUpFoot &&
@@ -516,9 +534,18 @@ class BotTurnManager {
     if (player.hasPickedUpFoot &&
         player.currentHand.isEmpty &&
         player.canGoOut) {
+      if (gameState.phase == GamePhase.roundEnd ||
+          gameState.phase == GamePhase.gameEnd ||
+          gameState.currentPlayer.id != player.id) {
+        return true;
+      }
+
       endRoundForBot(player);
       DebugLogger.debug('Bot ${player.name} went out by discard');
+      return true;
     }
+
+    return false;
   }
 
   /// Attempt a meld during forced turn completion to shrink hand toward foot.
@@ -690,16 +717,7 @@ class BotTurnManager {
         );
 
         // Check for foot pickup after discard
-        handlePostDiscardState(botPlayer);
-
-        // ADVANCE TURN - this is guaranteed to work
-        final previousPlayer = botPlayer;
-        gameState.nextPlayer();
-        // Publish event so UI knows turn changed
-        gameController.publishTurnEndedEvent(previousPlayer);
-        // Flush analytics on turn completion for better timing
-        AnalyticsBatcher.flushOnTurnCompletion();
-        onStateChanged();
+        _finishForcedDiscard(botPlayer);
         return;
       }
 
@@ -726,10 +744,7 @@ class BotTurnManager {
           );
         }
 
-        final previousPlayer2 = botPlayer;
-        gameState.nextPlayer();
-        gameController.publishTurnEndedEvent(previousPlayer2);
-        onStateChanged();
+        _finishForcedDiscard(botPlayer);
         return;
       }
 
@@ -758,24 +773,18 @@ class BotTurnManager {
           );
 
           // Force advance turn to prevent infinite loop
-          final previousPlayer3 = botPlayer;
-          gameState.nextPlayer();
-          gameController.publishTurnEndedEvent(previousPlayer3);
+          _completeTurnAndNotify(botPlayer);
           onStateChanged();
           return;
         }
       }
 
-      final previousPlayer4 = botPlayer;
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(previousPlayer4);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     } catch (e) {
       DebugLogger.error('CRITICAL ERROR in absolutelyGuaranteedDiscard: $e');
       // Even if everything fails, force advance turn to prevent infinite loops
-      final previousPlayer5 = botPlayer;
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(previousPlayer5);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     }
   }
@@ -870,21 +879,7 @@ class BotTurnManager {
           ),
         );
 
-        // Check for foot pickup after manual discard
-        if (botPlayer.isHandEmpty && !botPlayer.hasPickedUpFoot) {
-          botPlayer.pickUpFoot();
-          gameState.recentActions.add(
-            GameAction(
-              message: 'picked up foot after emergency discard',
-              playerName: botPlayer.name,
-            ),
-          );
-        }
-
-        // Complete turn legally
-        gameState.nextPlayer();
-        gameController.publishTurnEndedEvent(botPlayer);
-        onStateChanged();
+        _finishForcedDiscard(botPlayer);
         return;
       }
 
@@ -910,16 +905,13 @@ class BotTurnManager {
             ),
           );
 
-          // Complete turn legally
-          gameState.nextPlayer();
-          gameController.publishTurnEndedEvent(botPlayer);
-          onStateChanged();
+          _finishForcedDiscard(botPlayer);
           return;
         }
       }
 
-      // STEP 5: Check if bot can go out (end game)
-      if (botPlayer.canGoOut) {
+      // Empty hand/foot with books already satisfied — go out without discarding.
+      if (botPlayer.currentHand.isEmpty && botPlayer.canGoOut) {
         endRoundForBot(
           botPlayer,
           actionMessage: '🎉 went out and ended the round!',
@@ -943,14 +935,12 @@ class BotTurnManager {
       );
 
       // Complete turn without polluting discard pile with synthetic cards
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(botPlayer);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     } catch (e) {
       DebugLogger.error('CRITICAL ERROR in emergencyCompleteBotTurn: $e');
       // Even if everything fails, force advance turn to prevent infinite loops
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(botPlayer);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     }
   }

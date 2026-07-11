@@ -236,9 +236,10 @@ class GameController implements GameInterface {
     }
 
     final roundBefore = _gameState.round;
+    final roundEndingPlayer = _captureRoundEndingPlayer(player);
     final roundEnded = _gameState.handlePlayerWentOut();
     if (roundEnded) {
-      _publishRoundOrGameEndEvents(player, roundBefore);
+      _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
     } else {
       publishTurnEndedEvent(player);
     }
@@ -246,6 +247,17 @@ class GameController implements GameInterface {
   }
 
   SoloGameSettings get soloSettings => _gameState.soloSettings;
+
+  /// Snapshot the player credited with going out before state resets it.
+  Player _captureRoundEndingPlayer(Player actingPlayer) {
+    final wentOutIndex = _gameState.playerWhoWentOutIndex;
+    if (wentOutIndex != null &&
+        wentOutIndex >= 0 &&
+        wentOutIndex < _gameState.players.length) {
+      return _gameState.players[wentOutIndex];
+    }
+    return actingPlayer;
+  }
 
   void _publishRoundOrGameEndEvents(Player player, int roundBefore) {
     final phase = _gameState.phase;
@@ -272,25 +284,48 @@ class GameController implements GameInterface {
     }
   }
 
+  void _publishPostActionEvents({
+    required GamePhase phaseBefore,
+    required int roundBefore,
+    required Player actingPlayer,
+    required Player roundEndingPlayer,
+    required int currentIndexBefore,
+  }) {
+    if (_gameState.phase != phaseBefore) {
+      _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      return;
+    }
+
+    if (_gameState.finalTurnPhaseActive &&
+        _gameState.currentPlayerIndex != currentIndexBefore) {
+      publishTurnEndedEvent(actingPlayer);
+    }
+  }
+
   @override
   bool discardCard(PlayingCard card) {
     final player = _gameState.currentPlayer;
     final phaseBefore = _gameState.phase;
     final roundBefore = _gameState.round;
+    final roundEndingPlayer = _captureRoundEndingPlayer(player);
+    final currentIndexBefore = _gameState.currentPlayerIndex;
     final result = _gameState.discard(card);
     _gameState.validateGameState();
 
     if (result) {
       _eventBus.publish(CardDiscardedEvent(card: card, player: player));
 
-      if (_gameState.phase != phaseBefore) {
-        _publishRoundOrGameEndEvents(player, roundBefore);
-      } else if (_gameState.finalTurnPhaseActive &&
-          _gameState.playerWhoWentOutIndex != null &&
-          _gameState.players[_gameState.playerWhoWentOutIndex!].id ==
-              player.id) {
-        publishTurnEndedEvent(player);
-      } else {
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
+      );
+
+      if (_gameState.phase == phaseBefore &&
+          (!_gameState.finalTurnPhaseActive ||
+              _gameState.currentPlayerIndex == currentIndexBefore)) {
         // Check if turn ended (player changed or phase changed)
         final newPlayer = _gameState.currentPlayer;
         if (newPlayer.id != player.id ||
@@ -326,6 +361,27 @@ class GameController implements GameInterface {
     );
   }
 
+  /// Advance play after a completed turn, publishing turn-end or round-end events.
+  ///
+  /// Returns true when the round or game ended.
+  bool advanceTurnAfterAction(Player previousPlayer) {
+    final phaseBefore = _gameState.phase;
+    final roundBefore = _gameState.round;
+    final roundEndingPlayer = _captureRoundEndingPlayer(previousPlayer);
+    final roundEnded = _gameState.completeTurn();
+
+    if (_gameState.phase != phaseBefore) {
+      _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      return true;
+    }
+
+    if (!roundEnded) {
+      publishTurnEndedEvent(previousPlayer);
+    }
+
+    return roundEnded;
+  }
+
   @override
   void nextRound({bool dealCards = true}) {
     if (_gameState.phase == GamePhase.roundEnd) {
@@ -346,6 +402,8 @@ class GameController implements GameInterface {
     final hadPickedUpFoot = player.hasPickedUpFoot;
     final roundBefore = _gameState.round;
     final phaseBefore = _gameState.phase;
+    final roundEndingPlayer = _captureRoundEndingPlayer(player);
+    final currentIndexBefore = _gameState.currentPlayerIndex;
 
     final result = _gameState.playMeld(cards);
     _gameState.validateGameState();
@@ -373,14 +431,13 @@ class GameController implements GameInterface {
       }
 
       // Check if player went out (round or game ended)
-      if (_gameState.phase != phaseBefore) {
-        _publishRoundOrGameEndEvents(player, roundBefore);
-      } else if (_gameState.finalTurnPhaseActive &&
-          _gameState.playerWhoWentOutIndex != null &&
-          _gameState.players[_gameState.playerWhoWentOutIndex!].id ==
-              player.id) {
-        publishTurnEndedEvent(player);
-      }
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
+      );
     }
 
     return result;
@@ -421,6 +478,8 @@ class GameController implements GameInterface {
     final hadPickedUpFoot = player.hasPickedUpFoot;
     final roundBefore = _gameState.round;
     final phaseBefore = _gameState.phase;
+    final roundEndingPlayer = _captureRoundEndingPlayer(player);
+    final currentIndexBefore = _gameState.currentPlayerIndex;
     final meld = player.melds[meldIndex];
     final result = _gameState.addToMeld(meldIndex, card);
     _gameState.validateGameState();
@@ -441,14 +500,13 @@ class GameController implements GameInterface {
       }
 
       // Check if player went out (round or game ended)
-      if (_gameState.phase != phaseBefore) {
-        _publishRoundOrGameEndEvents(player, roundBefore);
-      } else if (_gameState.finalTurnPhaseActive &&
-          _gameState.playerWhoWentOutIndex != null &&
-          _gameState.players[_gameState.playerWhoWentOutIndex!].id ==
-              player.id) {
-        publishTurnEndedEvent(player);
-      }
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
+      );
     }
 
     return result;

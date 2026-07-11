@@ -183,15 +183,8 @@ class GameStateManager {
     try {
       DebugLogger.debug('Forcing turn advancement (emergency)');
 
-      final gameState = gameController.gameState;
-
-      // Reset turn state
-      gameState.turnPhase = TurnPhase.draw;
-      gameState.hasDrawnFromDeck = false;
-      gameState.hasMelded = false;
-
-      // Advance to next player
-      gameState.nextPlayer();
+      final previousPlayer = gameController.gameState.currentPlayer;
+      gameController.advanceTurnAfterAction(previousPlayer);
 
       onStateChanged();
 
