@@ -396,8 +396,7 @@ class BotTurnManager {
           DebugLogger.debug(
             'Bot ${botPlayer.name} requesting emergency turn end',
           );
-          gameState.nextPlayer();
-          gameController.publishTurnEndedEvent(botPlayer);
+          _completeTurnAndNotify(botPlayer);
           success = true;
           break;
 
@@ -500,6 +499,12 @@ class BotTurnManager {
         DebugLogger.debug('Bot ${player.name} went out by melding');
       }
     }
+  }
+
+  void _completeTurnAndNotify(Player previousPlayer) {
+    gameController.advanceTurnAfterAction(previousPlayer);
+    AnalyticsBatcher.flushOnTurnCompletion();
+    onStateChanged();
   }
 
   /// Handle state after discard action
@@ -693,13 +698,7 @@ class BotTurnManager {
         handlePostDiscardState(botPlayer);
 
         // ADVANCE TURN - this is guaranteed to work
-        final previousPlayer = botPlayer;
-        gameState.nextPlayer();
-        // Publish event so UI knows turn changed
-        gameController.publishTurnEndedEvent(previousPlayer);
-        // Flush analytics on turn completion for better timing
-        AnalyticsBatcher.flushOnTurnCompletion();
-        onStateChanged();
+        _completeTurnAndNotify(botPlayer);
         return;
       }
 
@@ -726,9 +725,7 @@ class BotTurnManager {
           );
         }
 
-        final previousPlayer2 = botPlayer;
-        gameState.nextPlayer();
-        gameController.publishTurnEndedEvent(previousPlayer2);
+        _completeTurnAndNotify(botPlayer);
         onStateChanged();
         return;
       }
@@ -758,24 +755,18 @@ class BotTurnManager {
           );
 
           // Force advance turn to prevent infinite loop
-          final previousPlayer3 = botPlayer;
-          gameState.nextPlayer();
-          gameController.publishTurnEndedEvent(previousPlayer3);
+          _completeTurnAndNotify(botPlayer);
           onStateChanged();
           return;
         }
       }
 
-      final previousPlayer4 = botPlayer;
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(previousPlayer4);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     } catch (e) {
       DebugLogger.error('CRITICAL ERROR in absolutelyGuaranteedDiscard: $e');
       // Even if everything fails, force advance turn to prevent infinite loops
-      final previousPlayer5 = botPlayer;
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(previousPlayer5);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     }
   }
@@ -882,8 +873,7 @@ class BotTurnManager {
         }
 
         // Complete turn legally
-        gameState.nextPlayer();
-        gameController.publishTurnEndedEvent(botPlayer);
+        _completeTurnAndNotify(botPlayer);
         onStateChanged();
         return;
       }
@@ -911,8 +901,7 @@ class BotTurnManager {
           );
 
           // Complete turn legally
-          gameState.nextPlayer();
-          gameController.publishTurnEndedEvent(botPlayer);
+          _completeTurnAndNotify(botPlayer);
           onStateChanged();
           return;
         }
@@ -943,14 +932,12 @@ class BotTurnManager {
       );
 
       // Complete turn without polluting discard pile with synthetic cards
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(botPlayer);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     } catch (e) {
       DebugLogger.error('CRITICAL ERROR in emergencyCompleteBotTurn: $e');
       // Even if everything fails, force advance turn to prevent infinite loops
-      gameState.nextPlayer();
-      gameController.publishTurnEndedEvent(botPlayer);
+      _completeTurnAndNotify(botPlayer);
       onStateChanged();
     }
   }

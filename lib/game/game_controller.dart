@@ -326,6 +326,26 @@ class GameController implements GameInterface {
     );
   }
 
+  /// Advance play after a completed turn, publishing turn-end or round-end events.
+  ///
+  /// Returns true when the round or game ended.
+  bool advanceTurnAfterAction(Player previousPlayer) {
+    final phaseBefore = _gameState.phase;
+    final roundBefore = _gameState.round;
+    final roundEnded = _gameState.completeTurn();
+
+    if (_gameState.phase != phaseBefore) {
+      _publishRoundOrGameEndEvents(previousPlayer, roundBefore);
+      return true;
+    }
+
+    if (!roundEnded) {
+      publishTurnEndedEvent(previousPlayer);
+    }
+
+    return roundEnded;
+  }
+
   @override
   void nextRound({bool dealCards = true}) {
     if (_gameState.phase == GamePhase.roundEnd) {

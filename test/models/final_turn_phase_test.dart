@@ -121,8 +121,72 @@ void main() {
       gameState.handlePlayerWentOut();
 
       expect(gameState.playerWhoWentOutIndex, 0);
-      expect(gameState.playersAwaitingFinalTurn, {1, 2});
+      expect(gameState.playersAwaitingFinalTurn, {2});
       expect(gameState.currentPlayerIndex, 2);
+    });
+
+    test('went-out player never receives a turn during final turn phase', () {
+      final players = [
+        Player(id: '1', name: 'You', type: PlayerType.human),
+        Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        Player(id: '3', name: 'Bob', type: PlayerType.bot),
+      ];
+      final gameState = GameState(
+        players: players,
+        deck: Deck.createHandAndFootDeck(players.length),
+        soloSettings: _withFinalTurnSettings,
+      );
+
+      gameState.phase = GamePhase.playing;
+      _setupPlayerToGoOut(players[0]);
+      gameState.currentPlayerIndex = 0;
+      gameState.handlePlayerWentOut();
+
+      expect(gameState.finalTurnPhaseActive, isTrue);
+      expect(gameState.currentPlayerIndex, 1);
+
+      gameState.completeTurn();
+      expect(gameState.currentPlayerIndex, 2);
+      expect(gameState.currentPlayerIndex, isNot(0));
+
+      final roundEnded = gameState.completeTurn();
+      expect(roundEnded, isTrue);
+      expect(gameState.phase, GamePhase.roundEnd);
+      expect(gameState.currentPlayerIndex, isNot(0));
+    });
+
+    test('four players each get exactly one final turn after early go-out', () {
+      final players = [
+        Player(id: '1', name: 'You', type: PlayerType.human),
+        Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        Player(id: '3', name: 'Bob', type: PlayerType.bot),
+        Player(id: '4', name: 'Alex', type: PlayerType.bot),
+      ];
+      final gameState = GameState(
+        players: players,
+        deck: Deck.createHandAndFootDeck(players.length),
+        soloSettings: _withFinalTurnSettings,
+      );
+
+      gameState.phase = GamePhase.playing;
+      _setupPlayerToGoOut(players[0]);
+      gameState.currentPlayerIndex = 0;
+      gameState.handlePlayerWentOut();
+
+      expect(gameState.playersAwaitingFinalTurn, {1, 2, 3});
+      expect(gameState.currentPlayerIndex, 1);
+
+      final turnsTaken = <int>[];
+      while (gameState.finalTurnPhaseActive) {
+        turnsTaken.add(gameState.currentPlayerIndex);
+        final ended = gameState.completeTurn();
+        if (ended) {
+          break;
+        }
+      }
+
+      expect(turnsTaken, [1, 2, 3]);
+      expect(gameState.phase, GamePhase.roundEnd);
     });
   });
 }
