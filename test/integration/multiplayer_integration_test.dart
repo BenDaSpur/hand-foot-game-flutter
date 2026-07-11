@@ -10,18 +10,20 @@ import 'package:hand_foot_game_flutter/models/deck.dart';
 void main() {
   group('Mock multiplayer success path', () {
     test('create and join with mock adapter succeeds end-to-end', () async {
-      final hostController = await GameControllerFactory.createTestMultiplayerGame(
-        hostPlayerName: 'Host',
-        maxPlayers: 2,
-      );
+      final hostController =
+          await GameControllerFactory.createTestMultiplayerGame(
+            hostPlayerName: 'Host',
+            maxPlayers: 2,
+          );
 
       expect(hostController, isNotNull);
       expect(hostController!.isHost, isTrue);
 
-      final guestController = await GameControllerFactory.joinTestMultiplayerGame(
-        gameId: hostController.gameId,
-        playerName: 'Guest',
-      );
+      final guestController =
+          await GameControllerFactory.joinTestMultiplayerGame(
+            gameId: hostController.gameId,
+            playerName: 'Guest',
+          );
 
       expect(guestController, isNotNull);
       expect(guestController!.isHost, isFalse);
@@ -31,8 +33,16 @@ void main() {
 
       final serverState = GameState(
         players: [
-          Player(id: hostController.userId, name: 'Host', type: PlayerType.human),
-          Player(id: guestController.userId, name: 'Guest', type: PlayerType.human),
+          Player(
+            id: hostController.userId,
+            name: 'Host',
+            type: PlayerType.human,
+          ),
+          Player(
+            id: guestController.userId,
+            name: 'Guest',
+            type: PlayerType.human,
+          ),
         ],
         deck: Deck(),
         phase: GamePhase.playing,
