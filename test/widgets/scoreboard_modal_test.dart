@@ -277,6 +277,73 @@ void main() {
         expect(find.text('Leader: Player 3 (2000 points)'), findsOneWidget);
       });
 
+      testWidgets('displays actual player names instead of index labels', (
+        WidgetTester tester,
+      ) async {
+        final namedPlayers = [
+          Player(
+            id: '1',
+            name: 'You',
+            type: PlayerType.human,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1370,
+          ),
+          Player(
+            id: '2',
+            name: 'Bot 1',
+            type: PlayerType.bot,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 1325,
+          ),
+          Player(
+            id: '3',
+            name: 'Bot 2',
+            type: PlayerType.bot,
+            hand: [],
+            foot: [],
+            melds: [],
+            score: 370,
+          ),
+        ];
+
+        final namedGameState = GameState(
+          players: namedPlayers,
+          deck: Deck.createHandAndFootDeck(3),
+          currentPlayerIndex: 2,
+          phase: GamePhase.playing,
+          round: 2,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Material(
+              child: MediaQuery(
+                data: const MediaQueryData(size: Size(800, 1200)),
+                child: ScoreboardModal(gameState: namedGameState),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        expect(find.text('Leader: You (1370 points)'), findsOneWidget);
+        expect(find.text('You'), findsOneWidget);
+        expect(find.text('Bot 1'), findsOneWidget);
+
+        await tester.scrollUntilVisible(
+          find.text('Bot 2'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Bot 2'), findsOneWidget);
+        expect(find.textContaining('Player '), findsNothing);
+      });
+
       testWidgets('displays score breakdown components', (
         WidgetTester tester,
       ) async {

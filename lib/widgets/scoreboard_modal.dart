@@ -74,7 +74,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
 
     // Build accessibility label
     final accessibilityLabel =
-        'Player ${playerIndex + 1}, '
+        '${player.name}, '
         'Total score: ${breakdown['gameTotal']}, '
         'Round ${widget.gameState.round} score: ${breakdown['currentRoundTotal']}, '
         '${canGoOut ? 'Can go out, ' : ''}'
@@ -124,7 +124,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                           children: [
                             Flexible(
                               child: Text(
-                                'Player ${playerIndex + 1}',
+                                player.name,
                                 style: Theme.of(context)
                                     .textTheme
                                     .headlineMedium
@@ -467,7 +467,7 @@ class _ScoreboardModalState extends State<ScoreboardModal> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Leader: Player ${sortedPlayers[0] + 1} (${widget.gameState.players[sortedPlayers[0]].score} points)',
+                        'Leader: ${widget.gameState.players[sortedPlayers[0]].name} (${widget.gameState.players[sortedPlayers[0]].score} points)',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
