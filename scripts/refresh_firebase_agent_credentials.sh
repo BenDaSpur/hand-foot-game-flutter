@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="${FIREBASE_TOOLS_CONFIG:-$HOME/.config/configstore/firebase-tools.json}"
-DEST="$REPO_ROOT/.firebase/firebase-tools-credentials.json"
+DEST="$REPO_ROOT/.firebase/oauth-credentials.json"
 
 if [[ ! -f "$SRC" ]]; then
   echo "❌ No Firebase credentials found at: $SRC"

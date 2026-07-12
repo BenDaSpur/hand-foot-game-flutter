@@ -1,22 +1,123 @@
 const fs = require('fs');
 const https = require('https');
+const crypto = require('crypto');
+const path = require('path');
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+const REPO_ROOT = path.resolve(__dirname, '..');
+const DEFAULT_SERVICE_ACCOUNT_FILE = path.join(
+  REPO_ROOT,
+  '.firebase/hand-foot-service-account.json',
+);
+
+// Firebase CLI OAuth client (public installed-app credentials).
+// Source: https://github.com/firebase/firebase-tools/blob/master/src/api.ts
 const DEFAULT_OAUTH_CLIENT_ID =
   '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com';
+const DEFAULT_OAUTH_CLIENT_SECRET = 'j9iVZfS8kkCEFUPaAeJV0sAi';
+
+const SERVICE_ACCOUNT_SCOPES = [
+  'https://www.googleapis.com/auth/datastore',
+  'https://www.googleapis.com/auth/cloud-platform',
+].join(' ');
+
+let cachedServiceAccountToken = null;
+let cachedServiceAccountTokenExpiresAt = 0;
 
 function getOAuthClientConfig() {
   const clientId =
     process.env.FIREBASE_OAUTH_CLIENT_ID || DEFAULT_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.FIREBASE_OAUTH_CLIENT_SECRET;
-  if (!clientSecret) {
+  const clientSecret =
+    process.env.FIREBASE_OAUTH_CLIENT_SECRET || DEFAULT_OAUTH_CLIENT_SECRET;
+  return { clientId, clientSecret };
+}
+
+function base64url(value) {
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value);
+  return buffer
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function loadServiceAccount() {
+  try {
+    if (process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64) {
+      const json = Buffer.from(
+        process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64,
+        'base64',
+      ).toString('utf8');
+      return JSON.parse(json);
+    }
+
+    const filePath =
+      process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE ||
+      DEFAULT_SERVICE_ACCOUNT_FILE;
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch (error) {
     throw new Error(
-      'FIREBASE_OAUTH_CLIENT_SECRET is required for OAuth token refresh. ' +
-        'Set it in your environment or local .env (gitignored). ' +
-        'Rotate any secret previously committed to the repository.',
+      `Failed to load service account credentials: ${error.message}`,
     );
   }
-  return { clientId, clientSecret };
+
+  return null;
+}
+
+function hasServiceAccountCredentials() {
+  return loadServiceAccount() != null;
+}
+
+async function getServiceAccountAccessToken(serviceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    cachedServiceAccountToken &&
+    Date.now() < cachedServiceAccountTokenExpiresAt - 60000
+  ) {
+    return cachedServiceAccountToken;
+  }
+
+  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claim = base64url(
+    JSON.stringify({
+      iss: serviceAccount.client_email,
+      scope: SERVICE_ACCOUNT_SCOPES,
+      aud: serviceAccount.token_uri || 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now,
+    }),
+  );
+  const unsigned = `${header}.${claim}`;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  signer.end();
+  const signature = base64url(signer.sign(serviceAccount.private_key));
+  const assertion = `${unsigned}.${signature}`;
+
+  const body = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion,
+  }).toString();
+
+  const result = await httpsRequest(
+    {
+      hostname: 'oauth2.googleapis.com',
+      path: '/token',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    },
+    body,
+  );
+
+  cachedServiceAccountToken = result.access_token;
+  cachedServiceAccountTokenExpiresAt =
+    Date.now() + (result.expires_in || 3600) * 1000;
+  return cachedServiceAccountToken;
 }
 
 function httpsRequest(options, body, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
@@ -101,10 +202,31 @@ async function getAccessToken(creds, credsPath) {
   return refreshAccessToken(creds, credsPath);
 }
 
+async function resolveAccessToken({ creds, credsPath } = {}) {
+  const serviceAccount = loadServiceAccount();
+  if (serviceAccount) {
+    return getServiceAccountAccessToken(serviceAccount);
+  }
+
+  if (!creds) {
+    throw new Error(
+      'No analytics credentials found. Set FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64, ' +
+        'place JSON at .firebase/hand-foot-service-account.json, or bootstrap OAuth credentials.',
+    );
+  }
+
+  return getAccessToken(creds, credsPath);
+}
+
 module.exports = {
   DEFAULT_REQUEST_TIMEOUT_MS,
+  DEFAULT_SERVICE_ACCOUNT_FILE,
   getOAuthClientConfig,
+  hasServiceAccountCredentials,
+  loadServiceAccount,
   httpsRequest,
   refreshAccessToken,
   getAccessToken,
+  getServiceAccountAccessToken,
+  resolveAccessToken,
 };

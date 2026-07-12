@@ -532,6 +532,15 @@ class EnhancedBotAI {
       return footPhaseDecision;
     }
 
+    // Draw-loop guard: played down with large hand should meld, not draw repeatedly
+    if (bot.hasPlayedDown &&
+        bot.currentHand.length >= BotConfig.drawLoopMeldHandThreshold) {
+      final drawLoopMeld = _forceMeldForLargePlayedDownHand(bot, context);
+      if (drawLoopMeld != null) {
+        return drawLoopMeld;
+      }
+    }
+
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
     // BUT: Give bots grace period early in round when large hands are normal
     // AND: Require minimum turns before emergency can activate
@@ -3095,6 +3104,45 @@ class EnhancedBotAI {
     return null;
   }
 
+  /// Prevent draw loops when a bot has played down but holds a large hand.
+  BotDecision? _forceMeldForLargePlayedDownHand(
+    Player bot,
+    BotGameContext context,
+  ) {
+    final controller = context.controller as GameController?;
+    if (controller == null) {
+      return null;
+    }
+
+    final additions = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+    if (additions.isNotEmpty) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Draw-loop guard: adding to meld with ${bot.currentHand.length} cards',
+      );
+      return BotDecision(action: 'addToMeld', data: additions.first);
+    }
+
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    if (possibleMelds.isNotEmpty) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Draw-loop guard: creating meld with ${bot.currentHand.length} cards',
+      );
+      return BotDecision(
+        action: 'createMeld',
+        data: _selectBestNewMeld(bot, possibleMelds),
+      );
+    }
+
+    return null;
+  }
+
   /// Force a meld/add in foot when hand is large or books are incomplete.
   BotDecision? _forceFootPhaseMeld(
     Player bot,
@@ -3355,6 +3403,8 @@ class EnhancedBotAI {
         return;
       }
 
+      _personalityManager.resetAdaptiveConstants(bot.id);
+
       final humanPlayers = gameState.players.where(
         (p) => p.type == PlayerType.human,
       );
@@ -3433,8 +3483,7 @@ class EnhancedBotAI {
     String strategy,
     Map<String, dynamic> overrides,
   ) {
-    // This would ideally modify the personality manager's constants for this bot
-    // For now, we'll track the strategy and apply it in decision-making
+    _personalityManager.applyConstantOverrides(bot.id, strategy, overrides);
     DebugLogger.botDebug(bot.id, bot.name, 'Adaptive strategy: $strategy');
   }
 

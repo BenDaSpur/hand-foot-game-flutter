@@ -48,6 +48,47 @@ class PersonalityConstants {
     required this.aggressivenessMultiplier,
   });
 
+  PersonalityConstants copyWith({
+    int? strategicBufferPoints,
+    int? minCardsForAggressiveUnlock,
+    int? valuablePileThreshold,
+    int? largePileThreshold,
+    int? footPileValueThreshold,
+    int? footPileSizeThreshold,
+    int? handPileValueThreshold,
+    int? handPileSizeThreshold,
+    int? maxTurnsBeforeForcePlayDown,
+    double? highValuePairBreakChance,
+    int? bookCompletionPriority,
+    double? aggressivenessMultiplier,
+  }) {
+    return PersonalityConstants(
+      strategicBufferPoints:
+          strategicBufferPoints ?? this.strategicBufferPoints,
+      minCardsForAggressiveUnlock:
+          minCardsForAggressiveUnlock ?? this.minCardsForAggressiveUnlock,
+      valuablePileThreshold:
+          valuablePileThreshold ?? this.valuablePileThreshold,
+      largePileThreshold: largePileThreshold ?? this.largePileThreshold,
+      footPileValueThreshold:
+          footPileValueThreshold ?? this.footPileValueThreshold,
+      footPileSizeThreshold:
+          footPileSizeThreshold ?? this.footPileSizeThreshold,
+      handPileValueThreshold:
+          handPileValueThreshold ?? this.handPileValueThreshold,
+      handPileSizeThreshold:
+          handPileSizeThreshold ?? this.handPileSizeThreshold,
+      maxTurnsBeforeForcePlayDown:
+          maxTurnsBeforeForcePlayDown ?? this.maxTurnsBeforeForcePlayDown,
+      highValuePairBreakChance:
+          highValuePairBreakChance ?? this.highValuePairBreakChance,
+      bookCompletionPriority:
+          bookCompletionPriority ?? this.bookCompletionPriority,
+      aggressivenessMultiplier:
+          aggressivenessMultiplier ?? this.aggressivenessMultiplier,
+    );
+  }
+
   /// Get personality-based constants
   static PersonalityConstants forPersonality(BotPersonality personality) {
     switch (personality) {
@@ -154,6 +195,8 @@ class BotPersonalityManager {
   // Per-player personality assignments
   final Map<String, BotPersonality> _playerPersonalities = {};
   final Map<String, PersonalityConstants> _playerConstants = {};
+  final Map<String, PersonalityConstants> _baseConstants = {};
+  final Map<String, String> _adaptiveStrategies = {};
 
   // Current player context cache
   PersonalityConstants? _currentConstants;
@@ -164,9 +207,10 @@ class BotPersonalityManager {
   /// Assign a personality to a specific bot player
   void assignPersonality(String playerId, BotPersonality personality) {
     _playerPersonalities[playerId] = personality;
-    _playerConstants[playerId] = PersonalityConstants.forPersonality(
-      personality,
-    );
+    final constants = PersonalityConstants.forPersonality(personality);
+    _baseConstants[playerId] = constants;
+    _playerConstants[playerId] = constants;
+    _adaptiveStrategies.remove(playerId);
   }
 
   /// Get personality for a specific player (defaults to adaptive)
@@ -178,6 +222,61 @@ class BotPersonalityManager {
   PersonalityConstants getConstants(String playerId) {
     return _playerConstants[playerId] ??
         PersonalityConstants.forPersonality(BotPersonality.adaptive);
+  }
+
+  /// Current adaptive strategy label for debugging/analytics (empty if none).
+  String getAdaptiveStrategy(String playerId) {
+    return _adaptiveStrategies[playerId] ?? '';
+  }
+
+  /// Reset adaptive bot to base personality constants before re-evaluating strategy.
+  void resetAdaptiveConstants(String playerId) {
+    if (getPersonality(playerId) != BotPersonality.adaptive) {
+      return;
+    }
+    final base =
+        _baseConstants[playerId] ??
+        PersonalityConstants.forPersonality(BotPersonality.adaptive);
+    _playerConstants[playerId] = base;
+    _adaptiveStrategies.remove(playerId);
+    if (_currentPlayerId == playerId) {
+      _currentConstants = base;
+    }
+  }
+
+  /// Apply runtime overrides to a bot's personality constants (adaptive bots).
+  void applyConstantOverrides(
+    String playerId,
+    String strategy,
+    Map<String, dynamic> overrides,
+  ) {
+    if (getPersonality(playerId) != BotPersonality.adaptive) {
+      return;
+    }
+
+    final current = getConstants(playerId);
+    _playerConstants[playerId] = current.copyWith(
+      strategicBufferPoints: overrides['strategicBufferPoints'] as int?,
+      minCardsForAggressiveUnlock:
+          overrides['minCardsForAggressiveUnlock'] as int?,
+      valuablePileThreshold: overrides['valuablePileThreshold'] as int?,
+      largePileThreshold: overrides['largePileThreshold'] as int?,
+      footPileValueThreshold: overrides['footPileValueThreshold'] as int?,
+      footPileSizeThreshold: overrides['footPileSizeThreshold'] as int?,
+      handPileValueThreshold: overrides['handPileValueThreshold'] as int?,
+      handPileSizeThreshold: overrides['handPileSizeThreshold'] as int?,
+      maxTurnsBeforeForcePlayDown:
+          overrides['maxTurnsBeforeForcePlayDown'] as int?,
+      highValuePairBreakChance:
+          overrides['highValuePairBreakChance'] as double?,
+      bookCompletionPriority: overrides['bookCompletionPriority'] as int?,
+      aggressivenessMultiplier:
+          overrides['aggressivenessMultiplier'] as double?,
+    );
+    _adaptiveStrategies[playerId] = strategy;
+    if (_currentPlayerId == playerId) {
+      _currentConstants = _playerConstants[playerId];
+    }
   }
 
   /// Set current player context for this decision cycle
@@ -304,11 +403,8 @@ class BotPersonalityManager {
       riskModifier *= _calculateAdaptiveModifier(gameState, botPlayer);
     }
 
-    // Cap risk tolerance at higher bounds for more competitive play
-    final finalRisk = (baseRisk * riskModifier).clamp(
-      0.4,
-      4.0,
-    ); // Increased upper bound
+    // Cap risk tolerance — clamp lowered per analytics monitoring guide
+    final finalRisk = (baseRisk * riskModifier).clamp(0.4, 3.5);
 
     // Log extreme risk tolerance for monitoring
     if (finalRisk > 3.0) {
@@ -409,6 +505,8 @@ class BotPersonalityManager {
   void clearPersonalityData() {
     _playerPersonalities.clear();
     _playerConstants.clear();
+    _baseConstants.clear();
+    _adaptiveStrategies.clear();
     _currentConstants = null;
     _currentPlayerId = null;
   }

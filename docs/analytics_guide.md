@@ -62,7 +62,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   },
   gameSeed: 123456, // For reproducible game analysis
   appVersion: "1.0.0",
-  botAiVersion: "2026.07-human-patterns",
+  botAiVersion: "2026.07-hand-foot-rush",
   finalScores: [1250, 980, 750],
   winnerId: "player_1",
   sessionDuration: 1800,
@@ -88,7 +88,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   decision: "takePile",
   drawSource: "discard",
   appVersion: "1.0.0",
-  botAiVersion: "2026.07-human-patterns",
+  botAiVersion: "2026.07-hand-foot-rush",
   reasoning: "Pile contains valuable cards for book completion",
   confidence: 0.8,
   gameSeed: 123456, // Same seed for reproducible analysis
@@ -110,7 +110,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   playerType: "human",
   drawSource: "deck",  // deck | discard | unlock (when applicable)
   appVersion: "1.0.0",
-  botAiVersion: "2026.07-human-patterns",
+  botAiVersion: "2026.07-hand-foot-rush",
   success: true,
   eventData: {
     cardCount: 5,
@@ -135,7 +135,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   handSizeAtEnd: 11,
   nextPlayerId: "bot_1",
   appVersion: "1.0.0",
-  botAiVersion: "2026.07-human-patterns"
+  botAiVersion: "2026.07-hand-foot-rush"
 }
 ```
 
@@ -155,7 +155,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
     takerId: "player_1"
   },
   appVersion: "1.0.0",
-  botAiVersion: "2026.07-human-patterns"
+  botAiVersion: "2026.07-hand-foot-rush"
 }
 ```
 

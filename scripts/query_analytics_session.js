@@ -1,22 +1,35 @@
 #!/usr/bin/env node
 /**
- * Query Firestore analytics using OAuth credentials from .firebase/firebase-tools-credentials.json
+ * Query Firestore analytics using OAuth credentials from .firebase/oauth-credentials.json
  * Analytics collections are write-only from client SDK; this uses admin REST API with user OAuth.
  */
 const fs = require('fs');
 const path = require('path');
 const {
   httpsRequest,
-  getAccessToken,
+  hasServiceAccountCredentials,
+  loadServiceAccount,
+  resolveAccessToken,
 } = require('./analytics_http_common');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CREDS_PATH =
   process.env.FIREBASE_CREDENTIALS_FILE ||
-  path.join(REPO_ROOT, '.firebase/firebase-tools-credentials.json');
-const PROJECT_ID =
-  process.env.FIREBASE_PROJECT_ID || 'hand-foot-game-flutter';
+  path.join(REPO_ROOT, '.firebase/oauth-credentials.json');
 
+
+function getProjectId() {
+  if (process.env.FIREBASE_PROJECT_ID) {
+    return process.env.FIREBASE_PROJECT_ID;
+  }
+  const serviceAccount = loadServiceAccount();
+  if (serviceAccount?.project_id) {
+    return serviceAccount.project_id;
+  }
+  throw new Error(
+    'FIREBASE_PROJECT_ID is required (or provide a service account JSON with project_id).',
+  );
+}
 function parseArgs(argv) {
   const args = {
     scores: null,
@@ -48,6 +61,9 @@ function parseArgs(argv) {
 }
 
 function loadCreds() {
+  if (!fs.existsSync(CREDS_PATH)) {
+    return null;
+  }
   const raw = fs.readFileSync(CREDS_PATH, 'utf8');
   return JSON.parse(raw);
 }
@@ -81,11 +97,12 @@ function docToObject(doc) {
 }
 
 async function listCollection(accessToken, collection, pageSize = 300) {
+  const projectId = getProjectId();
   const all = [];
   let pageToken = null;
   do {
     const path =
-      `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collection}` +
+      `/v1/projects/${projectId}/databases/(default)/documents/${collection}` +
       `?pageSize=${pageSize}` +
       (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
     const result = await httpsRequest({
@@ -134,7 +151,7 @@ async function runStructuredQuery(
     const result = await httpsRequest(
       {
         hostname: 'firestore.googleapis.com',
-        path: `/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`,
+        path: `/v1/projects/${getProjectId()}/databases/(default)/documents:runQuery`,
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -196,8 +213,14 @@ function scoresMatch(sessionScores, targetScores) {
 
 async function main() {
   const args = parseArgs(process.argv);
+  const projectId = getProjectId();
   const creds = loadCreds();
-  const accessToken = await getAccessToken(creds, CREDS_PATH);
+  const accessToken = await resolveAccessToken({ creds, credsPath: CREDS_PATH });
+  const authMode = hasServiceAccountCredentials()
+    ? 'service-account'
+    : 'oauth-user';
+  console.log(`Auth mode: ${authMode}`);
+  console.log(`Project: ${projectId}`);
 
   let sessionId = args.session;
 
