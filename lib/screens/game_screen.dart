@@ -22,6 +22,7 @@ import '../widgets/game_action_buttons.dart';
 import '../widgets/game_app_bar.dart';
 import '../widgets/game_session_info_menu.dart';
 import '../widgets/card_animation_host.dart';
+import '../widgets/final_turn_banner.dart';
 import '../widgets/perfect_grab_mini_game.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
@@ -1950,6 +1951,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ],
         ),
       );
+    }
+
+    if (gameState.finalTurnPhaseActive) {
+      return FinalTurnBanner(gameState: gameState);
     }
 
     return null;

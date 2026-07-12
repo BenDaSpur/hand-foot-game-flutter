@@ -10,6 +10,7 @@ import '../widgets/melds_section.dart';
 import '../widgets/game_hand_display.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/game_board_layout.dart';
+import '../widgets/final_turn_banner.dart';
 import '../widgets/turn_timer.dart';
 import '../widgets/card_animation_host.dart';
 import '../game/events/game_event_bus.dart';
@@ -516,6 +517,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                     ),
                   ],
                 ],
+                aboveMelds: gameState.finalTurnPhaseActive
+                    ? FinalTurnBanner(
+                        gameState: gameState,
+                        localPlayerId: _gameController.userId,
+                      )
+                    : null,
                 meldsSection: MeldsSection(
                   gameState: gameState,
                   humanPlayer: humanPlayer,

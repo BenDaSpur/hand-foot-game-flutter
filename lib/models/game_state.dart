@@ -107,6 +107,29 @@ class GameState {
 
   PlayingCard? get topDiscard => discardPile.isEmpty ? null : discardPile.last;
 
+  /// Player who went out this round, if any.
+  Player? get playerWhoWentOut {
+    final index = playerWhoWentOutIndex;
+    if (index == null || index < 0 || index >= players.length) {
+      return null;
+    }
+    return players[index];
+  }
+
+  /// Whether [currentPlayer] is taking their one final turn after a go-out.
+  bool get isCurrentPlayerFinalTurn =>
+      finalTurnPhaseActive &&
+      playersAwaitingFinalTurn.contains(currentPlayerIndex);
+
+  /// Whether the given [player] still has a final turn owed.
+  bool isPlayerAwaitingFinalTurn(Player player) {
+    final index = players.indexWhere((p) => p.id == player.id);
+    if (index < 0) {
+      return false;
+    }
+    return playersAwaitingFinalTurn.contains(index);
+  }
+
   /// Sets the game to multiplayer mode with optional viewer ID for privacy controls
   ///
   /// When [isMultiplayer] is true, action logging will respect multiplayer privacy rules,
