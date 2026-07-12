@@ -11,6 +11,42 @@ import '../services/game_save_service.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../models/player.dart';
 
+/// Layout and styling constants for main menu buttons.
+abstract final class _MenuButtonLayout {
+  static const double width = 320;
+  static const double height = 80;
+  static const double horizontalMargin = 20;
+  static const double borderRadius = 12;
+  static const double iconContainerRadius = 8;
+  static const double primaryBorderWidth = 2;
+  static const double secondaryBorderWidth = 1;
+  static const double primaryShadowBlur = 12;
+  static const double secondaryShadowBlur = 8;
+  static const Offset shadowOffset = Offset(0, 4);
+  static const double contentPadding = 16;
+  static const double iconContainerPadding = 8;
+  static const double iconSpacing = 16;
+  static const double labelDescriptionGap = 2;
+  static const double mainIconSize = 24;
+  static const double arrowIconSize = 16;
+  static const double settingsIconSize = 22;
+  static const double labelFontSize = 18;
+  static const double descriptionFontSize = 12;
+  static const double dividerWidth = 1;
+  static const double dividerHeight = 48;
+  static const double settingsButtonMinSize = 48;
+  static const double settingsButtonHorizontalPadding = 12;
+
+  static const double primaryBackgroundAlpha = 0.2;
+  static const double primaryBorderAlpha = 0.6;
+  static const double secondaryBorderAlpha = 0.3;
+  static const double primaryShadowAlpha = 0.5;
+  static const double primaryIconBackgroundAlpha = 0.3;
+  static const double secondaryIconBackgroundAlpha = 0.2;
+  static const double descriptionTextAlpha = 0.7;
+  static const double dividerAlpha = 0.3;
+}
+
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
 
@@ -221,27 +257,43 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         : BalatroTheme.neonPink;
 
     return Container(
-      width: 320,
-      height: 80,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
+      width: _MenuButtonLayout.width,
+      height: _MenuButtonLayout.height,
+      margin: const EdgeInsets.symmetric(
+        horizontal: _MenuButtonLayout.horizontalMargin,
+      ),
       decoration: BoxDecoration(
         color: isPrimary
-            ? BalatroTheme.neonBlue.withValues(alpha: 0.2)
+            ? BalatroTheme.neonBlue.withValues(
+                alpha: _MenuButtonLayout.primaryBackgroundAlpha,
+              )
             : BalatroTheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_MenuButtonLayout.borderRadius),
         border: Border.all(
           color: isPrimary
-              ? BalatroTheme.neonBlue.withValues(alpha: 0.6)
-              : BalatroTheme.neonPink.withValues(alpha: 0.3),
-          width: isPrimary ? 2 : 1,
+              ? BalatroTheme.neonBlue.withValues(
+                  alpha: _MenuButtonLayout.primaryBorderAlpha,
+                )
+              : BalatroTheme.neonPink.withValues(
+                  alpha: _MenuButtonLayout.secondaryBorderAlpha,
+                ),
+          width: isPrimary
+              ? _MenuButtonLayout.primaryBorderWidth
+              : _MenuButtonLayout.secondaryBorderWidth,
         ),
         boxShadow: [
           BoxShadow(
             color: isPrimary
-                ? BalatroTheme.neonBlue.withValues(alpha: 0.5)
-                : BalatroTheme.neonPink.withValues(alpha: 0.3),
-            blurRadius: isPrimary ? 12 : 8,
-            offset: const Offset(0, 4),
+                ? BalatroTheme.neonBlue.withValues(
+                    alpha: _MenuButtonLayout.primaryShadowAlpha,
+                  )
+                : BalatroTheme.neonPink.withValues(
+                    alpha: _MenuButtonLayout.secondaryBorderAlpha,
+                  ),
+            blurRadius: isPrimary
+                ? _MenuButtonLayout.primaryShadowBlur
+                : _MenuButtonLayout.secondaryShadowBlur,
+            offset: _MenuButtonLayout.shadowOffset,
           ),
         ],
       ),
@@ -252,22 +304,40 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             Expanded(
               child: InkWell(
                 onTap: onPressed,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(
+                  _MenuButtonLayout.borderRadius,
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(
+                    _MenuButtonLayout.contentPadding,
+                  ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(
+                          _MenuButtonLayout.iconContainerPadding,
+                        ),
                         decoration: BoxDecoration(
                           color: isPrimary
-                              ? BalatroTheme.neonBlue.withValues(alpha: 0.3)
-                              : BalatroTheme.neonPink.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
+                              ? BalatroTheme.neonBlue.withValues(
+                                  alpha: _MenuButtonLayout
+                                      .primaryIconBackgroundAlpha,
+                                )
+                              : BalatroTheme.neonPink.withValues(
+                                  alpha: _MenuButtonLayout
+                                      .secondaryIconBackgroundAlpha,
+                                ),
+                          borderRadius: BorderRadius.circular(
+                            _MenuButtonLayout.iconContainerRadius,
+                          ),
                         ),
-                        child: Icon(icon, color: accentColor, size: 24),
+                        child: Icon(
+                          icon,
+                          color: accentColor,
+                          size: _MenuButtonLayout.mainIconSize,
+                        ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: _MenuButtonLayout.iconSpacing),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,20 +349,26 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                                 label,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 18,
+                                  fontSize: _MenuButtonLayout.labelFontSize,
                                   fontWeight: FontWeight.bold,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(
+                              height: _MenuButtonLayout.labelDescriptionGap,
+                            ),
                             Flexible(
                               child: Text(
                                 description,
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.7),
-                                  fontSize: 12,
+                                  color: Colors.white.withValues(
+                                    alpha:
+                                        _MenuButtonLayout.descriptionTextAlpha,
+                                  ),
+                                  fontSize:
+                                      _MenuButtonLayout.descriptionFontSize,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -302,10 +378,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         ),
                       ),
                       if (onSettingsPressed == null)
-                        Icon(
+                        const Icon(
                           Icons.arrow_forward_ios,
                           color: BalatroTheme.neonBlue,
-                          size: 16,
+                          size: _MenuButtonLayout.arrowIconSize,
                         ),
                     ],
                   ),
@@ -314,19 +390,28 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             ),
             if (onSettingsPressed != null) ...[
               Container(
-                width: 1,
-                height: 48,
-                color: accentColor.withValues(alpha: 0.3),
+                width: _MenuButtonLayout.dividerWidth,
+                height: _MenuButtonLayout.dividerHeight,
+                color: accentColor.withValues(
+                  alpha: _MenuButtonLayout.dividerAlpha,
+                ),
               ),
               Tooltip(
                 message: 'Game settings',
                 child: IconButton(
                   onPressed: onSettingsPressed,
-                  icon: Icon(Icons.settings, color: accentColor, size: 22),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  icon: Icon(
+                    Icons.settings,
+                    color: accentColor,
+                    size: _MenuButtonLayout.settingsIconSize,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal:
+                        _MenuButtonLayout.settingsButtonHorizontalPadding,
+                  ),
                   constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
+                    minWidth: _MenuButtonLayout.settingsButtonMinSize,
+                    minHeight: _MenuButtonLayout.settingsButtonMinSize,
                   ),
                 ),
               ),
