@@ -532,9 +532,12 @@ class EnhancedBotAI {
       return footPhaseDecision;
     }
 
-    // Draw-loop guard: played down with large hand should meld, not draw repeatedly
+    // Draw-loop guard: played down with large hand should meld, not draw repeatedly.
+    // Skip during human-style accumulation (8–14) or burst-meld threshold (15+).
     if (bot.hasPlayedDown &&
-        bot.currentHand.length >= BotConfig.drawLoopMeldHandThreshold) {
+        bot.currentHand.length >= BotConfig.drawLoopMeldHandThreshold &&
+        !_isInHumanAccumulationWindow(bot, context) &&
+        !_shouldExecuteDumpStrategy(bot, context)) {
       final drawLoopMeld = _forceMeldForLargePlayedDownHand(bot, context);
       if (drawLoopMeld != null) {
         return drawLoopMeld;
