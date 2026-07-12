@@ -48,32 +48,71 @@ class PersonalityConstants {
     required this.aggressivenessMultiplier,
   });
 
+  PersonalityConstants copyWith({
+    int? strategicBufferPoints,
+    int? minCardsForAggressiveUnlock,
+    int? valuablePileThreshold,
+    int? largePileThreshold,
+    int? footPileValueThreshold,
+    int? footPileSizeThreshold,
+    int? handPileValueThreshold,
+    int? handPileSizeThreshold,
+    int? maxTurnsBeforeForcePlayDown,
+    double? highValuePairBreakChance,
+    int? bookCompletionPriority,
+    double? aggressivenessMultiplier,
+  }) {
+    return PersonalityConstants(
+      strategicBufferPoints:
+          strategicBufferPoints ?? this.strategicBufferPoints,
+      minCardsForAggressiveUnlock:
+          minCardsForAggressiveUnlock ?? this.minCardsForAggressiveUnlock,
+      valuablePileThreshold:
+          valuablePileThreshold ?? this.valuablePileThreshold,
+      largePileThreshold: largePileThreshold ?? this.largePileThreshold,
+      footPileValueThreshold:
+          footPileValueThreshold ?? this.footPileValueThreshold,
+      footPileSizeThreshold:
+          footPileSizeThreshold ?? this.footPileSizeThreshold,
+      handPileValueThreshold:
+          handPileValueThreshold ?? this.handPileValueThreshold,
+      handPileSizeThreshold:
+          handPileSizeThreshold ?? this.handPileSizeThreshold,
+      maxTurnsBeforeForcePlayDown:
+          maxTurnsBeforeForcePlayDown ?? this.maxTurnsBeforeForcePlayDown,
+      highValuePairBreakChance:
+          highValuePairBreakChance ?? this.highValuePairBreakChance,
+      bookCompletionPriority:
+          bookCompletionPriority ?? this.bookCompletionPriority,
+      aggressivenessMultiplier:
+          aggressivenessMultiplier ?? this.aggressivenessMultiplier,
+    );
+  }
+
   /// Get personality-based constants
   static PersonalityConstants forPersonality(BotPersonality personality) {
     switch (personality) {
       case BotPersonality.conservative:
         return const PersonalityConstants(
           strategicBufferPoints:
-              10, // REDUCED - more aggressive competitiveness
+              8, // Faster play-down — analytics showed foot-phase stalls
           minCardsForAggressiveUnlock:
               3, // Reduced from 4 - more willing to unlock
           valuablePileThreshold:
-              100, // Reduced from 140 - more aggressive pile taking
+              90, // Slightly more willing to take piles for book cards
           largePileThreshold: 6, // Reduced from 8 - lower threshold
           footPileValueThreshold:
-              50, // Reduced from 70 - more aggressive in foot
-          footPileSizeThreshold:
-              5, // Reduced from 7 - more willing to take smaller piles
-          handPileValueThreshold:
-              50, // REDUCED further - much more aggressive pile taking
-          handPileSizeThreshold: 7, // Reduced from 9 - lower threshold
+              40, // More aggressive in foot when books incomplete
+          footPileSizeThreshold: 4, // Take smaller piles to finish book pairs
+          handPileValueThreshold: 45, // More willing to unlock for naturals
+          handPileSizeThreshold: 6, // Lower threshold for hand-phase unlocks
           maxTurnsBeforeForcePlayDown:
-              4, // REDUCED - prevent catastrophic hand accumulation
+              3, // Faster play-down — avoid 13-card hand stalls
           highValuePairBreakChance:
-              0.25, // Increased from 0.15 - more willing to break pairs
-          bookCompletionPriority: 200, // Keep high priority for books
+              0.3, // Break pairs sooner to complete clean books
+          bookCompletionPriority: 240, // Prioritize book pairs over hoarding
           aggressivenessMultiplier:
-              0.8, // Increased from 0.7 - less conservative
+              0.9, // Slightly more competitive than before
         );
       case BotPersonality.aggressive:
         return const PersonalityConstants(
@@ -151,9 +190,17 @@ class PersonalityConstants {
 
 /// Manages bot personality assignment and behavior modification
 class BotPersonalityManager {
+  /// Upper bound for calculated risk tolerance (analytics-tuned).
+  static const double maxRiskTolerance = 3.5;
+
+  /// Lower bound for calculated risk tolerance.
+  static const double minRiskTolerance = 0.4;
+
   // Per-player personality assignments
   final Map<String, BotPersonality> _playerPersonalities = {};
   final Map<String, PersonalityConstants> _playerConstants = {};
+  final Map<String, PersonalityConstants> _baseConstants = {};
+  final Map<String, String> _adaptiveStrategies = {};
 
   // Current player context cache
   PersonalityConstants? _currentConstants;
@@ -164,9 +211,10 @@ class BotPersonalityManager {
   /// Assign a personality to a specific bot player
   void assignPersonality(String playerId, BotPersonality personality) {
     _playerPersonalities[playerId] = personality;
-    _playerConstants[playerId] = PersonalityConstants.forPersonality(
-      personality,
-    );
+    final constants = PersonalityConstants.forPersonality(personality);
+    _baseConstants[playerId] = constants;
+    _playerConstants[playerId] = constants;
+    _adaptiveStrategies.remove(playerId);
   }
 
   /// Get personality for a specific player (defaults to adaptive)
@@ -178,6 +226,65 @@ class BotPersonalityManager {
   PersonalityConstants getConstants(String playerId) {
     return _playerConstants[playerId] ??
         PersonalityConstants.forPersonality(BotPersonality.adaptive);
+  }
+
+  /// Current adaptive strategy label for debugging/analytics (empty if none).
+  String getAdaptiveStrategy(String playerId) {
+    return _adaptiveStrategies[playerId] ?? '';
+  }
+
+  /// Reset adaptive bot to base personality constants before re-evaluating strategy.
+  void resetAdaptiveConstants(String playerId) {
+    if (getPersonality(playerId) != BotPersonality.adaptive) {
+      return;
+    }
+    final base =
+        _baseConstants[playerId] ??
+        PersonalityConstants.forPersonality(BotPersonality.adaptive);
+    _playerConstants[playerId] = base;
+    _adaptiveStrategies.remove(playerId);
+    if (_currentPlayerId == playerId) {
+      _currentConstants = base;
+    }
+  }
+
+  /// Apply runtime overrides to a bot's personality constants (adaptive bots).
+  void applyConstantOverrides(
+    String playerId,
+    String strategy,
+    Map<String, dynamic> overrides,
+  ) {
+    if (getPersonality(playerId) != BotPersonality.adaptive) {
+      return;
+    }
+
+    final current = getConstants(playerId);
+    _playerConstants[playerId] = current.copyWith(
+      strategicBufferPoints: _overrideInt(overrides['strategicBufferPoints']),
+      minCardsForAggressiveUnlock: _overrideInt(
+        overrides['minCardsForAggressiveUnlock'],
+      ),
+      valuablePileThreshold: _overrideInt(overrides['valuablePileThreshold']),
+      largePileThreshold: _overrideInt(overrides['largePileThreshold']),
+      footPileValueThreshold: _overrideInt(overrides['footPileValueThreshold']),
+      footPileSizeThreshold: _overrideInt(overrides['footPileSizeThreshold']),
+      handPileValueThreshold: _overrideInt(overrides['handPileValueThreshold']),
+      handPileSizeThreshold: _overrideInt(overrides['handPileSizeThreshold']),
+      maxTurnsBeforeForcePlayDown: _overrideInt(
+        overrides['maxTurnsBeforeForcePlayDown'],
+      ),
+      highValuePairBreakChance: _overrideDouble(
+        overrides['highValuePairBreakChance'],
+      ),
+      bookCompletionPriority: _overrideInt(overrides['bookCompletionPriority']),
+      aggressivenessMultiplier: _overrideDouble(
+        overrides['aggressivenessMultiplier'],
+      ),
+    );
+    _adaptiveStrategies[playerId] = strategy;
+    if (_currentPlayerId == playerId) {
+      _currentConstants = _playerConstants[playerId];
+    }
   }
 
   /// Set current player context for this decision cycle
@@ -304,11 +411,11 @@ class BotPersonalityManager {
       riskModifier *= _calculateAdaptiveModifier(gameState, botPlayer);
     }
 
-    // Cap risk tolerance at higher bounds for more competitive play
+    // Cap risk tolerance — clamp lowered per analytics monitoring guide
     final finalRisk = (baseRisk * riskModifier).clamp(
-      0.4,
-      4.0,
-    ); // Increased upper bound
+      minRiskTolerance,
+      maxRiskTolerance,
+    );
 
     // Log extreme risk tolerance for monitoring
     if (finalRisk > 3.0) {
@@ -409,6 +516,8 @@ class BotPersonalityManager {
   void clearPersonalityData() {
     _playerPersonalities.clear();
     _playerConstants.clear();
+    _baseConstants.clear();
+    _adaptiveStrategies.clear();
     _currentConstants = null;
     _currentPlayerId = null;
   }
@@ -451,6 +560,35 @@ class BotPersonalityManager {
   /// Get all assigned personalities for debugging
   Map<String, BotPersonality> getAllAssignedPersonalities() {
     return Map.from(_playerPersonalities);
+  }
+
+  static int? _overrideInt(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return null;
+  }
+
+  static double? _overrideDouble(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is double) {
+      return value;
+    }
+    if (value is int) {
+      return value.toDouble();
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return null;
   }
 
   /// Log extreme risk tolerance events for monitoring

@@ -473,6 +473,11 @@ class EnhancedBotAI {
 
   /// Handle meld phase decisions
   BotDecision _makeMeldDecision(Player bot, BotGameContext context) {
+    // Empty hand: skip meld (discard/go-out handled in discard phase)
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'noMeld');
+    }
+
     // PRIORITY 0: Check if bot should rush to go out
     if (_shouldRushToGoOut(bot, context.gameState)) {
       final handSize = bot.currentHand.length;
@@ -530,6 +535,18 @@ class EnhancedBotAI {
     final footPhaseDecision = _handleFootPhaseMeldDecision(bot, context);
     if (footPhaseDecision != null) {
       return footPhaseDecision;
+    }
+
+    // Draw-loop guard: played down with large hand should meld, not draw repeatedly.
+    // Skip during human-style accumulation (8–14) or burst-meld threshold (15+).
+    if (bot.hasPlayedDown &&
+        bot.currentHand.length >= BotConfig.drawLoopMeldHandThreshold &&
+        !_isInHumanAccumulationWindow(bot, context) &&
+        !_shouldExecuteDumpStrategy(bot, context)) {
+      final drawLoopMeld = _forceMeldForLargePlayedDownHand(bot, context);
+      if (drawLoopMeld != null) {
+        return drawLoopMeld;
+      }
     }
 
     // EMERGENCY PROTOCOLS: Check for catastrophic hand size failures FIRST
@@ -1795,6 +1812,10 @@ class EnhancedBotAI {
     final turnCount = _gameAnalyzer.getTurnCount(bot.id);
     final personality = _personalityManager.getPersonality(bot.id);
 
+    if (handSize == 0) {
+      return false;
+    }
+
     // On foot without both book types — keep melding, never hoard toward go-out
     if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
       return false;
@@ -2627,7 +2648,7 @@ class EnhancedBotAI {
 
     switch (personality) {
       case BotPersonality.conservative:
-        baseLimit = 15; // Human avg discard hand ~16.6
+        baseLimit = 13; // Was 15 — production showed excessive hand hoarding
         break;
       case BotPersonality.aggressive:
         baseLimit = 14;
@@ -2647,7 +2668,7 @@ class EnhancedBotAI {
       BotPersonality.adaptive => 5,
       BotPersonality.aggressive => 6,
       BotPersonality.bookBuilder => 7,
-      BotPersonality.conservative => 8,
+      BotPersonality.conservative => 6,
     };
     return (baseLimit - pressureReduction).clamp(minLimit, baseLimit);
   }
@@ -3066,6 +3087,27 @@ class EnhancedBotAI {
       return bookRush;
     }
 
+    // Missing go-out books — meld at any foot hand size (analytics: conservative
+    // hoarded 3–7 cards in foot with 0–1 books, leading to empty-hand errors)
+    if (!bot.canGoOutWithBooks) {
+      final bookPairRush = _forceFootPhaseMeld(
+        bot,
+        context,
+        prioritizeMissingBookType: true,
+      );
+      if (bookPairRush != null) {
+        return bookPairRush;
+      }
+
+      final possibleMelds = _getCachedPossibleMelds(bot, context);
+      if (possibleMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, possibleMelds),
+        );
+      }
+    }
+
     // Opponent close to going out or large foot hand — melt aggressively
     final needsForcedMeld =
         _opponentThreateningGoOut(context.gameState, bot) ||
@@ -3090,6 +3132,45 @@ class EnhancedBotAI {
           data: _selectBestNewMeld(bot, anyMelds),
         );
       }
+    }
+
+    return null;
+  }
+
+  /// Prevent draw loops when a bot has played down but holds a large hand.
+  BotDecision? _forceMeldForLargePlayedDownHand(
+    Player bot,
+    BotGameContext context,
+  ) {
+    final controller = context.controller as GameController?;
+    if (controller == null) {
+      return null;
+    }
+
+    final additions = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+      bot,
+    );
+    if (additions.isNotEmpty) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Draw-loop guard: adding to meld with ${bot.currentHand.length} cards',
+      );
+      return BotDecision(action: 'addToMeld', data: additions.first);
+    }
+
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    if (possibleMelds.isNotEmpty) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Draw-loop guard: creating meld with ${bot.currentHand.length} cards',
+      );
+      return BotDecision(
+        action: 'createMeld',
+        data: _selectBestNewMeld(bot, possibleMelds),
+      );
     }
 
     return null;
@@ -3355,6 +3436,8 @@ class EnhancedBotAI {
         return;
       }
 
+      _personalityManager.resetAdaptiveConstants(bot.id);
+
       final humanPlayers = gameState.players.where(
         (p) => p.type == PlayerType.human,
       );
@@ -3399,15 +3482,15 @@ class EnhancedBotAI {
           return;
         }
 
-        // ADAPTATION 3: Outlast aggressive opponents
+        // ADAPTATION 3: Human rushed to foot early — match tempo, don't stall
         if (human.hasPickedUpFoot &&
             human.currentHand.length <= 10 &&
             gameState.round <= 3) {
-          // Human is playing aggressively - switch to defensive mode
-          _overrideAdaptiveConstants(bot, 'defensive_counter', {
-            'maxTurnsBeforeForcePlayDown': 6, // Be more patient
-            'strategicBufferPoints': 25, // Wait for stronger position
-            'aggressivenessMultiplier': 0.9, // Be more defensive
+          _overrideAdaptiveConstants(bot, 'foot_pressure', {
+            'maxTurnsBeforeForcePlayDown': 2,
+            'footPileValueThreshold': 30,
+            'aggressivenessMultiplier': 1.4,
+            'bookCompletionPriority': 200,
           });
           return;
         }
@@ -3433,8 +3516,7 @@ class EnhancedBotAI {
     String strategy,
     Map<String, dynamic> overrides,
   ) {
-    // This would ideally modify the personality manager's constants for this bot
-    // For now, we'll track the strategy and apply it in decision-making
+    _personalityManager.applyConstantOverrides(bot.id, strategy, overrides);
     DebugLogger.botDebug(bot.id, bot.name, 'Adaptive strategy: $strategy');
   }
 

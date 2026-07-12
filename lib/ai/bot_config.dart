@@ -77,6 +77,9 @@ class BotConfig {
   /// In foot phase, force melding (all personalities) at this hand size
   static const int footPhaseAggressiveMeldingThreshold = 8;
 
+  /// Played-down bots with this many cards should meld instead of draw-looping
+  static const int drawLoopMeldHandThreshold = 10;
+
   /// Opponent book count that triggers foot-phase panic melding
   static const int footPhaseOpponentBookPanicThreshold = 4;
 
@@ -263,7 +266,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-hand-foot-rush';
+  static const String botAiVersion = '2026.07-personality-foot-rush';
 
   // Prevent instantiation
   BotConfig._();

@@ -114,7 +114,17 @@ class BotMeldAnalyzer {
       }
     }
 
-    possibleMelds.sort((a, b) {
+    var candidateMelds = possibleMelds;
+    if (needsCleanBookMore) {
+      final cleanOnlyMelds = possibleMelds
+          .where((meld) => !meld.any((card) => card.isWild))
+          .toList();
+      if (cleanOnlyMelds.isNotEmpty) {
+        candidateMelds = cleanOnlyMelds;
+      }
+    }
+
+    candidateMelds.sort((a, b) {
       int scoreA = _calculateMeldScore(
         a,
         preferClean,
@@ -134,7 +144,7 @@ class BotMeldAnalyzer {
       return scoreB.compareTo(scoreA);
     });
 
-    return possibleMelds.first;
+    return candidateMelds.first;
   }
 
   /// Calculate a score for a meld based on various criteria

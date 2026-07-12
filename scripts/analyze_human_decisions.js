@@ -6,19 +6,38 @@ const fs = require('fs');
 const path = require('path');
 const {
   httpsRequest,
-  getAccessToken,
+  hasServiceAccountCredentials,
+  loadServiceAccount,
+  resolveAccessToken,
 } = require('./analytics_http_common');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CREDS_PATH =
   process.env.FIREBASE_CREDENTIALS_FILE ||
-  path.join(REPO_ROOT, '.firebase/firebase-tools-credentials.json');
+  path.join(REPO_ROOT, '.firebase/oauth-credentials.json');
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'hand-foot-game-flutter';
 
 function loadCreds() {
+  if (!fs.existsSync(CREDS_PATH)) {
+    return null;
+  }
   return JSON.parse(fs.readFileSync(CREDS_PATH, 'utf8'));
 }
 
+
+
+function getProjectId() {
+  if (process.env.FIREBASE_PROJECT_ID) {
+    return process.env.FIREBASE_PROJECT_ID;
+  }
+  const serviceAccount = loadServiceAccount();
+  if (serviceAccount?.project_id) {
+    return serviceAccount.project_id;
+  }
+  throw new Error(
+    'FIREBASE_PROJECT_ID is required (or provide a service account JSON with project_id).',
+  );
+}
 function classifyDiscardTier(parsed) {
   if (parsed.isWild) {
     return 'wild';
@@ -70,7 +89,7 @@ async function listCollection(accessToken, collection, pageSize = 300) {
   let pageToken = null;
   do {
     const p =
-      `/v1/projects/${PROJECT_ID}/databases/(default)/documents/${collection}` +
+      `/v1/projects/${getProjectId()}/databases/(default)/documents/${collection}` +
       `?pageSize=${pageSize}` +
       (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
     const result = await httpsRequest({
@@ -115,7 +134,9 @@ function meldRankFromEvent(e) {
 
 async function main() {
   const creds = loadCreds();
-  const token = await getAccessToken(creds, CREDS_PATH);
+  const token = await resolveAccessToken({ creds, credsPath: CREDS_PATH });
+  console.log(`Auth mode: ${hasServiceAccountCredentials() ? 'service-account' : 'oauth-user'}`);
+  console.log(`Project: ${getProjectId()}`);
 
   console.log('Loading sessions...');
   const sessions = await listCollection(token, 'game_sessions', 500);

@@ -1,0 +1,16 @@
+{
+  "bootstrappedAt": "2026-07-12T00:00:00.000000+00:00",
+  "projectId": "your-firebase-project-id",
+  "authEmail": "you@example.com",
+  "paths": {
+    "credentialsFile": "<oauth-credentials-json-path>",
+    "envFile": ".env",
+    "mcpStore": "~/.config/configstore/firebase-tools.json",
+    "serviceAccountFile": ".firebase/hand-foot-service-account.json"
+  },
+  "cloudAgentSecretsInjected": true,
+  "hasOAuthClientSecret": false,
+  "hasServiceAccountB64": true,
+  "preferredAnalyticsAuth": "service-account",
+  "quickstartDoc": "docs/firebase_mcp_quickstart.md"
+}
