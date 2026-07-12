@@ -95,26 +95,24 @@ class PersonalityConstants {
       case BotPersonality.conservative:
         return const PersonalityConstants(
           strategicBufferPoints:
-              10, // REDUCED - more aggressive competitiveness
+              8, // Faster play-down — analytics showed foot-phase stalls
           minCardsForAggressiveUnlock:
               3, // Reduced from 4 - more willing to unlock
           valuablePileThreshold:
-              100, // Reduced from 140 - more aggressive pile taking
+              90, // Slightly more willing to take piles for book cards
           largePileThreshold: 6, // Reduced from 8 - lower threshold
           footPileValueThreshold:
-              50, // Reduced from 70 - more aggressive in foot
-          footPileSizeThreshold:
-              5, // Reduced from 7 - more willing to take smaller piles
-          handPileValueThreshold:
-              50, // REDUCED further - much more aggressive pile taking
-          handPileSizeThreshold: 7, // Reduced from 9 - lower threshold
+              40, // More aggressive in foot when books incomplete
+          footPileSizeThreshold: 4, // Take smaller piles to finish book pairs
+          handPileValueThreshold: 45, // More willing to unlock for naturals
+          handPileSizeThreshold: 6, // Lower threshold for hand-phase unlocks
           maxTurnsBeforeForcePlayDown:
-              4, // REDUCED - prevent catastrophic hand accumulation
+              3, // Faster play-down — avoid 13-card hand stalls
           highValuePairBreakChance:
-              0.25, // Increased from 0.15 - more willing to break pairs
-          bookCompletionPriority: 200, // Keep high priority for books
+              0.3, // Break pairs sooner to complete clean books
+          bookCompletionPriority: 240, // Prioritize book pairs over hoarding
           aggressivenessMultiplier:
-              0.8, // Increased from 0.7 - less conservative
+              0.9, // Slightly more competitive than before
         );
       case BotPersonality.aggressive:
         return const PersonalityConstants(

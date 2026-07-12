@@ -34,6 +34,61 @@ void main() {
       bot.foot.addAll(cards);
     }
 
+    test(
+      'conservative bot melds on foot with small hand when books incomplete',
+      () {
+        dealBotFoot([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        ]);
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
+
+        expect(bot.hasDirtyBook, isTrue);
+        expect(bot.hasCleanBook, isFalse);
+        expect(bot.currentHand.length, lessThan(8));
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        expect(decision.action, isNot('noMeld'));
+        expect(
+          decision.action,
+          anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
+        );
+      },
+      tags: ['personality_regression'],
+    );
+
+    test('empty hand in meld phase returns noMeld without strategic hold', () {
+      bot.hand.clear();
+      bot.foot.clear();
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
+
+      final decision = botAI.makeDecision(bot, gameController);
+
+      expect(decision.action, equals('noMeld'));
+    });
+
     test('conservative bot melds instead of holding with 10+ foot cards', () {
       dealBotFoot([
         const PlayingCard(suit: Suit.hearts, rank: CardRank.king),

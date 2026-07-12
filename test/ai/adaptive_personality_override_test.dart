@@ -86,7 +86,7 @@ void main() {
 
       expect(
         manager.getConstants(conservative.id).maxTurnsBeforeForcePlayDown,
-        4,
+        3,
       );
     });
   });

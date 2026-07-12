@@ -473,6 +473,11 @@ class EnhancedBotAI {
 
   /// Handle meld phase decisions
   BotDecision _makeMeldDecision(Player bot, BotGameContext context) {
+    // Empty hand: skip meld (discard/go-out handled in discard phase)
+    if (bot.currentHand.isEmpty) {
+      return BotDecision(action: 'noMeld');
+    }
+
     // PRIORITY 0: Check if bot should rush to go out
     if (_shouldRushToGoOut(bot, context.gameState)) {
       final handSize = bot.currentHand.length;
@@ -1807,6 +1812,10 @@ class EnhancedBotAI {
     final turnCount = _gameAnalyzer.getTurnCount(bot.id);
     final personality = _personalityManager.getPersonality(bot.id);
 
+    if (handSize == 0) {
+      return false;
+    }
+
     // On foot without both book types — keep melding, never hoard toward go-out
     if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
       return false;
@@ -2639,7 +2648,7 @@ class EnhancedBotAI {
 
     switch (personality) {
       case BotPersonality.conservative:
-        baseLimit = 15; // Human avg discard hand ~16.6
+        baseLimit = 13; // Was 15 — production showed excessive hand hoarding
         break;
       case BotPersonality.aggressive:
         baseLimit = 14;
@@ -2659,7 +2668,7 @@ class EnhancedBotAI {
       BotPersonality.adaptive => 5,
       BotPersonality.aggressive => 6,
       BotPersonality.bookBuilder => 7,
-      BotPersonality.conservative => 8,
+      BotPersonality.conservative => 6,
     };
     return (baseLimit - pressureReduction).clamp(minLimit, baseLimit);
   }
@@ -3078,6 +3087,27 @@ class EnhancedBotAI {
       return bookRush;
     }
 
+    // Missing go-out books — meld at any foot hand size (analytics: conservative
+    // hoarded 3–7 cards in foot with 0–1 books, leading to empty-hand errors)
+    if (!bot.canGoOutWithBooks) {
+      final bookPairRush = _forceFootPhaseMeld(
+        bot,
+        context,
+        prioritizeMissingBookType: true,
+      );
+      if (bookPairRush != null) {
+        return bookPairRush;
+      }
+
+      final possibleMelds = _getCachedPossibleMelds(bot, context);
+      if (possibleMelds.isNotEmpty) {
+        return BotDecision(
+          action: 'createMeld',
+          data: _selectBestNewMeld(bot, possibleMelds),
+        );
+      }
+    }
+
     // Opponent close to going out or large foot hand — melt aggressively
     final needsForcedMeld =
         _opponentThreateningGoOut(context.gameState, bot) ||
@@ -3452,15 +3482,15 @@ class EnhancedBotAI {
           return;
         }
 
-        // ADAPTATION 3: Outlast aggressive opponents
+        // ADAPTATION 3: Human rushed to foot early — match tempo, don't stall
         if (human.hasPickedUpFoot &&
             human.currentHand.length <= 10 &&
             gameState.round <= 3) {
-          // Human is playing aggressively - switch to defensive mode
-          _overrideAdaptiveConstants(bot, 'defensive_counter', {
-            'maxTurnsBeforeForcePlayDown': 6, // Be more patient
-            'strategicBufferPoints': 25, // Wait for stronger position
-            'aggressivenessMultiplier': 0.9, // Be more defensive
+          _overrideAdaptiveConstants(bot, 'foot_pressure', {
+            'maxTurnsBeforeForcePlayDown': 2,
+            'footPileValueThreshold': 30,
+            'aggressivenessMultiplier': 1.4,
+            'bookCompletionPriority': 200,
           });
           return;
         }
