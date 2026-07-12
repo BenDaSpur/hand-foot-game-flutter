@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
@@ -9,6 +10,42 @@ import '../services/firebase_service.dart';
 import '../services/game_save_service.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../models/player.dart';
+
+/// Layout and styling constants for main menu buttons.
+abstract final class _MenuButtonLayout {
+  static const double width = 320;
+  static const double height = 80;
+  static const double horizontalMargin = 20;
+  static const double borderRadius = 12;
+  static const double iconContainerRadius = 8;
+  static const double primaryBorderWidth = 2;
+  static const double secondaryBorderWidth = 1;
+  static const double primaryShadowBlur = 12;
+  static const double secondaryShadowBlur = 8;
+  static const Offset shadowOffset = Offset(0, 4);
+  static const double contentPadding = 16;
+  static const double iconContainerPadding = 8;
+  static const double iconSpacing = 16;
+  static const double labelDescriptionGap = 2;
+  static const double mainIconSize = 24;
+  static const double arrowIconSize = 16;
+  static const double settingsIconSize = 22;
+  static const double labelFontSize = 18;
+  static const double descriptionFontSize = 12;
+  static const double dividerWidth = 1;
+  static const double dividerHeight = 48;
+  static const double settingsButtonMinSize = 48;
+  static const double settingsButtonHorizontalPadding = 12;
+
+  static const double primaryBackgroundAlpha = 0.2;
+  static const double primaryBorderAlpha = 0.6;
+  static const double secondaryBorderAlpha = 0.3;
+  static const double primaryShadowAlpha = 0.5;
+  static const double primaryIconBackgroundAlpha = 0.3;
+  static const double secondaryIconBackgroundAlpha = 0.2;
+  static const double descriptionTextAlpha = 0.7;
+  static const double dividerAlpha = 0.3;
+}
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -166,6 +203,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           label: 'PLAY SOLO',
                           description: 'Play against AI opponents',
                           onPressed: _startSoloGame,
+                          onSettingsPressed: _openSoloGameSettings,
                         ),
                         const SizedBox(height: 20),
                         _buildMenuButton(
@@ -211,93 +249,174 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     required String label,
     required String description,
     required VoidCallback onPressed,
+    VoidCallback? onSettingsPressed,
     bool isPrimary = false,
   }) {
+    final accentColor = isPrimary
+        ? BalatroTheme.neonBlue
+        : BalatroTheme.neonPink;
+
     return Container(
-      width: 320,
-      height: 80,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary
-              ? BalatroTheme.neonBlue.withValues(alpha: 0.2)
-              : BalatroTheme.cardBackground,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isPrimary
-                  ? BalatroTheme.neonBlue.withValues(alpha: 0.6)
-                  : BalatroTheme.neonPink.withValues(alpha: 0.3),
-              width: isPrimary ? 2 : 1,
-            ),
-          ),
-          elevation: isPrimary ? 12 : 8,
-          shadowColor: isPrimary
-              ? BalatroTheme.neonBlue.withValues(alpha: 0.5)
-              : BalatroTheme.neonPink.withValues(alpha: 0.3),
+      width: _MenuButtonLayout.width,
+      height: _MenuButtonLayout.height,
+      margin: const EdgeInsets.symmetric(
+        horizontal: _MenuButtonLayout.horizontalMargin,
+      ),
+      decoration: BoxDecoration(
+        color: isPrimary
+            ? BalatroTheme.neonBlue.withValues(
+                alpha: _MenuButtonLayout.primaryBackgroundAlpha,
+              )
+            : BalatroTheme.cardBackground,
+        borderRadius: BorderRadius.circular(_MenuButtonLayout.borderRadius),
+        border: Border.all(
+          color: isPrimary
+              ? BalatroTheme.neonBlue.withValues(
+                  alpha: _MenuButtonLayout.primaryBorderAlpha,
+                )
+              : BalatroTheme.neonPink.withValues(
+                  alpha: _MenuButtonLayout.secondaryBorderAlpha,
+                ),
+          width: isPrimary
+              ? _MenuButtonLayout.primaryBorderWidth
+              : _MenuButtonLayout.secondaryBorderWidth,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
+        boxShadow: [
+          BoxShadow(
+            color: isPrimary
+                ? BalatroTheme.neonBlue.withValues(
+                    alpha: _MenuButtonLayout.primaryShadowAlpha,
+                  )
+                : BalatroTheme.neonPink.withValues(
+                    alpha: _MenuButtonLayout.secondaryBorderAlpha,
+                  ),
+            blurRadius: isPrimary
+                ? _MenuButtonLayout.primaryShadowBlur
+                : _MenuButtonLayout.secondaryShadowBlur,
+            offset: _MenuButtonLayout.shadowOffset,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onPressed,
+                borderRadius: BorderRadius.circular(
+                  _MenuButtonLayout.borderRadius,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(
+                    _MenuButtonLayout.contentPadding,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(
+                          _MenuButtonLayout.iconContainerPadding,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isPrimary
+                              ? BalatroTheme.neonBlue.withValues(
+                                  alpha: _MenuButtonLayout
+                                      .primaryIconBackgroundAlpha,
+                                )
+                              : BalatroTheme.neonPink.withValues(
+                                  alpha: _MenuButtonLayout
+                                      .secondaryIconBackgroundAlpha,
+                                ),
+                          borderRadius: BorderRadius.circular(
+                            _MenuButtonLayout.iconContainerRadius,
+                          ),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: accentColor,
+                          size: _MenuButtonLayout.mainIconSize,
+                        ),
+                      ),
+                      const SizedBox(width: _MenuButtonLayout.iconSpacing),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                label,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: _MenuButtonLayout.labelFontSize,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(
+                              height: _MenuButtonLayout.labelDescriptionGap,
+                            ),
+                            Flexible(
+                              child: Text(
+                                description,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(
+                                    alpha:
+                                        _MenuButtonLayout.descriptionTextAlpha,
+                                  ),
+                                  fontSize:
+                                      _MenuButtonLayout.descriptionFontSize,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (onSettingsPressed == null)
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: BalatroTheme.neonBlue,
+                          size: _MenuButtonLayout.arrowIconSize,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (onSettingsPressed != null) ...[
               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isPrimary
-                      ? BalatroTheme.neonBlue.withValues(alpha: 0.3)
-                      : BalatroTheme.neonPink.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  icon,
-                  color: isPrimary
-                      ? BalatroTheme.neonBlue
-                      : BalatroTheme.neonPink,
-                  size: 24,
+                width: _MenuButtonLayout.dividerWidth,
+                height: _MenuButtonLayout.dividerHeight,
+                color: accentColor.withValues(
+                  alpha: _MenuButtonLayout.dividerAlpha,
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Flexible(
-                      child: Text(
-                        description,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 12,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              Tooltip(
+                message: 'Game settings',
+                child: IconButton(
+                  onPressed: onSettingsPressed,
+                  icon: Icon(
+                    Icons.settings,
+                    color: accentColor,
+                    size: _MenuButtonLayout.settingsIconSize,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal:
+                        _MenuButtonLayout.settingsButtonHorizontalPadding,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: _MenuButtonLayout.settingsButtonMinSize,
+                    minHeight: _MenuButtonLayout.settingsButtonMinSize,
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: BalatroTheme.neonBlue,
-                size: 16,
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -579,15 +698,30 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void _startSoloGame() async {
     setState(() => _isLoading = true);
 
-    if (mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => const SoloGameSetupScreen()),
-      );
+    try {
+      final settings = await SoloGameSettings.loadFromPreferences();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => GameScreen(settings: settings),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorDialog('Failed to start game: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+  void _openSoloGameSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const SoloGameSetupScreen()),
+    );
   }
 
   void _createMultiplayerGame() async {
