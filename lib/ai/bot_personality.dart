@@ -190,6 +190,12 @@ class PersonalityConstants {
 
 /// Manages bot personality assignment and behavior modification
 class BotPersonalityManager {
+  /// Upper bound for calculated risk tolerance (analytics-tuned).
+  static const double maxRiskTolerance = 3.5;
+
+  /// Lower bound for calculated risk tolerance.
+  static const double minRiskTolerance = 0.4;
+
   // Per-player personality assignments
   final Map<String, BotPersonality> _playerPersonalities = {};
   final Map<String, PersonalityConstants> _playerConstants = {};
@@ -254,22 +260,26 @@ class BotPersonalityManager {
 
     final current = getConstants(playerId);
     _playerConstants[playerId] = current.copyWith(
-      strategicBufferPoints: overrides['strategicBufferPoints'] as int?,
-      minCardsForAggressiveUnlock:
-          overrides['minCardsForAggressiveUnlock'] as int?,
-      valuablePileThreshold: overrides['valuablePileThreshold'] as int?,
-      largePileThreshold: overrides['largePileThreshold'] as int?,
-      footPileValueThreshold: overrides['footPileValueThreshold'] as int?,
-      footPileSizeThreshold: overrides['footPileSizeThreshold'] as int?,
-      handPileValueThreshold: overrides['handPileValueThreshold'] as int?,
-      handPileSizeThreshold: overrides['handPileSizeThreshold'] as int?,
-      maxTurnsBeforeForcePlayDown:
-          overrides['maxTurnsBeforeForcePlayDown'] as int?,
-      highValuePairBreakChance:
-          overrides['highValuePairBreakChance'] as double?,
-      bookCompletionPriority: overrides['bookCompletionPriority'] as int?,
-      aggressivenessMultiplier:
-          overrides['aggressivenessMultiplier'] as double?,
+      strategicBufferPoints: _overrideInt(overrides['strategicBufferPoints']),
+      minCardsForAggressiveUnlock: _overrideInt(
+        overrides['minCardsForAggressiveUnlock'],
+      ),
+      valuablePileThreshold: _overrideInt(overrides['valuablePileThreshold']),
+      largePileThreshold: _overrideInt(overrides['largePileThreshold']),
+      footPileValueThreshold: _overrideInt(overrides['footPileValueThreshold']),
+      footPileSizeThreshold: _overrideInt(overrides['footPileSizeThreshold']),
+      handPileValueThreshold: _overrideInt(overrides['handPileValueThreshold']),
+      handPileSizeThreshold: _overrideInt(overrides['handPileSizeThreshold']),
+      maxTurnsBeforeForcePlayDown: _overrideInt(
+        overrides['maxTurnsBeforeForcePlayDown'],
+      ),
+      highValuePairBreakChance: _overrideDouble(
+        overrides['highValuePairBreakChance'],
+      ),
+      bookCompletionPriority: _overrideInt(overrides['bookCompletionPriority']),
+      aggressivenessMultiplier: _overrideDouble(
+        overrides['aggressivenessMultiplier'],
+      ),
     );
     _adaptiveStrategies[playerId] = strategy;
     if (_currentPlayerId == playerId) {
@@ -402,7 +412,10 @@ class BotPersonalityManager {
     }
 
     // Cap risk tolerance — clamp lowered per analytics monitoring guide
-    final finalRisk = (baseRisk * riskModifier).clamp(0.4, 3.5);
+    final finalRisk = (baseRisk * riskModifier).clamp(
+      minRiskTolerance,
+      maxRiskTolerance,
+    );
 
     // Log extreme risk tolerance for monitoring
     if (finalRisk > 3.0) {
@@ -547,6 +560,35 @@ class BotPersonalityManager {
   /// Get all assigned personalities for debugging
   Map<String, BotPersonality> getAllAssignedPersonalities() {
     return Map.from(_playerPersonalities);
+  }
+
+  static int? _overrideInt(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return null;
+  }
+
+  static double? _overrideDouble(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is double) {
+      return value;
+    }
+    if (value is int) {
+      return value.toDouble();
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return null;
   }
 
   /// Log extreme risk tolerance events for monitoring

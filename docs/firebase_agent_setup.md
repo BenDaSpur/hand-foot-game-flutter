@@ -59,9 +59,8 @@ dart run scripts/export_analytics.dart --days 7 --include-raw
 
 Analytics collections (`game_sessions`, `bot_decisions`, `game_events`, `performance_metrics`, `turn_summaries`, `decision_outcomes`) are **write-only** from the client SDK. Agents must read via:
 
-- OAuth credentials in `.firebase/oauth-credentials.json`, or
-- Firebase MCP after login, or
-- `scripts/query_analytics_session.js` (Node, uses stored OAuth)
+- `scripts/query_analytics_session.js` (Node) — **prefers service account** (`FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` or `.firebase/hand-foot-service-account.json`), falls back to stored OAuth credentials, or
+- Firebase MCP after login (project setup / legacy OAuth workflows)
 
 ```bash
 node scripts/query_analytics_session.js --scores 3325,1140,1185

@@ -3147,9 +3147,9 @@ class EnhancedBotAI {
       return null;
     }
 
-    final additions = _meldAnalyzer.findCardsToAddToExistingMelds(
+    final additions = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
       bot,
-      controller,
     );
     if (additions.isNotEmpty) {
       DebugLogger.botDebug(

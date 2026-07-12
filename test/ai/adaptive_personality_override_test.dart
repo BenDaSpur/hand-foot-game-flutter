@@ -1,3 +1,6 @@
+@Tags(['adaptive_personality_override'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
@@ -72,6 +75,22 @@ void main() {
         final constants = botAI.personalityManager.getConstants(adaptiveBot.id);
         expect(constants.maxTurnsBeforeForcePlayDown, 1);
         expect(constants.aggressivenessMultiplier, closeTo(1.8, 0.01));
+      },
+    );
+
+    test(
+      'applyConstantOverrides accepts num values for int and double fields',
+      () {
+        final manager = botAI.personalityManager;
+
+        manager.applyConstantOverrides(adaptiveBot.id, 'num_coercion', {
+          'maxTurnsBeforeForcePlayDown': 2.0,
+          'aggressivenessMultiplier': 2,
+        });
+
+        final overridden = manager.getConstants(adaptiveBot.id);
+        expect(overridden.maxTurnsBeforeForcePlayDown, 2);
+        expect(overridden.aggressivenessMultiplier, 2.0);
       },
     );
 

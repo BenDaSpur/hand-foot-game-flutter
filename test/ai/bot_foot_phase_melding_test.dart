@@ -69,25 +69,29 @@ void main() {
       tags: ['personality_regression'],
     );
 
-    test('empty hand in meld phase returns noMeld without strategic hold', () {
-      bot.hand.clear();
-      bot.foot.clear();
-      bot.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-        ])!,
-      );
+    test(
+      'empty hand in meld phase returns noMeld without strategic hold',
+      () {
+        bot.hand.clear();
+        bot.foot.clear();
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
 
-      final decision = botAI.makeDecision(bot, gameController);
+        final decision = botAI.makeDecision(bot, gameController);
 
-      expect(decision.action, equals('noMeld'));
-    });
+        expect(decision.action, equals('noMeld'));
+      },
+      tags: ['empty_hand_regression'],
+    );
 
     test('conservative bot melds instead of holding with 10+ foot cards', () {
       dealBotFoot([

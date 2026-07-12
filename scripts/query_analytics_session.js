@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Query Firestore analytics using OAuth credentials from .firebase/oauth-credentials.json
- * Analytics collections are write-only from client SDK; this uses admin REST API with user OAuth.
+ * Query Firestore analytics via admin REST API.
+ * Auth: service account preferred (FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64 or
+ * .firebase/hand-foot-service-account.json), OAuth user tokens as fallback
+ * (resolveAccessToken in analytics_http_common.js).
  */
 const fs = require('fs');
 const path = require('path');

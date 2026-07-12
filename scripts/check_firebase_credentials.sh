@@ -81,7 +81,15 @@ else
 fi
 echo ""
 
-if [[ -f "$CREDS_FILE" || -f "$MCP_STORE" ]]; then
+SERVICE_ACCOUNT_READY=false
+if [[ -n "${FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64:-}" ]] ||
+  [[ -f "$REPO_ROOT/.firebase/hand-foot-service-account.json" ]]; then
+  SERVICE_ACCOUNT_READY=true
+fi
+
+if [[ "$SERVICE_ACCOUNT_READY" == true ]]; then
+  echo "Next: node scripts/query_analytics_session.js --recent --turn-summaries --decision-outcomes"
+elif [[ -f "$CREDS_FILE" || -f "$MCP_STORE" ]]; then
   echo "Next: verify MCP with firebase_get_environment"
 elif [[ -n "${FIREBASE_TOOLS_CREDENTIALS_JSON:-}" ]]; then
   echo "Next: run ./scripts/bootstrap_firebase_agent_env.sh to materialize credentials"
