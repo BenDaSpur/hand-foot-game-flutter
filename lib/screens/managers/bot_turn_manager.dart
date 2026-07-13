@@ -27,6 +27,7 @@ class BotTurnManager {
     required String decision,
     required String reasoning,
     Map<String, dynamic>? context,
+    GameState? gameStateSnapshot,
   })
   logBotDecision;
 
@@ -229,6 +230,7 @@ class BotTurnManager {
                 context: decision.data != null
                     ? {'data': decision.data.toString()}
                     : null,
+                gameStateSnapshot: gameController.gameState,
               );
               break;
             }

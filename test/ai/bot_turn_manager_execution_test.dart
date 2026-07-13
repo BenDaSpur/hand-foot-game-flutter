@@ -49,6 +49,7 @@ void main() {
               required String decision,
               required String reasoning,
               Map<String, dynamic>? context,
+              GameState? gameStateSnapshot,
             }) {},
       );
     });
@@ -160,6 +161,7 @@ void main() {
               required String decision,
               required String reasoning,
               Map<String, dynamic>? context,
+              GameState? gameStateSnapshot,
             }) {},
       );
 

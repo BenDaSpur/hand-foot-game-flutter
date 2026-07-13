@@ -2068,11 +2068,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     required String decision,
     required String reasoning,
     Map<String, dynamic>? context,
+    GameState? gameStateSnapshot,
   }) async {
     if (_analyticsSessionId == null) return;
 
     try {
-      final gameState = ref.read(currentGameStateProvider);
+      final gameState = gameStateSnapshot ?? ref.read(currentGameStateProvider);
       if (gameState == null) return;
 
       _actionSequenceNumber++; // Increment sequence for this action

@@ -40,6 +40,9 @@ class BotConfig {
   /// Never stall on hand pile at or below this size — melt or discard to foot
   static const int handToFootCriticalHandSize = 4;
 
+  /// On hand pile: multi-meld / empty-to-foot below this size (avoids 1-card trap)
+  static const int handPileFootCompletionMaxHand = 5;
+
   /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
   static const int handToFootRushAggressiveOpponentPressureMargin = 2;
 
@@ -266,7 +269,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-personality-foot-rush';
+  static const String botAiVersion = '2026.07-hand-pile-foot-completion';
 
   // Prevent instantiation
   BotConfig._();
