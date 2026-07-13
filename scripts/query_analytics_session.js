@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
  * Query Firestore analytics via admin REST API.
- * Auth: service account preferred (FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64 or
- * .firebase/hand-foot-service-account.json), OAuth user tokens as fallback
- * (resolveAccessToken in analytics_http_common.js).
+ * Auth (via resolveAccessToken in analytics_http_common.js):
+ *   1. Service account — hand-foot-flutter-firebase.json (repo root, preferred),
+ *      FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64, or legacy
+ *      .firebase/hand-foot-service-account.json
+ *   2. OAuth user tokens (stored credentials fallback)
  */
 const fs = require('fs');
 const path = require('path');

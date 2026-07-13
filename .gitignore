@@ -63,5 +63,6 @@ lib/firebase_options_local.dart
 
 # Firebase local settings
 .firebase/
+hand-foot-flutter-firebase.json
 firebase-debug.log
 firebase-export-*.json

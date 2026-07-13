@@ -33,7 +33,9 @@ OPTIONAL_ENV_VARS=(
   FIREBASE_OAUTH_CLIENT_SECRET
 )
 
-SERVICE_ACCOUNT_FILE="$REPO_ROOT/.firebase/hand-foot-service-account.json"
+SERVICE_ACCOUNT_FILE="$REPO_ROOT/hand-foot-flutter-firebase.json"
+LEGACY_SERVICE_ACCOUNT_FILE="$REPO_ROOT/.firebase/hand-foot-service-account.json"
+ALT_SERVICE_ACCOUNT_FILE="$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json"
 
 missing=()
 for var in "${REQUIRED_ENV_VARS[@]}"; do
@@ -93,25 +95,47 @@ chmod 600 "$ENV_FILE"
 echo "✅ Generated $ENV_FILE"
 
 if [[ -n "${FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64:-}" ]]; then
-  install -m 600 /dev/null "$SERVICE_ACCOUNT_FILE"
-  python3 - "$SERVICE_ACCOUNT_FILE" <<'PY'
+  SERVICE_ACCOUNT_TMP="$(mktemp "${SERVICE_ACCOUNT_FILE}.tmp.XXXXXX")"
+  cleanup_service_account_tmp() {
+    rm -f "$SERVICE_ACCOUNT_TMP"
+  }
+  trap cleanup_service_account_tmp EXIT
+  if python3 - "$SERVICE_ACCOUNT_TMP" <<'PY'
 import base64
 import json
 import os
 import sys
 
 out_path = sys.argv[1]
-os.chmod(out_path, 0o600)
 raw = base64.b64decode(os.environ["FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64"]).decode("utf-8")
 data = json.loads(raw)
+if data.get("type") != "service_account":
+    raise ValueError('service account JSON must have "type": "service_account"')
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
 os.chmod(out_path, 0o600)
 PY
-  echo "✅ Wrote service account file: $SERVICE_ACCOUNT_FILE"
+  then
+    mv -f "$SERVICE_ACCOUNT_TMP" "$SERVICE_ACCOUNT_FILE"
+    chmod 600 "$SERVICE_ACCOUNT_FILE"
+    trap - EXIT
+    rm -f "$SERVICE_ACCOUNT_TMP"
+    echo "✅ Wrote service account file: $SERVICE_ACCOUNT_FILE"
+  else
+    cleanup_service_account_tmp
+    trap - EXIT
+    echo "❌ Failed to decode FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64; left existing file unchanged" >&2
+    exit 1
+  fi
 elif [[ -f "$SERVICE_ACCOUNT_FILE" ]]; then
   echo "✅ Using existing service account file: $SERVICE_ACCOUNT_FILE"
+elif [[ -f "$ALT_SERVICE_ACCOUNT_FILE" ]]; then
+  echo "✅ Using existing service account file: $ALT_SERVICE_ACCOUNT_FILE"
+  SERVICE_ACCOUNT_FILE="$ALT_SERVICE_ACCOUNT_FILE"
+elif [[ -f "$LEGACY_SERVICE_ACCOUNT_FILE" ]]; then
+  echo "✅ Using legacy service account file: $LEGACY_SERVICE_ACCOUNT_FILE"
+  SERVICE_ACCOUNT_FILE="$LEGACY_SERVICE_ACCOUNT_FILE"
 fi
 
 # Non-secret agent metadata for fast discovery
