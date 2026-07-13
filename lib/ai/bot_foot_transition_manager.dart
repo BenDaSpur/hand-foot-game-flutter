@@ -1,5 +1,6 @@
 import '../models/player.dart';
 import '../models/card.dart';
+import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
@@ -19,6 +20,18 @@ class BotFootTransitionManager {
 
   BotFootTransitionManager({BotMeldAnalyzer? meldAnalyzer})
     : _meldAnalyzer = meldAnalyzer ?? BotMeldAnalyzer();
+
+  /// Meld phase cannot discard — defer to discard phase via [noMeld].
+  BotDecision _phaseAwareTransitionDecision(
+    GameController controller,
+    BotDecision decision,
+  ) {
+    if (controller.gameState.turnPhase == TurnPhase.meld &&
+        decision.action == 'discard') {
+      return BotDecision(action: 'noMeld');
+    }
+    return decision;
+  }
 
   /// Main entry point for foot transition decisions.
   ///
@@ -116,7 +129,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Check if bot should make an aggressive transition
@@ -218,7 +234,7 @@ class BotFootTransitionManager {
     return hasBooks &&
         hasMultipleMelds &&
         bot.hasPlayedDown &&
-        remainingCards >= 5;
+        remainingCards >= 3;
   }
 
   /// Check if bot should transition when most cards can be played
@@ -285,7 +301,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Try transition due to hand size pressure
@@ -333,7 +352,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Try transition in later rounds where foot access is more valuable
@@ -366,7 +388,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Try transition after playing down
@@ -396,7 +421,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Try transition based on hand quality assessment
@@ -422,7 +450,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Try transition when most cards can be played
@@ -451,7 +482,10 @@ class BotFootTransitionManager {
       return BotDecision(action: 'error');
     }
     final cardToDiscard = _chooseCardToDiscard(bot);
-    return BotDecision(action: 'discard', data: cardToDiscard);
+    return _phaseAwareTransitionDecision(
+      controller,
+      BotDecision(action: 'discard', data: cardToDiscard),
+    );
   }
 
   /// Determine if bot should transition based on hand quality

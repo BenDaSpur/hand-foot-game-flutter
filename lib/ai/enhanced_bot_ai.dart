@@ -784,7 +784,13 @@ class EnhancedBotAI {
     }
 
     // RULE ENFORCEMENT: Bot must discard a card to follow Hand & Foot rules
-    final cardToDiscard = _chooseCardToDiscard(bot, context.gameState);
+    PlayingCard? cardToDiscard;
+    if (bot.hasPlayedDown &&
+        !bot.hasPickedUpFoot &&
+        bot.currentHand.length <= BotConfig.handPileFootCompletionMaxHand) {
+      cardToDiscard = _chooseHandPileTransitionDiscard(bot);
+    }
+    cardToDiscard ??= _chooseCardToDiscard(bot, context.gameState);
     if (cardToDiscard == null) {
       return BotDecision(action: 'error');
     }
@@ -1839,6 +1845,10 @@ class EnhancedBotAI {
       return false;
     }
 
+    if (_shouldCompleteHandPileForFoot(bot, context)) {
+      return false;
+    }
+
     // On foot without both book types — keep melding, never hoard toward go-out
     if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
       return false;
@@ -2534,7 +2544,7 @@ class EnhancedBotAI {
       return footTransition;
     }
 
-    return BotDecision(action: 'noMeld');
+    return null;
   }
 
   /// On final turn after another player went out: meld all scorable cards.
@@ -2889,19 +2899,44 @@ class EnhancedBotAI {
         .findMaximalMeldCombination(bot, controller)
         .where((meld) => meld.length >= GameConfig.minTotalCardsForMeld)
         .toList();
+    final minCardsToClear = _opponentOnFootPressure(context, bot)
+        ? handSize - 2
+        : handSize - 1;
+    if (minCardsToClear < 1) {
+      return null;
+    }
+
     if (maximalMelds.length >= 2) {
       final cardsMeldable = maximalMelds.fold<int>(
         0,
         (sum, meld) => sum + meld.length,
       );
-      if (cardsMeldable >= handSize - 1) {
+      if (cardsMeldable >= minCardsToClear) {
         return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
       }
     } else if (maximalMelds.length == 1 &&
-        maximalMelds.first.length >= handSize - 1) {
+        maximalMelds.first.length >= minCardsToClear) {
       return BotDecision(action: 'createMeld', data: maximalMelds.first);
     }
     return null;
+  }
+
+  /// Discard choice when clearing a small hand pile toward foot pickup.
+  PlayingCard? _chooseHandPileTransitionDiscard(Player bot) {
+    final hand = bot.currentHand;
+    if (hand.isEmpty) {
+      return null;
+    }
+
+    final threes = hand.where((card) => card.rank == CardRank.three).toList();
+    if (threes.isNotEmpty) {
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return threes.first;
+    }
+
+    final sortedHand = List<PlayingCard>.from(hand);
+    sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+    return sortedHand.first;
   }
 
   /// Enhanced book completion strategy for competitive play
@@ -2910,6 +2945,10 @@ class EnhancedBotAI {
     GameState gameState,
     BotPersonality personality,
   ) {
+    if (bot.hasPlayedDown && !bot.hasPickedUpFoot) {
+      return false;
+    }
+
     // Start considering book completion earlier (round 2+) for competitiveness
     if (gameState.round < 2) return false;
 

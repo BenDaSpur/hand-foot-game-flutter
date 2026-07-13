@@ -152,10 +152,7 @@ void main() {
           gameController,
         );
         expect(decision, isNotNull);
-        expect(
-          decision!.action,
-          anyOf(['endTurn', 'discard']),
-        ); // May choose to discard instead
+        expect(decision!.action, 'noMeld');
       });
     });
   });
