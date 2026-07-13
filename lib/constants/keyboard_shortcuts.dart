@@ -1,13 +1,17 @@
-/// A single keyboard shortcut entry for help UI and tooltips.
+import 'package:flutter/services.dart';
+
+/// A single keyboard shortcut entry for help UI, tooltips, and dispatch.
 class KeyboardShortcutEntry {
   final String keyLabel;
   final String action;
   final String? phase;
+  final LogicalKeyboardKey? logicalKey;
 
   const KeyboardShortcutEntry({
     required this.keyLabel,
     required this.action,
     this.phase,
+    this.logicalKey,
   });
 }
 
@@ -33,11 +37,13 @@ class KeyboardShortcuts {
       keyLabel: drawKey,
       action: 'Draw from deck',
       phase: 'Draw',
+      logicalKey: LogicalKeyboardKey.keyW,
     ),
     KeyboardShortcutEntry(
       keyLabel: takeDiscardKey,
       action: 'Take discard pile',
       phase: 'Draw',
+      logicalKey: LogicalKeyboardKey.keyQ,
     ),
   ];
 
@@ -46,36 +52,65 @@ class KeyboardShortcuts {
       keyLabel: playCardsKey,
       action: 'Open Play Cards',
       phase: 'Meld',
+      logicalKey: LogicalKeyboardKey.keyE,
     ),
     KeyboardShortcutEntry(
       keyLabel: discardKey,
       action: 'Discard / Go to Foot / Go Out',
       phase: 'Meld',
+      logicalKey: LogicalKeyboardKey.space,
     ),
     KeyboardShortcutEntry(
       keyLabel: discardAltKey,
       action: 'Same as Space',
       phase: 'Meld',
+      logicalKey: LogicalKeyboardKey.enter,
     ),
   ];
 
   static const List<KeyboardShortcutEntry> navigation = [
-    KeyboardShortcutEntry(keyLabel: prevCardKey, action: 'Focus previous card'),
-    KeyboardShortcutEntry(keyLabel: nextCardKey, action: 'Focus next card'),
+    KeyboardShortcutEntry(
+      keyLabel: prevCardKey,
+      action: 'Focus previous card',
+      logicalKey: LogicalKeyboardKey.keyA,
+    ),
+    KeyboardShortcutEntry(
+      keyLabel: nextCardKey,
+      action: 'Focus next card',
+      logicalKey: LogicalKeyboardKey.keyD,
+    ),
     KeyboardShortcutEntry(
       keyLabel: toggleSelectKey,
       action: 'Toggle select focused card',
+      logicalKey: LogicalKeyboardKey.keyF,
     ),
-    KeyboardShortcutEntry(keyLabel: sortKey, action: 'Sort hand by rank'),
-    KeyboardShortcutEntry(keyLabel: clearKey, action: 'Clear selection'),
-    KeyboardShortcutEntry(keyLabel: 'Esc', action: 'Clear selection'),
+    KeyboardShortcutEntry(
+      keyLabel: sortKey,
+      action: 'Sort hand by rank',
+      logicalKey: LogicalKeyboardKey.keyS,
+    ),
+    KeyboardShortcutEntry(
+      keyLabel: clearKey,
+      action: 'Clear selection',
+      logicalKey: LogicalKeyboardKey.keyC,
+    ),
+    KeyboardShortcutEntry(
+      keyLabel: 'Esc',
+      action: 'Clear selection',
+      logicalKey: LogicalKeyboardKey.escape,
+    ),
   ];
 
   static const List<KeyboardShortcutEntry> utility = [
-    KeyboardShortcutEntry(keyLabel: scoreboardKey, action: 'Open scoreboard'),
+    KeyboardShortcutEntry(
+      keyLabel: scoreboardKey,
+      action: 'Open scoreboard',
+      logicalKey: LogicalKeyboardKey.keyR,
+    ),
     KeyboardShortcutEntry(
       keyLabel: helpKey,
       action: 'Toggle keyboard shortcuts help',
+      logicalKey: LogicalKeyboardKey.keyH,
     ),
     KeyboardShortcutEntry(
       keyLabel: '?',
@@ -89,6 +124,45 @@ class KeyboardShortcuts {
     ...navigation,
     ...utility,
   ];
+
+  /// Canonical draw binding (W).
+  static final LogicalKeyboardKey draw = drawPhase.first.logicalKey!;
+
+  /// Canonical take-discard binding (Q).
+  static final LogicalKeyboardKey takeDiscard = drawPhase[1].logicalKey!;
+
+  /// Canonical play-cards binding (E).
+  static final LogicalKeyboardKey playCards = meldPhase.first.logicalKey!;
+
+  /// Discard primary binding (Space).
+  static final LogicalKeyboardKey discard = meldPhase[1].logicalKey!;
+
+  /// Discard alternate binding (Enter).
+  static final LogicalKeyboardKey discardAlt = meldPhase[2].logicalKey!;
+
+  /// Focus previous card (A).
+  static final LogicalKeyboardKey prevCard = navigation[0].logicalKey!;
+
+  /// Focus next card (D).
+  static final LogicalKeyboardKey nextCard = navigation[1].logicalKey!;
+
+  /// Toggle select focused card (F).
+  static final LogicalKeyboardKey toggleSelect = navigation[2].logicalKey!;
+
+  /// Sort hand (S).
+  static final LogicalKeyboardKey sort = navigation[3].logicalKey!;
+
+  /// Clear selection (C).
+  static final LogicalKeyboardKey clear = navigation[4].logicalKey!;
+
+  /// Clear / dismiss (Esc).
+  static final LogicalKeyboardKey escape = navigation[5].logicalKey!;
+
+  /// Scoreboard (R).
+  static final LogicalKeyboardKey scoreboard = utility.first.logicalKey!;
+
+  /// Help overlay (H).
+  static final LogicalKeyboardKey help = utility[1].logicalKey!;
 
   /// WASD layout rows for the help overlay diagram.
   static const List<List<String>> wasdLayout = [

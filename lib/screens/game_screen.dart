@@ -1479,21 +1479,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     setState(() {
       _selectedCardIndices.clear();
-      _keyboardFocusedCardIndex = _clampKeyboardFocus(
-        _keyboardFocusedCardIndex,
-        humanPlayer.currentHand.length,
+      _keyboardFocusedCardIndex = clampKeyboardFocus(
+        index: _keyboardFocusedCardIndex,
+        handLength: humanPlayer.currentHand.length,
       );
     });
-  }
-
-  int? _clampKeyboardFocus(int? index, int handLength) {
-    if (handLength <= 0 || index == null) {
-      return null;
-    }
-    if (index >= handLength) {
-      return handLength - 1;
-    }
-    return index;
   }
 
   void _onFocusPreviousCard() {
@@ -1543,9 +1533,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       canUnlockDiscard: controller?.canUnlockDiscard() ?? false,
       selectedCardCount: _selectedCardIndices.length,
       handLength: handLength,
-      focusedCardIndex: _clampKeyboardFocus(
-        _keyboardFocusedCardIndex,
-        handLength,
+      focusedCardIndex: clampKeyboardFocus(
+        index: _keyboardFocusedCardIndex,
+        handLength: handLength,
       ),
       isHumanTurn: gameState.currentPlayer.type == PlayerType.human,
       isAnimating: _isCardAnimationActive,
@@ -1851,9 +1841,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   handDisplay: GameHandDisplay(
                     player: humanPlayer,
                     selectedCardIndices: _selectedCardIndices,
-                    keyboardFocusedCardIndex: _clampKeyboardFocus(
-                      _keyboardFocusedCardIndex,
-                      humanPlayer.currentHand.length,
+                    keyboardFocusedCardIndex: clampKeyboardFocus(
+                      index: _keyboardFocusedCardIndex,
+                      handLength: humanPlayer.currentHand.length,
                     ),
                     onCardTap:
                         currentPlayer.type == PlayerType.human &&

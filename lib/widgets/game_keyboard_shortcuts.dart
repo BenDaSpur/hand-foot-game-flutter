@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../constants/keyboard_shortcuts.dart';
 import '../models/game_state.dart';
 
 /// Callbacks invoked by keyboard shortcuts.
@@ -58,7 +59,7 @@ class GameKeyboardContext {
 
 /// Returns true when the key is H or ? (shift+/).
 bool isHelpToggleKey(KeyDownEvent event) {
-  if (event.logicalKey == LogicalKeyboardKey.keyH) {
+  if (event.logicalKey == KeyboardShortcuts.help) {
     return true;
   }
   return event.character == '?';
@@ -81,7 +82,7 @@ KeyEventResult handleGameKeyboardEvent({
     return KeyEventResult.handled;
   }
 
-  if (context.isHelpVisible && key == LogicalKeyboardKey.escape) {
+  if (context.isHelpVisible && key == KeyboardShortcuts.escape) {
     actions.onToggleHelp();
     return KeyEventResult.handled;
   }
@@ -95,7 +96,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // W = Draw from deck
-  if (key == LogicalKeyboardKey.keyW) {
+  if (key == KeyboardShortcuts.draw) {
     if (context.turnPhase == TurnPhase.draw) {
       actions.onDrawFromDeck();
       return KeyEventResult.handled;
@@ -103,7 +104,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // Q = Take discard pile
-  if (key == LogicalKeyboardKey.keyQ) {
+  if (key == KeyboardShortcuts.takeDiscard) {
     if (context.turnPhase == TurnPhase.draw &&
         context.canUnlockDiscard &&
         actions.onUnlockDiscard != null) {
@@ -113,7 +114,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // E = Open Play Cards modal
-  if (key == LogicalKeyboardKey.keyE) {
+  if (key == KeyboardShortcuts.playCards) {
     if (context.turnPhase == TurnPhase.meld) {
       actions.onOpenMeldModal();
       return KeyEventResult.handled;
@@ -121,7 +122,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // Space / Enter = Discard
-  if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.enter) {
+  if (key == KeyboardShortcuts.discard || key == KeyboardShortcuts.discardAlt) {
     if (context.turnPhase == TurnPhase.meld &&
         context.selectedCardCount == 1 &&
         context.hasInteractedSinceDraw) {
@@ -131,7 +132,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // A = Focus previous card
-  if (key == LogicalKeyboardKey.keyA) {
+  if (key == KeyboardShortcuts.prevCard) {
     if (context.handLength > 0) {
       actions.onFocusPrevious();
       return KeyEventResult.handled;
@@ -139,7 +140,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // D = Focus next card
-  if (key == LogicalKeyboardKey.keyD) {
+  if (key == KeyboardShortcuts.nextCard) {
     if (context.handLength > 0) {
       actions.onFocusNext();
       return KeyEventResult.handled;
@@ -147,7 +148,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // F = Toggle select on focused card
-  if (key == LogicalKeyboardKey.keyF) {
+  if (key == KeyboardShortcuts.toggleSelect) {
     if (context.handLength > 0 && context.focusedCardIndex != null) {
       actions.onToggleSelectFocused();
       return KeyEventResult.handled;
@@ -155,13 +156,13 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // S = Sort hand
-  if (key == LogicalKeyboardKey.keyS) {
+  if (key == KeyboardShortcuts.sort) {
     actions.onSortHand();
     return KeyEventResult.handled;
   }
 
   // C / Esc = Clear selection
-  if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.escape) {
+  if (key == KeyboardShortcuts.clear || key == KeyboardShortcuts.escape) {
     if (context.selectedCardCount > 0) {
       actions.onClearSelection();
       return KeyEventResult.handled;
@@ -169,7 +170,7 @@ KeyEventResult handleGameKeyboardEvent({
   }
 
   // R = Scoreboard
-  if (key == LogicalKeyboardKey.keyR) {
+  if (key == KeyboardShortcuts.scoreboard) {
     actions.onShowScoreboard();
     return KeyEventResult.handled;
   }
@@ -218,16 +219,33 @@ class _GameKeyboardShortcutsState extends State<GameKeyboardShortcuts> {
 
   @override
   Widget build(BuildContext context) {
+    // ExcludeFocus keeps action-bar ElevatedButtons from stealing primary focus
+    // so WASD shortcuts keep working after mouse clicks. Dialogs open on the
+    // navigator overlay and are unaffected.
     return Focus(
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: _onKeyEvent,
-      child: widget.child,
+      child: ExcludeFocus(child: widget.child),
     );
   }
 }
 
+/// Clamps a keyboard focus index into [0, handLength - 1], or null when empty.
+int? clampKeyboardFocus({required int? index, required int handLength}) {
+  if (handLength <= 0 || index == null) {
+    return null;
+  }
+  if (index >= handLength) {
+    return handLength - 1;
+  }
+  return index;
+}
+
 /// Moves keyboard focus to the previous card index (wraps at 0).
+///
+/// Out-of-range non-null indices (below 0 or beyond the hand) wrap to the
+/// last card so focus always lands on a valid index.
 int? focusPreviousCardIndex({
   required int? currentIndex,
   required int handLength,
@@ -238,13 +256,16 @@ int? focusPreviousCardIndex({
   if (currentIndex == null) {
     return handLength - 1;
   }
-  if (currentIndex <= 0) {
+  if (currentIndex <= 0 || currentIndex >= handLength) {
     return handLength - 1;
   }
   return currentIndex - 1;
 }
 
 /// Moves keyboard focus to the next card index (wraps at end).
+///
+/// Out-of-range non-null indices (below 0 or at/beyond the end) wrap to the
+/// first card so focus always lands on a valid index.
 int? focusNextCardIndex({required int? currentIndex, required int handLength}) {
   if (handLength <= 0) {
     return null;
@@ -252,7 +273,7 @@ int? focusNextCardIndex({required int? currentIndex, required int handLength}) {
   if (currentIndex == null) {
     return 0;
   }
-  if (currentIndex >= handLength - 1) {
+  if (currentIndex < 0 || currentIndex >= handLength - 1) {
     return 0;
   }
   return currentIndex + 1;

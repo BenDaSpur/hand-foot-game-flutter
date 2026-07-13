@@ -182,21 +182,11 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     currentUserPlayer.sortHandByRank();
     setState(() {
       _selectedCardIndices.clear();
-      _keyboardFocusedCardIndex = _clampKeyboardFocus(
-        _keyboardFocusedCardIndex,
-        currentUserPlayer.currentHand.length,
+      _keyboardFocusedCardIndex = clampKeyboardFocus(
+        index: _keyboardFocusedCardIndex,
+        handLength: currentUserPlayer.currentHand.length,
       );
     });
-  }
-
-  int? _clampKeyboardFocus(int? index, int handLength) {
-    if (handLength <= 0 || index == null) {
-      return null;
-    }
-    if (index >= handLength) {
-      return handLength - 1;
-    }
-    return index;
   }
 
   void _onFocusPreviousCard() {
@@ -278,9 +268,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       canUnlockDiscard: _gameController.canUnlockDiscard(),
       selectedCardCount: _selectedCardIndices.length,
       handLength: handLength,
-      focusedCardIndex: _clampKeyboardFocus(
-        _keyboardFocusedCardIndex,
-        handLength,
+      focusedCardIndex: clampKeyboardFocus(
+        index: _keyboardFocusedCardIndex,
+        handLength: handLength,
       ),
       isHumanTurn: _gameController.isMyTurn,
       isAnimating: _isCardAnimationActive,
@@ -726,9 +716,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                       handDisplay: GameHandDisplay(
                         player: humanPlayer,
                         selectedCardIndices: _selectedCardIndices,
-                        keyboardFocusedCardIndex: _clampKeyboardFocus(
-                          _keyboardFocusedCardIndex,
-                          humanPlayer.currentHand.length,
+                        keyboardFocusedCardIndex: clampKeyboardFocus(
+                          index: _keyboardFocusedCardIndex,
+                          handLength: humanPlayer.currentHand.length,
                         ),
                         onCardTap: _onCardTap,
                         onCardDoubleTap: _onCardDoubleTap,

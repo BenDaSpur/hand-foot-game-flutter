@@ -17,6 +17,14 @@ void main() {
     test('moves to previous card', () {
       expect(focusPreviousCardIndex(currentIndex: 3, handLength: 5), 2);
     });
+
+    test('wraps out-of-range high index to last card', () {
+      expect(focusPreviousCardIndex(currentIndex: 10, handLength: 5), 4);
+    });
+
+    test('wraps negative index to last card', () {
+      expect(focusPreviousCardIndex(currentIndex: -1, handLength: 5), 4);
+    });
   });
 
   group('focusNextCardIndex', () {
@@ -30,6 +38,32 @@ void main() {
 
     test('moves to next card', () {
       expect(focusNextCardIndex(currentIndex: 2, handLength: 5), 3);
+    });
+
+    test('wraps out-of-range high index to first card', () {
+      expect(focusNextCardIndex(currentIndex: 10, handLength: 5), 0);
+    });
+
+    test('wraps negative index to first card', () {
+      expect(focusNextCardIndex(currentIndex: -3, handLength: 5), 0);
+    });
+  });
+
+  group('clampKeyboardFocus', () {
+    test('returns null for empty hand', () {
+      expect(clampKeyboardFocus(index: 2, handLength: 0), isNull);
+    });
+
+    test('returns null for null index', () {
+      expect(clampKeyboardFocus(index: null, handLength: 5), isNull);
+    });
+
+    test('clamps above upper bound', () {
+      expect(clampKeyboardFocus(index: 9, handLength: 5), 4);
+    });
+
+    test('preserves in-range index', () {
+      expect(clampKeyboardFocus(index: 2, handLength: 5), 2);
     });
   });
 
@@ -204,6 +238,28 @@ void main() {
 
       expect(result, KeyEventResult.handled);
       expect(clearCount, 1);
+    });
+
+    test('S sorts hand', () {
+      final result = handleGameKeyboardEvent(
+        event: keyEvent(LogicalKeyboardKey.keyS),
+        context: buildContext(),
+        actions: buildActions(),
+      );
+
+      expect(result, KeyEventResult.handled);
+      expect(sortCount, 1);
+    });
+
+    test('R opens scoreboard', () {
+      final result = handleGameKeyboardEvent(
+        event: keyEvent(LogicalKeyboardKey.keyR),
+        context: buildContext(),
+        actions: buildActions(),
+      );
+
+      expect(result, KeyEventResult.handled);
+      expect(scoreboardCount, 1);
     });
 
     test('H toggles help overlay', () {
