@@ -26,6 +26,8 @@ import '../widgets/final_turn_banner.dart';
 import '../widgets/perfect_grab_mini_game.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
+import '../services/analytics/bot_decision_analytics_snapshot.dart';
+import '../services/analytics/bot_decision_snapshot_mapper.dart';
 import '../services/analytics_batcher.dart';
 import '../services/analytics_fields.dart';
 import 'main_menu_screen.dart';
@@ -2068,13 +2070,19 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     required String decision,
     required String reasoning,
     Map<String, dynamic>? context,
-    GameState? gameStateSnapshot,
+    BotDecisionAnalyticsSnapshot? gameStateSnapshot,
   }) async {
     if (_analyticsSessionId == null) return;
 
     try {
-      final gameState = gameStateSnapshot ?? ref.read(currentGameStateProvider);
-      if (gameState == null) return;
+      final liveGameState = ref.read(currentGameStateProvider);
+      if (liveGameState == null && gameStateSnapshot == null) {
+        return;
+      }
+
+      final analyticsSnapshot =
+          gameStateSnapshot ??
+          BotDecisionSnapshotMapper.fromGameState(liveGameState!);
 
       _actionSequenceNumber++; // Increment sequence for this action
 
@@ -2084,13 +2092,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         decision: decision,
         reasoning: reasoning,
         personality: personality,
-        gameState: gameState,
+        gameState: analyticsSnapshot,
         decisionContext: {
           ...?context,
           // Add sequencing information
           'actionSequence': _actionSequenceNumber,
           'turnNumber': _totalTurns,
-          'playerTurnIndex': gameState.currentPlayerIndex,
+          'playerTurnIndex': analyticsSnapshot.currentPlayerIndex,
         },
       );
     } catch (e) {
