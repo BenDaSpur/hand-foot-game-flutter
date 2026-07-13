@@ -206,6 +206,11 @@ class BotTurnManager {
         for (int attempt = 0; attempt < 3 && !actionSucceeded; attempt++) {
           try {
             final decision = botAI.makeDecision(botPlayer, gameController);
+            final gameStateSnapshot = gameController.gameState
+                .snapshotForAnalytics();
+            final snapshotBot = gameStateSnapshot.players.firstWhere(
+              (player) => player.id == botPlayer.id,
+            );
             actionSucceeded = executeBotDecision(decision, botPlayer);
 
             if (actionSucceeded) {
@@ -218,9 +223,9 @@ class BotTurnManager {
 
               // Log bot decision for analytics with actual strategic reasoning
               final strategicReasoning = generateBotReasoning(
-                botPlayer,
+                snapshotBot,
                 decision,
-                gameController.gameState,
+                gameStateSnapshot,
               );
 
               logBotDecision(
@@ -230,7 +235,7 @@ class BotTurnManager {
                 context: decision.data != null
                     ? {'data': decision.data.toString()}
                     : null,
-                gameStateSnapshot: gameController.gameState,
+                gameStateSnapshot: gameStateSnapshot,
               );
               break;
             }

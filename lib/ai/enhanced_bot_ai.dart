@@ -2405,23 +2405,14 @@ class EnhancedBotAI {
     }
 
     final handSize = bot.currentHand.length;
-    if (handSize <= BotConfig.handPileFootCompletionMaxHand) {
-      final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
-        bot,
-        controller,
-      );
-      if (maximalMelds.length >= 2) {
-        final cardsMeldable = maximalMelds.fold<int>(
-          0,
-          (sum, meld) => sum + meld.length,
-        );
-        if (cardsMeldable >= handSize - 1) {
-          return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
-        }
-      } else if (maximalMelds.length == 1 &&
-          maximalMelds.first.length >= handSize - 1) {
-        return BotDecision(action: 'createMeld', data: maximalMelds.first);
-      }
+    final maximalMeldsDecision = _tryMaximalMeldsForHandPileCompletion(
+      bot,
+      controller,
+      handSize,
+      context,
+    );
+    if (maximalMeldsDecision != null) {
+      return maximalMeldsDecision;
     }
 
     final cardsToAdd = _filterWildCardAdditions(
@@ -2500,23 +2491,14 @@ class EnhancedBotAI {
     }
 
     final handSize = bot.currentHand.length;
-    if (handSize <= BotConfig.handPileFootCompletionMaxHand) {
-      final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
-        bot,
-        controller,
-      );
-      if (maximalMelds.length >= 2) {
-        final cardsMeldable = maximalMelds.fold<int>(
-          0,
-          (sum, meld) => sum + meld.length,
-        );
-        if (cardsMeldable >= handSize - 1) {
-          return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
-        }
-      } else if (maximalMelds.length == 1 &&
-          maximalMelds.first.length >= handSize - 1) {
-        return BotDecision(action: 'createMeld', data: maximalMelds.first);
-      }
+    final maximalMeldsDecision = _tryMaximalMeldsForHandPileCompletion(
+      bot,
+      controller,
+      handSize,
+      context,
+    );
+    if (maximalMeldsDecision != null) {
+      return maximalMeldsDecision;
     }
 
     final rush = _makeHandToFootRushDecision(bot, context);
@@ -2882,6 +2864,44 @@ class EnhancedBotAI {
   /// True when any opponent has picked up foot — bots should race to transition.
   bool _opponentOnFootPressure(BotGameContext context, Player bot) {
     return context.players.any((p) => p.id != bot.id && p.hasPickedUpFoot);
+  }
+
+  /// Hand-size ceiling for multi-meld foot completion (5 normally, up to 8 under pressure).
+  int _handPileMaximalMeldHandLimit(Player bot, BotGameContext context) {
+    if (_opponentOnFootPressure(context, bot)) {
+      return BotConfig.handToFootRushOpponentOnFootThreshold;
+    }
+    return BotConfig.handPileFootCompletionMaxHand;
+  }
+
+  /// Try multi-meld or single-meld completion when hand is small enough.
+  BotDecision? _tryMaximalMeldsForHandPileCompletion(
+    Player bot,
+    GameController controller,
+    int handSize,
+    BotGameContext context,
+  ) {
+    if (handSize > _handPileMaximalMeldHandLimit(bot, context)) {
+      return null;
+    }
+
+    final maximalMelds = _meldAnalyzer
+        .findMaximalMeldCombination(bot, controller)
+        .where((meld) => meld.length >= GameConfig.minTotalCardsForMeld)
+        .toList();
+    if (maximalMelds.length >= 2) {
+      final cardsMeldable = maximalMelds.fold<int>(
+        0,
+        (sum, meld) => sum + meld.length,
+      );
+      if (cardsMeldable >= handSize - 1) {
+        return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
+      }
+    } else if (maximalMelds.length == 1 &&
+        maximalMelds.first.length >= handSize - 1) {
+      return BotDecision(action: 'createMeld', data: maximalMelds.first);
+    }
+    return null;
   }
 
   /// Enhanced book completion strategy for competitive play

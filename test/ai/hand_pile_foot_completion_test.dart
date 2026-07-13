@@ -53,33 +53,31 @@ void main() {
       expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
     });
 
-    test('uses createMultipleMelds to clear 3-card hand (1-card trap)', () {
-      bot.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        ])!,
-      );
-      bot.hand
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
-        ]);
+    test(
+      'uses createMultipleMelds to clear hand with two melds plus discard',
+      () {
+        human.hasPickedUpFoot = true;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          ]);
 
-      final decision = botAI.makeCompleteHandPileForFootDecision(
-        bot,
-        context(),
-      );
+        final decision = botAI.makeCompleteHandPileForFootDecision(
+          bot,
+          context(),
+        );
 
-      expect(decision, isNotNull);
-      expect(
-        decision!.action,
-        isIn(['createMultipleMelds', 'addToMeld', 'createMeld']),
-      );
-    });
+        expect(decision, isNotNull);
+        expect(decision!.action, 'createMultipleMelds');
+      },
+    );
 
     test(
       'conservative bot does not hold at 8 cards with melds but zero books',
@@ -183,5 +181,37 @@ void main() {
         expect(decision.action, isNot('drawFromDeck'));
       },
     );
+
+    test('final turn draw phase draws from deck', () {
+      gameController.gameState.turnPhase = TurnPhase.draw;
+      gameController.gameState.hasDrawnFromDeck = false;
+      bot.hand
+        ..clear()
+        ..add(const PlayingCard(suit: Suit.hearts, rank: CardRank.five));
+
+      final decision = botAI.makeFinalTurnScoringDecision(bot, context());
+      expect(decision.action, 'drawFromDeck');
+
+      final routeDecision = botAI.makeDecision(bot, gameController);
+      expect(routeDecision.action, 'drawFromDeck');
+    });
+
+    test('final turn discard phase discards without drawing', () {
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      gameController.gameState.hasDrawnFromDeck = true;
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+        ]);
+
+      final decision = botAI.makeFinalTurnScoringDecision(bot, context());
+      expect(decision.action, 'discard');
+
+      final routeDecision = botAI.makeDecision(bot, gameController);
+      expect(routeDecision.action, 'discard');
+      expect(routeDecision.action, isNot('drawFromDeck'));
+    });
   });
 }

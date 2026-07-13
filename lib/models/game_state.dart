@@ -148,6 +148,56 @@ class GameState {
     _viewerId = viewerId;
   }
 
+  /// Immutable copy of game state for analytics/logging before mutations apply.
+  GameState snapshotForAnalytics() {
+    final snapshotPlayers = players
+        .map(
+          (player) => Player(
+            id: player.id,
+            name: player.name,
+            type: player.type,
+            hand: List<PlayingCard>.from(player.hand),
+            foot: List<PlayingCard>.from(player.foot),
+            melds: player.melds
+                .map(
+                  (meld) => Meld(
+                    rank: meld.rank,
+                    cards: List<PlayingCard>.from(meld.cards),
+                  ),
+                )
+                .toList(),
+            hasPickedUpFoot: player.hasPickedUpFoot,
+            hasPlayedDown: player.hasPlayedDown,
+            score: player.score,
+          ),
+        )
+        .toList();
+
+    final snapshot = GameState(
+      players: snapshotPlayers,
+      deck: Deck.fromCards(deck.cards, seed: deck.seed),
+      discardPile: List<PlayingCard>.from(discardPile),
+      recentActions: List<GameAction>.from(recentActions),
+      currentPlayerIndex: currentPlayerIndex,
+      phase: phase,
+      turnPhase: turnPhase,
+      round: round,
+      discardPileFrozen: discardPileFrozen,
+      hasDrawnFromDeck: hasDrawnFromDeck,
+      hasMelded: hasMelded,
+      soloSettings: soloSettings,
+      finalTurnPhaseActive: finalTurnPhaseActive,
+      playerWhoWentOutIndex: playerWhoWentOutIndex,
+      playersAwaitingFinalTurn: Set<int>.from(playersAwaitingFinalTurn),
+    );
+
+    if (winner != null) {
+      snapshot.winner = snapshotPlayers.firstWhere((p) => p.id == winner!.id);
+    }
+
+    return snapshot;
+  }
+
   void _logAction(String message, {bool showCardDetails = true}) {
     // Determine if card details should be shown based on player type and action visibility
     final isHuman = currentPlayer.type == PlayerType.human;

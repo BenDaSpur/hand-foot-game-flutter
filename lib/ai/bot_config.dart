@@ -40,7 +40,8 @@ class BotConfig {
   /// Never stall on hand pile at or below this size — melt or discard to foot
   static const int handToFootCriticalHandSize = 4;
 
-  /// On hand pile: multi-meld / empty-to-foot below this size (avoids 1-card trap)
+  /// On hand pile: multi-meld / empty-to-foot at or below this size (inclusive;
+  /// e.g. 5-card hands qualify). Opponent-on-foot pressure may extend the limit.
   static const int handPileFootCompletionMaxHand = 5;
 
   /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
