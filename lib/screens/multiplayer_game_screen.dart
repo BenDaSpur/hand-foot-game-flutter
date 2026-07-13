@@ -15,6 +15,9 @@ import '../widgets/turn_timer.dart';
 import '../widgets/card_animation_host.dart';
 import '../game/events/game_event_bus.dart';
 import '../services/multiplayer_resume_service.dart';
+import '../widgets/game_keyboard_shortcuts.dart';
+import '../widgets/keyboard_shortcuts_overlay.dart';
+import '../utils/game_responsive_layout.dart';
 import '../theme/balatro_theme.dart';
 import 'main_menu_screen.dart';
 
@@ -46,6 +49,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   final GlobalKey _meldAreaKey = GlobalKey();
   final ScrollController _handScrollController = ScrollController();
 
+  int? _keyboardFocusedCardIndex;
+  bool _showKeyboardHelp = false;
+  bool _isCardAnimationActive = false;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +83,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     }
 
     setState(() {
+      _keyboardFocusedCardIndex = cardIndex;
       if (_selectedCardIndices.contains(cardIndex)) {
         _selectedCardIndices.remove(cardIndex);
       } else {
@@ -164,6 +172,129 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       _gameController.discardCard(_selectedCards.first);
       setState(() => _selectedCardIndices.clear());
     }
+  }
+
+  void _sortHand() {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) {
+      return;
+    }
+    currentUserPlayer.sortHandByRank();
+    setState(() {
+      _selectedCardIndices.clear();
+      _keyboardFocusedCardIndex = clampKeyboardFocus(
+        index: _keyboardFocusedCardIndex,
+        handLength: currentUserPlayer.currentHand.length,
+      );
+    });
+  }
+
+  void _onFocusPreviousCard() {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) {
+      return;
+    }
+    setState(() {
+      _keyboardFocusedCardIndex = focusPreviousCardIndex(
+        currentIndex: _keyboardFocusedCardIndex,
+        handLength: currentUserPlayer.currentHand.length,
+      );
+    });
+  }
+
+  void _onFocusNextCard() {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    if (currentUserPlayer == null) {
+      return;
+    }
+    setState(() {
+      _keyboardFocusedCardIndex = focusNextCardIndex(
+        currentIndex: _keyboardFocusedCardIndex,
+        handLength: currentUserPlayer.currentHand.length,
+      );
+    });
+  }
+
+  void _onToggleSelectFocusedCard() {
+    if (_keyboardFocusedCardIndex != null) {
+      _onCardTap(_keyboardFocusedCardIndex!);
+    }
+  }
+
+  void _toggleKeyboardHelp() {
+    setState(() {
+      _showKeyboardHelp = !_showKeyboardHelp;
+    });
+  }
+
+  void _showScoreboard() {
+    final gameState = _gameController.gameState;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        title: const Text(
+          'Scoreboard',
+          style: TextStyle(color: BalatroTheme.neonYellow),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: gameState.players.map((player) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                '${player.name}: ${player.score} pts',
+                style: const TextStyle(color: Colors.white),
+              ),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  GameKeyboardContext _buildKeyboardContext(GameState gameState) {
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    final handLength = currentUserPlayer?.currentHand.length ?? 0;
+    return GameKeyboardContext(
+      turnPhase: gameState.turnPhase,
+      canUnlockDiscard: _gameController.canUnlockDiscard(),
+      selectedCardCount: _selectedCardIndices.length,
+      handLength: handLength,
+      focusedCardIndex: clampKeyboardFocus(
+        index: _keyboardFocusedCardIndex,
+        handLength: handLength,
+      ),
+      isHumanTurn: _gameController.isMyTurn,
+      isAnimating: _isCardAnimationActive,
+      hasInteractedSinceDraw: true,
+      isHelpVisible: _showKeyboardHelp,
+    );
+  }
+
+  GameKeyboardActions _buildKeyboardActions() {
+    return GameKeyboardActions(
+      onDrawFromDeck: _onDrawFromDeck,
+      onUnlockDiscard: _gameController.canUnlockDiscard()
+          ? _onUnlockDiscard
+          : null,
+      onOpenMeldModal: _showAdvancedMeldSelector,
+      onDiscard: _onDiscard,
+      onClearSelection: () => setState(() => _selectedCardIndices.clear()),
+      onSortHand: _sortHand,
+      onToggleSelectFocused: _onToggleSelectFocusedCard,
+      onFocusPrevious: _onFocusPreviousCard,
+      onFocusNext: _onFocusNextCard,
+      onShowScoreboard: _showScoreboard,
+      onToggleHelp: _toggleKeyboardHelp,
+    );
   }
 
   void _showAdvancedMeldSelector() {
@@ -413,165 +544,202 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
           return _buildGameEndScreen(gameState);
         }
 
-        return Container(
-          decoration: const BoxDecoration(
-            gradient: BalatroTheme.primaryGradient,
-          ),
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            appBar: GameAppBar(
-              gameState: gameState,
-              isMultiplayer: true,
-              connectionStream: _gameController.connectionStream,
-              isOnline: _gameController.isOnline,
-              sessionInfo: GameSessionInfo(
-                gameId: _gameController.gameId,
-                playerId: _gameController.userId,
-              ),
-              onLeaveGame: _cleanupAndExit,
-            ),
-            body: CardAnimationHost(
-              eventBus: gameEventBus,
-              localHumanPlayer: () => humanPlayer,
-              deckKey: _deckKey,
-              discardKey: _discardKey,
-              handStackKey: _handStackKey,
-              meldAreaKey: _meldAreaKey,
-              handScrollController: _handScrollController,
-              child: GameBoardLayout(
-                gameState: gameState,
-                viewingPlayerMelds: _viewingPlayerMelds,
-                onPlayerTap: (player) {
-                  setState(() {
-                    _viewingPlayerMelds = player.id == _gameController.userId
-                        ? null
-                        : player;
-                  });
-                },
-                deckKey: _deckKey,
-                discardKey: _discardKey,
-                meldAreaKey: _meldAreaKey,
-                headerExpanded: _headerExpanded,
-                onHeaderToggle: () {
-                  setState(() {
-                    _headerExpanded = !_headerExpanded;
-                  });
-                },
-                currentUserId: _gameController.userId,
-                useDesktopRecentActions: true,
-                recentActionsExpanded: _actionsExpanded,
-                onRecentActionsToggle: () {
-                  setState(() {
-                    _actionsExpanded = !_actionsExpanded;
-                  });
-                },
-                headerExtras: [
-                  Icon(
-                    _gameController.isOnline ? Icons.wifi : Icons.wifi_off,
-                    color: _gameController.isOnline ? Colors.green : Colors.red,
-                    size: 16,
+        final showDesktopKeyboardHints = !GameResponsiveLayout.isMobile(
+          context,
+        );
+
+        return GameKeyboardShortcuts(
+          getContext: () => _buildKeyboardContext(gameState),
+          actions: _buildKeyboardActions(),
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: BalatroTheme.primaryGradient,
+                ),
+                child: Scaffold(
+                  backgroundColor: Colors.transparent,
+                  appBar: GameAppBar(
+                    gameState: gameState,
+                    isMultiplayer: true,
+                    connectionStream: _gameController.connectionStream,
+                    isOnline: _gameController.isOnline,
+                    sessionInfo: GameSessionInfo(
+                      gameId: _gameController.gameId,
+                      playerId: _gameController.userId,
+                    ),
+                    onLeaveGame: _cleanupAndExit,
                   ),
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _gameController.isMyTurn
-                          ? Colors.green.withValues(alpha: 0.3)
-                          : Colors.orange.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _gameController.isMyTurn
-                          ? 'YOU'
-                          : gameState.currentPlayer.name,
-                      style: TextStyle(
-                        color: _gameController.isMyTurn
-                            ? Colors.green
-                            : Colors.orange,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
+                  body: CardAnimationHost(
+                    eventBus: gameEventBus,
+                    localHumanPlayer: () => humanPlayer,
+                    deckKey: _deckKey,
+                    discardKey: _discardKey,
+                    handStackKey: _handStackKey,
+                    meldAreaKey: _meldAreaKey,
+                    handScrollController: _handScrollController,
+                    onAnimationStateChanged: (isAnimating) {
+                      if (_isCardAnimationActive != isAnimating) {
+                        setState(() {
+                          _isCardAnimationActive = isAnimating;
+                        });
+                      }
+                    },
+                    child: GameBoardLayout(
+                      gameState: gameState,
+                      viewingPlayerMelds: _viewingPlayerMelds,
+                      onPlayerTap: (player) {
+                        setState(() {
+                          _viewingPlayerMelds =
+                              player.id == _gameController.userId
+                              ? null
+                              : player;
+                        });
+                      },
+                      deckKey: _deckKey,
+                      discardKey: _discardKey,
+                      meldAreaKey: _meldAreaKey,
+                      headerExpanded: _headerExpanded,
+                      onHeaderToggle: () {
+                        setState(() {
+                          _headerExpanded = !_headerExpanded;
+                        });
+                      },
+                      currentUserId: _gameController.userId,
+                      useDesktopRecentActions: true,
+                      recentActionsExpanded: _actionsExpanded,
+                      onRecentActionsToggle: () {
+                        setState(() {
+                          _actionsExpanded = !_actionsExpanded;
+                        });
+                      },
+                      headerExtras: [
+                        if (showDesktopKeyboardHints) ...[
+                          KeyboardShortcutsHelpChip(onTap: _toggleKeyboardHelp),
+                          const SizedBox(width: 4),
+                        ],
+                        Icon(
+                          _gameController.isOnline
+                              ? Icons.wifi
+                              : Icons.wifi_off,
+                          color: _gameController.isOnline
+                              ? Colors.green
+                              : Colors.red,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _gameController.isMyTurn
+                                ? Colors.green.withValues(alpha: 0.3)
+                                : Colors.orange.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _gameController.isMyTurn
+                                ? 'YOU'
+                                : gameState.currentPlayer.name,
+                            style: TextStyle(
+                              color: _gameController.isMyTurn
+                                  ? Colors.green
+                                  : Colors.orange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        if (_turnTimerEnabled) ...[
+                          const SizedBox(width: 4),
+                          TurnTimer(
+                            key: ValueKey(gameState.currentPlayer.id),
+                            turnDurationSeconds: _turnDurationSeconds,
+                            isActive: _gameController.isMyTurn,
+                            onTimeUp: _handleTurnTimeout,
+                            onTick: (remaining) {
+                              if (remaining == 30 && _gameController.isMyTurn) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('⏰ 30 seconds remaining!'),
+                                    backgroundColor: Colors.orange,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ],
+                      aboveMelds: gameState.finalTurnPhaseActive
+                          ? FinalTurnBanner(
+                              gameState: gameState,
+                              localPlayerId: _gameController.userId,
+                            )
+                          : null,
+                      meldsSection: MeldsSection(
+                        gameState: gameState,
+                        humanPlayer: humanPlayer,
+                        viewingPlayerMelds: _viewingPlayerMelds,
+                        onViewPlayerMelds: (player) {
+                          setState(() {
+                            _viewingPlayerMelds = player;
+                          });
+                        },
+                        onAddCardToMeld: _onAddCardToMeld,
+                        onSelectAllCardsForMeld: _selectAllCardsForMeld,
+                        canAddCardToMeld: _canAddCardToMeld,
+                        getCompatibleCardsInfo: _getCompatibleCardsInfo,
+                        currentUserId: _gameController.userId,
+                      ),
+                      actionButtons: GameActionButtons(
+                        gameState: gameState,
+                        humanPlayer: humanPlayer,
+                        selectedCardIndices: _selectedCardIndices,
+                        showKeyboardHints: showDesktopKeyboardHints,
+                        onDrawFromDeck: _onDrawFromDeck,
+                        onUnlockDiscard:
+                            (gameState.turnPhase == TurnPhase.draw &&
+                                _gameController.canUnlockDiscard())
+                            ? _onUnlockDiscard
+                            : null,
+                        onShowAdvancedMeldSelector: _showAdvancedMeldSelector,
+                        onDiscard: _selectedCards.length == 1
+                            ? _onDiscard
+                            : null,
+                        onClearSelection: () =>
+                            setState(() => _selectedCardIndices.clear()),
+                        currentUserId: _gameController.userId,
+                      ),
+                      handDisplay: GameHandDisplay(
+                        player: humanPlayer,
+                        selectedCardIndices: _selectedCardIndices,
+                        keyboardFocusedCardIndex: clampKeyboardFocus(
+                          index: _keyboardFocusedCardIndex,
+                          handLength: humanPlayer.currentHand.length,
+                        ),
+                        onCardTap: _onCardTap,
+                        onCardDoubleTap: _onCardDoubleTap,
+                        isCardPlayable: _isCardPlayable,
+                        viewingPlayerMelds: _viewingPlayerMelds,
+                        onReturnToHand: () =>
+                            setState(() => _viewingPlayerMelds = null),
+                        isCurrentPlayerTurn:
+                            _gameController.gameState.currentPlayer.id ==
+                            _gameController.userId,
+                        showHighlights: true,
+                        handStackKey: _handStackKey,
+                        handScrollController: _handScrollController,
                       ),
                     ),
                   ),
-                  if (_turnTimerEnabled) ...[
-                    const SizedBox(width: 4),
-                    TurnTimer(
-                      key: ValueKey(gameState.currentPlayer.id),
-                      turnDurationSeconds: _turnDurationSeconds,
-                      isActive: _gameController.isMyTurn,
-                      onTimeUp: _handleTurnTimeout,
-                      onTick: (remaining) {
-                        if (remaining == 30 && _gameController.isMyTurn) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('⏰ 30 seconds remaining!'),
-                              backgroundColor: Colors.orange,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                ],
-                aboveMelds: gameState.finalTurnPhaseActive
-                    ? FinalTurnBanner(
-                        gameState: gameState,
-                        localPlayerId: _gameController.userId,
-                      )
-                    : null,
-                meldsSection: MeldsSection(
-                  gameState: gameState,
-                  humanPlayer: humanPlayer,
-                  viewingPlayerMelds: _viewingPlayerMelds,
-                  onViewPlayerMelds: (player) {
-                    setState(() {
-                      _viewingPlayerMelds = player;
-                    });
-                  },
-                  onAddCardToMeld: _onAddCardToMeld,
-                  onSelectAllCardsForMeld: _selectAllCardsForMeld,
-                  canAddCardToMeld: _canAddCardToMeld,
-                  getCompatibleCardsInfo: _getCompatibleCardsInfo,
-                  currentUserId: _gameController.userId,
-                ),
-                actionButtons: GameActionButtons(
-                  gameState: gameState,
-                  humanPlayer: humanPlayer,
-                  selectedCardIndices: _selectedCardIndices,
-                  onDrawFromDeck: _onDrawFromDeck,
-                  onUnlockDiscard:
-                      (gameState.turnPhase == TurnPhase.draw &&
-                          _gameController.canUnlockDiscard())
-                      ? _onUnlockDiscard
-                      : null,
-                  onShowAdvancedMeldSelector: _showAdvancedMeldSelector,
-                  onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
-                  onClearSelection: () =>
-                      setState(() => _selectedCardIndices.clear()),
-                  currentUserId: _gameController.userId,
-                ),
-                handDisplay: GameHandDisplay(
-                  player: humanPlayer,
-                  selectedCardIndices: _selectedCardIndices,
-                  onCardTap: _onCardTap,
-                  onCardDoubleTap: _onCardDoubleTap,
-                  isCardPlayable: _isCardPlayable,
-                  viewingPlayerMelds: _viewingPlayerMelds,
-                  onReturnToHand: () =>
-                      setState(() => _viewingPlayerMelds = null),
-                  isCurrentPlayerTurn:
-                      _gameController.gameState.currentPlayer.id ==
-                      _gameController.userId,
-                  showHighlights: true,
-                  handStackKey: _handStackKey,
-                  handScrollController: _handScrollController,
                 ),
               ),
-            ),
+              if (_showKeyboardHelp && showDesktopKeyboardHints)
+                KeyboardShortcutsOverlay(onDismiss: _toggleKeyboardHelp),
+            ],
           ),
         );
       },

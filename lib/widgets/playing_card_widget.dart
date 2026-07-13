@@ -6,6 +6,7 @@ import '../theme/balatro_theme.dart';
 class PlayingCardWidget extends StatelessWidget {
   final PlayingCard card;
   final bool isSelected;
+  final bool isKeyboardFocused;
   final bool isPlayable;
   final bool isNewlyDrawn;
   final VoidCallback? onTap;
@@ -19,6 +20,7 @@ class PlayingCardWidget extends StatelessWidget {
     super.key,
     required this.card,
     this.isSelected = false,
+    this.isKeyboardFocused = false,
     this.isPlayable = false,
     this.isNewlyDrawn = false,
     this.onTap,
@@ -63,6 +65,8 @@ class PlayingCardWidget extends StatelessWidget {
               border: Border.all(
                 color: isSelected
                     ? BalatroTheme.glowColor
+                    : isKeyboardFocused
+                    ? BalatroTheme.neonBlue
                     : isNewlyDrawn
                     ? BalatroTheme.neonYellow
                     : isPlayable
@@ -70,6 +74,8 @@ class PlayingCardWidget extends StatelessWidget {
                     : BalatroTheme.cardBorder,
                 width: isSelected
                     ? 3
+                    : isKeyboardFocused
+                    ? 2
                     : isNewlyDrawn
                     ? 2
                     : 1,

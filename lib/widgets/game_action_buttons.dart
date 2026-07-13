@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
+import '../constants/keyboard_shortcuts.dart';
 import '../utils/game_responsive_layout.dart';
 import 'card_animation_host.dart';
 
@@ -187,6 +188,7 @@ class GameActionButtons extends StatelessWidget {
   final VoidCallback? onDiscard;
   final VoidCallback onClearSelection;
   final String? currentUserId; // For multiplayer turn detection
+  final bool showKeyboardHints;
 
   const GameActionButtons({
     super.key,
@@ -199,6 +201,7 @@ class GameActionButtons extends StatelessWidget {
     required this.onDiscard,
     required this.onClearSelection,
     this.currentUserId, // Optional - for multiplayer
+    this.showKeyboardHints = false,
   });
 
   bool get _hasSelectedCard => selectedCardIndices.length == 1;
@@ -363,6 +366,7 @@ class GameActionButtons extends StatelessWidget {
         _buildCompactButton(
           onPressed: isAnimating ? null : onDrawFromDeck,
           text: 'Draw from deck',
+          shortcutHint: showKeyboardHints ? KeyboardShortcuts.drawKey : null,
           isPhone: isPhone,
         ),
       );
@@ -371,6 +375,9 @@ class GameActionButtons extends StatelessWidget {
           _buildCompactButton(
             onPressed: isAnimating ? null : onUnlockDiscard,
             text: 'Take Discard',
+            shortcutHint: showKeyboardHints
+                ? KeyboardShortcuts.takeDiscardKey
+                : null,
             isPhone: isPhone,
           ),
         );
@@ -382,6 +389,9 @@ class GameActionButtons extends StatelessWidget {
         _buildCompactButton(
           onPressed: isAnimating ? null : onShowAdvancedMeldSelector,
           text: 'Play Cards',
+          shortcutHint: showKeyboardHints
+              ? KeyboardShortcuts.playCardsKey
+              : null,
           isPhone: isPhone,
           backgroundColor: const Color(
             0xFF16c79a,
@@ -392,6 +402,7 @@ class GameActionButtons extends StatelessWidget {
         _buildCompactButton(
           onPressed: isAnimating ? null : (_hasSelectedCard ? onDiscard : null),
           text: _discardButtonText,
+          shortcutHint: showKeyboardHints ? KeyboardShortcuts.discardKey : null,
           isPhone: isPhone,
           backgroundColor:
               _discardButtonColor ??
@@ -403,6 +414,7 @@ class GameActionButtons extends StatelessWidget {
           _buildCompactButton(
             onPressed: isAnimating ? null : onClearSelection,
             text: 'Clear',
+            shortcutHint: showKeyboardHints ? KeyboardShortcuts.clearKey : null,
             isPhone: isPhone,
             backgroundColor: Colors.grey,
           ),
@@ -435,9 +447,14 @@ class GameActionButtons extends StatelessWidget {
     required VoidCallback? onPressed,
     required String text,
     required bool isPhone,
+    String? shortcutHint,
     Color? backgroundColor,
   }) {
-    return ElevatedButton(
+    final label = shortcutHint == null
+        ? text
+        : '$text${KeyboardShortcuts.tooltipSuffix(shortcutHint)}';
+
+    final button = ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: backgroundColor,
@@ -461,5 +478,11 @@ class GameActionButtons extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
     );
+
+    if (shortcutHint == null) {
+      return button;
+    }
+
+    return Tooltip(message: label, child: button);
   }
 }

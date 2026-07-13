@@ -12,6 +12,7 @@ import 'playing_card_widget.dart';
 class GameHandDisplay extends StatelessWidget {
   final Player player;
   final List<int> selectedCardIndices;
+  final int? keyboardFocusedCardIndex;
   final Function(int)? onCardTap;
   final Function(int)? onCardDoubleTap;
   final bool Function(PlayingCard)? isCardPlayable;
@@ -26,6 +27,7 @@ class GameHandDisplay extends StatelessWidget {
     super.key,
     required this.player,
     required this.selectedCardIndices,
+    this.keyboardFocusedCardIndex,
     this.onCardTap,
     this.onCardDoubleTap,
     this.isCardPlayable,
@@ -126,6 +128,8 @@ class GameHandDisplay extends StatelessWidget {
                                 width: sizes.handWidth,
                                 height: sizes.handHeight,
                                 isSelected: selectedCardIndices.contains(index),
+                                isKeyboardFocused:
+                                    keyboardFocusedCardIndex == index,
                                 isPlayable: isCardPlayable?.call(card) ?? false,
                                 isNewlyDrawn:
                                     showHighlights &&
