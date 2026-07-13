@@ -80,6 +80,65 @@ void main() {
     );
 
     test(
+      'does not strategically hold during hand-pile foot completion window',
+      () {
+        human.hasPickedUpFoot = true;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+          ]);
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          ])!,
+        );
+
+        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        expect(decision.action, isNot('noMeld'));
+      },
+    );
+
+    test(
+      'makeCompleteHandPileForFootDecision defers discard when no melds in meld phase',
+      () {
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          ]);
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          ])!,
+        );
+
+        final decision = botAI.makeCompleteHandPileForFootDecision(
+          bot,
+          context(),
+        );
+
+        expect(decision?.action, 'noMeld');
+
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(bot, gameController);
+        expect(discardDecision.action, 'discard');
+      },
+    );
+
+    test(
       'conservative bot does not hold at 8 cards with melds but zero books',
       () {
         bot.melds.add(

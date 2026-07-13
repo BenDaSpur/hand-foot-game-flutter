@@ -7,6 +7,7 @@ import '../../game/game_controller.dart';
 import '../../ai/enhanced_bot_ai.dart';
 import '../../ai/bot_decision.dart';
 import '../../ai/bot_personality.dart';
+import '../../ai/bot_config.dart' as ai_bot_config;
 import '../../config/bot_configurations.dart';
 import '../../utils/debug_logger.dart';
 import '../../config/game_config.dart';
@@ -1043,6 +1044,10 @@ class BotTurnManager {
         case 'noMeld':
           if (!bot.hasPlayedDown) {
             return '$personality bot waiting for better play-down opportunity ($handSize cards)';
+          } else if (!bot.hasPickedUpFoot &&
+              handSize <=
+                  ai_bot_config.BotConfig.handPileFootCompletionMaxHand) {
+            return '$personality bot completing hand pile for foot (no meld available, $handSize cards)';
           } else {
             return '$personality bot holding cards strategically ($handSize cards, $hasBooks books)';
           }
