@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "if [ ! -d flutter ]; then git clone https://github.com/flutter/flutter.git -b 3.32.8 --depth 1; fi && export PATH=\"$PWD/flutter/bin:$PATH\" && export PUB_CACHE=\"$PWD/.pub-cache\" && flutter config --enable-web && flutter pub get",
+  "installCommand": "if [ ! -d flutter ]; then git clone https://github.com/flutter/flutter.git -b 3.44.6 --depth 1; fi && export PATH=\"$PWD/flutter/bin:$PATH\" && export PUB_CACHE=\"$PWD/.pub-cache\" && flutter config --enable-web && flutter pub get",
   "buildCommand": "bash scripts/vercel_build.sh",
   "outputDirectory": "build/web",
   "headers": [

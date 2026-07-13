@@ -18,7 +18,7 @@ on:
       flutter_version:
         description: 'Flutter version to use'
         type: string
-        default: '3.32.8'
+        default: '3.44.6'
     outputs:
       tests_passed:
         description: 'Whether tests passed'

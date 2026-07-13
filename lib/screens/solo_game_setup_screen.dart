@@ -357,7 +357,7 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
           ),
         ),
         value: value,
-        activeColor: BalatroTheme.neonPink,
+        activeThumbColor: BalatroTheme.neonPink,
         onChanged: onChanged,
       ),
     );
