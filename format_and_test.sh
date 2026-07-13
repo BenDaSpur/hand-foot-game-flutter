@@ -4,7 +4,7 @@
 # Matches the optimized CI pipeline for consistent local testing
 
 echo "🔧 Formatting Dart code..."
-dart format lib test e2e_test
+dart format .
 
 echo "🧪 Running tests..."
 flutter test

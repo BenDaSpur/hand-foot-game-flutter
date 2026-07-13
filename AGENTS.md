@@ -65,7 +65,7 @@ See `docs/firebase_mcp_quickstart.md`, `docs/firebase_agent_setup.md`, and `docs
 CI enforces formatting — unformatted Dart will fail `quality-checks`. After any code change:
 
 ```bash
-dart format lib test e2e_test  # required — CI runs: dart format --set-exit-if-changed lib test e2e_test
+dart format .              # required — CI runs: dart format --set-exit-if-changed .
 flutter analyze            # must be zero issues
 flutter test               # full suite must pass
 ```
