@@ -8,6 +8,7 @@ import '../utils/debug_logger.dart';
 import 'bot_decision.dart';
 import 'bot_config.dart';
 import 'bot_meld_analyzer.dart';
+import 'bot_discard_analyzer.dart';
 
 /// Manages end game decisions for bot players.
 ///
@@ -783,7 +784,7 @@ class BotEndGameManager {
     }
 
     // Never discard wilds in foot while missing required go-out books
-    if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+    if (BotDiscardAnalyzer.mustProtectWildsInFoot(bot)) {
       final nonWilds = hand.where((card) => !card.isWild).toList();
       if (nonWilds.isNotEmpty) {
         nonWilds.sort((a, b) => a.pointValue.compareTo(b.pointValue));

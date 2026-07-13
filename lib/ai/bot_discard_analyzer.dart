@@ -17,6 +17,11 @@ class BotDiscardAnalyzer {
 
   BotDiscardAnalyzer();
 
+  /// Whether wild cards must be kept while the bot is in foot without go-out books.
+  static bool mustProtectWildsInFoot(Player bot) {
+    return bot.hasPickedUpFoot && !bot.canGoOutWithBooks;
+  }
+
   /// Choose the best card to discard considering multiple factors.
   ///
   /// Returns the card that minimizes harm to the bot while avoiding
@@ -69,7 +74,7 @@ class BotDiscardAnalyzer {
     }
 
     // 2. NEVER discard wilds in foot while missing required go-out books
-    if (card.isWild && bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+    if (card.isWild && mustProtectWildsInFoot(bot)) {
       return -BotConfig.wildProtection;
     }
 
