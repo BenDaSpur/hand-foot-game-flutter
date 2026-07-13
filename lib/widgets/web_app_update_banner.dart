@@ -37,14 +37,14 @@ class WebAppUpdateBanner extends StatelessWidget {
                   const SizedBox(width: 12),
                   const Text(
                     'A new version is available.',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: BalatroTheme.primaryText),
                   ),
                   const SizedBox(width: 12),
                   FilledButton(
                     onPressed: reloadForNewDeploy,
                     style: FilledButton.styleFrom(
                       backgroundColor: BalatroTheme.lightPurple,
-                      foregroundColor: Colors.white,
+                      foregroundColor: BalatroTheme.primaryText,
                     ),
                     child: const Text('Reload'),
                   ),

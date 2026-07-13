@@ -1,17 +1,35 @@
-// Web-only implementation (conditionally imported).
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:async';
+import 'dart:js_interop';
 
-import 'dart:html' as html;
+import 'package:web/web.dart';
+
+const Duration _requestTimeout = Duration(seconds: 10);
 
 Future<String?> fetchVersionJson() async {
+  final abortController = AbortController();
+  final timer = Timer(_requestTimeout, abortController.abort);
+
   try {
     final cacheBuster = DateTime.now().millisecondsSinceEpoch;
-    return await html.HttpRequest.getString('/version.json?_=$cacheBuster');
+    final response = await window
+        .fetch(
+          '/version.json?_=$cacheBuster'.toJS,
+          RequestInit(signal: abortController.signal),
+        )
+        .toDart;
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.text().toDart).toDart;
   } catch (_) {
     return null;
+  } finally {
+    timer.cancel();
   }
 }
 
 void reloadWebPage() {
-  html.window.location.reload();
+  window.location.reload();
 }

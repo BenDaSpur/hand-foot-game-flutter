@@ -11,19 +11,22 @@ class WebDeployVersionService {
   WebDeployVersionService({
     Future<String?> Function()? fetchVersionJson,
     Duration pollInterval = const Duration(minutes: 5),
+    @visibleForTesting bool? enablePolling,
   }) : _fetchVersionJson = fetchVersionJson ?? fetchDeployVersionJson,
-       _pollInterval = pollInterval;
+       _pollInterval = pollInterval,
+       _enablePolling = enablePolling ?? kIsWeb;
 
   final Future<String?> Function() _fetchVersionJson;
   final Duration _pollInterval;
+  final bool _enablePolling;
 
   String? _sessionBuildNumber;
   Timer? _pollTimer;
   VoidCallback? _onUpdateAvailable;
 
-  /// Starts polling on web; no-op on other platforms.
+  /// Starts polling on web; no-op on other platforms unless [enablePolling].
   void start({required VoidCallback onUpdateAvailable}) {
-    if (!kIsWeb) {
+    if (!_enablePolling) {
       return;
     }
 
@@ -40,6 +43,12 @@ class WebDeployVersionService {
     _pollTimer = null;
     _onUpdateAvailable = null;
   }
+
+  @visibleForTesting
+  Future<void> checkForUpdateNow() => _checkForUpdate();
+
+  @visibleForTesting
+  String? get sessionBuildNumber => _sessionBuildNumber;
 
   Future<void> _initializeSessionBuildNumber() async {
     final remoteJson = await _fetchVersionJson();

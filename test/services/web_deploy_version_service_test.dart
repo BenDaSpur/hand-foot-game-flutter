@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/web_deploy_version_logic.dart';
+import 'package:hand_foot_game_flutter/services/web_deploy_version_service.dart';
 
 void main() {
   group('parseBuildNumberFromVersionJson', () {
@@ -44,5 +45,119 @@ void main() {
         isFalse,
       );
     });
+  });
+
+  group('WebDeployVersionService', () {
+    test('start polling notifies when remote build changes', () async {
+      var fetchCount = 0;
+      var notified = false;
+      final service = WebDeployVersionService(
+        enablePolling: true,
+        pollInterval: const Duration(milliseconds: 20),
+        fetchVersionJson: () async {
+          fetchCount++;
+          if (fetchCount <= 2) {
+            return '{"build_number":"build-a"}';
+          }
+          return '{"build_number":"build-b"}';
+        },
+      );
+
+      service.start(onUpdateAvailable: () => notified = true);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(notified, isTrue);
+      service.dispose();
+    });
+
+    test('start polling ignores matching remote build', () async {
+      var notified = false;
+      final service = WebDeployVersionService(
+        enablePolling: true,
+        pollInterval: const Duration(milliseconds: 20),
+        fetchVersionJson: () async => '{"build_number":"build-a"}',
+      );
+
+      service.start(onUpdateAvailable: () => notified = true);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(notified, isFalse);
+      service.dispose();
+    });
+
+    test('start polling ignores unavailable remote build data', () async {
+      var fetchCount = 0;
+      var notified = false;
+      final service = WebDeployVersionService(
+        enablePolling: true,
+        pollInterval: const Duration(milliseconds: 20),
+        fetchVersionJson: () async {
+          fetchCount++;
+          if (fetchCount <= 2) {
+            return '{"build_number":"build-a"}';
+          }
+          return null;
+        },
+      );
+
+      service.start(onUpdateAvailable: () => notified = true);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(notified, isFalse);
+      service.dispose();
+    });
+
+    test('checkForUpdate notifies when remote build changes', () async {
+      var remoteBuild = 'build-a';
+      var notified = false;
+      final service = WebDeployVersionService(
+        enablePolling: true,
+        fetchVersionJson: () async => '{"build_number":"$remoteBuild"}',
+      );
+
+      service.start(onUpdateAvailable: () => notified = true);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.sessionBuildNumber, 'build-a');
+      expect(notified, isFalse);
+
+      remoteBuild = 'build-b';
+      await service.checkForUpdateNow();
+
+      expect(notified, isTrue);
+      service.dispose();
+    });
+
+    test(
+      'checkForUpdate ignores matching or unavailable remote build',
+      () async {
+        var remoteBuild = 'build-a';
+        var returnNull = false;
+        var notified = false;
+        final service = WebDeployVersionService(
+          enablePolling: true,
+          fetchVersionJson: () async {
+            if (returnNull) {
+              return null;
+            }
+            return '{"build_number":"$remoteBuild"}';
+          },
+        );
+
+        service.start(onUpdateAvailable: () => notified = true);
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+
+        await service.checkForUpdateNow();
+        expect(notified, isFalse);
+
+        returnNull = true;
+        await service.checkForUpdateNow();
+        expect(notified, isFalse);
+
+        service.dispose();
+      },
+    );
   });
 }
