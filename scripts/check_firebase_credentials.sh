@@ -53,6 +53,8 @@ check_env FIREBASE_WEB_APP_ID && ENV_OK=$((ENV_OK + 1)) || true
 check_env FIREBASE_AUTH_EMAIL && ENV_OK=$((ENV_OK + 1)) || true
 if [[ -n "${FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64:-}" ]]; then
   status ok "env:FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64 is set (preferred analytics auth)"
+elif [[ -f "$REPO_ROOT/hand-foot-flutter-firebase.json" ]]; then
+  status ok "service account file exists (hand-foot-flutter-firebase.json)"
 elif [[ -f "$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json" ]]; then
   status ok "service account file exists (.firebase/hand-foot-flutter-firebase.json)"
 elif [[ -f "$REPO_ROOT/.firebase/hand-foot-service-account.json" ]]; then
@@ -72,7 +74,8 @@ check_file "$REPO_ROOT/.env" ".env" && FILE_OK=$((FILE_OK + 1)) || true
 check_file "$CREDS_FILE" "workspace OAuth credentials" && FILE_OK=$((FILE_OK + 1)) || true
 check_file "$MCP_STORE" "MCP credential store" && FILE_OK=$((FILE_OK + 1)) || true
 check_file "$REPO_ROOT/.firebase/agent-config.json" "agent-config.json" && FILE_OK=$((FILE_OK + 1)) || true
-check_file "$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json" "hand-foot-flutter-firebase.json" && FILE_OK=$((FILE_OK + 1)) || true
+check_file "$REPO_ROOT/hand-foot-flutter-firebase.json" "hand-foot-flutter-firebase.json" && FILE_OK=$((FILE_OK + 1)) || true
+check_file "$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json" "hand-foot-flutter-firebase.json (.firebase/)" && FILE_OK=$((FILE_OK + 1)) || true
 check_file "$REPO_ROOT/.firebase/hand-foot-service-account.json" "service account JSON (legacy)" && FILE_OK=$((FILE_OK + 1)) || true
 echo ""
 
@@ -86,6 +89,7 @@ echo ""
 
 SERVICE_ACCOUNT_READY=false
 if [[ -n "${FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64:-}" ]] ||
+  [[ -f "$REPO_ROOT/hand-foot-flutter-firebase.json" ]] ||
   [[ -f "$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json" ]] ||
   [[ -f "$REPO_ROOT/.firebase/hand-foot-service-account.json" ]]; then
   SERVICE_ACCOUNT_READY=true

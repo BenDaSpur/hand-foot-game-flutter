@@ -8,7 +8,7 @@ This repo is **public**. Firebase secrets live only in **gitignored** local file
 
 Secrets are injected as environment variables (`CLOUD_AGENT_INJECTED_SECRET_NAMES`) and/or as a credential file. They are **not** on disk until bootstrapped or injected:
 
-**Required for Firestore analytics:** `.firebase/hand-foot-flutter-firebase.json` — a Firebase service account JSON with permissions to query the production Firestore account. Cloud Agent environments should provide this file.
+**Required for Firestore analytics:** `hand-foot-flutter-firebase.json` at the repo root — a Firebase service account JSON with permissions to query the production Firestore account. Cloud Agent workspaces provide this file as part of setup.
 
 ```bash
 ./scripts/check_firebase_credentials.sh      # status check (no secrets printed)
@@ -17,7 +17,7 @@ Secrets are injected as environment variables (`CLOUD_AGENT_INJECTED_SECRET_NAME
 
 | Env var (injected) / file | Written to |
 |---------------------------|------------|
-| `hand-foot-flutter-firebase.json` (Cloud Agent file) | `.firebase/hand-foot-flutter-firebase.json` |
+| `hand-foot-flutter-firebase.json` (Cloud Agent workspace file) | Repo root (gitignored) |
 | `FIREBASE_TOOLS_CREDENTIALS_JSON` | `.firebase/oauth-credentials.json` + `~/.config/configstore/firebase-tools.json` |
 | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | `.firebase/hand-foot-service-account.json` |
 | `FIREBASE_PROJECT_ID` + other `FIREBASE_*` | `.env` |
@@ -29,7 +29,7 @@ Non-secret metadata: `.firebase/agent-config.json` (see [agent-config.example.js
 
 | File | Purpose |
 |------|---------|
-| `.firebase/hand-foot-flutter-firebase.json` | **Preferred** — service account JSON for Firestore analytics reads |
+| `hand-foot-flutter-firebase.json` | **Preferred** — service account JSON for Firestore analytics reads (repo root, gitignored) |
 | `.env` | Flutter/web Firebase config + project IDs |
 | `.firebase/oauth-credentials.json` | OAuth tokens for CLI/admin Firestore reads |
 | `.firebase/agent-config.json` | Non-secret metadata + script pointers |

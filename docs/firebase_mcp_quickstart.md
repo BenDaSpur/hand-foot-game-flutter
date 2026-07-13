@@ -4,27 +4,27 @@ Fast path for agents to find credentials and query production analytics. **Do no
 
 ## Recommended auth: service account (no token expiry)
 
-For **Firestore analytics reads**, Cloud Agents should have **`hand-foot-flutter-firebase.json`** — a Firebase service account JSON file with permissions to query the production Firestore account. Place it at `.firebase/hand-foot-flutter-firebase.json` (gitignored). Alternatively, inject `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded JSON). Both are preferred over user OAuth tokens.
+For **Firestore analytics reads**, Cloud Agent workspaces provide **`hand-foot-flutter-firebase.json`** at the repo root — a Firebase service account JSON with permissions to query the production Firestore account (gitignored). Alternatively, inject `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded JSON). Both are preferred over user OAuth tokens.
 
 | Auth method | Secret / file | Expires? | Best for |
 |-------------|---------------|----------|----------|
-| **Service account file (preferred)** | `.firebase/hand-foot-flutter-firebase.json` | No (until key rotated) | Cloud Agents, analytics scripts |
+| **Service account file (preferred)** | `hand-foot-flutter-firebase.json` (repo root) | No (until key rotated) | Cloud Agent workspaces, analytics scripts |
 | **Service account (env var)** | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | No (until key rotated) | Cloud Agents when file injection is unavailable |
 | OAuth user (legacy) | `FIREBASE_TOOLS_CREDENTIALS_JSON` | Yes (~1h + reauth) | MCP project setup, local dev |
 
 ## Cloud Agent credential file: `hand-foot-flutter-firebase.json`
 
-Cloud Agent environments should include this file so agents can authenticate against the Firebase account without interactive login.
+Cloud Agent workspaces include this file at the **repo root** so agents can authenticate against the Firebase account without interactive login.
 
 1. In GCP Console → **IAM & Admin** → **Service Accounts**, use `firebase-adminsdk` (or a dedicated read-only account)
 2. **Keys** → **Add key** → **JSON** → download
-3. Save the JSON as `.firebase/hand-foot-flutter-firebase.json` in the agent workspace (or inject it via Cloud Agent secrets)
-4. Set permissions: `chmod 600 .firebase/hand-foot-flutter-firebase.json`
+3. Configure in **Cursor → Cloud Agent workspace setup** as `hand-foot-flutter-firebase.json` at the repo root
+4. The file is gitignored — never commit it
 
 Analytics scripts pick it up automatically when present. You can also point explicitly:
 
 ```bash
-export FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE=.firebase/hand-foot-flutter-firebase.json
+export FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE=hand-foot-flutter-firebase.json
 ```
 
 **Never commit `hand-foot-flutter-firebase.json` to GitHub.**
@@ -55,11 +55,11 @@ base64 -i your-project-key.json
 
 ### Local development (without Cloud Agent secret)
 
-Copy your service account JSON to the canonical gitignored path:
+Copy your service account JSON to the gitignored repo root path:
 
 ```bash
-cp your-project-key.json .firebase/hand-foot-flutter-firebase.json
-chmod 600 .firebase/hand-foot-flutter-firebase.json
+cp your-project-key.json hand-foot-flutter-firebase.json
+chmod 600 hand-foot-flutter-firebase.json
 ```
 
 Legacy path (also supported): `.firebase/hand-foot-service-account.json`
@@ -67,7 +67,7 @@ Legacy path (also supported): `.firebase/hand-foot-service-account.json`
 Or set a custom path:
 
 ```bash
-export FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE=.firebase/hand-foot-flutter-firebase.json
+export FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE=hand-foot-flutter-firebase.json
 ```
 
 ## 30-second checklist
@@ -87,7 +87,7 @@ node scripts/query_analytics_session.js --recent --turn-summaries --decision-out
 
 | Source | Variable / path | Purpose |
 |--------|-----------------|---------|
-| **Cloud Agent (preferred)** | `.firebase/hand-foot-flutter-firebase.json` | Service account JSON for Firestore reads |
+| **Cloud Agent (preferred)** | `hand-foot-flutter-firebase.json` (repo root) | Service account JSON for Firestore reads |
 | **Cloud Agent (alt)** | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | Base64 service account JSON for Firestore reads |
 | **After bootstrap** | `.firebase/hand-foot-service-account.json` | Decoded service account from B64 env var (gitignored) |
 | **Cloud Agent** | `FIREBASE_TOOLS_CREDENTIALS_JSON` | OAuth user tokens (MCP / legacy fallback) |
@@ -105,7 +105,7 @@ List injected secrets: `echo $CLOUD_AGENT_INJECTED_SECRET_NAMES`
 - `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_API_KEY`, `FIREBASE_WEB_APP_ID`, platform app IDs, etc.
 
 **Required for reliable analytics (add one of these):**
-- `hand-foot-flutter-firebase.json` (service account JSON at `.firebase/hand-foot-flutter-firebase.json`)
+- `hand-foot-flutter-firebase.json` (service account JSON at repo root)
 - `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded service account JSON)
 
 **Optional / legacy:**
@@ -146,7 +146,7 @@ Project: your-firebase-project-id
 |---------|-----|
 | `Auth mode: oauth-user` + `invalid_rapt` | Add `hand-foot-flutter-firebase.json` or `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64`, or MCP `firebase_login` |
 | `Invalid JWT Signature` | Re-download service account key; update `hand-foot-flutter-firebase.json` or re-encode base64 |
-| `No analytics credentials found` | Add `.firebase/hand-foot-flutter-firebase.json`, bootstrap + service account B64, or OAuth creds |
+| `No analytics credentials found` | Add `hand-foot-flutter-firebase.json` at repo root, bootstrap + service account B64, or OAuth creds |
 | `Authenticated User: <NONE>` | Run bootstrap; OAuth only needed for MCP project tools |
 | `No .env file` | Run `./scripts/bootstrap_firebase_agent_env.sh` |
 

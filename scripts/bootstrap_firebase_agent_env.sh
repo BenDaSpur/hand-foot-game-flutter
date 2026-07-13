@@ -33,8 +33,9 @@ OPTIONAL_ENV_VARS=(
   FIREBASE_OAUTH_CLIENT_SECRET
 )
 
-SERVICE_ACCOUNT_FILE="$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json"
+SERVICE_ACCOUNT_FILE="$REPO_ROOT/hand-foot-flutter-firebase.json"
 LEGACY_SERVICE_ACCOUNT_FILE="$REPO_ROOT/.firebase/hand-foot-service-account.json"
+ALT_SERVICE_ACCOUNT_FILE="$REPO_ROOT/.firebase/hand-foot-flutter-firebase.json"
 
 missing=()
 for var in "${REQUIRED_ENV_VARS[@]}"; do
@@ -113,6 +114,9 @@ PY
   echo "✅ Wrote service account file: $SERVICE_ACCOUNT_FILE"
 elif [[ -f "$SERVICE_ACCOUNT_FILE" ]]; then
   echo "✅ Using existing service account file: $SERVICE_ACCOUNT_FILE"
+elif [[ -f "$ALT_SERVICE_ACCOUNT_FILE" ]]; then
+  echo "✅ Using existing service account file: $ALT_SERVICE_ACCOUNT_FILE"
+  SERVICE_ACCOUNT_FILE="$ALT_SERVICE_ACCOUNT_FILE"
 elif [[ -f "$LEGACY_SERVICE_ACCOUNT_FILE" ]]; then
   echo "✅ Using legacy service account file: $LEGACY_SERVICE_ACCOUNT_FILE"
   SERVICE_ACCOUNT_FILE="$LEGACY_SERVICE_ACCOUNT_FILE"

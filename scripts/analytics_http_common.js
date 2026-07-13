@@ -6,6 +6,7 @@ const path = require('path');
 const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 const REPO_ROOT = path.resolve(__dirname, '..');
 const DEFAULT_SERVICE_ACCOUNT_FILES = [
+  path.join(REPO_ROOT, 'hand-foot-flutter-firebase.json'),
   path.join(REPO_ROOT, '.firebase/hand-foot-flutter-firebase.json'),
   path.join(REPO_ROOT, '.firebase/hand-foot-service-account.json'),
 ];
@@ -213,7 +214,7 @@ async function resolveAccessToken({ creds, credsPath } = {}) {
   if (!creds) {
     throw new Error(
       'No analytics credentials found. Set FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64, ' +
-        'place JSON at .firebase/hand-foot-flutter-firebase.json, or bootstrap OAuth credentials.',
+        'place JSON at hand-foot-flutter-firebase.json, or bootstrap OAuth credentials.',
     );
   }
 
