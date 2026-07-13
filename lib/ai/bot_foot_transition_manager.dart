@@ -264,7 +264,10 @@ class BotFootTransitionManager {
         return BotDecision(action: 'error');
       }
       final cardToDiscard = _chooseCardToDiscard(bot);
-      return BotDecision(action: 'discard', data: cardToDiscard);
+      return _phaseAwareTransitionDecision(
+        controller,
+        BotDecision(action: 'discard', data: cardToDiscard),
+      );
     }
 
     // Priority 1: Use wild cards aggressively when transitioning to foot
@@ -321,7 +324,10 @@ class BotFootTransitionManager {
         return BotDecision(action: 'error');
       }
       final cardToDiscard = _chooseCardToDiscard(bot);
-      return BotDecision(action: 'discard', data: cardToDiscard);
+      return _phaseAwareTransitionDecision(
+        controller,
+        BotDecision(action: 'discard', data: cardToDiscard),
+      );
     }
 
     // Add multiple cards to existing melds if possible (analyzer already sorted)

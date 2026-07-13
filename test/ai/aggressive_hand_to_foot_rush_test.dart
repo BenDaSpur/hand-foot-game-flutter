@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_config.dart';
+import 'package:hand_foot_game_flutter/ai/bot_decision.dart';
 import 'package:hand_foot_game_flutter/ai/bot_game_context.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
@@ -77,6 +78,21 @@ void main() {
 
     BotGameContext context() =>
         BotGameContext(gameController.gameState, gameController);
+
+    void expectMeldPhaseDefersThenDiscards({
+      required BotDecision meldPhaseDecision,
+      String? discardReason,
+      bool expectPlayingCardData = false,
+    }) {
+      expect(meldPhaseDecision.action, equals('noMeld'));
+
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      final discardDecision = botAI.makeDecision(bot, gameController);
+      expect(discardDecision.action, equals('discard'), reason: discardReason);
+      if (expectPlayingCardData) {
+        expect(discardDecision.data, isA<PlayingCard>());
+      }
+    }
 
     setUp(() {
       botAI = EnhancedBotAI(seed: 577904);
@@ -198,46 +214,52 @@ void main() {
     });
 
     group('makeHandToFootRushDecision', () {
-      test('returns discard rush action below threshold, null above', () {
-        configureBot(
-          personality: BotPersonality.conservative,
-          handSize: BotConfig.handToFootCriticalHandSize,
-        );
+      test(
+        'returns meld-phase noMeld rush action below threshold, null above',
+        () {
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootCriticalHandSize,
+          );
 
-        final rushDecision = botAI.makeHandToFootRushDecision(bot, context());
-        expect(rushDecision, isNotNull);
-        expect(rushDecision!.action, equals('noMeld'));
+          final rushDecision = botAI.makeHandToFootRushDecision(bot, context());
+          expect(rushDecision, isNotNull);
+          expect(rushDecision!.action, equals('noMeld'));
 
-        configureBot(
-          personality: BotPersonality.conservative,
-          handSize: BotConfig.handToFootCriticalHandSize + 1,
-        );
-        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
-      });
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootCriticalHandSize + 1,
+          );
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+        },
+      );
 
-      test('opponent pressure boundary returns rush discard at 8 only', () {
-        configureBot(
-          personality: BotPersonality.conservative,
-          handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
-          opponentOnFoot: true,
-        );
+      test(
+        'opponent pressure boundary returns meld-phase noMeld at 8 only',
+        () {
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
+            opponentOnFoot: true,
+          );
 
-        final rushAtThreshold = botAI.makeHandToFootRushDecision(
-          bot,
-          context(),
-        );
-        expect(rushAtThreshold, isNotNull);
-        expect(rushAtThreshold!.action, equals('noMeld'));
+          final rushAtThreshold = botAI.makeHandToFootRushDecision(
+            bot,
+            context(),
+          );
+          expect(rushAtThreshold, isNotNull);
+          expect(rushAtThreshold!.action, equals('noMeld'));
 
-        configureBot(
-          personality: BotPersonality.conservative,
-          handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
-          opponentOnFoot: true,
-        );
-        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
-      });
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
+            opponentOnFoot: true,
+          );
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+        },
+      );
 
-      test('aggressive boundary returns rush discard at 6 only', () {
+      test('aggressive boundary returns meld-phase noMeld at 6 only', () {
         configureBot(
           personality: BotPersonality.aggressive,
           handSize: BotConfig.handToFootRushAggressiveThreshold,
@@ -257,31 +279,34 @@ void main() {
         expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
       });
 
-      test('aggressive opponent margin returns rush discard at 10 only', () {
-        final rushAtMargin =
-            BotConfig.handToFootRushOpponentOnFootThreshold +
-            BotConfig.handToFootRushAggressiveOpponentPressureMargin;
+      test(
+        'aggressive opponent margin returns meld-phase noMeld at 10 only',
+        () {
+          final rushAtMargin =
+              BotConfig.handToFootRushOpponentOnFootThreshold +
+              BotConfig.handToFootRushAggressiveOpponentPressureMargin;
 
-        configureBot(
-          personality: BotPersonality.aggressive,
-          handSize: rushAtMargin,
-          opponentOnFoot: true,
-        );
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: rushAtMargin,
+            opponentOnFoot: true,
+          );
 
-        final rushAtThreshold = botAI.makeHandToFootRushDecision(
-          bot,
-          context(),
-        );
-        expect(rushAtThreshold, isNotNull);
-        expect(rushAtThreshold!.action, equals('noMeld'));
+          final rushAtThreshold = botAI.makeHandToFootRushDecision(
+            bot,
+            context(),
+          );
+          expect(rushAtThreshold, isNotNull);
+          expect(rushAtThreshold!.action, equals('noMeld'));
 
-        configureBot(
-          personality: BotPersonality.aggressive,
-          handSize: rushAtMargin + 1,
-          opponentOnFoot: true,
-        );
-        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
-      });
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: rushAtMargin + 1,
+            opponentOnFoot: true,
+          );
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+        },
+      );
     });
 
     group('makeDecision integration', () {
@@ -293,13 +318,10 @@ void main() {
         );
 
         expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
-        final belowThresholdDecision = botAI.makeDecision(bot, gameController);
-        expect(belowThresholdDecision.action, equals('noMeld'));
-
-        gameController.gameState.turnPhase = TurnPhase.discard;
-        final discardDecision = botAI.makeDecision(bot, gameController);
-        expect(discardDecision.action, equals('discard'));
-        expect(discardDecision.data, isA<PlayingCard>());
+        expectMeldPhaseDefersThenDiscards(
+          meldPhaseDecision: botAI.makeDecision(bot, gameController),
+          expectPlayingCardData: true,
+        );
 
         configureBot(
           personality: BotPersonality.conservative,
@@ -332,16 +354,8 @@ void main() {
           );
 
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
-          final belowThresholdDecision = botAI.makeDecision(
-            bot,
-            gameController,
-          );
-          expect(belowThresholdDecision.action, equals('noMeld'));
-
-          gameController.gameState.turnPhase = TurnPhase.discard;
-          expect(
-            botAI.makeDecision(bot, gameController).action,
-            equals('discard'),
+          expectMeldPhaseDefersThenDiscards(
+            meldPhaseDecision: botAI.makeDecision(bot, gameController),
           );
 
           configureBot(
@@ -375,16 +389,8 @@ void main() {
           );
 
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
-          final belowThresholdDecision = botAI.makeDecision(
-            bot,
-            gameController,
-          );
-          expect(belowThresholdDecision.action, equals('noMeld'));
-
-          gameController.gameState.turnPhase = TurnPhase.discard;
-          expect(
-            botAI.makeDecision(bot, gameController).action,
-            equals('discard'),
+          expectMeldPhaseDefersThenDiscards(
+            meldPhaseDecision: botAI.makeDecision(bot, gameController),
           );
 
           configureBot(
