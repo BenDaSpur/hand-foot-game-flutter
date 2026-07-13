@@ -5,10 +5,10 @@ const path = require('path');
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 const REPO_ROOT = path.resolve(__dirname, '..');
-const DEFAULT_SERVICE_ACCOUNT_FILE = path.join(
-  REPO_ROOT,
-  '.firebase/hand-foot-service-account.json',
-);
+const DEFAULT_SERVICE_ACCOUNT_FILES = [
+  path.join(REPO_ROOT, '.firebase/hand-foot-flutter-firebase.json'),
+  path.join(REPO_ROOT, '.firebase/hand-foot-service-account.json'),
+];
 
 // Firebase CLI OAuth client (public installed-app credentials).
 // Source: https://github.com/firebase/firebase-tools/blob/master/src/api.ts
@@ -53,8 +53,10 @@ function loadServiceAccount() {
 
     const filePath =
       process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE ||
-      DEFAULT_SERVICE_ACCOUNT_FILE;
-    if (fs.existsSync(filePath)) {
+      DEFAULT_SERVICE_ACCOUNT_FILES.find((candidate) =>
+        fs.existsSync(candidate),
+      );
+    if (filePath && fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
   } catch (error) {
@@ -211,7 +213,7 @@ async function resolveAccessToken({ creds, credsPath } = {}) {
   if (!creds) {
     throw new Error(
       'No analytics credentials found. Set FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64, ' +
-        'place JSON at .firebase/hand-foot-service-account.json, or bootstrap OAuth credentials.',
+        'place JSON at .firebase/hand-foot-flutter-firebase.json, or bootstrap OAuth credentials.',
     );
   }
 
@@ -220,7 +222,7 @@ async function resolveAccessToken({ creds, credsPath } = {}) {
 
 module.exports = {
   DEFAULT_REQUEST_TIMEOUT_MS,
-  DEFAULT_SERVICE_ACCOUNT_FILE,
+  DEFAULT_SERVICE_ACCOUNT_FILES,
   getOAuthClientConfig,
   hasServiceAccountCredentials,
   loadServiceAccount,

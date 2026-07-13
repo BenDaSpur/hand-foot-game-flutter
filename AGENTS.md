@@ -24,15 +24,15 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 
 ### Multiplayer / Firebase (optional)
 - The repo ships a **stub** `lib/firebase_options.dart`. Online multiplayer (`CREATE GAME`/`JOIN GAME`) requires real Firebase/Firestore credentials injected via `scripts/setup_local_firebase.sh` + a local `.env` (gitignored).
-- **Firebase credentials (Cloud Agent):** Run `./scripts/bootstrap_firebase_agent_env.sh` first. For **Firestore analytics**, add `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded service account JSON). See [docs/firebase_mcp_quickstart.md](docs/firebase_mcp_quickstart.md).
-- **Analytics queries:** `node scripts/query_analytics_session.js --scores 3325,1140,1185 --foot-only` — uses **service account** auth when `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (or `.firebase/hand-foot-service-account.json`) is configured; falls back to OAuth user tokens otherwise (add `FIREBASE_OAUTH_CLIENT_SECRET` only if OAuth refresh fails).
+- **Firebase credentials (Cloud Agent):** Cloud Agent environments should include **`hand-foot-flutter-firebase.json`** — a Firebase service account JSON (gitignored at `.firebase/hand-foot-flutter-firebase.json`) with permissions to query the production Firestore account. Run `./scripts/bootstrap_firebase_agent_env.sh` to materialize other injected secrets. Alternatively, inject `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded service account JSON). See [docs/firebase_mcp_quickstart.md](docs/firebase_mcp_quickstart.md).
+- **Analytics queries:** `node scripts/query_analytics_session.js --scores 3325,1140,1185 --foot-only` — uses **service account** auth when `hand-foot-flutter-firebase.json` (or `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` / `.firebase/hand-foot-service-account.json`) is configured; falls back to OAuth user tokens otherwise (add `FIREBASE_OAUTH_CLIENT_SECRET` only if OAuth refresh fails).
 - Without Firebase credentials, solo vs. bots still works — sufficient for core gameplay.
 
 ### Investigating game data (use Firebase MCP)
 
 When a user asks about a **session**, **bot behavior**, **foot transitions**, **scores**, or other **production analytics**, use **Firebase MCP first** — do not guess from code alone.
 
-1. **Bootstrap credentials** — `./scripts/check_firebase_credentials.sh` then `./scripts/bootstrap_firebase_agent_env.sh`
+1. **Bootstrap credentials** — confirm `.firebase/hand-foot-flutter-firebase.json` exists (or run `./scripts/check_firebase_credentials.sh`), then `./scripts/bootstrap_firebase_agent_env.sh`
 2. **Check MCP is ready** — `GetMcpTools` with server `Firebase`. If status is `loading`, wait and retry.
 3. **Authenticate / set project**
    - `firebase_get_environment` — confirm `Authenticated User` and `Active Project ID`

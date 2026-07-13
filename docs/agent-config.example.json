@@ -6,7 +6,7 @@
     "credentialsFile": "<oauth-credentials-json-path>",
     "envFile": ".env",
     "mcpStore": "~/.config/configstore/firebase-tools.json",
-    "serviceAccountFile": ".firebase/hand-foot-service-account.json"
+    "serviceAccountFile": ".firebase/hand-foot-flutter-firebase.json"
   },
   "cloudAgentSecretsInjected": true,
   "hasOAuthClientSecret": false,
