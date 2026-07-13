@@ -982,6 +982,20 @@ class EnhancedBotAI {
       return true;
     }
 
+    // Scenario 4b: Opponent hoarding unplayed cards — end round while penalty is high
+    for (final opponent in gameState.players) {
+      if (opponent.id == bot.id) {
+        continue;
+      }
+      if (opponent.calculateAllUnplayedCardsValue() >=
+          BotConfig.aggressiveGoOutOpponentPenaltyThreshold) {
+        DebugLogger.debug(
+          '${bot.name}: HOARDING RUSH - Opponent penalty ${opponent.calculateAllUnplayedCardsValue()} >= ${BotConfig.aggressiveGoOutOpponentPenaltyThreshold}',
+        );
+        return true;
+      }
+    }
+
     // Scenario 5: EMERGENCY 3s MANAGEMENT - Bot has 8+ cards mostly 3s, needs to rush out
     final threeCount = bot.currentHand.where((card) => card.isThree).length;
     if (bot.currentHand.length >= 8 &&
@@ -3136,6 +3150,13 @@ class EnhancedBotAI {
         return _counterHumanAccumulation(bot, context, gameState, human);
       }
 
+      // THREAT 1b: Human hoarding after play-down (large hand+foot penalty pile)
+      if (human.hasPlayedDown &&
+          human.calculateAllUnplayedCardsValue() >=
+              BotConfig.aggressiveGoOutOpponentPenaltyThreshold) {
+        return _counterHumanAccumulation(bot, context, gameState, human);
+      }
+
       // THREAT 2: Human close to going out
       if (human.hasPickedUpFoot &&
           human.currentHand.length <= GameConfig.dangerousOpponentHandSize) {
@@ -3159,6 +3180,31 @@ class EnhancedBotAI {
     Player human,
   ) {
     final personality = _personalityManager.getPersonality(bot.id);
+    final opponentPenalty = human.calculateAllUnplayedCardsValue();
+    final hoardingPressure =
+        opponentPenalty >= BotConfig.aggressiveGoOutOpponentPenaltyThreshold;
+
+    // When opponent penalty pile is huge, rush finish or complete missing books
+    if (hoardingPressure && bot.hasPickedUpFoot) {
+      if (bot.canGoOutWithBooks) {
+        final controller = context.controller as GameController?;
+        if (controller != null) {
+          final finishDecision = _endGameManager.buildFinishRoundDecision(
+            bot,
+            controller,
+            gameState.turnPhase,
+          );
+          if (finishDecision != null) {
+            return finishDecision;
+          }
+        }
+      } else {
+        final bookRush = _rushToCompleteRequiredBooks(bot, context);
+        if (bookRush != null) {
+          return bookRush;
+        }
+      }
+    }
 
     // AGGRESSIVE BOTS: Speed demon counter-strategy
     if (personality == BotPersonality.aggressive) {
@@ -3308,10 +3354,10 @@ class EnhancedBotAI {
               .where((card) => needsClean ? !card.isWild : true)
               .toList();
           if (addableCards.isNotEmpty) {
-            return BotDecision(
-              action: 'addToMeld',
-              data: {'meldIndex': i, 'card': addableCards.first},
-            );
+            final addition = {'meldIndex': i, 'card': addableCards.first};
+            if (BotEndGameManager.isSafeAddToMeld(bot, addition)) {
+              return BotDecision(action: 'addToMeld', data: addition);
+            }
           }
         }
       }
@@ -3324,7 +3370,9 @@ class EnhancedBotAI {
     for (final meld in possibleMelds) {
       final isClean = !meld.any((card) => card.isWild);
       if ((needsClean && isClean) || (needsDirty && !isClean)) {
-        return BotDecision(action: 'createMeld', data: meld);
+        if (BotEndGameManager.isSafeCreateMeld(bot, meld)) {
+          return BotDecision(action: 'createMeld', data: meld);
+        }
       }
     }
 
@@ -3366,10 +3414,10 @@ class EnhancedBotAI {
 
       final possibleMelds = _getCachedPossibleMelds(bot, context);
       if (possibleMelds.isNotEmpty) {
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, possibleMelds),
-        );
+        final bestMeld = _selectBestNewMeld(bot, possibleMelds);
+        if (BotEndGameManager.isSafeCreateMeld(bot, bestMeld)) {
+          return BotDecision(action: 'createMeld', data: bestMeld);
+        }
       }
     }
 
