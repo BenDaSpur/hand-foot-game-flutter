@@ -113,8 +113,11 @@ To test with production Firebase locally, use [`scripts/setup_local_firebase.sh`
 
 **Stale app after deploy**
 
-- `index.html` is served with `Cache-Control: no-cache` via [`vercel.json`](../vercel.json).
-- Hard-refresh the browser if assets still look old.
+- App shell files (`index.html`, `flutter_bootstrap.js`, `flutter_service_worker.js`, `main.dart.js`, `version.json`, `manifest.json`) are served with `Cache-Control: no-cache` via [`vercel.json`](../vercel.json).
+- Content-hashed assets under `/assets/` and `/canvaskit/` use long-lived immutable caching.
+- Each Vercel build stamps `version.json` `build_number` with the git commit SHA (`VERCEL_GIT_COMMIT_SHA`).
+- The web app polls `version.json` and shows a **Reload** banner when a newer deploy is detected.
+- Flutter's service worker still handles offline caching and asset hash upgrades.
 
 ## Native releases (Android, Windows, macOS, Linux)
 
