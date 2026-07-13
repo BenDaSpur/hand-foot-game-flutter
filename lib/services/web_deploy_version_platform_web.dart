@@ -7,7 +7,9 @@ const Duration _requestTimeout = Duration(seconds: 10);
 
 Future<String?> fetchVersionJson() async {
   final abortController = AbortController();
-  final timer = Timer(_requestTimeout, abortController.abort);
+  final timer = Timer(_requestTimeout, () {
+    abortController.abort();
+  });
 
   try {
     final cacheBuster = DateTime.now().millisecondsSinceEpoch;
