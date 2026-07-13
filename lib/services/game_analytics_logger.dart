@@ -8,6 +8,7 @@ import '../ai/bot_personality.dart';
 import '../ai/bot_config.dart';
 import '../config/analytics_metadata.dart';
 import '../game/events/game_event.dart';
+import 'analytics/bot_decision_analytics_snapshot.dart';
 import 'firebase_service.dart';
 import 'device_service.dart';
 import 'analytics_batcher.dart';
@@ -245,7 +246,7 @@ class GameAnalyticsLogger {
     required String decision,
     required String reasoning,
     required BotPersonality personality,
-    required GameState gameState,
+    required BotDecisionAnalyticsSnapshot gameState,
     Map<String, dynamic>? decisionContext,
     double? confidence,
     List<String>? alternativeActions,
@@ -255,7 +256,7 @@ class GameAnalyticsLogger {
     if (_currentSessionId == null) return;
 
     try {
-      final botPlayer = gameState.players.firstWhere((p) => p.id == botId);
+      final botPlayer = gameState.playerById(botId);
 
       final decisionData = {
         'sessionId': _currentSessionId,
@@ -276,7 +277,7 @@ class GameAnalyticsLogger {
         'currentPlayerIndex': gameState.currentPlayerIndex,
         'discardPileSize': gameState.discardPile.length,
         'discardPileFrozen': gameState.discardPileFrozen,
-        'gameSeed': gameState.deck.seed, // For reproducible analysis
+        'gameSeed': gameState.deckSeed, // For reproducible analysis
         // Bot state
         'botHandSize': botPlayer.currentHand.length,
         'botHandCards': botPlayer.currentHand
@@ -302,7 +303,7 @@ class GameAnalyticsLogger {
             .toList(),
 
         // Game state context
-        'deckSize': gameState.deck.size,
+        'deckSize': gameState.deckSize,
         'topDiscardCard': gameState.discardPile.isNotEmpty
             ? gameState.discardPile.last.compactName
             : null,
@@ -995,7 +996,10 @@ class GameAnalyticsLogger {
     return 'session_$timestamp$random';
   }
 
-  static int _countDangerousOpponents(GameState gameState, String botId) {
+  static int _countDangerousOpponents(
+    BotDecisionAnalyticsSnapshot gameState,
+    String botId,
+  ) {
     return gameState.players
         .where(
           (p) =>

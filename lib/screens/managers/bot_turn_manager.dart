@@ -11,6 +11,8 @@ import '../../config/bot_configurations.dart';
 import '../../utils/debug_logger.dart';
 import '../../config/game_config.dart';
 import '../../services/analytics_batcher.dart';
+import '../../services/analytics/bot_decision_analytics_snapshot.dart';
+import '../../services/analytics/bot_decision_snapshot_mapper.dart';
 
 /// Manages all bot-related functionality for the game screen.
 ///
@@ -27,6 +29,7 @@ class BotTurnManager {
     required String decision,
     required String reasoning,
     Map<String, dynamic>? context,
+    BotDecisionAnalyticsSnapshot? gameStateSnapshot,
   })
   logBotDecision;
 
@@ -205,6 +208,10 @@ class BotTurnManager {
         for (int attempt = 0; attempt < 3 && !actionSucceeded; attempt++) {
           try {
             final decision = botAI.makeDecision(botPlayer, gameController);
+            final gameStateSnapshot = BotDecisionSnapshotMapper.fromGameState(
+              gameController.gameState,
+            );
+            final snapshotBot = gameStateSnapshot.playerById(botPlayer.id);
             actionSucceeded = executeBotDecision(decision, botPlayer);
 
             if (actionSucceeded) {
@@ -217,9 +224,9 @@ class BotTurnManager {
 
               // Log bot decision for analytics with actual strategic reasoning
               final strategicReasoning = generateBotReasoning(
-                botPlayer,
+                snapshotBot,
                 decision,
-                gameController.gameState,
+                gameStateSnapshot,
               );
 
               logBotDecision(
@@ -229,6 +236,7 @@ class BotTurnManager {
                 context: decision.data != null
                     ? {'data': decision.data.toString()}
                     : null,
+                gameStateSnapshot: gameStateSnapshot,
               );
               break;
             }
@@ -984,9 +992,9 @@ class BotTurnManager {
 
   /// Generate strategic reasoning for bot decisions for analytics
   String generateBotReasoning(
-    Player bot,
+    AnalyticsPlayerSnapshot bot,
     BotDecision decision,
-    GameState gameState,
+    BotDecisionAnalyticsSnapshot gameState,
   ) {
     try {
       final personality = botAI.personalityManager.getPersonality(bot.id);

@@ -96,6 +96,12 @@ class EnhancedBotAI {
       // Set context for personality-based decisions
       _personalityManager.setCurrentPlayerContext(bot.id);
 
+      // Final turn after another player went out — maximize melded points, no holding.
+      if (gameState.finalTurnPhaseActive &&
+          gameState.isPlayerAwaitingFinalTurn(bot)) {
+        return _makeFinalTurnScoringDecision(bot, context);
+      }
+
       // CRITICAL: Finish the round when books are met — discard/meld last cards
       // before going out (empty hand required for canGoOut).
       if (gameState.turnPhase == TurnPhase.discard ||
@@ -476,6 +482,15 @@ class EnhancedBotAI {
     // Empty hand: skip meld (discard/go-out handled in discard phase)
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'noMeld');
+    }
+
+    // PRIORITY 0: Complete hand pile → foot (multi-meld to avoid 1-card trap)
+    final handPileFootCompletion = _makeCompleteHandPileForFootDecision(
+      bot,
+      context,
+    );
+    if (handPileFootCompletion != null) {
+      return handPileFootCompletion;
     }
 
     // PRIORITY 0: Check if bot should rush to go out
@@ -1787,6 +1802,14 @@ class EnhancedBotAI {
       return false;
     }
 
+    // On hand pile without books — meld toward play-down/books, don't hoard
+    if (bot.hasPlayedDown && !bot.hasPickedUpFoot) {
+      final bookCount = bot.melds.where((m) => m.cards.length >= 7).length;
+      if (bookCount == 0) {
+        return false;
+      }
+    }
+
     // Allow trimming melds that drop hand below accumulation window (e.g. 8→5)
     final controller = context.controller as GameController?;
     if (controller != null) {
@@ -1838,6 +1861,11 @@ class EnhancedBotAI {
       }
       if (personality == BotPersonality.aggressive &&
           handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+        return false;
+      }
+      // Played down but no books yet — keep melding, don't hoard on hand pile
+      final bookCount = bot.melds.where((m) => m.cards.length >= 7).length;
+      if (bot.hasPlayedDown && bookCount == 0 && handSize <= 7) {
         return false;
       }
     }
@@ -2376,6 +2404,17 @@ class EnhancedBotAI {
       return null;
     }
 
+    final handSize = bot.currentHand.length;
+    final maximalMeldsDecision = _tryMaximalMeldsForHandPileCompletion(
+      bot,
+      controller,
+      handSize,
+      context,
+    );
+    if (maximalMeldsDecision != null) {
+      return maximalMeldsDecision;
+    }
+
     final cardsToAdd = _filterWildCardAdditions(
       _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
       bot,
@@ -2405,6 +2444,155 @@ class EnhancedBotAI {
     }
 
     return null;
+  }
+
+  /// True when bot should empty the hand pile to pick up foot (any personality).
+  bool _shouldCompleteHandPileForFoot(Player bot, BotGameContext context) {
+    if (!bot.hasPlayedDown || bot.hasPickedUpFoot) {
+      return false;
+    }
+    final handSize = bot.currentHand.length;
+    if (handSize == 0) {
+      return false;
+    }
+    if (handSize <= BotConfig.handPileFootCompletionMaxHand) {
+      return true;
+    }
+    if (_opponentOnFootPressure(context, bot) &&
+        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Multi-meld / sequential rush to clear hand pile and trigger foot pickup.
+  BotDecision? _makeCompleteHandPileForFootDecision(
+    Player bot,
+    BotGameContext context,
+  ) {
+    if (!_shouldCompleteHandPileForFoot(bot, context)) {
+      return null;
+    }
+
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      'HAND PILE→FOOT completion with ${bot.currentHand.length} cards',
+    );
+
+    final playAllDecision = _checkCanPlayAllCards(bot, context);
+    if (playAllDecision != null) {
+      return playAllDecision;
+    }
+
+    final controller = context.controller as GameController?;
+    if (controller == null) {
+      return null;
+    }
+
+    final handSize = bot.currentHand.length;
+    final maximalMeldsDecision = _tryMaximalMeldsForHandPileCompletion(
+      bot,
+      controller,
+      handSize,
+      context,
+    );
+    if (maximalMeldsDecision != null) {
+      return maximalMeldsDecision;
+    }
+
+    final rush = _makeHandToFootRushDecision(bot, context);
+    if (rush != null) {
+      return rush;
+    }
+
+    final cardsToAdd = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
+      bot,
+    );
+    if (cardsToAdd.isNotEmpty) {
+      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    final possibleMelds = _getCachedPossibleMelds(bot, context);
+    if (possibleMelds.isNotEmpty) {
+      return BotDecision(
+        action: 'createMeld',
+        data: _meldAnalyzer.findBestMeld(
+          possibleMelds,
+          bot: bot,
+          preferLarger: true,
+        ),
+      );
+    }
+
+    final footTransition = _footTransitionManager.handleFootTransition(
+      bot,
+      controller,
+    );
+    if (footTransition != null) {
+      return footTransition;
+    }
+
+    return BotDecision(action: 'noMeld');
+  }
+
+  /// On final turn after another player went out: meld all scorable cards.
+  BotDecision _makeFinalTurnScoringDecision(
+    Player bot,
+    BotGameContext context,
+  ) {
+    final gameState = context.gameState;
+    final controller = context.controller as GameController?;
+
+    switch (gameState.turnPhase) {
+      case TurnPhase.draw:
+        return BotDecision(action: 'drawFromDeck');
+      case TurnPhase.meld:
+        if (bot.currentHand.isEmpty) {
+          return BotDecision(action: 'noMeld');
+        }
+        if (controller != null) {
+          final playAll = _checkCanPlayAllCards(bot, context);
+          if (playAll != null) {
+            return playAll;
+          }
+
+          final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
+            bot,
+            controller,
+          );
+          if (maximalMelds.length >= 2) {
+            return BotDecision(
+              action: 'createMultipleMelds',
+              data: maximalMelds,
+            );
+          }
+
+          final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+            bot,
+            controller,
+          );
+          if (cardsToAdd.isNotEmpty) {
+            return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+          }
+
+          final possibleMelds = _getCachedPossibleMelds(bot, context);
+          if (possibleMelds.isNotEmpty) {
+            return BotDecision(
+              action: 'createMeld',
+              data: _meldAnalyzer.findBestMeld(
+                possibleMelds,
+                bot: bot,
+                preferLarger: true,
+              ),
+            );
+          }
+        }
+        return BotDecision(action: 'noMeld');
+      case TurnPhase.discard:
+        return _makeDiscardDecision(bot, context);
+    }
   }
 
   /// Determine if we should hold cards based on round play-down requirements
@@ -2676,6 +2864,44 @@ class EnhancedBotAI {
   /// True when any opponent has picked up foot — bots should race to transition.
   bool _opponentOnFootPressure(BotGameContext context, Player bot) {
     return context.players.any((p) => p.id != bot.id && p.hasPickedUpFoot);
+  }
+
+  /// Hand-size ceiling for multi-meld foot completion (5 normally, up to 8 under pressure).
+  int _handPileMaximalMeldHandLimit(Player bot, BotGameContext context) {
+    if (_opponentOnFootPressure(context, bot)) {
+      return BotConfig.handToFootRushOpponentOnFootThreshold;
+    }
+    return BotConfig.handPileFootCompletionMaxHand;
+  }
+
+  /// Try multi-meld or single-meld completion when hand is small enough.
+  BotDecision? _tryMaximalMeldsForHandPileCompletion(
+    Player bot,
+    GameController controller,
+    int handSize,
+    BotGameContext context,
+  ) {
+    if (handSize > _handPileMaximalMeldHandLimit(bot, context)) {
+      return null;
+    }
+
+    final maximalMelds = _meldAnalyzer
+        .findMaximalMeldCombination(bot, controller)
+        .where((meld) => meld.length >= GameConfig.minTotalCardsForMeld)
+        .toList();
+    if (maximalMelds.length >= 2) {
+      final cardsMeldable = maximalMelds.fold<int>(
+        0,
+        (sum, meld) => sum + meld.length,
+      );
+      if (cardsMeldable >= handSize - 1) {
+        return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
+      }
+    } else if (maximalMelds.length == 1 &&
+        maximalMelds.first.length >= handSize - 1) {
+      return BotDecision(action: 'createMeld', data: maximalMelds.first);
+    }
+    return null;
   }
 
   /// Enhanced book completion strategy for competitive play
@@ -3708,6 +3934,24 @@ class EnhancedBotAI {
   }
 
   // Getters for testing and debugging
+
+  @visibleForTesting
+  bool shouldCompleteHandPileForFoot(Player bot, BotGameContext context) {
+    return _shouldCompleteHandPileForFoot(bot, context);
+  }
+
+  @visibleForTesting
+  BotDecision? makeCompleteHandPileForFootDecision(
+    Player bot,
+    BotGameContext context,
+  ) {
+    return _makeCompleteHandPileForFootDecision(bot, context);
+  }
+
+  @visibleForTesting
+  BotDecision makeFinalTurnScoringDecision(Player bot, BotGameContext context) {
+    return _makeFinalTurnScoringDecision(bot, context);
+  }
 
   @visibleForTesting
   bool shouldRushHandToFoot(Player bot, BotGameContext context) {

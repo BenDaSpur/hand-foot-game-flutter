@@ -58,6 +58,10 @@ void main() {
             const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
             const PlayingCard(suit: Suit.spades, rank: CardRank.king),
             const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
           ])!,
         );
 
@@ -106,6 +110,10 @@ void main() {
             const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
             const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
             const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
           ])!,
         );
 
@@ -154,6 +162,10 @@ void main() {
           const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
           const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
           const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
         ])!,
       );
 

@@ -9,6 +9,7 @@ import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/screens/managers/bot_turn_manager.dart';
+import 'package:hand_foot_game_flutter/services/analytics/bot_decision_analytics_snapshot.dart';
 
 final _immediateRoundEndSettings = SoloGameSettings(
   botCount: 1,
@@ -49,6 +50,7 @@ void main() {
               required String decision,
               required String reasoning,
               Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
             }) {},
       );
     });
@@ -160,6 +162,7 @@ void main() {
               required String decision,
               required String reasoning,
               Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
             }) {},
       );
 
