@@ -78,5 +78,36 @@ void main() {
       expect(find.textContaining('You went out'), findsOneWidget);
       expect(find.textContaining('1 remaining'), findsOneWidget);
     });
+
+    testWidgets(
+      'shows plural waiting message when multiple final turns remain',
+      (tester) async {
+        final bot2 = Player(id: 'bot2', name: 'Bot 2', type: PlayerType.bot);
+        gameState = GameState(
+          players: [human, bot, bot2],
+          deck: Deck.createHandAndFootDeck(3),
+        );
+        gameState.finalTurnPhaseActive = true;
+        gameState.playerWhoWentOutIndex = 0;
+        gameState.playersAwaitingFinalTurn.addAll([1, 2]);
+        gameState.currentPlayerIndex = 1;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: FinalTurnBanner(
+                gameState: gameState,
+                localPlayerId: human.id,
+              ),
+            ),
+          ),
+        );
+
+        expect(find.text('FINAL TURNS IN PROGRESS'), findsOneWidget);
+        expect(find.textContaining('You went out'), findsOneWidget);
+        expect(find.textContaining('one more turns'), findsOneWidget);
+        expect(find.textContaining('2 remaining'), findsOneWidget);
+      },
+    );
   });
 }

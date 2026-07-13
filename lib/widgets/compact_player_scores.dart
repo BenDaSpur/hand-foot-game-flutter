@@ -192,10 +192,16 @@ class _PlayerChip extends StatelessWidget {
                   ],
                   if (isWentOut) ...[
                     const SizedBox(width: 3),
-                    _StatusBadge(label: 'OUT', color: BalatroTheme.neonGreen),
+                    const _StatusBadge(
+                      label: 'OUT',
+                      color: BalatroTheme.neonGreen,
+                    ),
                   ] else if (isAwaitingFinalTurn) ...[
                     const SizedBox(width: 3),
-                    _StatusBadge(label: 'LAST', color: BalatroTheme.neonOrange),
+                    const _StatusBadge(
+                      label: 'LAST',
+                      color: BalatroTheme.neonOrange,
+                    ),
                   ],
                 ],
               ),

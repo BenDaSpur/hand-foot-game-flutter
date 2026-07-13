@@ -80,7 +80,7 @@ class GameCompactHeader extends StatelessWidget {
                 if (gameState.finalTurnPhaseActive) ...[
                   const SizedBox(width: 6),
                   _PhaseChip(
-                    label: gameState.isCurrentPlayerFinalTurn
+                    label: gameState.playersAwaitingFinalTurn.length == 1
                         ? 'Final turn'
                         : 'Final turns',
                     color: BalatroTheme.neonOrange,
