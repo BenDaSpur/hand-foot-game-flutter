@@ -68,16 +68,21 @@ class BotDiscardAnalyzer {
       return BotConfig.threesPriority + 5; // Black 3 = -5 points
     }
 
-    // 2. NEVER discard wilds unless desperate (< 3 cards)
+    // 2. NEVER discard wilds in foot while missing required go-out books
+    if (card.isWild && bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+      return -BotConfig.wildProtection;
+    }
+
+    // 3. NEVER discard wilds unless desperate (<= 3 cards) once books are met
     if (card.isWild && bot.currentHand.length > 3) {
       return -BotConfig.wildProtection;
     }
 
-    // 3. Base score from inverse point value (low value = good to discard)
+    // 4. Base score from inverse point value (low value = good to discard)
     // Invert: high point cards (aces=20, wilds=50) get negative score
     score += 50 - card.pointValue;
 
-    // 4. DEFENSIVE: Check if opponents need this card
+    // 5. DEFENSIVE: Check if opponents need this card
     if (analyzer != null) {
       final opponentNeedScore = _calculateOpponentNeedScore(
         card,
@@ -88,7 +93,7 @@ class BotDiscardAnalyzer {
       score -= opponentNeedScore; // Reduce score if opponents need it
     }
 
-    // 5. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
+    // 6. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
     final sameRankCount = bot.currentHand
         .where((c) => c.rank == card.rank && !c.isWild)
         .length;
@@ -121,14 +126,14 @@ class BotDiscardAnalyzer {
       score += BotConfig.humanLowRankDiscardBonus;
     }
 
-    // 6. MELD FIT: Don't discard cards that fit existing melds
+    // 7. MELD FIT: Don't discard cards that fit existing melds
     for (final meld in bot.melds) {
       if (_cardFitsMeld(card, meld)) {
         score -= 30; // Keep cards that can extend melds
       }
     }
 
-    // 7. BOOK COMPLETION: Heavily penalize discarding cards near completing books
+    // 8. BOOK COMPLETION: Heavily penalize discarding cards near completing books
     for (final meld in bot.melds) {
       if (meld.cards.length >= 5 && _cardFitsMeld(card, meld)) {
         score -= 50; // Strong incentive to keep near-book cards

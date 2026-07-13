@@ -22,7 +22,7 @@ class BotEndGameManager {
   BotEndGameManager({BotMeldAnalyzer? meldAnalyzer})
     : _meldAnalyzer = meldAnalyzer ?? BotMeldAnalyzer();
 
-  /// True when a meld would leave one card while the bot still cannot go out.
+  /// True when a meld would leave 0–1 cards while the bot still cannot go out.
   static bool leavesUnfinishableSingleCard(
     Player bot, {
     required int cardsRemoved,
@@ -33,7 +33,7 @@ class BotEndGameManager {
     }
 
     final remaining = bot.currentHand.length - cardsRemoved;
-    if (remaining != 1) {
+    if (remaining > 1) {
       return false;
     }
 
@@ -780,6 +780,15 @@ class BotEndGameManager {
       // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
       threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
       return threes.first;
+    }
+
+    // Never discard wilds in foot while missing required go-out books
+    if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+      final nonWilds = hand.where((card) => !card.isWild).toList();
+      if (nonWilds.isNotEmpty) {
+        nonWilds.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+        return nonWilds.first;
+      }
     }
 
     // Then discard lowest value cards

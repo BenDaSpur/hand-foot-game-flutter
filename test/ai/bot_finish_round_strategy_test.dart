@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_discard_analyzer.dart';
 import 'package:hand_foot_game_flutter/ai/bot_end_game_manager.dart';
 import 'package:hand_foot_game_flutter/ai/bot_foot_transition_manager.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
@@ -172,9 +173,11 @@ void main() {
         );
         botPlayer.hand.clear();
         botPlayer.foot.clear();
-        botPlayer.foot.add(
+        botPlayer.foot.addAll([
           const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-        );
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+        ]);
 
         gameController.gameState.turnPhase = TurnPhase.meld;
         gameController.gameState.hasDrawnFromDeck = true;
@@ -219,6 +222,52 @@ void main() {
         final decision = botAI.makeDecision(botPlayer, gameController);
 
         expect(decision.action, isNot('addToMeld'));
+      },
+      tags: ['clean_book_regression'],
+    );
+
+    test(
+      'rejects meld that empties hand without both book types',
+      () {
+        botPlayer.melds.clear();
+        botPlayer.melds.add(dirtyBook());
+        botPlayer.hand.clear();
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+        ]);
+
+        expect(botPlayer.canGoOutWithBooks, isFalse);
+        expect(
+          BotEndGameManager.isSafeCreateMeld(botPlayer, botPlayer.currentHand),
+          isFalse,
+        );
+      },
+      tags: ['clean_book_regression'],
+    );
+
+    test(
+      'does not discard wild twos in foot when missing go-out books',
+      () {
+        botPlayer.melds.clear();
+        botPlayer.melds.add(dirtyBook());
+        botPlayer.hand.clear();
+        botPlayer.foot.clear();
+        botPlayer.foot.addAll([
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        ]);
+
+        final discardAnalyzer = BotDiscardAnalyzer();
+        final discard = discardAnalyzer.chooseCardToDiscard(
+          botPlayer,
+          gameController.gameState,
+        );
+
+        expect(discard.rank, equals(CardRank.five));
+        expect(discard.isWild, isFalse);
       },
       tags: ['clean_book_regression'],
     );
