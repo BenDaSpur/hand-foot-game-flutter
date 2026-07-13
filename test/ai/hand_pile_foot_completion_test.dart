@@ -108,7 +108,7 @@ void main() {
     );
 
     test(
-      'makeCompleteHandPileForFootDecision returns null when no melds exist',
+      'makeCompleteHandPileForFootDecision defers discard when no melds in meld phase',
       () {
         bot.hand
           ..clear()
@@ -130,7 +130,11 @@ void main() {
           context(),
         );
 
-        expect(decision, isNull);
+        expect(decision?.action, 'noMeld');
+
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(bot, gameController);
+        expect(discardDecision.action, 'discard');
       },
     );
 

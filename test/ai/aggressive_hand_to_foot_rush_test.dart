@@ -206,8 +206,7 @@ void main() {
 
         final rushDecision = botAI.makeHandToFootRushDecision(bot, context());
         expect(rushDecision, isNotNull);
-        expect(rushDecision!.action, equals('discard'));
-        expect(rushDecision.data, isA<PlayingCard>());
+        expect(rushDecision!.action, equals('noMeld'));
 
         configureBot(
           personality: BotPersonality.conservative,
@@ -228,7 +227,7 @@ void main() {
           context(),
         );
         expect(rushAtThreshold, isNotNull);
-        expect(rushAtThreshold!.action, equals('discard'));
+        expect(rushAtThreshold!.action, equals('noMeld'));
 
         configureBot(
           personality: BotPersonality.conservative,
@@ -249,7 +248,7 @@ void main() {
           context(),
         );
         expect(rushAtThreshold, isNotNull);
-        expect(rushAtThreshold!.action, equals('discard'));
+        expect(rushAtThreshold!.action, equals('noMeld'));
 
         configureBot(
           personality: BotPersonality.aggressive,
@@ -274,7 +273,7 @@ void main() {
           context(),
         );
         expect(rushAtThreshold, isNotNull);
-        expect(rushAtThreshold!.action, equals('discard'));
+        expect(rushAtThreshold!.action, equals('noMeld'));
 
         configureBot(
           personality: BotPersonality.aggressive,
@@ -295,8 +294,12 @@ void main() {
 
         expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
         final belowThresholdDecision = botAI.makeDecision(bot, gameController);
-        expect(belowThresholdDecision.action, equals('discard'));
-        expect(belowThresholdDecision.data, isA<PlayingCard>());
+        expect(belowThresholdDecision.action, equals('noMeld'));
+
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(bot, gameController);
+        expect(discardDecision.action, equals('discard'));
+        expect(discardDecision.data, isA<PlayingCard>());
 
         configureBot(
           personality: BotPersonality.conservative,
@@ -310,10 +313,13 @@ void main() {
           isNull,
           reason: 'rush hook must be inactive above opponent threshold',
         );
+        expect(aboveThresholdDecision.action, equals('noMeld'));
+
+        gameController.gameState.turnPhase = TurnPhase.discard;
         expect(
-          aboveThresholdDecision.action,
-          isNot('noMeld'),
-          reason: 'foot transition may still act above rush threshold',
+          botAI.makeDecision(bot, gameController).action,
+          equals('discard'),
+          reason: 'foot transition still discards above rush threshold',
         );
       });
 
@@ -330,7 +336,13 @@ void main() {
             bot,
             gameController,
           );
-          expect(belowThresholdDecision.action, equals('discard'));
+          expect(belowThresholdDecision.action, equals('noMeld'));
+
+          gameController.gameState.turnPhase = TurnPhase.discard;
+          expect(
+            botAI.makeDecision(bot, gameController).action,
+            equals('discard'),
+          );
 
           configureBot(
             personality: BotPersonality.aggressive,
@@ -342,11 +354,14 @@ void main() {
             bot,
             gameController,
           );
+          expect(aboveThresholdDecision.action, equals('noMeld'));
+
+          gameController.gameState.turnPhase = TurnPhase.discard;
           expect(
-            aboveThresholdDecision.action,
-            isNot('noMeld'),
+            botAI.makeDecision(bot, gameController).action,
+            equals('discard'),
             reason:
-                'foot transition may still discard above aggressive rush threshold',
+                'foot transition still discards above aggressive rush threshold',
           );
         },
       );
@@ -364,7 +379,13 @@ void main() {
             bot,
             gameController,
           );
-          expect(belowThresholdDecision.action, equals('discard'));
+          expect(belowThresholdDecision.action, equals('noMeld'));
+
+          gameController.gameState.turnPhase = TurnPhase.discard;
+          expect(
+            botAI.makeDecision(bot, gameController).action,
+            equals('discard'),
+          );
 
           configureBot(
             personality: BotPersonality.conservative,
@@ -376,11 +397,14 @@ void main() {
             bot,
             gameController,
           );
+          expect(aboveThresholdDecision.action, equals('noMeld'));
+
+          gameController.gameState.turnPhase = TurnPhase.discard;
           expect(
-            aboveThresholdDecision.action,
-            isNot('noMeld'),
+            botAI.makeDecision(bot, gameController).action,
+            equals('discard'),
             reason:
-                'foot transition may still discard above critical rush threshold',
+                'foot transition still discards above critical rush threshold',
           );
         },
       );

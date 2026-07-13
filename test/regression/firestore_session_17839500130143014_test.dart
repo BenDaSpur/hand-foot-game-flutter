@@ -48,10 +48,9 @@ void main() {
 
     test('bots still draw from deck at start of turn on small hand pile', () {
       for (final bot in [alex, carl]) {
-        bot
-          ..hasPlayedDown = true
-          ..hasPickedUpFoot = false
-          ..hand
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
           ..clear()
           ..addAll([
             const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
@@ -75,10 +74,9 @@ void main() {
       'Carl conservative melds at hand=3 with 1 book while opponent on foot',
       () {
         human.hasPickedUpFoot = true;
-        carl
-          ..hasPlayedDown = true
-          ..hasPickedUpFoot = false
-          ..melds
+        carl.hasPlayedDown = true;
+        carl.hasPickedUpFoot = false;
+        carl.melds
           ..clear()
           ..addAll([
             Meld.createMeld([
@@ -119,12 +117,11 @@ void main() {
     );
 
     test(
-      'hand pile completion returns null instead of blocking noMeld when stuck',
+      'hand pile completion defers discard in meld phase when no melds available',
       () {
-        carl
-          ..hasPlayedDown = true
-          ..hasPickedUpFoot = false
-          ..melds
+        carl.hasPlayedDown = true;
+        carl.hasPickedUpFoot = false;
+        carl.melds
           ..clear()
           ..add(
             Meld.createMeld([
@@ -146,12 +143,15 @@ void main() {
 
         expect(botAI.shouldCompleteHandPileForFoot(carl, context()), isTrue);
 
-        final completion = botAI.makeCompleteHandPileForFootDecision(
+        final meldDecision = botAI.makeCompleteHandPileForFootDecision(
           carl,
           context(),
         );
+        expect(meldDecision?.action, 'noMeld');
 
-        expect(completion, isNull);
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(carl, gameController);
+        expect(discardDecision.action, 'discard');
       },
     );
 
@@ -159,10 +159,9 @@ void main() {
       'Alex adaptive uses multi-meld rush at hand=7 with opponent on foot',
       () {
         human.hasPickedUpFoot = true;
-        alex
-          ..hasPlayedDown = true
-          ..hasPickedUpFoot = false
-          ..melds.clear();
+        alex.hasPlayedDown = true;
+        alex.hasPickedUpFoot = false;
+        alex.melds.clear();
         alex.hand
           ..clear()
           ..addAll([

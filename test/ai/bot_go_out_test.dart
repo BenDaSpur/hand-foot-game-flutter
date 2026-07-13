@@ -140,9 +140,13 @@ void main() {
       // Make decision
       final decision = botAI.makeDecision(botPlayer, gameController);
 
-      // Should return discard decision (since no melds possible with 3s)
-      expect(decision.action, equals('discard'));
-      expect(decision.data, isA<PlayingCard>());
+      // Meld phase defers discard; discard phase executes it
+      expect(decision.action, equals('noMeld'));
+
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      final discardDecision = botAI.makeDecision(botPlayer, gameController);
+      expect(discardDecision.action, equals('discard'));
+      expect(discardDecision.data, isA<PlayingCard>());
     });
   });
 }
