@@ -9,7 +9,7 @@ The repo includes [`vercel.json`](../vercel.json) and [`scripts/vercel_build.sh`
 ### Deployment flow
 
 ```text
-Push to GitHub → Vercel build → Clone Flutter 3.32.8 → flutter pub get
+Push to GitHub → Vercel build → Clone Flutter 3.44.6 → flutter pub get
   → Inject Firebase config (if set) → flutter build web → Serve build/web
 ```
 
@@ -101,7 +101,7 @@ To test with production Firebase locally, use [`scripts/setup_local_firebase.sh`
 **Build fails on Vercel**
 
 - Check Vercel build logs for Flutter SDK or `pub get` errors.
-- Confirm Flutter version **3.32.8** matches CI (see [`vercel.json`](../vercel.json) install command).
+- Confirm Flutter version **3.44.6** matches CI (see [`vercel.json`](../vercel.json) install command).
 
 **Multiplayer does not work on playhandfoot.com**
 

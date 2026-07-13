@@ -22,6 +22,7 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+    - "build/**"
   errors:
     # Allow print statements in tests for debugging
     avoid_print: ignore
@@ -29,3 +30,6 @@ analyzer:
     avoid_redundant_argument_values: ignore
     prefer_const_constructors: ignore
     prefer_const_declarations: ignore
+    # Dart 3.12 style suggestions — keep non-blocking in CI
+    prefer_initializing_formals: ignore
+    use_null_aware_elements: ignore

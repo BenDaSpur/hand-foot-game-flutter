@@ -12,7 +12,7 @@ jobs:
     with:
       setup_firebase_android: true
       run_e2e_tests: false
-      flutter_version: "3.32.8"
+      flutter_version: "3.44.6"
     secrets: inherit
 
   # E2E tests temporarily disabled - re-enable when needed
@@ -21,6 +21,6 @@ jobs:
   #   with:
   #     setup_firebase_android: false
   #     run_e2e_tests: true
-  #     flutter_version: "3.32.8"
+  #     flutter_version: "3.44.6"
   #   secrets: inherit
   #   needs: quality-checks

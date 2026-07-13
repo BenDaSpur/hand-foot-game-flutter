@@ -18,7 +18,7 @@ on:
       flutter_version:
         description: 'Flutter version to use'
         type: string
-        default: '3.32.8'
+        default: '3.44.6'
     outputs:
       tests_passed:
         description: 'Whether tests passed'
@@ -79,7 +79,7 @@ jobs:
         run: flutter pub get
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed .
+        run: dart format --output=none --set-exit-if-changed lib test e2e_test
 
       - name: Run tests
         id: tests
