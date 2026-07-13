@@ -27,11 +27,17 @@ class BotDecisionAnalyticsSnapshot {
     required this.playerWhoWentOutIndex,
     required Set<int> playersAwaitingFinalTurn,
     required this.winnerId,
-  }) : players = UnmodifiableListView(players),
-       deckCards = UnmodifiableListView(deckCards),
-       discardPile = UnmodifiableListView(discardPile),
-       recentActions = UnmodifiableListView(recentActions),
-       playersAwaitingFinalTurn = UnmodifiableSetView(playersAwaitingFinalTurn);
+  }) : players = UnmodifiableListView(
+         List<AnalyticsPlayerSnapshot>.from(players),
+       ),
+       deckCards = UnmodifiableListView(List<PlayingCard>.from(deckCards)),
+       discardPile = UnmodifiableListView(List<PlayingCard>.from(discardPile)),
+       recentActions = UnmodifiableListView(
+         List<GameAction>.from(recentActions),
+       ),
+       playersAwaitingFinalTurn = UnmodifiableSetView(
+         Set<int>.from(playersAwaitingFinalTurn),
+       );
 
   final UnmodifiableListView<AnalyticsPlayerSnapshot> players;
   final UnmodifiableListView<PlayingCard> deckCards;
@@ -72,11 +78,15 @@ class AnalyticsPlayerSnapshot {
     required this.hasPickedUpFoot,
     required this.hasPlayedDown,
     required this.score,
-  }) : hand = UnmodifiableListView(hand),
-       foot = UnmodifiableListView(foot),
-       melds = UnmodifiableListView(melds),
-       newlyDrawnCardIndices = UnmodifiableSetView(newlyDrawnCardIndices),
-       roundScoreHistory = UnmodifiableListView(roundScoreHistory);
+  }) : hand = UnmodifiableListView(List<PlayingCard>.from(hand)),
+       foot = UnmodifiableListView(List<PlayingCard>.from(foot)),
+       melds = UnmodifiableListView(List<AnalyticsMeldSnapshot>.from(melds)),
+       newlyDrawnCardIndices = UnmodifiableSetView(
+         Set<int>.from(newlyDrawnCardIndices),
+       ),
+       roundScoreHistory = UnmodifiableListView(
+         List<RoundScoreBreakdown>.from(roundScoreHistory),
+       );
 
   final String id;
   final String name;
@@ -102,7 +112,7 @@ class AnalyticsPlayerSnapshot {
 /// Immutable meld capture for bot-decision analytics.
 class AnalyticsMeldSnapshot {
   AnalyticsMeldSnapshot({required this.rank, required List<PlayingCard> cards})
-    : cards = UnmodifiableListView(cards);
+    : cards = UnmodifiableListView(List<PlayingCard>.from(cards));
 
   final CardRank rank;
   final UnmodifiableListView<PlayingCard> cards;
