@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/card.dart';
 import '../models/player.dart';
@@ -38,6 +37,9 @@ import 'managers/dialog_manager.dart';
 import 'managers/game_state_manager.dart';
 import 'managers/persistence_manager.dart';
 import 'managers/event_based_game_state_manager.dart';
+import '../widgets/game_keyboard_shortcuts.dart';
+import '../widgets/keyboard_shortcuts_overlay.dart';
+import '../utils/game_responsive_layout.dart';
 import '../providers/game_providers.dart';
 import '../providers/computed_providers.dart';
 
@@ -98,7 +100,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _isCardAnimationActive = false;
 
   // Keyboard shortcuts
-  final FocusNode _focusNode = FocusNode();
+  int? _keyboardFocusedCardIndex;
+  bool _showKeyboardHelp = false;
 
   // Card draw animation anchors
   final GlobalKey _deckKey = GlobalKey();
@@ -119,7 +122,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   @override
   void dispose() {
     _disposed = true;
-    _focusNode.dispose();
     _handScrollController.dispose();
     // Dispose event-based manager to clean up subscriptions
     _eventBasedGameStateManager?.dispose();
@@ -714,6 +716,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     _hasPlayerInteractedSinceDraw = true; // Mark that player has interacted
     setState(() {
+      _keyboardFocusedCardIndex = cardIndex;
       if (_selectedCardIndices.contains(cardIndex)) {
         _selectedCardIndices.remove(cardIndex);
       } else {
@@ -1474,8 +1477,99 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         break;
     }
 
-    setState(() {});
-    _selectedCardIndices.clear();
+    setState(() {
+      _selectedCardIndices.clear();
+      _keyboardFocusedCardIndex = _clampKeyboardFocus(
+        _keyboardFocusedCardIndex,
+        humanPlayer.currentHand.length,
+      );
+    });
+  }
+
+  int? _clampKeyboardFocus(int? index, int handLength) {
+    if (handLength <= 0 || index == null) {
+      return null;
+    }
+    if (index >= handLength) {
+      return handLength - 1;
+    }
+    return index;
+  }
+
+  void _onFocusPreviousCard() {
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) {
+      return;
+    }
+    setState(() {
+      _keyboardFocusedCardIndex = focusPreviousCardIndex(
+        currentIndex: _keyboardFocusedCardIndex,
+        handLength: humanPlayer.currentHand.length,
+      );
+    });
+  }
+
+  void _onFocusNextCard() {
+    final humanPlayer = ref.read(humanPlayerProvider);
+    if (humanPlayer == null) {
+      return;
+    }
+    setState(() {
+      _keyboardFocusedCardIndex = focusNextCardIndex(
+        currentIndex: _keyboardFocusedCardIndex,
+        handLength: humanPlayer.currentHand.length,
+      );
+    });
+  }
+
+  void _onToggleSelectFocusedCard() {
+    if (_keyboardFocusedCardIndex != null) {
+      _onCardTap(_keyboardFocusedCardIndex!);
+    }
+  }
+
+  void _toggleKeyboardHelp() {
+    setState(() {
+      _showKeyboardHelp = !_showKeyboardHelp;
+    });
+  }
+
+  GameKeyboardContext _buildKeyboardContext(GameState gameState) {
+    final controller = _gameController;
+    final humanPlayer = ref.read(humanPlayerProvider);
+    final handLength = humanPlayer?.currentHand.length ?? 0;
+    return GameKeyboardContext(
+      turnPhase: gameState.turnPhase,
+      canUnlockDiscard: controller?.canUnlockDiscard() ?? false,
+      selectedCardCount: _selectedCardIndices.length,
+      handLength: handLength,
+      focusedCardIndex: _clampKeyboardFocus(
+        _keyboardFocusedCardIndex,
+        handLength,
+      ),
+      isHumanTurn: gameState.currentPlayer.type == PlayerType.human,
+      isAnimating: _isCardAnimationActive,
+      hasInteractedSinceDraw: _hasPlayerInteractedSinceDraw,
+      isHelpVisible: _showKeyboardHelp,
+    );
+  }
+
+  GameKeyboardActions _buildKeyboardActions() {
+    return GameKeyboardActions(
+      onDrawFromDeck: _onDrawFromDeck,
+      onUnlockDiscard: _onUnlockDiscard,
+      onOpenMeldModal: () => _dialogManager.showAdvancedMeldSelector(
+        onMeldsCreated: _executeAdvancedMeldCreation,
+      ),
+      onDiscard: _onDiscard,
+      onClearSelection: () => setState(() => _selectedCardIndices.clear()),
+      onSortHand: () => _sortHand('rank'),
+      onToggleSelectFocused: _onToggleSelectFocusedCard,
+      onFocusPrevious: _onFocusPreviousCard,
+      onFocusNext: _onFocusNextCard,
+      onShowScoreboard: () => _dialogManager.showScoreboard(),
+      onToggleHelp: _toggleKeyboardHelp,
+    );
   }
 
   void _showWildCardConfirmation(
@@ -1598,107 +1692,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
   }
 
-  /// Handle keyboard shortcuts for desktop users
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    // Only handle key down events
-    if (event is! KeyDownEvent) {
-      return KeyEventResult.ignored;
-    }
-
-    if (_isCardAnimationActive) {
-      return KeyEventResult.ignored;
-    }
-
-    // Only handle shortcuts during human turn
-    final currentPlayer = ref.read(currentPlayerProvider);
-    if (currentPlayer?.type != PlayerType.human) {
-      return KeyEventResult.ignored;
-    }
-
-    final gameState = ref.read(currentGameStateProvider);
-    if (gameState == null) return KeyEventResult.ignored;
-
-    final humanPlayer = ref.read(humanPlayerProvider);
-    if (humanPlayer == null) return KeyEventResult.ignored;
-
-    final key = event.logicalKey;
-
-    // D = Draw from deck
-    if (key == LogicalKeyboardKey.keyD) {
-      if (gameState.turnPhase == TurnPhase.draw) {
-        _onDrawFromDeck();
-        return KeyEventResult.handled;
-      }
-    }
-
-    // T = Take/unlock discard pile
-    if (key == LogicalKeyboardKey.keyT) {
-      final controller = _gameController;
-      if (controller != null &&
-          gameState.turnPhase == TurnPhase.draw &&
-          controller.canUnlockDiscard()) {
-        _onUnlockDiscard();
-        return KeyEventResult.handled;
-      }
-    }
-
-    // M = Open meld selector
-    if (key == LogicalKeyboardKey.keyM) {
-      if (gameState.turnPhase == TurnPhase.meld && _selectedCards.isNotEmpty) {
-        _dialogManager.showAdvancedMeldSelector(
-          onMeldsCreated: _executeAdvancedMeldCreation,
-        );
-        return KeyEventResult.handled;
-      }
-    }
-
-    // Enter/Space = Discard (if 1 card selected)
-    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) {
-      if (gameState.turnPhase == TurnPhase.meld && _selectedCards.length == 1) {
-        _onDiscard();
-        return KeyEventResult.handled;
-      }
-    }
-
-    // Escape = Clear selection
-    if (key == LogicalKeyboardKey.escape) {
-      if (_selectedCardIndices.isNotEmpty) {
-        setState(() => _selectedCardIndices.clear());
-        return KeyEventResult.handled;
-      }
-    }
-
-    // S = Sort hand by rank
-    if (key == LogicalKeyboardKey.keyS) {
-      _sortHand('rank');
-      return KeyEventResult.handled;
-    }
-
-    // Number keys 1-9 = Toggle card selection
-    final numberKeys = {
-      LogicalKeyboardKey.digit1: 0,
-      LogicalKeyboardKey.digit2: 1,
-      LogicalKeyboardKey.digit3: 2,
-      LogicalKeyboardKey.digit4: 3,
-      LogicalKeyboardKey.digit5: 4,
-      LogicalKeyboardKey.digit6: 5,
-      LogicalKeyboardKey.digit7: 6,
-      LogicalKeyboardKey.digit8: 7,
-      LogicalKeyboardKey.digit9: 8,
-      LogicalKeyboardKey.digit0: 9,
-    };
-
-    if (numberKeys.containsKey(key)) {
-      final index = numberKeys[key]!;
-      if (index < humanPlayer.currentHand.length) {
-        _onCardTap(index);
-        return KeyEventResult.handled;
-      }
-    }
-
-    return KeyEventResult.ignored;
-  }
-
   @override
   Widget build(BuildContext context) {
     // Use providers for reactive state access
@@ -1721,157 +1714,177 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       'UI BUILD: Current player=${currentPlayer.name} (${currentPlayer.type}), version=${controllerState?.version}',
     );
 
-    return Focus(
-      focusNode: _focusNode,
-      autofocus: true,
-      onKeyEvent: _handleKeyEvent,
-      child: Container(
-        decoration: const BoxDecoration(gradient: BalatroTheme.primaryGradient),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: GameAppBar(
-            gameState: gameState,
-            isMultiplayer: false,
-            sessionInfo: _soloSessionInfo(gameState),
-            additionalActions: [
-              IconButton(
-                icon: const Icon(
-                  Icons.leaderboard,
-                  color: BalatroTheme.neonYellow,
-                ),
-                tooltip: 'View Scoreboard',
-                onPressed: () {
-                  _dialogManager.showScoreboard();
-                },
-              ),
-            ],
-            onNewGame: () {
-              _dialogManager.showNewGameConfirmation(_startNewGame);
-            },
-            onCopySeed: () {
-              _persistenceManager.copySeedToClipboard(context);
-            },
-            onExportGame: () {
-              _persistenceManager.copyGameStateToClipboard(context);
-            },
-            onLoadGame: () {
-              _dialogManager.showLoadGameDialog(
-                (inputText) =>
-                    _persistenceManager.loadGameFromJson(inputText, context),
-              );
-            },
-            onHowToPlay: () {
-              _dialogManager.showHowToPlayDialog();
-            },
-          ),
-          body: CardAnimationHost(
-            eventBus: ref.read(gameEventBusProvider),
-            deckKey: _deckKey,
-            discardKey: _discardKey,
-            handStackKey: _handStackKey,
-            meldAreaKey: _meldAreaKey,
-            handScrollController: _handScrollController,
-            onAnimationStateChanged: (isAnimating) {
-              if (_isCardAnimationActive != isAnimating) {
-                setState(() {
-                  _isCardAnimationActive = isAnimating;
-                });
-              }
-            },
-            child: GameBoardLayout(
-              gameState: gameState,
-              viewingPlayerMelds: _viewingPlayerMelds,
-              onPlayerTap: (player) {
-                setState(() {
-                  _viewingPlayerMelds = player.id == humanPlayer.id
-                      ? null
-                      : player;
-                });
-              },
-              deckKey: _deckKey,
-              discardKey: _discardKey,
-              meldAreaKey: _meldAreaKey,
-              headerExpanded: _statusExpanded,
-              onHeaderToggle: () {
-                setState(() {
-                  _statusExpanded = !_statusExpanded;
-                });
-              },
-              botPersonalityManager: _botAI.personalityManager,
-              useDesktopRecentActions: true,
-              recentActionsExpanded: _actionsExpanded,
-              onRecentActionsToggle: () {
-                setState(() {
-                  _actionsExpanded = !_actionsExpanded;
-                });
-              },
-              aboveMelds: _buildAboveMeldsBanner(
-                context,
-                gameState,
-                currentPlayer,
-              ),
-              meldsSection: MeldsSection(
+    final showDesktopKeyboardHints = !GameResponsiveLayout.isMobile(context);
+
+    return GameKeyboardShortcuts(
+      getContext: () => _buildKeyboardContext(gameState),
+      actions: _buildKeyboardActions(),
+      child: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: BalatroTheme.primaryGradient,
+            ),
+            child: Scaffold(
+              backgroundColor: Colors.transparent,
+              appBar: GameAppBar(
                 gameState: gameState,
-                humanPlayer: humanPlayer,
-                viewingPlayerMelds: _viewingPlayerMelds,
-                onViewPlayerMelds: (player) {
-                  setState(() {
-                    _viewingPlayerMelds = player;
-                  });
-                },
-                onAddCardToMeld: _onAddCardToMeld,
-                onSelectAllCardsForMeld: _selectAllCardsForMeld,
-                canAddCardToMeld: _canAddCardToMeld,
-                getCompatibleCardsInfo: _getCompatibleCardsInfo,
-              ),
-              actionButtons: GameActionButtons(
-                gameState: gameState,
-                humanPlayer: humanPlayer,
-                selectedCardIndices: _selectedCardIndices,
-                onDrawFromDeck: _onDrawFromDeck,
-                onUnlockDiscard: () {
-                  final controller = _gameController;
-                  return (controller != null && controller.canUnlockDiscard())
-                      ? _onUnlockDiscard
-                      : null;
-                }(),
-                onShowAdvancedMeldSelector: () =>
-                    _dialogManager.showAdvancedMeldSelector(
-                      onMeldsCreated: _executeAdvancedMeldCreation,
+                isMultiplayer: false,
+                sessionInfo: _soloSessionInfo(gameState),
+                additionalActions: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.leaderboard,
+                      color: BalatroTheme.neonYellow,
                     ),
-                onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
-                onClearSelection: () =>
-                    setState(() => _selectedCardIndices.clear()),
-              ),
-              handDisplay: GameHandDisplay(
-                player: humanPlayer,
-                selectedCardIndices: _selectedCardIndices,
-                onCardTap:
-                    currentPlayer.type == PlayerType.human &&
-                        gameState.phase != GamePhase.gameEnd
-                    ? _onCardTap
-                    : null,
-                onCardDoubleTap:
-                    currentPlayer.type == PlayerType.human &&
-                        gameState.phase != GamePhase.gameEnd
-                    ? _onCardDoubleTap
-                    : null,
-                isCardPlayable: _isCardPlayable,
-                viewingPlayerMelds: _viewingPlayerMelds,
-                onReturnToHand: () {
-                  setState(() {
-                    _viewingPlayerMelds = null;
-                  });
+                    tooltip: 'View Scoreboard',
+                    onPressed: () {
+                      _dialogManager.showScoreboard();
+                    },
+                  ),
+                ],
+                onNewGame: () {
+                  _dialogManager.showNewGameConfirmation(_startNewGame);
                 },
-                isCurrentPlayerTurn:
-                    currentPlayer.type == PlayerType.human &&
-                    gameState.phase != GamePhase.gameEnd,
+                onCopySeed: () {
+                  _persistenceManager.copySeedToClipboard(context);
+                },
+                onExportGame: () {
+                  _persistenceManager.copyGameStateToClipboard(context);
+                },
+                onLoadGame: () {
+                  _dialogManager.showLoadGameDialog(
+                    (inputText) => _persistenceManager.loadGameFromJson(
+                      inputText,
+                      context,
+                    ),
+                  );
+                },
+                onHowToPlay: () {
+                  _dialogManager.showHowToPlayDialog();
+                },
+              ),
+              body: CardAnimationHost(
+                eventBus: ref.read(gameEventBusProvider),
+                deckKey: _deckKey,
+                discardKey: _discardKey,
                 handStackKey: _handStackKey,
+                meldAreaKey: _meldAreaKey,
                 handScrollController: _handScrollController,
+                onAnimationStateChanged: (isAnimating) {
+                  if (_isCardAnimationActive != isAnimating) {
+                    setState(() {
+                      _isCardAnimationActive = isAnimating;
+                    });
+                  }
+                },
+                child: GameBoardLayout(
+                  gameState: gameState,
+                  viewingPlayerMelds: _viewingPlayerMelds,
+                  onPlayerTap: (player) {
+                    setState(() {
+                      _viewingPlayerMelds = player.id == humanPlayer.id
+                          ? null
+                          : player;
+                    });
+                  },
+                  deckKey: _deckKey,
+                  discardKey: _discardKey,
+                  meldAreaKey: _meldAreaKey,
+                  headerExpanded: _statusExpanded,
+                  onHeaderToggle: () {
+                    setState(() {
+                      _statusExpanded = !_statusExpanded;
+                    });
+                  },
+                  botPersonalityManager: _botAI.personalityManager,
+                  useDesktopRecentActions: true,
+                  recentActionsExpanded: _actionsExpanded,
+                  onRecentActionsToggle: () {
+                    setState(() {
+                      _actionsExpanded = !_actionsExpanded;
+                    });
+                  },
+                  headerExtras: showDesktopKeyboardHints
+                      ? [KeyboardShortcutsHelpChip(onTap: _toggleKeyboardHelp)]
+                      : const [],
+                  aboveMelds: _buildAboveMeldsBanner(
+                    context,
+                    gameState,
+                    currentPlayer,
+                  ),
+                  meldsSection: MeldsSection(
+                    gameState: gameState,
+                    humanPlayer: humanPlayer,
+                    viewingPlayerMelds: _viewingPlayerMelds,
+                    onViewPlayerMelds: (player) {
+                      setState(() {
+                        _viewingPlayerMelds = player;
+                      });
+                    },
+                    onAddCardToMeld: _onAddCardToMeld,
+                    onSelectAllCardsForMeld: _selectAllCardsForMeld,
+                    canAddCardToMeld: _canAddCardToMeld,
+                    getCompatibleCardsInfo: _getCompatibleCardsInfo,
+                  ),
+                  actionButtons: GameActionButtons(
+                    gameState: gameState,
+                    humanPlayer: humanPlayer,
+                    selectedCardIndices: _selectedCardIndices,
+                    showKeyboardHints: showDesktopKeyboardHints,
+                    onDrawFromDeck: _onDrawFromDeck,
+                    onUnlockDiscard: () {
+                      final controller = _gameController;
+                      return (controller != null &&
+                              controller.canUnlockDiscard())
+                          ? _onUnlockDiscard
+                          : null;
+                    }(),
+                    onShowAdvancedMeldSelector: () =>
+                        _dialogManager.showAdvancedMeldSelector(
+                          onMeldsCreated: _executeAdvancedMeldCreation,
+                        ),
+                    onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
+                    onClearSelection: () =>
+                        setState(() => _selectedCardIndices.clear()),
+                  ),
+                  handDisplay: GameHandDisplay(
+                    player: humanPlayer,
+                    selectedCardIndices: _selectedCardIndices,
+                    keyboardFocusedCardIndex: _clampKeyboardFocus(
+                      _keyboardFocusedCardIndex,
+                      humanPlayer.currentHand.length,
+                    ),
+                    onCardTap:
+                        currentPlayer.type == PlayerType.human &&
+                            gameState.phase != GamePhase.gameEnd
+                        ? _onCardTap
+                        : null,
+                    onCardDoubleTap:
+                        currentPlayer.type == PlayerType.human &&
+                            gameState.phase != GamePhase.gameEnd
+                        ? _onCardDoubleTap
+                        : null,
+                    isCardPlayable: _isCardPlayable,
+                    viewingPlayerMelds: _viewingPlayerMelds,
+                    onReturnToHand: () {
+                      setState(() {
+                        _viewingPlayerMelds = null;
+                      });
+                    },
+                    isCurrentPlayerTurn:
+                        currentPlayer.type == PlayerType.human &&
+                        gameState.phase != GamePhase.gameEnd,
+                    handStackKey: _handStackKey,
+                    handScrollController: _handScrollController,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          if (_showKeyboardHelp && showDesktopKeyboardHints)
+            KeyboardShortcutsOverlay(onDismiss: _toggleKeyboardHelp),
+        ],
       ),
     );
   }

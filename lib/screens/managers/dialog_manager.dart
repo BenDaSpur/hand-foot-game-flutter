@@ -5,6 +5,7 @@ import '../../game/game_controller.dart';
 import '../../widgets/advanced_meld_selector.dart';
 import '../../widgets/emergency_round_end_dialog.dart';
 import '../../widgets/scoreboard_modal.dart';
+import '../../constants/keyboard_shortcuts.dart';
 import '../../theme/balatro_theme.dart';
 
 /// Manages all dialogs and modals for the game screen.
@@ -713,6 +714,8 @@ class DialogManager {
               children: [
                 _buildRulesSection(),
                 const SizedBox(height: 20),
+                _buildKeyboardShortcutsSection(),
+                const SizedBox(height: 20),
                 _buildPersonalitiesSection(),
               ],
             ),
@@ -759,6 +762,55 @@ class DialogManager {
         _buildRuleItem('🚫', 'Restrictions', 'Wilds ≤ naturals in any meld'),
         _buildRuleItem('🎲', 'Play Down', 'Round 1: 60 pts, +30 each round'),
         _buildRuleItem('🏁', 'Going Out', 'Need both clean AND dirty book'),
+      ],
+    );
+  }
+
+  Widget _buildKeyboardShortcutsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Keyboard Shortcuts (Desktop)',
+          style: TextStyle(
+            color: BalatroTheme.neonGreen,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Left hand on WASD — right hand on mouse. Press H in-game for the full overlay.',
+          style: TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        ...KeyboardShortcuts.wasdLayout.map((row) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: row.map((keyLabel) {
+                final action =
+                    KeyboardShortcuts.wasdLayoutLabels[keyLabel] ?? keyLabel;
+                return Text(
+                  '[$keyLabel] $action',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                );
+              }).toList(),
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+        ...KeyboardShortcuts.utility.map((entry) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(
+              '[${entry.keyLabel}] ${entry.action}',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          );
+        }),
       ],
     );
   }
