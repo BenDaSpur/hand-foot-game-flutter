@@ -45,6 +45,7 @@ class CompactPlayerScores extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: _PlayerChip(
+                gameState: gameState,
                 player: player,
                 isViewing: isViewing,
                 isCurrent: isCurrent,
@@ -62,6 +63,7 @@ class CompactPlayerScores extends StatelessWidget {
 }
 
 class _PlayerChip extends StatelessWidget {
+  final GameState gameState;
   final Player player;
   final bool isViewing;
   final bool isCurrent;
@@ -71,6 +73,7 @@ class _PlayerChip extends StatelessWidget {
   final BotPersonalityManager? botPersonalityManager;
 
   const _PlayerChip({
+    required this.gameState,
     required this.player,
     required this.isViewing,
     required this.isCurrent,
@@ -82,8 +85,17 @@ class _PlayerChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final wentOutIndex = gameState.playerWhoWentOutIndex;
+    final playerIndex = gameState.players.indexWhere((p) => p.id == player.id);
+    final isWentOut = wentOutIndex != null && playerIndex == wentOutIndex;
+    final isAwaitingFinalTurn =
+        gameState.finalTurnPhaseActive &&
+        gameState.isPlayerAwaitingFinalTurn(player);
+
     final accent = isViewing
         ? BalatroTheme.neonGreen
+        : isAwaitingFinalTurn
+        ? BalatroTheme.neonOrange
         : isCurrent
         ? BalatroTheme.neonBlue
         : Colors.white.withValues(alpha: 0.35);
@@ -104,7 +116,7 @@ class _PlayerChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: accent,
-              width: isViewing || isCurrent ? 1.5 : 1,
+              width: isViewing || isCurrent || isAwaitingFinalTurn ? 1.5 : 1,
             ),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
@@ -178,6 +190,19 @@ class _PlayerChip extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (isWentOut) ...[
+                    const SizedBox(width: 3),
+                    const _StatusBadge(
+                      label: 'OUT',
+                      color: BalatroTheme.neonGreen,
+                    ),
+                  ] else if (isAwaitingFinalTurn) ...[
+                    const SizedBox(width: 3),
+                    const _StatusBadge(
+                      label: 'LAST',
+                      color: BalatroTheme.neonOrange,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -212,5 +237,32 @@ class _PlayerChip extends StatelessWidget {
       case BotPersonality.adaptive:
         return PersonalityIcons.adaptive;
     }
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _StatusBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.8)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: UIConstants.playerScoresHandFootFontSize,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
   }
 }

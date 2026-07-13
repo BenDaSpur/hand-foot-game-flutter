@@ -77,6 +77,15 @@ class GameCompactHeader extends StatelessWidget {
                 _RoundBadge(round: gameState.round),
                 const SizedBox(width: 6),
                 _PhaseChip(label: _phaseLabel(), color: _phaseColor()),
+                if (gameState.finalTurnPhaseActive) ...[
+                  const SizedBox(width: 6),
+                  _PhaseChip(
+                    label: gameState.playersAwaitingFinalTurn.length == 1
+                        ? 'Final turn'
+                        : 'Final turns',
+                    color: BalatroTheme.neonOrange,
+                  ),
+                ],
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
