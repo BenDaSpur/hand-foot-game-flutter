@@ -4,12 +4,12 @@ Fast path for agents to find credentials and query production analytics. **Do no
 
 ## Recommended auth: service account (no token expiry)
 
-For **Firestore analytics reads**, Cloud Agent workspaces provide **`hand-foot-flutter-firebase.json`** at the repo root — a Firebase service account JSON with permissions to query the production Firestore account (gitignored). Alternatively, inject `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded JSON). Both are preferred over user OAuth tokens.
+For **Firestore analytics reads**, Cloud Agent workspaces provide **`hand-foot-flutter-firebase.json`** at the repo root — a Firebase service account JSON with permissions to query the production Firestore account (gitignored). Alternatively, inject `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` (base64-encoded JSON). Analytics scripts check the repo-root file before the env var; both are preferred over user OAuth tokens.
 
 | Auth method | Secret / file | Expires? | Best for |
 |-------------|---------------|----------|----------|
 | **Service account file (preferred)** | `hand-foot-flutter-firebase.json` (repo root) | No (until key rotated) | Cloud Agent workspaces, analytics scripts |
-| **Service account (env var)** | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | No (until key rotated) | Cloud Agents when file injection is unavailable |
+| **Service account (env var)** | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | No (until key rotated) | Fallback when repo-root file is unavailable |
 | OAuth user (legacy) | `FIREBASE_TOOLS_CREDENTIALS_JSON` | Yes (~1h + reauth) | MCP project setup, local dev |
 
 ## Cloud Agent credential file: `hand-foot-flutter-firebase.json`
@@ -49,7 +49,7 @@ base64 -i your-project-key.json
 |------|-------|
 | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | Paste the base64 output (single line, no quotes) |
 
-5. Bootstrap materializes it to `.firebase/hand-foot-service-account.json` (gitignored)
+5. Bootstrap materializes it to `hand-foot-flutter-firebase.json` at the repo root (gitignored)
 
 **Never commit the JSON or base64 string to GitHub.**
 
@@ -89,7 +89,8 @@ node scripts/query_analytics_session.js --recent --turn-summaries --decision-out
 |--------|-----------------|---------|
 | **Cloud Agent (preferred)** | `hand-foot-flutter-firebase.json` (repo root) | Service account JSON for Firestore reads |
 | **Cloud Agent (alt)** | `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | Base64 service account JSON for Firestore reads |
-| **After bootstrap** | `.firebase/hand-foot-service-account.json` | Decoded service account from B64 env var (gitignored) |
+| **After bootstrap** | `hand-foot-flutter-firebase.json` (repo root) | Decoded service account from B64 env var (gitignored) |
+| **Legacy fallback** | `.firebase/hand-foot-service-account.json` | Older bootstrap/output path (still supported) |
 | **Cloud Agent** | `FIREBASE_TOOLS_CREDENTIALS_JSON` | OAuth user tokens (MCP / legacy fallback) |
 | **Cloud Agent** | `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_*`, etc. | Flutter + Firestore project config |
 | **After bootstrap** | `.env` | All `FIREBASE_*` vars for Dart/Flutter scripts |

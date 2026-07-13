@@ -19,7 +19,7 @@ Secrets are injected as environment variables (`CLOUD_AGENT_INJECTED_SECRET_NAME
 |---------------------------|------------|
 | `hand-foot-flutter-firebase.json` (Cloud Agent workspace file) | Repo root (gitignored) |
 | `FIREBASE_TOOLS_CREDENTIALS_JSON` | `.firebase/oauth-credentials.json` + `~/.config/configstore/firebase-tools.json` |
-| `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | `.firebase/hand-foot-service-account.json` |
+| `FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64` | `hand-foot-flutter-firebase.json` (repo root, gitignored) |
 | `FIREBASE_PROJECT_ID` + other `FIREBASE_*` | `.env` |
 | `FIREBASE_CREDENTIALS_FILE` | Path hint for OAuth file location |
 

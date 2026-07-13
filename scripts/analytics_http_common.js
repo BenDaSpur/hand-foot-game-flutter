@@ -44,21 +44,24 @@ function base64url(value) {
 
 function loadServiceAccount() {
   try {
+    const explicitFilePath = process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE;
+    if (explicitFilePath && fs.existsSync(explicitFilePath)) {
+      return JSON.parse(fs.readFileSync(explicitFilePath, 'utf8'));
+    }
+
+    const defaultFilePath = DEFAULT_SERVICE_ACCOUNT_FILES.find((candidate) =>
+      fs.existsSync(candidate),
+    );
+    if (defaultFilePath) {
+      return JSON.parse(fs.readFileSync(defaultFilePath, 'utf8'));
+    }
+
     if (process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64) {
       const json = Buffer.from(
         process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_B64,
         'base64',
       ).toString('utf8');
       return JSON.parse(json);
-    }
-
-    const filePath =
-      process.env.FIREBASE_HAND_FOOT_SERVICE_ACCOUNT_FILE ||
-      DEFAULT_SERVICE_ACCOUNT_FILES.find((candidate) =>
-        fs.existsSync(candidate),
-      );
-    if (filePath && fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
   } catch (error) {
     throw new Error(
