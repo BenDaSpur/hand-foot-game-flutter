@@ -21,4 +21,6 @@ fi
 BUILD_NUMBER="${VERCEL_GIT_COMMIT_SHA:-local}"
 echo "Building web release with BUILD_NUMBER=$BUILD_NUMBER"
 
-flutter build web --release --dart-define=BUILD_NUMBER="$BUILD_NUMBER"
+flutter build web --release \
+  --build-number="$BUILD_NUMBER" \
+  --dart-define=BUILD_NUMBER="$BUILD_NUMBER"

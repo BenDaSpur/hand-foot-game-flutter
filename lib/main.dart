@@ -6,7 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'screens/main_menu_screen.dart';
 import 'services/firebase_service.dart';
 import 'services/analytics_config_service.dart';
+import 'services/web_deploy_version_service.dart';
 import 'theme/balatro_theme.dart';
+import 'widgets/web_app_update_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,14 +67,51 @@ void main() async {
   runApp(const ProviderScope(child: HandAndFootApp()));
 }
 
-class HandAndFootApp extends StatelessWidget {
+class HandAndFootApp extends StatefulWidget {
   const HandAndFootApp({super.key});
+
+  @override
+  State<HandAndFootApp> createState() => _HandAndFootAppState();
+}
+
+class _HandAndFootAppState extends State<HandAndFootApp> {
+  final WebDeployVersionService _deployVersionService =
+      WebDeployVersionService();
+  bool _updateAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _deployVersionService.start(
+      onUpdateAvailable: () {
+        if (!mounted || _updateAvailable) {
+          return;
+        }
+        setState(() {
+          _updateAvailable = true;
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _deployVersionService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Hand & Foot Card Game',
       theme: BalatroTheme.darkTheme,
+      builder: (context, child) {
+        if (!_updateAvailable || child == null) {
+          return child ?? const SizedBox.shrink();
+        }
+
+        return Stack(children: [child, const WebAppUpdateBanner()]);
+      },
       home: const MainMenuScreen(),
     );
   }
