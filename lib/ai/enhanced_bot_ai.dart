@@ -96,6 +96,14 @@ class EnhancedBotAI {
       // Set context for personality-based decisions
       _personalityManager.setCurrentPlayerContext(bot.id);
 
+      // Clear meld cache whenever hand/meld state may have changed between
+      // decision iterations (must run before final-turn early return).
+      if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
+        _meldAnalyzer.clearCache();
+        _cachedPossibleMelds = null;
+        _lastMeldCacheKey = null;
+      }
+
       // Final turn after another player went out — maximize melded points, no holding.
       if (gameState.finalTurnPhaseActive &&
           gameState.isPlayerAwaitingFinalTurn(bot)) {
@@ -135,11 +143,6 @@ class EnhancedBotAI {
       // Update game analysis
       _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
       _gameAnalyzer.incrementTurnCount(bot.id);
-
-      // Clear meld cache if needed
-      if (gameState.turnPhase == TurnPhase.meld || gameState.hasDrawnFromDeck) {
-        _meldAnalyzer.clearCache();
-      }
 
       // Calculate early game status to prevent emergency panic on normal starting hands
       final handSize = bot.currentHand.length;
@@ -2576,47 +2579,141 @@ class EnhancedBotAI {
         if (bot.currentHand.isEmpty) {
           return BotDecision(action: 'noMeld');
         }
-        if (controller != null) {
-          final playAll = _checkCanPlayAllCards(bot, context);
-          if (playAll != null) {
-            return playAll;
-          }
+        if (controller == null) {
+          return BotDecision(action: 'noMeld');
+        }
 
-          final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
+        // Play-down first when required — otherwise later dumps are illegal.
+        if (!bot.hasPlayedDown) {
+          final playDown = _meldAnalyzer.findBestPlayDownCombination(
             bot,
             controller,
+            gameState.playDownRequirement,
           );
-          if (maximalMelds.length >= 2) {
-            return BotDecision(
-              action: 'createMultipleMelds',
-              data: maximalMelds,
-            );
+          if (playDown.isNotEmpty) {
+            return _executePlayDown(playDown);
           }
+          // Cannot meet play-down requirement — discard and eat the penalty.
+          return BotDecision(action: 'noMeld');
+        }
 
-          final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
-            bot,
-            controller,
+        final playAll = _checkCanPlayAllCards(bot, context);
+        if (playAll != null) {
+          return playAll;
+        }
+
+        // Dump every card that can attach to existing melds (incl. wilds).
+        final cardsToAdd = _findFinalTurnAdditions(bot, controller);
+        if (cardsToAdd.isNotEmpty) {
+          return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+        }
+
+        final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
+          bot,
+          controller,
+        );
+        final playableMelds = maximalMelds
+            .where((meld) => _meldCardsStillInHand(bot, meld))
+            .toList();
+        if (playableMelds.length >= 2) {
+          return BotDecision(
+            action: 'createMultipleMelds',
+            data: playableMelds,
           );
-          if (cardsToAdd.isNotEmpty) {
-            return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
-          }
+        }
+        if (playableMelds.length == 1) {
+          return BotDecision(action: 'createMeld', data: playableMelds.first);
+        }
 
-          final possibleMelds = _getCachedPossibleMelds(bot, context);
-          if (possibleMelds.isNotEmpty) {
-            return BotDecision(
-              action: 'createMeld',
-              data: _meldAnalyzer.findBestMeld(
-                possibleMelds,
-                bot: bot,
-                preferLarger: true,
-              ),
-            );
-          }
+        final possibleMelds = _meldAnalyzer
+            .getPossibleMelds(bot, controller)
+            .where((meld) => _meldCardsStillInHand(bot, meld))
+            .toList();
+        if (possibleMelds.isNotEmpty) {
+          return BotDecision(
+            action: 'createMeld',
+            data: _meldAnalyzer.findBestMeld(
+              possibleMelds,
+              bot: bot,
+              preferLarger: true,
+            ),
+          );
         }
         return BotDecision(action: 'noMeld');
       case TurnPhase.discard:
-        return _makeDiscardDecision(bot, context);
+        return _makeFinalTurnDiscardDecision(bot);
     }
+  }
+
+  /// Prefer additions that shrink the penalty pile without wrecking a clean book.
+  List<Map<String, dynamic>> _findFinalTurnAdditions(
+    Player bot,
+    GameController controller,
+  ) {
+    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    );
+    if (cardsToAdd.isEmpty) {
+      return cardsToAdd;
+    }
+
+    final ranked = cardsToAdd.where((addition) {
+      final card = addition['card'] as PlayingCard;
+      final meld = addition['meld'] as Meld;
+      // Never convert a clean book to dirty — that loses 200 net book points.
+      if (card.isWild && meld.isClean) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    ranked.sort((a, b) {
+      final cardA = a['card'] as PlayingCard;
+      final cardB = b['card'] as PlayingCard;
+      final byPoints = cardB.pointValue.compareTo(cardA.pointValue);
+      if (byPoints != 0) {
+        return byPoints;
+      }
+      return (b['priority'] as int).compareTo(a['priority'] as int);
+    });
+    return ranked;
+  }
+
+  bool _meldCardsStillInHand(Player bot, List<PlayingCard> meldCards) {
+    final remaining = List<PlayingCard>.from(bot.currentHand);
+    for (final card in meldCards) {
+      final index = remaining.indexWhere(
+        (handCard) =>
+            identical(handCard, card) ||
+            (handCard.rank == card.rank && handCard.suit == card.suit),
+      );
+      if (index < 0) {
+        return false;
+      }
+      remaining.removeAt(index);
+    }
+    return true;
+  }
+
+  /// Dump the most expensive leftover card — round is ending after this discard.
+  BotDecision _makeFinalTurnDiscardDecision(Player bot) {
+    if (bot.currentHand.isEmpty) {
+      if (bot.canGoOut) {
+        return BotDecision(action: 'goOut');
+      }
+      return BotDecision(action: 'error');
+    }
+
+    final hand = List<PlayingCard>.from(bot.currentHand);
+    final threes = hand.where((card) => card.isThree).toList();
+    if (threes.isNotEmpty) {
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return BotDecision(action: 'discard', data: threes.first);
+    }
+
+    hand.sort((a, b) => b.pointValue.compareTo(a.pointValue));
+    return BotDecision(action: 'discard', data: hand.first);
   }
 
   /// Determine if we should hold cards based on round play-down requirements

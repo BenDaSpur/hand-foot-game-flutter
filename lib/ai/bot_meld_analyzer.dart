@@ -21,6 +21,7 @@ class BotMeldAnalyzer {
   // Cached results for performance
   List<List<PlayingCard>>? _cachedPossibleMelds;
   String? _cachedPlayerId;
+  String? _cachedHandFingerprint;
 
   BotMeldAnalyzer();
 
@@ -29,14 +30,21 @@ class BotMeldAnalyzer {
     Player bot,
     GameController controller,
   ) {
-    // Use cached result if available for the same player
-    if (_cachedPossibleMelds != null && _cachedPlayerId == bot.id) {
+    final handFingerprint = bot.currentHand
+        .map((c) => '${c.rank.index}:${c.suit?.index ?? -1}')
+        .join(',');
+
+    // Use cached result only when player AND hand contents match
+    if (_cachedPossibleMelds != null &&
+        _cachedPlayerId == bot.id &&
+        _cachedHandFingerprint == handFingerprint) {
       return _cachedPossibleMelds!;
     }
 
     // Calculate and cache new result
     _cachedPossibleMelds = controller.findPossibleMelds(bot);
     _cachedPlayerId = bot.id;
+    _cachedHandFingerprint = handFingerprint;
 
     return _cachedPossibleMelds!;
   }
@@ -45,6 +53,7 @@ class BotMeldAnalyzer {
   void clearCache() {
     _cachedPossibleMelds = null;
     _cachedPlayerId = null;
+    _cachedHandFingerprint = null;
   }
 
   /// Choose the largest meld from a list of possible melds
