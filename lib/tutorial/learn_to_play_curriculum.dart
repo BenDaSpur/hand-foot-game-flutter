@@ -24,8 +24,8 @@ abstract final class LearnToPlayCurriculum {
       id: 'meld',
       title: 'Play down',
       coachMessage:
-          'Select the highlighted Kings, then tap Play Cards. '
-          'Your first meld(s) must meet the round play-down points (60 in Round 1).',
+          'Tap Play Cards to open the meld selector. Group your Kings into a '
+          'meld worth at least 60 points for Round 1, then confirm.',
       requiredAction: LearnToPlayAction.meld,
       phase: LearnToPlayPhase.basics,
     ),

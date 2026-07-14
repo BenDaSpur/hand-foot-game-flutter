@@ -1388,6 +1388,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         },
       );
       _sortHand('rank');
+      _advanceLearnAfterSuccessfulMeld();
       setState(() {});
 
       // Check if creating melds caused the round to end
@@ -1903,155 +1904,164 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     });
                   }
                 },
-                child: GameBoardLayout(
-                  gameState: gameState,
-                  viewingPlayerMelds: _viewingPlayerMelds,
-                  onPlayerTap: (player) {
-                    setState(() {
-                      _viewingPlayerMelds = player.id == humanPlayer.id
-                          ? null
-                          : player;
-                    });
-                  },
-                  deckKey: _deckKey,
-                  discardKey: _discardKey,
-                  meldAreaKey: _meldAreaKey,
-                  headerExpanded: _statusExpanded,
-                  onHeaderToggle: () {
-                    setState(() {
-                      _statusExpanded = !_statusExpanded;
-                    });
-                  },
-                  botPersonalityManager: _botAI.personalityManager,
-                  useDesktopRecentActions: true,
-                  recentActionsExpanded: _actionsExpanded,
-                  onRecentActionsToggle: () {
-                    setState(() {
-                      _actionsExpanded = !_actionsExpanded;
-                    });
-                  },
-                  headerExtras: showDesktopKeyboardHints
-                      ? [KeyboardShortcutsHelpChip(onTap: _toggleKeyboardHelp)]
-                      : const [],
-                  aboveMelds: _buildAboveMeldsBanner(
-                    context,
-                    gameState,
-                    currentPlayer,
-                  ),
-                  meldsSection: MeldsSection(
-                    gameState: gameState,
-                    humanPlayer: humanPlayer,
-                    viewingPlayerMelds: _viewingPlayerMelds,
-                    onViewPlayerMelds: (player) {
-                      setState(() {
-                        _viewingPlayerMelds = player;
-                      });
-                    },
-                    onAddCardToMeld: _onAddCardToMeld,
-                    onSelectAllCardsForMeld: _selectAllCardsForMeld,
-                    canAddCardToMeld: _canAddCardToMeld,
-                    getCompatibleCardsInfo: _getCompatibleCardsInfo,
-                  ),
-                  actionButtons: GameActionButtons(
-                    gameState: gameState,
-                    humanPlayer: humanPlayer,
-                    selectedCardIndices: _selectedCardIndices,
-                    showKeyboardHints:
-                        showDesktopKeyboardHints && !_isLearnToPlay,
-                    onDrawFromDeck:
-                        (!_isLearnToPlay ||
-                            (_learnCoordinator?.canPerform(
-                                  LearnToPlayAction.draw,
-                                ) ??
-                                false))
-                        ? _onDrawFromDeck
-                        : null,
-                    onUnlockDiscard: _isLearnToPlay
-                        ? null
-                        : () {
-                            final controller = _gameController;
-                            return (controller != null &&
-                                    controller.canUnlockDiscard())
-                                ? _onUnlockDiscard
+                child: Column(
+                  children: [
+                    if (_isLearnToPlay && _learnCoordinator != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                        child: LearnToPlayCoachBanner(
+                          step: _learnCoordinator!.currentStep,
+                          progress: _learnCoordinator!.progress,
+                          showContinue: _learnCoordinator!.isInfoStep,
+                          onContinue: _onLearnContinueInfo,
+                        ),
+                      ),
+                    Expanded(
+                      child: GameBoardLayout(
+                        gameState: gameState,
+                        viewingPlayerMelds: _viewingPlayerMelds,
+                        onPlayerTap: (player) {
+                          setState(() {
+                            _viewingPlayerMelds = player.id == humanPlayer.id
+                                ? null
+                                : player;
+                          });
+                        },
+                        deckKey: _deckKey,
+                        discardKey: _discardKey,
+                        meldAreaKey: _meldAreaKey,
+                        headerExpanded: _statusExpanded,
+                        onHeaderToggle: () {
+                          setState(() {
+                            _statusExpanded = !_statusExpanded;
+                          });
+                        },
+                        botPersonalityManager: _botAI.personalityManager,
+                        useDesktopRecentActions: true,
+                        recentActionsExpanded: _actionsExpanded,
+                        onRecentActionsToggle: () {
+                          setState(() {
+                            _actionsExpanded = !_actionsExpanded;
+                          });
+                        },
+                        headerExtras: showDesktopKeyboardHints
+                            ? [
+                                KeyboardShortcutsHelpChip(
+                                  onTap: _toggleKeyboardHelp,
+                                ),
+                              ]
+                            : const [],
+                        aboveMelds: _buildAboveMeldsBanner(
+                          context,
+                          gameState,
+                          currentPlayer,
+                        ),
+                        meldsSection: MeldsSection(
+                          gameState: gameState,
+                          humanPlayer: humanPlayer,
+                          viewingPlayerMelds: _viewingPlayerMelds,
+                          onViewPlayerMelds: (player) {
+                            setState(() {
+                              _viewingPlayerMelds = player;
+                            });
+                          },
+                          onAddCardToMeld: _onAddCardToMeld,
+                          onSelectAllCardsForMeld: _selectAllCardsForMeld,
+                          canAddCardToMeld: _canAddCardToMeld,
+                          getCompatibleCardsInfo: _getCompatibleCardsInfo,
+                        ),
+                        actionButtons: GameActionButtons(
+                          gameState: gameState,
+                          humanPlayer: humanPlayer,
+                          selectedCardIndices: _selectedCardIndices,
+                          showKeyboardHints:
+                              showDesktopKeyboardHints && !_isLearnToPlay,
+                          onDrawFromDeck:
+                              (!_isLearnToPlay ||
+                                  (_learnCoordinator?.canPerform(
+                                        LearnToPlayAction.draw,
+                                      ) ??
+                                      false))
+                              ? _onDrawFromDeck
+                              : null,
+                          onUnlockDiscard: _isLearnToPlay
+                              ? null
+                              : () {
+                                  final controller = _gameController;
+                                  return (controller != null &&
+                                          controller.canUnlockDiscard())
+                                      ? _onUnlockDiscard
+                                      : null;
+                                }(),
+                          onShowAdvancedMeldSelector: _isLearnToPlay
+                              ? ((_learnCoordinator?.canPerform(
+                                          LearnToPlayAction.meld,
+                                        ) ??
+                                        false)
+                                    ? _openLearnMeldModal
+                                    : null)
+                              : () => _dialogManager.showAdvancedMeldSelector(
+                                  onMeldsCreated: _executeAdvancedMeldCreation,
+                                ),
+                          onDiscard: () {
+                            if (_isLearnToPlay) {
+                              if (!(_learnCoordinator?.canPerform(
+                                    LearnToPlayAction.discard,
+                                  ) ??
+                                  false)) {
+                                return null;
+                              }
+                              if (_selectedCards.length != 1) {
+                                return null;
+                              }
+                              return _onDiscard;
+                            }
+                            return _selectedCards.length == 1
+                                ? _onDiscard
                                 : null;
                           }(),
-                    onShowAdvancedMeldSelector: _isLearnToPlay
-                        ? ((_learnCoordinator?.canPerform(
-                                    LearnToPlayAction.meld,
-                                  ) ??
-                                  false)
-                              ? _onLearnPlayMeld
-                              : null)
-                        : () => _dialogManager.showAdvancedMeldSelector(
-                            onMeldsCreated: _executeAdvancedMeldCreation,
+                          onClearSelection: () =>
+                              setState(() => _selectedCardIndices.clear()),
+                        ),
+                        handDisplay: GameHandDisplay(
+                          player: humanPlayer,
+                          selectedCardIndices: _selectedCardIndices,
+                          keyboardFocusedCardIndex: clampKeyboardFocus(
+                            index: _keyboardFocusedCardIndex,
+                            handLength: humanPlayer.currentHand.length,
                           ),
-                    onDiscard: () {
-                      if (_isLearnToPlay) {
-                        if (!(_learnCoordinator?.canPerform(
-                              LearnToPlayAction.discard,
-                            ) ??
-                            false)) {
-                          return null;
-                        }
-                        if (_selectedCards.length != 1) {
-                          return null;
-                        }
-                        return _onDiscard;
-                      }
-                      return _selectedCards.length == 1 ? _onDiscard : null;
-                    }(),
-                    onClearSelection: () =>
-                        setState(() => _selectedCardIndices.clear()),
-                  ),
-                  handDisplay: GameHandDisplay(
-                    player: humanPlayer,
-                    selectedCardIndices: _selectedCardIndices,
-                    keyboardFocusedCardIndex: clampKeyboardFocus(
-                      index: _keyboardFocusedCardIndex,
-                      handLength: humanPlayer.currentHand.length,
+                          onCardTap:
+                              currentPlayer.type == PlayerType.human &&
+                                  gameState.phase != GamePhase.gameEnd
+                              ? _onCardTap
+                              : null,
+                          onCardDoubleTap:
+                              currentPlayer.type == PlayerType.human &&
+                                  gameState.phase != GamePhase.gameEnd
+                              ? _onCardDoubleTap
+                              : null,
+                          playableCardIndices: _playableCardIndices(
+                            humanPlayer,
+                          ),
+                          viewingPlayerMelds: _viewingPlayerMelds,
+                          onReturnToHand: () {
+                            setState(() {
+                              _viewingPlayerMelds = null;
+                            });
+                          },
+                          isCurrentPlayerTurn:
+                              currentPlayer.type == PlayerType.human &&
+                              gameState.phase != GamePhase.gameEnd,
+                          handStackKey: _handStackKey,
+                          handScrollController: _handScrollController,
+                        ),
+                      ),
                     ),
-                    onCardTap:
-                        currentPlayer.type == PlayerType.human &&
-                            gameState.phase != GamePhase.gameEnd
-                        ? _onCardTap
-                        : null,
-                    onCardDoubleTap:
-                        currentPlayer.type == PlayerType.human &&
-                            gameState.phase != GamePhase.gameEnd
-                        ? _onCardDoubleTap
-                        : null,
-                    playableCardIndices: _playableCardIndices(humanPlayer),
-                    viewingPlayerMelds: _viewingPlayerMelds,
-                    onReturnToHand: () {
-                      setState(() {
-                        _viewingPlayerMelds = null;
-                      });
-                    },
-                    isCurrentPlayerTurn:
-                        currentPlayer.type == PlayerType.human &&
-                        gameState.phase != GamePhase.gameEnd,
-                    handStackKey: _handStackKey,
-                    handScrollController: _handScrollController,
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
-          if (_isLearnToPlay && _learnCoordinator != null)
-            Positioned(
-              left: 8,
-              right: 8,
-              top: MediaQuery.of(context).padding.top + kToolbarHeight + 4,
-              child: Material(
-                color: Colors.transparent,
-                child: LearnToPlayCoachBanner(
-                  step: _learnCoordinator!.currentStep,
-                  progress: _learnCoordinator!.progress,
-                  showContinue: _learnCoordinator!.isInfoStep,
-                  onContinue: _onLearnContinueInfo,
-                ),
-              ),
-            ),
           if (_showKeyboardHelp && showDesktopKeyboardHints)
             KeyboardShortcutsOverlay(onDismiss: _toggleKeyboardHelp),
         ],
@@ -2072,21 +2082,24 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _maybeShowLearnCompletion();
   }
 
-  void _onLearnPlayMeld() {
+  void _openLearnMeldModal() {
     final coordinator = _learnCoordinator;
-    final session = widget.learnToPlaySession;
-    final controller = _gameController;
     if (coordinator == null ||
-        session == null ||
-        controller == null ||
         !coordinator.canPerform(LearnToPlayAction.meld)) {
       return;
     }
-    final kings = session.kingIndicesInHand();
-    if (kings.length < 6) {
-      return;
-    }
-    if (!controller.createMeldByIndices(kings)) {
+    _dialogManager.showAdvancedMeldSelector(
+      onMeldsCreated: _executeAdvancedMeldCreation,
+    );
+  }
+
+  void _advanceLearnAfterSuccessfulMeld() {
+    final coordinator = _learnCoordinator;
+    final session = widget.learnToPlaySession;
+    if (!_isLearnToPlay ||
+        coordinator == null ||
+        session == null ||
+        !coordinator.canPerform(LearnToPlayAction.meld)) {
       return;
     }
     coordinator.advanceOn(LearnToPlayAction.meld);
@@ -2168,8 +2181,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     GameState gameState,
     Player currentPlayer,
   ) {
-    if (_isLearnToPlay && _learnCoordinator != null) {
-      // Coach sits in a Stack overlay so the real board layout stays unchanged.
+    if (_isLearnToPlay) {
       return null;
     }
 
