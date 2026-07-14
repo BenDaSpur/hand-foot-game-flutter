@@ -113,6 +113,119 @@ void main() {
     });
 
     testWidgets(
+      'CardDrawAnimationOverlay blocks input on first frame before fly starts',
+      (tester) async {
+        final deckKey = GlobalKey();
+        final discardKey = GlobalKey();
+        final handStackKey = GlobalKey();
+        final meldAreaKey = GlobalKey();
+        final scrollController = ScrollController();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 800,
+                height: 600,
+                child: Stack(
+                  children: [
+                    SizedBox(key: deckKey, width: 60, height: 80),
+                    CardDrawAnimationOverlay(
+                      request: const CardAnimationRequest(
+                        type: CardDrawAnimationType.deckDraw,
+                        handCards: [
+                          PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+                        ],
+                        handTargetIndices: [0],
+                      ),
+                      deckKey: deckKey,
+                      discardKey: discardKey,
+                      handStackKey: handStackKey,
+                      meldAreaKey: meldAreaKey,
+                      handScrollController: scrollController,
+                      onComplete: () {},
+                      onSkip: () {},
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Before the post-frame animation callback: full-screen blocker exists.
+        expect(
+          find.descendant(
+            of: find.byType(CardDrawAnimationOverlay),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is GestureDetector &&
+                  widget.behavior == HitTestBehavior.opaque,
+            ),
+          ),
+          findsOneWidget,
+        );
+
+        await tester.pump();
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Container &&
+                widget.color != null &&
+                widget.color!.a > 0,
+          ),
+          findsOneWidget,
+        );
+
+        scrollController.dispose();
+      },
+    );
+
+    testWidgets('CardDrawAnimationOverlay clears flying cards when skipped', (
+      tester,
+    ) async {
+      final deckKey = GlobalKey();
+      final discardKey = GlobalKey();
+      final handStackKey = GlobalKey();
+      final meldAreaKey = GlobalKey();
+      final scrollController = ScrollController();
+      var completed = false;
+      var skipped = false;
+
+      await pumpOverlayHarness(
+        tester,
+        request: const CardAnimationRequest(
+          type: CardDrawAnimationType.deckDraw,
+          handCards: [PlayingCard(suit: Suit.diamonds, rank: CardRank.seven)],
+          handTargetIndices: [0],
+        ),
+        deckKey: deckKey,
+        discardKey: discardKey,
+        handStackKey: handStackKey,
+        meldAreaKey: meldAreaKey,
+        scrollController: scrollController,
+        onComplete: () {
+          completed = true;
+        },
+        onSkip: () {
+          skipped = true;
+        },
+      );
+
+      await tester.pump();
+      await tester.pump(GameConfig.cardRevealDuration ~/ 2);
+      expect(find.byType(PlayingCardWidget), findsOneWidget);
+
+      await tester.tapAt(const Offset(400, 300));
+      await tester.pump();
+
+      expect(skipped, isTrue);
+      expect(completed, isTrue);
+      expect(find.byType(PlayingCardWidget), findsNothing);
+      scrollController.dispose();
+    });
+
+    testWidgets(
       'CardDrawAnimationOverlay shows scrim and cards during deck draw',
       (tester) async {
         final deckKey = GlobalKey();

@@ -742,6 +742,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _onCardTap(int cardIndex) {
+    if (_isCardAnimationActive) {
+      return;
+    }
+
     final currentPlayer = ref.read(currentPlayerProvider);
     if (currentPlayer?.type != PlayerType.human) {
       return;
@@ -792,6 +796,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
+    if (_isCardAnimationActive) {
+      return;
+    }
+
     final currentPlayer = ref.read(currentPlayerProvider);
     if (currentPlayer?.type != PlayerType.human) {
       return;

@@ -84,4 +84,45 @@ void main() {
     },
     tags: ['widget'],
   );
+
+  testWidgets('hand card taps are ignored while draw animation is active', (
+    tester,
+  ) async {
+    final setup = createMeldPhaseTestController();
+    final human = setup.human;
+    human.hand
+      ..clear()
+      ..addAll([
+        PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        PlayingCard(suit: Suit.spades, rank: CardRank.six),
+      ]);
+    var tapCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: BalatroTheme.testTheme,
+        home: Scaffold(
+          body: CardAnimationScope(
+            isAnimating: true,
+            hiddenHandIndices: const {},
+            child: SizedBox(
+              width: 800,
+              height: 200,
+              child: GameHandDisplay(
+                player: human,
+                selectedCardIndices: const [],
+                onCardTap: (_) => tapCount++,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PlayingCardWidget).first);
+    await tester.pump();
+
+    expect(tapCount, 0);
+  });
 }

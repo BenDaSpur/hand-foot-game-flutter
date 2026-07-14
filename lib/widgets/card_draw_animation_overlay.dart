@@ -102,6 +102,9 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
   void initState() {
     super.initState();
     if (widget.request != null) {
+      // Block hand taps immediately — isAnimating flips true before the first
+      // frame, but the overlay used to stay shrink until post-frame animation.
+      _showScrim = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _startAnimation(widget.request!);
       });
@@ -113,6 +116,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     super.didUpdateWidget(oldWidget);
     if (widget.request != null && widget.request != oldWidget.request) {
       _skipped = false;
+      _showScrim = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _startAnimation(widget.request!);
       });
@@ -131,6 +135,10 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     }
     _skipped = true;
     _activeController?.stop();
+    setState(() {
+      _showScrim = false;
+      _visuals = [];
+    });
     widget.onSkip();
     widget.onComplete();
   }
@@ -471,7 +479,9 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
 
   @override
   Widget build(BuildContext context) {
-    if (!_showScrim && _visuals.isEmpty) {
+    final shouldBlockInput =
+        widget.request != null || _showScrim || _visuals.isNotEmpty;
+    if (!shouldBlockInput) {
       return const SizedBox.shrink();
     }
 

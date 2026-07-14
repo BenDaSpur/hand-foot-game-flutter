@@ -46,6 +46,7 @@ class GameHandDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sizes = GameResponsiveLayout.handSizes(context);
+    final animationActive = CardAnimationScope.animationActive(context);
     final stackHeight =
         sizes.handHeight + sizes.selectionLift + UIConstants.smallSpacing;
 
@@ -113,11 +114,16 @@ class GameHandDisplay extends StatelessWidget {
                         left: sizes.handCardLeft(index),
                         bottom: 0,
                         child: GestureDetector(
-                          onTap: onCardTap != null && !hideDuringAnimation
+                          onTap:
+                              onCardTap != null &&
+                                  !hideDuringAnimation &&
+                                  !animationActive
                               ? () => onCardTap!(index)
                               : null,
                           onDoubleTap:
-                              onCardDoubleTap != null && !hideDuringAnimation
+                              onCardDoubleTap != null &&
+                                  !hideDuringAnimation &&
+                                  !animationActive
                               ? () => onCardDoubleTap!(index)
                               : null,
                           // Avoid wrapping visible cards in Opacity:
