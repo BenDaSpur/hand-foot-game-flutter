@@ -33,12 +33,23 @@ class LearnToPlaySession {
       seed: lessonSeed,
       soloSettings: lessonSettings,
     );
+    controller.autosaveEnabled = false;
     controller.initializeGame(dealCards: false);
     controller.completeRoundStart(earnedPerfectGrabBonus: false);
 
     final session = LearnToPlaySession._(controller);
     session.applyScriptedStartingHand();
     return session;
+  }
+
+  /// Keep the human as current player so GameScreen action UI stays interactive
+  /// during coach/info steps after a discard advanced the turn.
+  void keepHumanInControl() {
+    final players = controller.gameState.players;
+    final humanIndex = players.indexWhere((p) => p.type == PlayerType.human);
+    if (humanIndex >= 0) {
+      controller.gameState.currentPlayerIndex = humanIndex;
+    }
   }
 
   /// Hand with 6 Kings (60 pts play-down) plus a junk discard before draw.

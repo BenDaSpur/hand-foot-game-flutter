@@ -42,6 +42,11 @@ import '../widgets/keyboard_shortcuts_overlay.dart';
 import '../utils/game_responsive_layout.dart';
 import '../providers/game_providers.dart';
 import '../providers/computed_providers.dart';
+import '../services/learn_to_play_preferences.dart';
+import '../tutorial/learn_to_play_coordinator.dart';
+import '../tutorial/learn_to_play_session.dart';
+import '../tutorial/learn_to_play_step.dart';
+import '../widgets/learn_to_play_coach_banner.dart';
 
 /// Shared bot configurations live in [kBotConfigurations].
 
@@ -49,12 +54,15 @@ class GameScreen extends ConsumerStatefulWidget {
   final int? testSeed; // For deterministic testing
   final GameController? gameController; // For continuing saved games
   final SoloGameSettings? settings; // For new solo games from setup screen
+  /// When set, runs as Learn to Play on the real game board UI.
+  final LearnToPlaySession? learnToPlaySession;
 
   const GameScreen({
     super.key,
     this.testSeed,
     this.gameController,
     this.settings,
+    this.learnToPlaySession,
   });
 
   @override
@@ -110,12 +118,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   final GlobalKey _meldAreaKey = GlobalKey();
   final ScrollController _handScrollController = ScrollController();
 
+  LearnToPlayCoordinator? _learnCoordinator;
+  bool _learnCompletionShown = false;
+
+  bool get _isLearnToPlay => widget.learnToPlaySession != null;
+
   @override
   void initState() {
     super.initState();
     // Initialize event listeners via Riverpod
     ref.read(gameEventListenerProvider);
     ref.read(soundEventListenerProvider); // Initialize sound effects
+    if (_isLearnToPlay) {
+      _learnCoordinator = LearnToPlayCoordinator();
+      LearnToPlayPreferences.dismissOffer();
+    }
     _initializeGame();
   }
 
@@ -292,8 +309,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   Future<void> _initializeGame() async {
-    // If a gameController was provided (continuing saved game), use it
+    // If a gameController was provided (continuing saved game / Learn to Play), use it
     if (widget.gameController != null) {
+      // Defer provider mutation out of initState/build (Riverpod requirement).
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) {
+        return;
+      }
       final eventBus = ref.read(gameEventBusProvider);
       ref
           .read(gameControllerProvider.notifier)
@@ -302,12 +324,19 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
       // Continue must restore personalities — autosave previously left them
       // unassigned, so icons/AI defaulted to Adaptive (e.g. Clara showed Sue's icon).
-      _restorePersonalitiesForContinuedGame(widget.gameController!);
+      if (!_isLearnToPlay) {
+        _restorePersonalitiesForContinuedGame(widget.gameController!);
+      } else {
+        _assignBotPersonalities();
+      }
 
       _isInitialized = true;
+      setState(() {});
 
-      // Start bot turns if needed
-      processCurrentPlayerTurn();
+      // Start bot turns if needed (skipped in Learn to Play)
+      if (!_isLearnToPlay) {
+        processCurrentPlayerTurn();
+      }
       return;
     }
 
@@ -524,6 +553,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   /// SIMPLIFIED: Single entry point for turn processing with error recovery
   void processCurrentPlayerTurn() {
     if (!_isInitialized || _disposed || !mounted) return;
+    if (_isLearnToPlay) {
+      return;
+    }
 
     try {
       final controller = _gameController;
@@ -721,6 +753,33 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     // Bounds checking
     if (cardIndex < 0 || cardIndex >= humanPlayer.currentHand.length) return;
 
+    if (_isLearnToPlay) {
+      final coordinator = _learnCoordinator;
+      final session = widget.learnToPlaySession;
+      if (coordinator == null || session == null) {
+        return;
+      }
+      if (coordinator.canPerform(LearnToPlayAction.meld)) {
+        if (!session.kingIndicesInHand().contains(cardIndex)) {
+          return;
+        }
+      } else if (coordinator.canPerform(LearnToPlayAction.discard)) {
+        if (session.discardTargetIndex() != cardIndex) {
+          return;
+        }
+        setState(() {
+          _keyboardFocusedCardIndex = cardIndex;
+          _selectedCardIndices
+            ..clear()
+            ..add(cardIndex);
+        });
+        _hasPlayerInteractedSinceDraw = true;
+        return;
+      } else {
+        return;
+      }
+    }
+
     _hasPlayerInteractedSinceDraw = true; // Mark that player has interacted
     setState(() {
       _keyboardFocusedCardIndex = cardIndex;
@@ -832,6 +891,22 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   Set<int> _playableCardIndices(Player humanPlayer) {
     final currentPlayer = ref.read(currentPlayerProvider);
     if (currentPlayer?.type != PlayerType.human) {
+      return {};
+    }
+
+    if (_isLearnToPlay) {
+      final coordinator = _learnCoordinator;
+      final session = widget.learnToPlaySession;
+      if (coordinator == null || session == null) {
+        return {};
+      }
+      if (coordinator.canPerform(LearnToPlayAction.meld)) {
+        return session.kingIndicesInHand().toSet();
+      }
+      if (coordinator.canPerform(LearnToPlayAction.discard)) {
+        final index = session.discardTargetIndex();
+        return index == null ? {} : {index};
+      }
       return {};
     }
 
@@ -951,6 +1026,27 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   void _onDrawFromDeck() {
     final controller = _gameController;
     if (controller == null) return;
+
+    if (_isLearnToPlay) {
+      final coordinator = _learnCoordinator;
+      final session = widget.learnToPlaySession;
+      if (coordinator == null ||
+          session == null ||
+          !coordinator.canPerform(LearnToPlayAction.draw)) {
+        return;
+      }
+      if (!controller.drawFromDeck()) {
+        return;
+      }
+      session.normalizeHandAfterDraw();
+      coordinator.advanceOn(LearnToPlayAction.draw);
+      _hasPlayerInteractedSinceDraw = false;
+      _selectedCardIndices.clear();
+      // Pre-select kings for the meld step
+      _selectedCardIndices.addAll(session.kingIndicesInHand());
+      setState(() {});
+      return;
+    }
 
     if (controller.drawFromDeck()) {
       // Log human action for analytics
@@ -1106,6 +1202,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   bool _canAddCardToMeld(int meldIndex) {
+    if (_isLearnToPlay) {
+      return false;
+    }
     if (_selectedCards.isEmpty) return false;
 
     final humanPlayer = ref.read(humanPlayerProvider);
@@ -1314,6 +1413,34 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   Future<void> _onDiscard() async {
     // CRITICAL FIX: Prevent auto-discard after drawing cards
     if (!_hasPlayerInteractedSinceDraw) {
+      return;
+    }
+
+    if (_isLearnToPlay) {
+      final coordinator = _learnCoordinator;
+      final session = widget.learnToPlaySession;
+      final controller = _gameController;
+      if (coordinator == null ||
+          session == null ||
+          controller == null ||
+          !coordinator.canPerform(LearnToPlayAction.discard)) {
+        return;
+      }
+      final target = session.discardTargetIndex();
+      if (target == null) {
+        return;
+      }
+      final hand = session.human.currentHand;
+      if (target < 0 || target >= hand.length) {
+        return;
+      }
+      if (!controller.discardCard(hand[target])) {
+        return;
+      }
+      coordinator.advanceOn(LearnToPlayAction.discard);
+      session.keepHumanInControl();
+      _selectedCardIndices.clear();
+      setState(() {});
       return;
     }
 
@@ -1711,36 +1838,53 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               appBar: GameAppBar(
                 gameState: gameState,
                 isMultiplayer: false,
-                sessionInfo: _soloSessionInfo(gameState),
+                sessionInfo: _isLearnToPlay
+                    ? null
+                    : _soloSessionInfo(gameState),
                 additionalActions: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.leaderboard,
-                      color: BalatroTheme.neonYellow,
+                  if (_isLearnToPlay)
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Exit lesson',
+                      onPressed: _exitLearnToPlay,
                     ),
-                    tooltip: 'View Scoreboard',
-                    onPressed: () {
-                      _dialogManager.showScoreboard();
-                    },
-                  ),
+                  if (!_isLearnToPlay)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.leaderboard,
+                        color: BalatroTheme.neonYellow,
+                      ),
+                      tooltip: 'View Scoreboard',
+                      onPressed: () {
+                        _dialogManager.showScoreboard();
+                      },
+                    ),
                 ],
-                onNewGame: () {
-                  _dialogManager.showNewGameConfirmation(_startNewGame);
-                },
-                onCopySeed: () {
-                  _persistenceManager.copySeedToClipboard(context);
-                },
-                onExportGame: () {
-                  _persistenceManager.copyGameStateToClipboard(context);
-                },
-                onLoadGame: () {
-                  _dialogManager.showLoadGameDialog(
-                    (inputText) => _persistenceManager.loadGameFromJson(
-                      inputText,
-                      context,
-                    ),
-                  );
-                },
+                onNewGame: _isLearnToPlay
+                    ? null
+                    : () {
+                        _dialogManager.showNewGameConfirmation(_startNewGame);
+                      },
+                onCopySeed: _isLearnToPlay
+                    ? null
+                    : () {
+                        _persistenceManager.copySeedToClipboard(context);
+                      },
+                onExportGame: _isLearnToPlay
+                    ? null
+                    : () {
+                        _persistenceManager.copyGameStateToClipboard(context);
+                      },
+                onLoadGame: _isLearnToPlay
+                    ? null
+                    : () {
+                        _dialogManager.showLoadGameDialog(
+                          (inputText) => _persistenceManager.loadGameFromJson(
+                            inputText,
+                            context,
+                          ),
+                        );
+                      },
                 onHowToPlay: () {
                   _dialogManager.showHowToPlayDialog();
                 },
@@ -1812,20 +1956,50 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     gameState: gameState,
                     humanPlayer: humanPlayer,
                     selectedCardIndices: _selectedCardIndices,
-                    showKeyboardHints: showDesktopKeyboardHints,
-                    onDrawFromDeck: _onDrawFromDeck,
-                    onUnlockDiscard: () {
-                      final controller = _gameController;
-                      return (controller != null &&
-                              controller.canUnlockDiscard())
-                          ? _onUnlockDiscard
-                          : null;
+                    showKeyboardHints:
+                        showDesktopKeyboardHints && !_isLearnToPlay,
+                    onDrawFromDeck:
+                        (!_isLearnToPlay ||
+                            (_learnCoordinator?.canPerform(
+                                  LearnToPlayAction.draw,
+                                ) ??
+                                false))
+                        ? _onDrawFromDeck
+                        : null,
+                    onUnlockDiscard: _isLearnToPlay
+                        ? null
+                        : () {
+                            final controller = _gameController;
+                            return (controller != null &&
+                                    controller.canUnlockDiscard())
+                                ? _onUnlockDiscard
+                                : null;
+                          }(),
+                    onShowAdvancedMeldSelector: _isLearnToPlay
+                        ? ((_learnCoordinator?.canPerform(
+                                    LearnToPlayAction.meld,
+                                  ) ??
+                                  false)
+                              ? _onLearnPlayMeld
+                              : null)
+                        : () => _dialogManager.showAdvancedMeldSelector(
+                            onMeldsCreated: _executeAdvancedMeldCreation,
+                          ),
+                    onDiscard: () {
+                      if (_isLearnToPlay) {
+                        if (!(_learnCoordinator?.canPerform(
+                              LearnToPlayAction.discard,
+                            ) ??
+                            false)) {
+                          return null;
+                        }
+                        if (_selectedCards.length != 1) {
+                          return null;
+                        }
+                        return _onDiscard;
+                      }
+                      return _selectedCards.length == 1 ? _onDiscard : null;
                     }(),
-                    onShowAdvancedMeldSelector: () =>
-                        _dialogManager.showAdvancedMeldSelector(
-                          onMeldsCreated: _executeAdvancedMeldCreation,
-                        ),
-                    onDiscard: _selectedCards.length == 1 ? _onDiscard : null,
                     onClearSelection: () =>
                         setState(() => _selectedCardIndices.clear()),
                   ),
@@ -1863,6 +2037,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               ),
             ),
           ),
+          if (_isLearnToPlay && _learnCoordinator != null)
+            Positioned(
+              left: 8,
+              right: 8,
+              top: MediaQuery.of(context).padding.top + kToolbarHeight + 4,
+              child: Material(
+                color: Colors.transparent,
+                child: LearnToPlayCoachBanner(
+                  step: _learnCoordinator!.currentStep,
+                  progress: _learnCoordinator!.progress,
+                  showContinue: _learnCoordinator!.isInfoStep,
+                  onContinue: _onLearnContinueInfo,
+                ),
+              ),
+            ),
           if (_showKeyboardHelp && showDesktopKeyboardHints)
             KeyboardShortcutsOverlay(onDismiss: _toggleKeyboardHelp),
         ],
@@ -1870,11 +2059,120 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
+  void _onLearnContinueInfo() {
+    final coordinator = _learnCoordinator;
+    if (coordinator == null ||
+        !coordinator.canPerform(LearnToPlayAction.continueInfo)) {
+      return;
+    }
+    coordinator.advanceOn(LearnToPlayAction.continueInfo);
+    widget.learnToPlaySession?.keepHumanInControl();
+    _selectedCardIndices.clear();
+    setState(() {});
+    _maybeShowLearnCompletion();
+  }
+
+  void _onLearnPlayMeld() {
+    final coordinator = _learnCoordinator;
+    final session = widget.learnToPlaySession;
+    final controller = _gameController;
+    if (coordinator == null ||
+        session == null ||
+        controller == null ||
+        !coordinator.canPerform(LearnToPlayAction.meld)) {
+      return;
+    }
+    final kings = session.kingIndicesInHand();
+    if (kings.length < 6) {
+      return;
+    }
+    if (!controller.createMeldByIndices(kings)) {
+      return;
+    }
+    coordinator.advanceOn(LearnToPlayAction.meld);
+    _selectedCardIndices.clear();
+    final discardIndex = session.discardTargetIndex();
+    if (discardIndex != null) {
+      _selectedCardIndices.add(discardIndex);
+      _hasPlayerInteractedSinceDraw = true;
+    }
+    setState(() {});
+  }
+
+  Future<void> _maybeShowLearnCompletion() async {
+    final coordinator = _learnCoordinator;
+    if (coordinator == null ||
+        !coordinator.isComplete ||
+        _learnCompletionShown) {
+      return;
+    }
+    _learnCompletionShown = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: BalatroTheme.darkPurple,
+          title: const Text(
+            'You learned enough to win!',
+            style: TextStyle(color: BalatroTheme.primaryText),
+          ),
+          content: const Text(
+            'You finished the basics and how-to-win tips. '
+            'Try a real solo game next — build books, manage your Foot, and race to go out.',
+            style: TextStyle(color: BalatroTheme.secondaryText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MainMenuScreen(enableLearnToPlayOffer: false),
+                  ),
+                  (route) => false,
+                );
+              },
+              child: const Text('Main Menu'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        GameScreen(settings: SoloGameSettings.defaults),
+                  ),
+                  (route) => false,
+                );
+              },
+              child: const Text('Play Solo'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _exitLearnToPlay() async {
+    await LearnToPlayPreferences.dismissOffer();
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   Widget? _buildAboveMeldsBanner(
     BuildContext context,
     GameState gameState,
     Player currentPlayer,
   ) {
+    if (_isLearnToPlay && _learnCoordinator != null) {
+      // Coach sits in a Stack overlay so the real board layout stays unchanged.
+      return null;
+    }
+
     if (_isGameStuck() &&
         currentPlayer.type == PlayerType.human &&
         gameState.phase != GamePhase.gameEnd) {

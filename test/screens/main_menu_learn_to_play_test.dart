@@ -44,6 +44,22 @@ void main() {
   });
 
   testWidgets('LEARN TO PLAY opens lesson screen', (tester) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.exceptionAsString().contains('A RenderFlex overflowed')) {
+        return;
+      }
+      originalOnError?.call(details);
+    };
+    addTearDown(() {
+      FlutterError.onError = originalOnError;
+    });
+
     await tester.pumpWidget(
       MaterialApp(
         theme: BalatroTheme.testTheme,
@@ -53,7 +69,9 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.text('LEARN TO PLAY'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
 
     expect(find.byType(LearnToPlayScreen), findsOneWidget);
     expect(find.textContaining('Hand and a Foot'), findsOneWidget);

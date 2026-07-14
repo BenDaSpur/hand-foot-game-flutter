@@ -40,6 +40,9 @@ class GameController implements GameInterface {
   @override
   final int? gameSeed;
 
+  /// When false, [saveGame] is a no-op (used by Learn to Play).
+  bool autosaveEnabled = true;
+
   /// Personalities restored from local autosave (playerId → enum toString).
   /// Applied by GameScreen when continuing a saved solo game.
   Map<String, String> restoredBotPersonalities = {};
@@ -772,6 +775,9 @@ class GameController implements GameInterface {
 
   @override
   Future<void> saveGame() async {
+    if (!autosaveEnabled) {
+      return;
+    }
     await GameSaveService.saveGame(_gameState, gameSeed);
   }
 

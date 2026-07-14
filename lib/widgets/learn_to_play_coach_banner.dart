@@ -24,7 +24,7 @@ class LearnToPlayCoachBanner extends StatelessWidget {
       color: Colors.transparent,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: BalatroTheme.darkPurple.withValues(alpha: 0.95),
           border: Border.all(
@@ -66,31 +66,38 @@ class LearnToPlayCoachBanner extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: progress.clamp(0.0, 1.0),
-                minHeight: 4,
+                minHeight: 3,
                 backgroundColor: BalatroTheme.mediumPurple,
                 color: BalatroTheme.neonGreen,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               step.coachMessage,
               style: const TextStyle(
                 color: BalatroTheme.primaryText,
-                fontSize: 15,
-                height: 1.35,
+                fontSize: 13,
+                height: 1.3,
               ),
             ),
             if (showContinue && onContinue != null) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
                 child: ElevatedButton(
                   onPressed: onContinue,
+                  style: ElevatedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                  ),
                   child: const Text('Continue'),
                 ),
               ),

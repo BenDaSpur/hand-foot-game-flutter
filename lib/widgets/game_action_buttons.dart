@@ -182,9 +182,9 @@ class GameActionButtons extends StatelessWidget {
   final GameState gameState;
   final Player humanPlayer;
   final List<int> selectedCardIndices;
-  final VoidCallback onDrawFromDeck;
+  final VoidCallback? onDrawFromDeck;
   final VoidCallback? onUnlockDiscard;
-  final VoidCallback onShowAdvancedMeldSelector;
+  final VoidCallback? onShowAdvancedMeldSelector;
   final VoidCallback? onDiscard;
   final VoidCallback onClearSelection;
   final String? currentUserId; // For multiplayer turn detection
