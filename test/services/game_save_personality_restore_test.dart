@@ -30,15 +30,41 @@ void main() {
       Player(id: '3', name: 'Clara', type: PlayerType.bot),
     ];
 
+    GameController buildSueClaraController() {
+      final controller = GameController(
+        players: sueClaraPlayers(),
+        seed: 708121,
+        soloSettings: sueClaraSettings(),
+      );
+      controller.initializeGame();
+      return controller;
+    }
+
+    ({BotTurnManager manager, EnhancedBotAI botAI}) buildTurnManager(
+      GameController controller,
+    ) {
+      final botAI = EnhancedBotAI();
+      final manager = BotTurnManager(
+        gameController: controller,
+        botAI: botAI,
+        onStateChanged: () {},
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+              gameStateSnapshot,
+            }) {},
+      );
+      return (manager: manager, botAI: botAI);
+    }
+
     test(
       'autosave includes bot personalities from solo settings order',
       () async {
-        final controller = GameController(
-          players: sueClaraPlayers(),
-          seed: 708121,
-          soloSettings: sueClaraSettings(),
-        );
-        controller.initializeGame();
+        final controller = buildSueClaraController();
 
         await GameSaveService.saveGame(controller.gameState, 708121);
 
@@ -53,12 +79,7 @@ void main() {
     test(
       'Continue restore assigns Sue adaptive and Clara conservative',
       () async {
-        final controller = GameController(
-          players: sueClaraPlayers(),
-          seed: 708121,
-          soloSettings: sueClaraSettings(),
-        );
-        controller.initializeGame();
+        final controller = buildSueClaraController();
         await GameSaveService.saveGame(controller.gameState, 708121);
 
         final restored = await GameController.loadSavedGame();
@@ -72,22 +93,8 @@ void main() {
           equals('BotPersonality.conservative'),
         );
 
-        final botAI = EnhancedBotAI();
-        final turnManager = BotTurnManager(
-          gameController: restored,
-          botAI: botAI,
-          onStateChanged: () {},
-          logHumanAction: (_) {},
-          logBotDecision:
-              ({
-                required String botId,
-                required String decision,
-                required String reasoning,
-                Map<String, dynamic>? context,
-                gameStateSnapshot,
-              }) {},
-        );
-        turnManager.restoreBotPersonalities(restored.restoredBotPersonalities);
+        final (:manager, :botAI) = buildTurnManager(restored);
+        manager.restoreBotPersonalities(restored.restoredBotPersonalities);
 
         expect(
           botAI.personalityManager.getPersonality('2'),
@@ -143,52 +150,14 @@ void main() {
 
     test(
       'partial personality map restores saved entries and fills missing bots',
-      () async {
-        final controller = GameController(
-          players: sueClaraPlayers(),
-          seed: 708121,
-          soloSettings: sueClaraSettings(),
-        );
-        controller.initializeGame();
-        await GameSaveService.saveGame(controller.gameState, 708121);
-
-        final restored = await GameController.loadSavedGame();
-        expect(restored, isNotNull);
-
-        final botAI = EnhancedBotAI();
-        final turnManager = BotTurnManager(
-          gameController: restored!,
-          botAI: botAI,
-          onStateChanged: () {},
-          logHumanAction: (_) {},
-          logBotDecision:
-              ({
-                required String botId,
-                required String decision,
-                required String reasoning,
-                Map<String, dynamic>? context,
-                gameStateSnapshot,
-              }) {},
-        );
+      () {
+        final controller = buildSueClaraController();
+        final (:manager, :botAI) = buildTurnManager(controller);
 
         // Legacy/partial Continue payload: Sue saved, Clara missing.
         // Clara must resolve from full roster (settings/name), not Adaptive default.
-        turnManager.restoreBotPersonalities({'2': 'BotPersonality.adaptive'});
+        manager.restoreBotPersonalities({'2': 'BotPersonality.adaptive'});
 
-        expect(
-          botAI.personalityManager.getPersonality('2'),
-          equals(BotPersonality.adaptive),
-        );
-        expect(
-          botAI.personalityManager.getPersonality('3'),
-          equals(BotPersonality.conservative),
-        );
-
-        // Malformed saved value falls back to Adaptive while valid entries stick.
-        turnManager.restoreBotPersonalities({
-          '2': 'BotPersonality.notARealPersonality',
-          '3': 'BotPersonality.conservative',
-        });
         expect(
           botAI.personalityManager.getPersonality('2'),
           equals(BotPersonality.adaptive),
@@ -199,5 +168,24 @@ void main() {
         );
       },
     );
+
+    test('malformed saved personality falls back to adaptive', () {
+      final controller = buildSueClaraController();
+      final (:manager, :botAI) = buildTurnManager(controller);
+
+      manager.restoreBotPersonalities({
+        '2': 'BotPersonality.notARealPersonality',
+        '3': 'BotPersonality.conservative',
+      });
+
+      expect(
+        botAI.personalityManager.getPersonality('2'),
+        equals(BotPersonality.adaptive),
+      );
+      expect(
+        botAI.personalityManager.getPersonality('3'),
+        equals(BotPersonality.conservative),
+      );
+    });
   });
 }
