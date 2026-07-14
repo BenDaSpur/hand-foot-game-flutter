@@ -16,6 +16,7 @@ class GameHandDisplay extends StatelessWidget {
   final Function(int)? onCardTap;
   final Function(int)? onCardDoubleTap;
   final bool Function(PlayingCard)? isCardPlayable;
+
   /// Preferred playable lookup by hand index (avoids equality edge cases).
   final Set<int>? playableCardIndices;
   final Player? viewingPlayerMelds;
