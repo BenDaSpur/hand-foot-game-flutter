@@ -6,6 +6,8 @@ import 'package:hand_foot_game_flutter/services/learn_to_play_preferences.dart';
 import 'package:hand_foot_game_flutter/theme/balatro_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/learn_to_play_test_helpers.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -44,21 +46,7 @@ void main() {
   });
 
   testWidgets('LEARN TO PLAY opens lesson screen', (tester) async {
-    tester.view.physicalSize = const Size(900, 1200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final originalOnError = FlutterError.onError;
-    FlutterError.onError = (details) {
-      if (details.exceptionAsString().contains('A RenderFlex overflowed')) {
-        return;
-      }
-      originalOnError?.call(details);
-    };
-    addTearDown(() {
-      FlutterError.onError = originalOnError;
-    });
+    configureLearnToPlayTestViewport(tester);
 
     await tester.pumpWidget(
       MaterialApp(

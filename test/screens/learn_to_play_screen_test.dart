@@ -6,31 +6,14 @@ import 'package:hand_foot_game_flutter/widgets/advanced_meld_selector.dart';
 import 'package:hand_foot_game_flutter/widgets/learn_to_play_coach_banner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../helpers/learn_to_play_test_helpers.dart';
+
 Future<void> _pumpLearnScreen(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(900, 1200);
-  tester.view.devicePixelRatio = 1.0;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-
-  // Compact action-button layout can overflow by a few pixels in tests;
-  // ignore those so we can assert coach + lock behavior.
-  final originalOnError = FlutterError.onError;
-  FlutterError.onError = (details) {
-    if (details.exceptionAsString().contains('A RenderFlex overflowed')) {
-      return;
-    }
-    originalOnError?.call(details);
-  };
-  addTearDown(() {
-    FlutterError.onError = originalOnError;
-  });
-
-  await tester.pumpWidget(
+  configureLearnToPlayTestViewport(tester);
+  await pumpLearnToPlayFrame(
+    tester,
     MaterialApp(theme: BalatroTheme.testTheme, home: const LearnToPlayScreen()),
   );
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 50));
-  await tester.pump();
 }
 
 void main() {

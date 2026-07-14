@@ -128,11 +128,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   return;
                 }
                 Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const LearnToPlayScreen(),
-                  ),
-                );
+                _openLearnToPlay();
               },
               child: const Text('Start'),
             ),
@@ -858,6 +854,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _startLearnToPlay() {
+    _openLearnToPlay();
+  }
+
+  void _openLearnToPlay() {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const LearnToPlayScreen()));

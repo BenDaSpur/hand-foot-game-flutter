@@ -2136,45 +2136,48 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: BalatroTheme.darkPurple,
-          title: const Text(
-            'You learned enough to win!',
-            style: TextStyle(color: BalatroTheme.primaryText),
-          ),
-          content: const Text(
-            'You finished the basics and how-to-win tips. '
-            'Try a real solo game next — build books, manage your Foot, and race to go out.',
-            style: TextStyle(color: BalatroTheme.secondaryText),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const MainMenuScreen(enableLearnToPlayOffer: false),
-                  ),
-                  (route) => false,
-                );
-              },
-              child: const Text('Main Menu'),
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            backgroundColor: BalatroTheme.darkPurple,
+            title: const Text(
+              'You learned enough to win!',
+              style: TextStyle(color: BalatroTheme.primaryText),
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        GameScreen(settings: SoloGameSettings.defaults),
-                  ),
-                  (route) => false,
-                );
-              },
-              child: const Text('Play Solo'),
+            content: const Text(
+              'You finished the basics and how-to-win tips. '
+              'Try a real solo game next — build books, manage your Foot, and race to go out.',
+              style: TextStyle(color: BalatroTheme.secondaryText),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const MainMenuScreen(enableLearnToPlayOffer: false),
+                    ),
+                    (route) => false,
+                  );
+                },
+                child: const Text('Main Menu'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          GameScreen(settings: SoloGameSettings.defaults),
+                    ),
+                    (route) => false,
+                  );
+                },
+                child: const Text('Play Solo'),
+              ),
+            ],
+          ),
         );
       },
     );

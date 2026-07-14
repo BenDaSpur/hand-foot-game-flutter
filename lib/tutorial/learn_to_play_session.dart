@@ -23,6 +23,7 @@ class LearnToPlaySession {
 
   Player get human => controller.gameState.players.firstWhere(
     (p) => p.type == PlayerType.human,
+    orElse: () => controller.gameState.players.first,
   );
 
   /// Creates a dealt lesson session ready at [TurnPhase.draw].
