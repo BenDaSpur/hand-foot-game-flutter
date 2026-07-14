@@ -72,6 +72,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   // REUSE: Copy single-player card interaction logic
   void _onCardTap(int cardIndex) {
+    if (_isCardAnimationActive) {
+      return;
+    }
+
     if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
       return; // Same pattern as single-player checking PlayerType.human
     }
@@ -93,6 +97,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
+    if (_isCardAnimationActive) {
+      return;
+    }
+
     if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
       return;
     }
