@@ -149,59 +149,73 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
           },
           itemBuilder: (BuildContext context) => [
             if (!isMultiplayer) ...[
-              const PopupMenuItem<String>(
-                value: 'new_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.refresh, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('New Game'),
-                  ],
+              if (onNewGame != null)
+                const PopupMenuItem<String>(
+                  value: 'new_game',
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('New Game'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'copy_seed',
-                child: Row(
-                  children: [
-                    Icon(Icons.copy, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Text('Copy Seed'),
-                  ],
+              if (onNewGame != null ||
+                  onCopySeed != null ||
+                  onExportGame != null ||
+                  onLoadGame != null)
+                const PopupMenuDivider(),
+              if (onCopySeed != null)
+                const PopupMenuItem<String>(
+                  value: 'copy_seed',
+                  child: Row(
+                    children: [
+                      Icon(Icons.copy, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Text('Copy Seed'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'export_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.download, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Export Game'),
-                  ],
+              if (onExportGame != null)
+                const PopupMenuItem<String>(
+                  value: 'export_game',
+                  child: Row(
+                    children: [
+                      Icon(Icons.download, color: Colors.green),
+                      SizedBox(width: 8),
+                      Text('Export Game'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'load_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.upload, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Load Game'),
-                  ],
+              if (onLoadGame != null)
+                const PopupMenuItem<String>(
+                  value: 'load_game',
+                  child: Row(
+                    children: [
+                      Icon(Icons.upload, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text('Load Game'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'how_to_play',
-                child: Row(
-                  children: [
-                    Icon(Icons.help_outline, color: Colors.purple),
-                    SizedBox(width: 8),
-                    Text('How to Play'),
-                  ],
+              if (onHowToPlay != null) ...[
+                if (onCopySeed != null ||
+                    onExportGame != null ||
+                    onLoadGame != null ||
+                    onNewGame != null)
+                  const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'how_to_play',
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline, color: Colors.purple),
+                      SizedBox(width: 8),
+                      Text('How to Play'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuDivider(),
+                const PopupMenuDivider(),
+              ],
             ] else ...[
               const PopupMenuItem<String>(
                 value: 'leave_game',

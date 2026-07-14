@@ -15,6 +15,7 @@ void main() {
       MaterialApp(
         theme: BalatroTheme.darkTheme,
         home: MainMenuScreen(
+          enableLearnToPlayOffer: false,
           urlLauncher: (uri) async {
             launchCalls++;
             launchedUri = uri;
@@ -28,6 +29,8 @@ void main() {
     expect(find.text('View on GitHub'), findsOneWidget);
     expect(find.text('How to Play'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('View on GitHub'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('View on GitHub'));
     await tester.pump();
 
@@ -41,11 +44,16 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: BalatroTheme.darkTheme,
-        home: MainMenuScreen(urlLauncher: (_) async => false),
+        home: MainMenuScreen(
+          enableLearnToPlayOffer: false,
+          urlLauncher: (_) async => false,
+        ),
       ),
     );
     await tester.pump();
 
+    await tester.ensureVisible(find.text('View on GitHub'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('View on GitHub'));
     await tester.pump();
 

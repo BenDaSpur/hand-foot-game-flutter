@@ -140,29 +140,32 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       return;
     }
 
-    setState(() {
-      _showScrim = true;
-      _visuals = [];
-    });
+    try {
+      setState(() {
+        _showScrim = true;
+        _visuals = [];
+      });
 
-    if (request.type == CardDrawAnimationType.discardUnlock &&
-        request.meldedCards.isNotEmpty) {
-      await _runMeldBeat(request);
-      if (_skipped || !mounted) {
+      if (request.type == CardDrawAnimationType.discardUnlock &&
+          request.meldedCards.isNotEmpty) {
+        await _runMeldBeat(request);
+        if (_skipped || !mounted) {
+          return;
+        }
+      }
+
+      if (request.handCards.isEmpty) {
         return;
       }
-    }
 
-    if (request.handCards.isEmpty) {
-      _finish();
-      return;
+      await _runRevealAndFly(request);
+    } finally {
+      // Always clear the animating gate, even if anchors were missing or a
+      // mid-animation hand rewrite aborted the fly sequence.
+      if (!_skipped && mounted) {
+        _finish();
+      }
     }
-
-    await _runRevealAndFly(request);
-    if (_skipped || !mounted) {
-      return;
-    }
-    _finish();
   }
 
   void _finish() {
