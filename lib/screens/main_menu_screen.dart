@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config/project_links.dart';
 import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
 import 'game_screen.dart';
@@ -229,6 +231,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         ),
                         const SizedBox(height: 40),
                         _buildInfoButton(),
+                        const SizedBox(height: 16),
+                        _buildGitHubButton(),
                         if (kIsWeb) ...[
                           const SizedBox(height: 16),
                           _buildInstallButton(),
@@ -444,6 +448,45 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildGitHubButton() {
+    return TextButton(
+      onPressed: _openGitHubRepository,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.code,
+            color: BalatroTheme.neonPink.withValues(alpha: 0.7),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'View on GitHub',
+            style: TextStyle(
+              color: BalatroTheme.neonPink.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openGitHubRepository() async {
+    final uri = Uri.parse(ProjectLinks.githubRepository);
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        print('Warning: Could not open GitHub repository URL');
+      }
+    } catch (e) {
+      print('Warning: Failed to open GitHub repository: $e');
+    }
   }
 
   Widget _buildInstallButton() {

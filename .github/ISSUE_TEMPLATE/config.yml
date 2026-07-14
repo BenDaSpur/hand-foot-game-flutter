@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/BenDaSpur/hand-foot-game-flutter/blob/main/CONTRIBUTING.md  # pragma: allowlist secret
+    about: Setup, coding standards, and how to open a pull request
+  - name: Security vulnerability
+    url: https://github.com/BenDaSpur/hand-foot-game-flutter/security/advisories/new  # pragma: allowlist secret
+    about: Report a security issue privately (do not file a public bug)
+  - name: Play the game
+    url: https://playhandfoot.com
+    about: Try Hand & Foot in the browser
