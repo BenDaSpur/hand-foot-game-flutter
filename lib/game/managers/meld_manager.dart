@@ -262,6 +262,77 @@ class MeldManager {
     return playableCards.toSet().toList();
   }
 
+  /// Hand indices that should show playable (green) highlight in the UI.
+  ///
+  /// Prefer this over [getPlayableCards] for rendering: identity/`==` on
+  /// [PlayingCard] is suit+rank, so duplicate multi-deck cards cannot be
+  /// keyed reliably by object equality alone.
+  Set<int> getPlayableCardIndices(Player player) {
+    final playableIndices = <int>{};
+    if (_gameState.turnPhase != TurnPhase.meld) {
+      return playableIndices;
+    }
+
+    final hand = player.currentHand;
+    final possibleMelds = findPossibleMelds(player);
+    var shouldHighlightWilds = false;
+
+    for (final meld in possibleMelds) {
+      final remaining = List<PlayingCard>.from(meld);
+      for (int i = 0; i < hand.length; i++) {
+        final matchIndex = remaining.indexWhere(
+          (card) => identical(card, hand[i]),
+        );
+        if (matchIndex >= 0) {
+          playableIndices.add(i);
+          remaining.removeAt(matchIndex);
+        }
+      }
+      if (meld.any((card) => card.isWild)) {
+        shouldHighlightWilds = true;
+      }
+    }
+
+    // findPossibleMelds prefers clean melds when a rank has 3+ naturals, so it
+    // omits dirty alternatives. Wilds remain legal with those ranks (and with
+    // pair+wild candidates already flagged above).
+    if (!shouldHighlightWilds && hand.any((card) => card.isWild)) {
+      final naturalCounts = <CardRank, int>{};
+      for (final card in hand) {
+        if (!card.isWild && card.rank != CardRank.three) {
+          naturalCounts.update(
+            card.rank,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+        }
+      }
+      shouldHighlightWilds = naturalCounts.values.any((count) => count >= 3);
+    }
+
+    // findPossibleMelds reuses wildCards.take(...) without consuming, so only
+    // the first wild is typically present in meld lists. Light up every wild
+    // that could complete a dirty new meld.
+    if (shouldHighlightWilds) {
+      for (int i = 0; i < hand.length; i++) {
+        if (hand[i].isWild) {
+          playableIndices.add(i);
+        }
+      }
+    }
+
+    for (int i = 0; i < hand.length; i++) {
+      for (final meld in player.melds) {
+        if (meld.canAddCard(hand[i])) {
+          playableIndices.add(i);
+          break;
+        }
+      }
+    }
+
+    return playableIndices;
+  }
+
   /// Helper to create a new meld or add to existing meld.
   void _createOrAddToMeld(
     Player player,

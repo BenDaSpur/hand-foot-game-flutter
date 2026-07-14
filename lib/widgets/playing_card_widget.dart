@@ -16,6 +16,15 @@ class PlayingCardWidget extends StatelessWidget {
 
   static const double cardMargin = 2.0;
 
+  /// Shared playable-treatment values (subtle green highlight).
+  static const double playableBorderWidth = 1.0;
+  static const double playableInnerGlowBlur = 6.0;
+  static const double playableInnerGlowSpread = 1.0;
+  static const double playableInnerGlowAlpha = 0.5;
+  static const double playableOuterGlowBlur = 12.0;
+  static const double playableOuterGlowSpread = 2.0;
+  static const double playableOuterGlowAlpha = 0.2;
+
   const PlayingCardWidget({
     super.key,
     required this.card,
@@ -78,6 +87,8 @@ class PlayingCardWidget extends StatelessWidget {
                     ? 2
                     : isNewlyDrawn
                     ? 2
+                    : isPlayable
+                    ? playableBorderWidth
                     : 1,
               ),
               borderRadius: BorderRadius.circular(12),
@@ -114,16 +125,20 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 3,
                   ),
                 ] else if (isPlayable) ...[
-                  // Playable cards get green glow
+                  // Playable cards get green glow (original subtle look)
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.5),
-                    blurRadius: 6,
-                    spreadRadius: 1,
+                    color: BalatroTheme.neonGreen.withValues(
+                      alpha: playableInnerGlowAlpha,
+                    ),
+                    blurRadius: playableInnerGlowBlur,
+                    spreadRadius: playableInnerGlowSpread,
                   ),
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    spreadRadius: 2,
+                    color: BalatroTheme.neonGreen.withValues(
+                      alpha: playableOuterGlowAlpha,
+                    ),
+                    blurRadius: playableOuterGlowBlur,
+                    spreadRadius: playableOuterGlowSpread,
                   ),
                 ] else if (card.isWild) ...[
                   // Wild cards always have subtle rainbow glow
@@ -151,27 +166,18 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 1,
                   ),
                 ] else ...[
-                  // Strong Balatro styling for hand cards
+                  // Depth only — large cyan/pink outer glows used to be mostly
+                  // invisible (clipped by Opacity) and look noisy once fixed.
                   const BoxShadow(
                     color: Colors.black,
                     offset: Offset(2, 3),
-                    blurRadius: 8,
-                    spreadRadius: 1,
+                    blurRadius: 6,
+                    spreadRadius: 0,
                   ),
                   BoxShadow(
-                    color: BalatroTheme.cardBorder.withValues(alpha: 0.7),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.glowColor.withValues(alpha: 0.3),
-                    blurRadius: 14,
-                    spreadRadius: 3,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonPink.withValues(alpha: 0.2),
-                    blurRadius: 18,
-                    spreadRadius: 2,
+                    color: BalatroTheme.cardBorder.withValues(alpha: 0.45),
+                    blurRadius: 4,
+                    spreadRadius: 0,
                   ),
                 ],
               ],

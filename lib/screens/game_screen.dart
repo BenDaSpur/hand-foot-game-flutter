@@ -829,39 +829,23 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         .toList();
   }
 
-  bool _isCardPlayable(PlayingCard card) {
+  Set<int> _playableCardIndices(Player humanPlayer) {
     final currentPlayer = ref.read(currentPlayerProvider);
     if (currentPlayer?.type != PlayerType.human) {
-      return false;
+      return {};
     }
 
     final gameState = ref.read(currentGameStateProvider);
     if (gameState?.turnPhase != TurnPhase.meld) {
-      return false;
+      return {};
     }
-
-    final humanPlayer = ref.read(humanPlayerProvider);
-    if (humanPlayer == null) return false;
 
     final controller = _gameController;
-    if (controller == null) return false;
-
-    // Check if this card can be added to any existing meld
-    for (int i = 0; i < humanPlayer.melds.length; i++) {
-      if (humanPlayer.melds[i].canAddCard(card)) {
-        return true;
-      }
+    if (controller == null) {
+      return {};
     }
 
-    // Check if this card can form a new meld
-    final possibleMelds = controller.findPossibleMelds(humanPlayer);
-    for (final meld in possibleMelds) {
-      if (meld.contains(card)) {
-        return true;
-      }
-    }
-
-    return false;
+    return controller.getPlayableCardIndices(humanPlayer);
   }
 
   bool _isGameStuck() {
@@ -1862,7 +1846,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                             gameState.phase != GamePhase.gameEnd
                         ? _onCardDoubleTap
                         : null,
-                    isCardPlayable: _isCardPlayable,
+                    playableCardIndices: _playableCardIndices(humanPlayer),
                     viewingPlayerMelds: _viewingPlayerMelds,
                     onReturnToHand: () {
                       setState(() {

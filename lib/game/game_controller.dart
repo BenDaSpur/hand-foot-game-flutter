@@ -526,6 +526,11 @@ class GameController implements GameInterface {
     return _meldManager.getPlayableCards(_gameState.currentPlayer);
   }
 
+  @override
+  Set<int> getPlayableCardIndices(Player player) {
+    return _meldManager.getPlayableCardIndices(player);
+  }
+
   // ============= Game Status and Queries =============
 
   @override

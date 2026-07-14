@@ -929,6 +929,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   @override
+  Set<int> getPlayableCardIndices(Player player) {
+    return _gameController.getPlayableCardIndices(player);
+  }
+
+  @override
   Future<void> saveGame() async {
     // Multiplayer games are automatically saved via network sync
     // No local persistence needed
