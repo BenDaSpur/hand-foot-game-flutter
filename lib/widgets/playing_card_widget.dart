@@ -116,23 +116,31 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 3,
                   ),
                 ] else if (isPlayable) ...[
-                  // Playable cards get a strong green glow (must stay visible
-                  // on edge cards where scroll clipping used to hide softer
-                  // shadows).
-                  BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.75),
+                  // Depth shadow so playable cards don't look flatter than
+                  // neighboring unplayable cards in the overlapping fan.
+                  const BoxShadow(
+                    color: Colors.black,
+                    offset: Offset(2, 3),
                     blurRadius: 8,
                     spreadRadius: 1,
                   ),
+                  // Upward glow: sibling cards overlap to the right and clip
+                  // side/bottom shadows; glow above the fan stays visible.
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.45),
-                    blurRadius: 16,
-                    spreadRadius: 3,
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.85),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                    offset: const Offset(0, -4),
                   ),
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.2),
-                    blurRadius: 22,
-                    spreadRadius: 5,
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.55),
+                    blurRadius: 14,
+                    spreadRadius: 2,
+                  ),
+                  BoxShadow(
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.25),
+                    blurRadius: 20,
+                    spreadRadius: 4,
                   ),
                 ] else if (card.isWild) ...[
                   // Wild cards always have subtle rainbow glow
@@ -186,7 +194,35 @@ class PlayingCardWidget extends StatelessWidget {
               ],
             ),
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
+                // In-face cue: survives fan overlap and Opacity clipping of
+                // outer shadows (visible on the peeking left strip).
+                if (isPlayable && !isSelected && !isNewlyDrawn)
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: BalatroTheme.neonGreen.withValues(alpha: 0.95),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          bottomLeft: Radius.circular(12),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: BalatroTheme.neonGreen.withValues(
+                              alpha: 0.7,
+                            ),
+                            blurRadius: 6,
+                            spreadRadius: 0.5,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 // Holographic shimmer effect
                 if (card.isWild)
                   Container(
