@@ -80,10 +80,9 @@ void main() {
     });
   });
 
-  test('handGlowPadding is large enough for playable glow blur', () {
-    // Guards the UX regression where ~12–16px soft shadows were clipped
-    // by the hand scroller's tiny horizontal inset.
-    const playableGlowBlur = 16.0;
+  test('handGlowPadding covers default playable glow blur', () {
+    // Original playable glow blurRadius max is 12.
+    const playableGlowBlur = 12.0;
     expect(UIConstants.handGlowPadding, greaterThanOrEqualTo(playableGlowBlur));
   });
 }

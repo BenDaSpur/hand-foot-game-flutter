@@ -40,7 +40,7 @@ class UIConstants {
 
   /// Horizontal inset for the hand scroller so playable/newly-drawn glow
   /// shadows are not clipped on the leftmost/rightmost cards.
-  static const double handGlowPadding = 24.0;
+  static const double handGlowPadding = 12.0;
 
   // Border radius
   static const double defaultBorderRadius = 8.0;

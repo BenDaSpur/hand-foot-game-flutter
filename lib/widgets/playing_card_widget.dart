@@ -78,8 +78,6 @@ class PlayingCardWidget extends StatelessWidget {
                     ? 2
                     : isNewlyDrawn
                     ? 2
-                    : isPlayable
-                    ? 2
                     : 1,
               ),
               borderRadius: BorderRadius.circular(12),
@@ -116,31 +114,16 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 3,
                   ),
                 ] else if (isPlayable) ...[
-                  // Depth shadow so playable cards don't look flatter than
-                  // neighboring unplayable cards in the overlapping fan.
-                  const BoxShadow(
-                    color: Colors.black,
-                    offset: Offset(2, 3),
-                    blurRadius: 8,
+                  // Playable cards get green glow (original subtle look)
+                  BoxShadow(
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.5),
+                    blurRadius: 6,
                     spreadRadius: 1,
                   ),
-                  // Upward glow: sibling cards overlap to the right and clip
-                  // side/bottom shadows; glow above the fan stays visible.
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.85),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                    offset: const Offset(0, -4),
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.55),
-                    blurRadius: 14,
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.2),
+                    blurRadius: 12,
                     spreadRadius: 2,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.25),
-                    blurRadius: 20,
-                    spreadRadius: 4,
                   ),
                 ] else if (card.isWild) ...[
                   // Wild cards always have subtle rainbow glow
@@ -168,61 +151,24 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 1,
                   ),
                 ] else ...[
-                  // Strong Balatro styling for hand cards
+                  // Depth only — large cyan/pink outer glows used to be mostly
+                  // invisible (clipped by Opacity) and look noisy once fixed.
                   const BoxShadow(
                     color: Colors.black,
                     offset: Offset(2, 3),
-                    blurRadius: 8,
-                    spreadRadius: 1,
+                    blurRadius: 6,
+                    spreadRadius: 0,
                   ),
                   BoxShadow(
-                    color: BalatroTheme.cardBorder.withValues(alpha: 0.7),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.glowColor.withValues(alpha: 0.3),
-                    blurRadius: 14,
-                    spreadRadius: 3,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonPink.withValues(alpha: 0.2),
-                    blurRadius: 18,
-                    spreadRadius: 2,
+                    color: BalatroTheme.cardBorder.withValues(alpha: 0.45),
+                    blurRadius: 4,
+                    spreadRadius: 0,
                   ),
                 ],
               ],
             ),
             child: Stack(
-              clipBehavior: Clip.none,
               children: [
-                // In-face cue: survives fan overlap and Opacity clipping of
-                // outer shadows (visible on the peeking left strip).
-                if (isPlayable && !isSelected && !isNewlyDrawn)
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 4,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: BalatroTheme.neonGreen.withValues(alpha: 0.95),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          bottomLeft: Radius.circular(12),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: BalatroTheme.neonGreen.withValues(
-                              alpha: 0.7,
-                            ),
-                            blurRadius: 6,
-                            spreadRadius: 0.5,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 // Holographic shimmer effect
                 if (card.isWild)
                   Container(
