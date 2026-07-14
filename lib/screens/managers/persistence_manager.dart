@@ -4,6 +4,8 @@ import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../game/game_controller.dart';
 import '../../ai/enhanced_bot_ai.dart';
+import '../../ai/bot_personality.dart';
+import '../../config/bot_configurations.dart';
 import '../../services/game_save_service.dart';
 import '../../utils/debug_logger.dart';
 import '../../theme/balatro_theme.dart';
@@ -27,12 +29,25 @@ class PersistenceManager {
     required this.onGameLoaded,
   });
 
+  Map<String, BotPersonality> _liveBotPersonalities() {
+    final botPersonalities = <String, BotPersonality>{};
+    for (final player in gameController.gameState.players) {
+      if (player.type == PlayerType.bot) {
+        botPersonalities[player.id] = botAI.personalityManager.getPersonality(
+          player.id,
+        );
+      }
+    }
+    return botPersonalities;
+  }
+
   /// Save current game state to local storage
   Future<void> saveGameState() async {
     try {
       await GameSaveService.saveGame(
         gameController.gameState,
         gameController.gameSeed,
+        botPersonalities: _liveBotPersonalities(),
       );
     } catch (e) {
       DebugLogger.error('Failed to save game state: $e');
@@ -41,16 +56,9 @@ class PersistenceManager {
 
   /// Export current game state with bot personalities
   String exportGameState() {
-    // Collect current bot personalities
-    final botPersonalities = <String, String>{};
-    for (final player in gameController.gameState.players) {
-      if (player.type == PlayerType.bot) {
-        final personality = botAI.personalityManager.getPersonality(player.id);
-        botPersonalities[player.id] = personality.toString();
-      }
-    }
-
-    return gameController.exportGameState(botPersonalities);
+    return gameController.exportGameState(
+      serializeBotPersonalities(_liveBotPersonalities()),
+    );
   }
 
   /// Copy exported game state to clipboard

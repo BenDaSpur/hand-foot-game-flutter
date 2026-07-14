@@ -131,39 +131,42 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   /// Helper method to assign bot personalities consistently
   void _assignBotPersonalities() {
     final controller = _gameController;
-    if (controller == null) return;
-
-    final botPlayers = controller.gameState.players
-        .where((p) => p.type == PlayerType.bot)
-        .toList();
-
-    // Create personality mapping from predefined bot configurations
-    final personalityMap = <String, BotPersonality>{};
-    for (final config in kBotConfigurations) {
-      personalityMap[config.name] = config.personality;
+    if (controller == null) {
+      return;
     }
 
-    // Assign personalities based on bot names, with fallback to random
-    for (final bot in botPlayers) {
-      final predefinedPersonality = personalityMap[bot.name];
-      if (predefinedPersonality != null) {
-        _botAI.assignPersonality(bot.id, predefinedPersonality);
-      } else {
-        // Fallback to random assignment for unknown bot names
-        final personalities = BotPersonality.values;
-        final randomPersonality =
-            personalities[(bot.id.hashCode % personalities.length)];
-        _botAI.assignPersonality(bot.id, randomPersonality);
-      }
+    final resolved = resolveBotPersonalities(
+      players: controller.gameState.players,
+      settings: controller.gameState.soloSettings,
+    );
+    for (final entry in resolved.entries) {
+      _botAI.assignPersonality(entry.key, entry.value);
     }
 
     // Log personality assignments in debug mode
     if (kDebugMode) {
+      final botPlayers = controller.gameState.players.where(
+        (p) => p.type == PlayerType.bot,
+      );
       for (final bot in botPlayers) {
         final personality = _botAI.personalityManager.getPersonality(bot.id);
-        print('Bot ${bot.name} (${bot.id}) assigned personality: $personality');
+        DebugLogger.debug(
+          'Bot ${bot.name} (${bot.id}) assigned personality: $personality',
+        );
       }
     }
+  }
+
+  /// Restore personalities when opening a continued autosave.
+  void _restorePersonalitiesForContinuedGame(GameController controller) {
+    final saved = controller.restoredBotPersonalities;
+    if (saved.isNotEmpty) {
+      _botTurnManager.restoreBotPersonalities(saved);
+      return;
+    }
+
+    // Legacy saves: derive from solo settings / known bot names
+    _assignBotPersonalities();
   }
 
   /// Initialize all manager instances after game controller setup
@@ -296,6 +299,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           .read(gameControllerProvider.notifier)
           .setController(widget.gameController!, eventBus);
       _initializeManagers();
+
+      // Continue must restore personalities — autosave previously left them
+      // unassigned, so icons/AI defaulted to Adaptive (e.g. Clara showed Sue's icon).
+      _restorePersonalitiesForContinuedGame(widget.gameController!);
 
       _isInitialized = true;
 
@@ -898,8 +905,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             .read(gameControllerProvider.notifier)
             .setController(savedController, eventBus);
 
-        // Assign consistent bot personalities based on player IDs
-        _assignBotPersonalities();
+        _initializeManagers();
+        _restorePersonalitiesForContinuedGame(savedController);
 
         // Sort the human player's hand
         final humanPlayer = ref.read(humanPlayerProvider);

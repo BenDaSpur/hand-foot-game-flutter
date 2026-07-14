@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../../models/player.dart';
 import '../../models/card.dart';
@@ -64,35 +63,25 @@ class BotTurnManager {
 
   /// Helper method to assign bot personalities consistently
   void assignBotPersonalities() {
-    final botPlayers = gameController.gameState.players
-        .where((p) => p.type == PlayerType.bot)
-        .toList();
+    final resolved = resolveBotPersonalities(
+      players: gameController.gameState.players,
+      settings: gameController.gameState.soloSettings,
+    );
 
-    // Create personality mapping from predefined bot configurations
-    final personalityMap = <String, BotPersonality>{};
-    for (final config in kBotConfigurations) {
-      personalityMap[config.name] = config.personality;
-    }
-
-    // Assign personalities based on bot names, with fallback to random
-    for (final bot in botPlayers) {
-      final predefinedPersonality = personalityMap[bot.name];
-      if (predefinedPersonality != null) {
-        botAI.assignPersonality(bot.id, predefinedPersonality);
-      } else {
-        // Fallback to random assignment for unknown bot names
-        final personalities = BotPersonality.values;
-        final randomPersonality =
-            personalities[(bot.id.hashCode % personalities.length)];
-        botAI.assignPersonality(bot.id, randomPersonality);
-      }
+    for (final entry in resolved.entries) {
+      botAI.assignPersonality(entry.key, entry.value);
     }
 
     // Log personality assignments in debug mode
     if (kDebugMode) {
+      final botPlayers = gameController.gameState.players.where(
+        (p) => p.type == PlayerType.bot,
+      );
       for (final bot in botPlayers) {
         final personality = botAI.personalityManager.getPersonality(bot.id);
-        print('Bot ${bot.name} (${bot.id}) assigned personality: $personality');
+        DebugLogger.debug(
+          'Bot ${bot.name} (${bot.id}) assigned personality: $personality',
+        );
       }
     }
   }
@@ -106,30 +95,35 @@ class BotTurnManager {
         .where((p) => p.type == PlayerType.bot)
         .toList();
 
+    if (savedPersonalities.isEmpty) {
+      assignBotPersonalities();
+      return;
+    }
+
+    final resolvedFallback = resolveBotPersonalities(
+      players: gameController.gameState.players,
+      settings: gameController.gameState.soloSettings,
+    );
+
     for (final bot in botPlayers) {
       final savedPersonalityName = savedPersonalities[bot.id];
       if (savedPersonalityName != null) {
-        // Parse saved personality name back to enum
-        final personality = BotPersonality.values.firstWhere(
-          (p) => p.toString() == savedPersonalityName,
-          orElse: () => BotPersonality.adaptive, // Fallback to adaptive
-        );
+        final personality = parseBotPersonalityString(savedPersonalityName);
         botAI.assignPersonality(bot.id, personality);
 
         if (kDebugMode) {
-          print(
+          DebugLogger.debug(
             'Bot ${bot.name} (${bot.id}) restored personality: $personality',
           );
         }
       } else {
-        // If no saved personality for this bot, assign a random one
-        final randomPersonality = BotPersonality
-            .values[Random().nextInt(BotPersonality.values.length)];
-        botAI.assignPersonality(bot.id, randomPersonality);
+        // Missing entry for this bot — fall back to full-roster resolution
+        final personality = resolvedFallback[bot.id] ?? BotPersonality.adaptive;
+        botAI.assignPersonality(bot.id, personality);
 
         if (kDebugMode) {
-          print(
-            'Bot ${bot.name} (${bot.id}) assigned new personality: $randomPersonality (no saved data)',
+          DebugLogger.debug(
+            'Bot ${bot.name} (${bot.id}) assigned personality: $personality (no saved entry)',
           );
         }
       }
