@@ -48,18 +48,15 @@ void main() {
 
         final indices = controller.getPlayableCardIndices(human);
 
+        // 5s/8s/Jacks/Kings (dirty with wilds), clean 6s, all wilds.
+        // Not playable: lone 7, 10, and Q.
         expect(
-          indices.contains(0),
-          isTrue,
-          reason: 'leftmost 5♥ must be playable',
+          indices,
+          equals({0, 1, 2, 3, 4, 6, 7, 9, 10, 12, 13, 14, 15, 16}),
         );
-        expect(indices.contains(1), isTrue, reason: '5♠ must be playable');
-        expect(indices.contains(6), isTrue, reason: '8♥ must be playable');
-        expect(indices.contains(7), isTrue, reason: '8♦ must be playable');
-        // All wilds usable for dirty melds (not only the first take())
-        expect(indices.contains(14), isTrue);
-        expect(indices.contains(15), isTrue);
-        expect(indices.contains(16), isTrue);
+        expect(indices.contains(5), isFalse, reason: 'lone 7 not playable');
+        expect(indices.contains(8), isFalse, reason: 'lone 10 not playable');
+        expect(indices.contains(11), isFalse, reason: 'lone Q not playable');
       },
       tags: ['meld'],
     );
@@ -83,15 +80,8 @@ void main() {
         expect(melds.any((m) => m.any((c) => c.isWild)), isFalse);
 
         final indices = controller.getPlayableCardIndices(human);
-        expect(indices.contains(0), isTrue);
-        expect(indices.contains(1), isTrue);
-        expect(indices.contains(2), isTrue);
-        expect(
-          indices.contains(4),
-          isTrue,
-          reason: 'wild usable for dirty king meld',
-        );
-        expect(indices.contains(5), isTrue, reason: 'all wilds highlighted');
+        expect(indices, equals({0, 1, 2, 4, 5}));
+        expect(indices.contains(3), isFalse, reason: 'lone ace not playable');
       },
       tags: ['meld'],
     );
@@ -109,9 +99,12 @@ void main() {
   });
 
   test('handGlowPadding covers default playable glow blur', () {
+    const playableGlowExtent =
+        PlayingCardWidget.playableOuterGlowBlur +
+        PlayingCardWidget.playableOuterGlowSpread;
     expect(
       UIConstants.handGlowPadding,
-      greaterThanOrEqualTo(PlayingCardWidget.playableOuterGlowBlur),
+      greaterThanOrEqualTo(playableGlowExtent),
     );
   });
 }
