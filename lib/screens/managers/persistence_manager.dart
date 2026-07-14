@@ -4,6 +4,7 @@ import '../../models/player.dart';
 import '../../models/game_state.dart';
 import '../../game/game_controller.dart';
 import '../../ai/enhanced_bot_ai.dart';
+import '../../ai/bot_personality.dart';
 import '../../services/game_save_service.dart';
 import '../../utils/debug_logger.dart';
 import '../../theme/balatro_theme.dart';
@@ -30,9 +31,18 @@ class PersistenceManager {
   /// Save current game state to local storage
   Future<void> saveGameState() async {
     try {
+      final botPersonalities = <String, BotPersonality>{};
+      for (final player in gameController.gameState.players) {
+        if (player.type == PlayerType.bot) {
+          botPersonalities[player.id] = botAI.personalityManager.getPersonality(
+            player.id,
+          );
+        }
+      }
       await GameSaveService.saveGame(
         gameController.gameState,
         gameController.gameSeed,
+        botPersonalities: botPersonalities,
       );
     } catch (e) {
       DebugLogger.error('Failed to save game state: $e');

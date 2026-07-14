@@ -40,6 +40,10 @@ class GameController implements GameInterface {
   @override
   final int? gameSeed;
 
+  /// Personalities restored from local autosave (playerId → enum toString).
+  /// Applied by GameScreen when continuing a saved solo game.
+  Map<String, String> restoredBotPersonalities = {};
+
   factory GameController({
     required List<Player> players,
     int? seed,

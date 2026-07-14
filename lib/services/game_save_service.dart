@@ -6,6 +6,8 @@ import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../game/game_controller.dart';
+import '../ai/bot_personality.dart';
+import '../config/bot_configurations.dart';
 import '../config/solo_game_settings.dart';
 
 class GameSaveService {
@@ -13,10 +15,18 @@ class GameSaveService {
   static final _log = Logger('GameSaveService');
 
   /// Save the current game state to local storage
-  static Future<void> saveGame(GameState gameState, int? gameSeed) async {
+  static Future<void> saveGame(
+    GameState gameState,
+    int? gameSeed, {
+    Map<String, BotPersonality>? botPersonalities,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final gameData = _serializeGameState(gameState, gameSeed);
+      final gameData = _serializeGameState(
+        gameState,
+        gameSeed,
+        botPersonalities: botPersonalities,
+      );
       final jsonString = jsonEncode(gameData);
 
       await prefs.setString(_saveKey, jsonString);
@@ -71,8 +81,14 @@ class GameSaveService {
   /// Serialize game state to a JSON-compatible map
   static Map<String, dynamic> _serializeGameState(
     GameState gameState,
-    int? gameSeed,
-  ) {
+    int? gameSeed, {
+    Map<String, BotPersonality>? botPersonalities,
+  }) {
+    final resolved = resolveBotPersonalities(
+      players: gameState.players,
+      settings: gameState.soloSettings,
+      preferred: botPersonalities,
+    );
     return {
       'gameSeed': gameSeed,
       'timestamp': DateTime.now().toIso8601String(),
@@ -97,6 +113,7 @@ class GameSaveService {
       'hasDrawnFromDeck': gameState.hasDrawnFromDeck,
       'hasMelded': gameState.hasMelded,
       'soloSettings': gameState.soloSettings.toJson(),
+      'botPersonalities': serializeBotPersonalities(resolved),
       'finalTurnPhaseActive': gameState.finalTurnPhaseActive,
       'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
       'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
@@ -167,6 +184,25 @@ class GameSaveService {
       // Clear newly drawn cards since they're not serialized properly
       // This prevents incorrect highlighting after game restore
       gameController.clearAllNewlyDrawnCards();
+
+      // Restore bot personalities from save, or derive for legacy saves
+      final savedPersonalities =
+          (savedData['botPersonalities'] as Map?)?.map(
+            (key, value) => MapEntry(key.toString(), value.toString()),
+          ) ??
+          <String, String>{};
+
+      if (savedPersonalities.isNotEmpty) {
+        gameController.restoredBotPersonalities = savedPersonalities;
+      } else {
+        final derived = resolveBotPersonalities(
+          players: players,
+          settings: soloSettings,
+        );
+        gameController.restoredBotPersonalities = serializeBotPersonalities(
+          derived,
+        );
+      }
 
       return gameController;
     } catch (e) {
