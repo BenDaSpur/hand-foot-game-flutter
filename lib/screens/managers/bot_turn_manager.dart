@@ -79,7 +79,9 @@ class BotTurnManager {
       );
       for (final bot in botPlayers) {
         final personality = botAI.personalityManager.getPersonality(bot.id);
-        print('Bot ${bot.name} (${bot.id}) assigned personality: $personality');
+        DebugLogger.debug(
+          'Bot ${bot.name} (${bot.id}) assigned personality: $personality',
+        );
       }
     }
   }
@@ -98,6 +100,11 @@ class BotTurnManager {
       return;
     }
 
+    final resolvedFallback = resolveBotPersonalities(
+      players: gameController.gameState.players,
+      settings: gameController.gameState.soloSettings,
+    );
+
     for (final bot in botPlayers) {
       final savedPersonalityName = savedPersonalities[bot.id];
       if (savedPersonalityName != null) {
@@ -105,21 +112,17 @@ class BotTurnManager {
         botAI.assignPersonality(bot.id, personality);
 
         if (kDebugMode) {
-          print(
+          DebugLogger.debug(
             'Bot ${bot.name} (${bot.id}) restored personality: $personality',
           );
         }
       } else {
-        // Missing entry for this bot — fall back to settings/name resolution
-        final resolved = resolveBotPersonalities(
-          players: [bot],
-          settings: gameController.gameState.soloSettings,
-        );
-        final personality = resolved[bot.id] ?? BotPersonality.adaptive;
+        // Missing entry for this bot — fall back to full-roster resolution
+        final personality = resolvedFallback[bot.id] ?? BotPersonality.adaptive;
         botAI.assignPersonality(bot.id, personality);
 
         if (kDebugMode) {
-          print(
+          DebugLogger.debug(
             'Bot ${bot.name} (${bot.id}) assigned personality: $personality (no saved entry)',
           );
         }

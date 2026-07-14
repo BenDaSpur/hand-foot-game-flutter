@@ -150,7 +150,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       );
       for (final bot in botPlayers) {
         final personality = _botAI.personalityManager.getPersonality(bot.id);
-        print('Bot ${bot.name} (${bot.id}) assigned personality: $personality');
+        DebugLogger.debug(
+          'Bot ${bot.name} (${bot.id}) assigned personality: $personality',
+        );
       }
     }
   }
@@ -903,8 +905,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             .read(gameControllerProvider.notifier)
             .setController(savedController, eventBus);
 
-        // Assign consistent bot personalities based on player IDs
-        _assignBotPersonalities();
+        _initializeManagers();
+        _restorePersonalitiesForContinuedGame(savedController);
 
         // Sort the human player's hand
         final humanPlayer = ref.read(humanPlayerProvider);

@@ -1,5 +1,6 @@
 import '../ai/bot_personality.dart';
 import '../models/player.dart';
+import '../utils/debug_logger.dart';
 import 'solo_game_settings.dart';
 
 /// Bot configuration with display name and personality mapping.
@@ -91,5 +92,8 @@ BotPersonality parseBotPersonalityString(String value) {
       return personality;
     }
   }
+  DebugLogger.warning(
+    'Unknown bot personality "$value", falling back to adaptive',
+  );
   return BotPersonality.adaptive;
 }

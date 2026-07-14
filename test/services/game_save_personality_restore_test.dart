@@ -142,16 +142,57 @@ void main() {
     );
 
     test(
-      'unassigned personalities defaulted to adaptive (regression of bug)',
-      () {
+      'partial personality map restores saved entries and fills missing bots',
+      () async {
+        final controller = GameController(
+          players: sueClaraPlayers(),
+          seed: 708121,
+          soloSettings: sueClaraSettings(),
+        );
+        controller.initializeGame();
+        await GameSaveService.saveGame(controller.gameState, 708121);
+
+        final restored = await GameController.loadSavedGame();
+        expect(restored, isNotNull);
+
         final botAI = EnhancedBotAI();
-        // Before fix: Continue never assigned personalities → Clara looked Adaptive
-        expect(
-          botAI.personalityManager.getPersonality('3'),
-          equals(BotPersonality.adaptive),
+        final turnManager = BotTurnManager(
+          gameController: restored!,
+          botAI: botAI,
+          onStateChanged: () {},
+          logHumanAction: (_) {},
+          logBotDecision:
+              ({
+                required String botId,
+                required String decision,
+                required String reasoning,
+                Map<String, dynamic>? context,
+                gameStateSnapshot,
+              }) {},
         );
 
-        botAI.assignPersonality('3', BotPersonality.conservative);
+        // Legacy/partial Continue payload: Sue saved, Clara missing.
+        // Clara must resolve from full roster (settings/name), not Adaptive default.
+        turnManager.restoreBotPersonalities({'2': 'BotPersonality.adaptive'});
+
+        expect(
+          botAI.personalityManager.getPersonality('2'),
+          equals(BotPersonality.adaptive),
+        );
+        expect(
+          botAI.personalityManager.getPersonality('3'),
+          equals(BotPersonality.conservative),
+        );
+
+        // Malformed saved value falls back to Adaptive while valid entries stick.
+        turnManager.restoreBotPersonalities({
+          '2': 'BotPersonality.notARealPersonality',
+          '3': 'BotPersonality.conservative',
+        });
+        expect(
+          botAI.personalityManager.getPersonality('2'),
+          equals(BotPersonality.adaptive),
+        );
         expect(
           botAI.personalityManager.getPersonality('3'),
           equals(BotPersonality.conservative),
