@@ -191,6 +191,120 @@ void main() {
       expect(bot.currentHand.first.rank, CardRank.five);
     });
 
+    test(
+      'uses wild to create a meld that empties hand into foot, then builds books',
+      () {
+        final setup = _setupFinalTurnBot(onFoot: false);
+        final bot = setup.bot;
+
+        // Dirty queens book + 6 clean kings (one short of book)
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          ])!,
+        );
+
+        // Wild must make Jack meld (not dump onto queens) so hand empties.
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          ]);
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          ]);
+
+        _runFinalTurnMeldLoop(setup.botAI, setup.gc, bot);
+
+        expect(bot.hasPickedUpFoot, isTrue);
+        expect(bot.hasCleanBook, isTrue);
+        expect(
+          bot.melds.any((m) => m.rank == CardRank.jack),
+          isTrue,
+          reason: 'wild should form a jack meld to clear the hand pile',
+        );
+        expect(
+          bot.melds.any((m) => m.rank == CardRank.ace && m.isBook),
+          isTrue,
+          reason: 'after reaching foot, should meld the ace book',
+        );
+        expect(bot.currentHand.length, 1);
+        expect(bot.currentHand.first.rank, CardRank.five);
+      },
+    );
+
+    test('prefers completing a clean book over a lower-impact add', () {
+      final setup = _setupFinalTurnBot();
+      final bot = setup.bot;
+      bot.melds.addAll([
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      ]);
+
+      _setActiveHand(bot, [
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+      ]);
+
+      final decision = setup.botAI.makeDecision(bot, setup.gc);
+      expect(decision.action, 'addToMeld');
+      final card = (decision.data as Map)['card'] as PlayingCard;
+      expect(
+        card.rank,
+        CardRank.king,
+        reason: 'completing the clean book (+500) should win',
+      );
+    });
+
     test('discards highest-penalty leftover card on final turn', () {
       final setup = _setupFinalTurnBot();
       final bot = setup.bot;
