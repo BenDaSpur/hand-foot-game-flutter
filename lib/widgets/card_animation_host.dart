@@ -54,6 +54,10 @@ class CardAnimationHost extends StatefulWidget {
   final ScrollController handScrollController;
   final ValueChanged<bool>? onAnimationStateChanged;
 
+  /// When false, draw/unlock overlays are skipped (used by Learn to Play so
+  /// coach steps are not blocked by stuck animation gating).
+  final bool animationsEnabled;
+
   const CardAnimationHost({
     super.key,
     required this.child,
@@ -65,6 +69,7 @@ class CardAnimationHost extends StatefulWidget {
     required this.handScrollController,
     this.localHumanPlayer,
     this.onAnimationStateChanged,
+    this.animationsEnabled = true,
   });
 
   @override
@@ -109,7 +114,8 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
   }
 
   void _handleCardDrawn(CardDrawnEvent event) {
-    if (!_shouldAnimateFor(event.player) ||
+    if (!widget.animationsEnabled ||
+        !_shouldAnimateFor(event.player) ||
         !event.fromDeck ||
         event.cards.isEmpty) {
       return;
@@ -124,7 +130,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
   }
 
   void _handleDiscardUnlocked(DiscardPileUnlockedEvent event) {
-    if (!_shouldAnimateFor(event.player)) {
+    if (!widget.animationsEnabled || !_shouldAnimateFor(event.player)) {
       return;
     }
     _startRequest(

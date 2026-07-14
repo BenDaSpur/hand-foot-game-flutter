@@ -1041,9 +1041,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       session.normalizeHandAfterDraw();
       coordinator.advanceOn(LearnToPlayAction.draw);
       _hasPlayerInteractedSinceDraw = false;
+      // Keep the hand unselected so play-down happens in the meld modal.
       _selectedCardIndices.clear();
-      // Pre-select kings for the meld step
-      _selectedCardIndices.addAll(session.kingIndicesInHand());
       setState(() {});
       return;
     }
@@ -1897,6 +1896,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 handStackKey: _handStackKey,
                 meldAreaKey: _meldAreaKey,
                 handScrollController: _handScrollController,
+                animationsEnabled: !_isLearnToPlay,
                 onAnimationStateChanged: (isAnimating) {
                   if (_isCardAnimationActive != isAnimating) {
                     setState(() {
@@ -1907,14 +1907,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 child: Column(
                   children: [
                     if (_isLearnToPlay && _learnCoordinator != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                        child: LearnToPlayCoachBanner(
-                          step: _learnCoordinator!.currentStep,
-                          progress: _learnCoordinator!.progress,
-                          showContinue: _learnCoordinator!.isInfoStep,
-                          onContinue: _onLearnContinueInfo,
-                        ),
+                      LearnToPlayCoachBanner(
+                        step: _learnCoordinator!.currentStep,
+                        progress: _learnCoordinator!.progress,
+                        showContinue: _learnCoordinator!.isInfoStep,
+                        onContinue: _onLearnContinueInfo,
                       ),
                     Expanded(
                       child: GameBoardLayout(
@@ -2031,13 +2028,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                             handLength: humanPlayer.currentHand.length,
                           ),
                           onCardTap:
-                              currentPlayer.type == PlayerType.human &&
-                                  gameState.phase != GamePhase.gameEnd
+                              _learnHandCardTapEnabled(currentPlayer, gameState)
                               ? _onCardTap
                               : null,
                           onCardDoubleTap:
-                              currentPlayer.type == PlayerType.human &&
-                                  gameState.phase != GamePhase.gameEnd
+                              _learnHandCardTapEnabled(currentPlayer, gameState)
                               ? _onCardDoubleTap
                               : null,
                           playableCardIndices: _playableCardIndices(
@@ -2082,12 +2077,29 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _maybeShowLearnCompletion();
   }
 
+  bool _learnHandCardTapEnabled(Player currentPlayer, GameState gameState) {
+    if (currentPlayer.type != PlayerType.human ||
+        gameState.phase == GamePhase.gameEnd) {
+      return false;
+    }
+    if (!_isLearnToPlay) {
+      return true;
+    }
+    // During play-down, selection happens inside the meld modal — not on the
+    // hand strip — so learners practice the same create-meld flow as solo play.
+    if (_learnCoordinator?.canPerform(LearnToPlayAction.meld) ?? false) {
+      return false;
+    }
+    return true;
+  }
+
   void _openLearnMeldModal() {
     final coordinator = _learnCoordinator;
     if (coordinator == null ||
         !coordinator.canPerform(LearnToPlayAction.meld)) {
       return;
     }
+    _selectedCardIndices.clear();
     _dialogManager.showAdvancedMeldSelector(
       onMeldsCreated: _executeAdvancedMeldCreation,
     );

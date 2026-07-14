@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
 import '../tutorial/learn_to_play_step.dart';
 
-/// Coach banner shown during Learn to Play steps.
+/// Dedicated coach row for Learn to Play.
+///
+/// Lives in the parent [Column] above the game board (not a Stack overlay), so
+/// it never covers the deck, scores, or melds.
 class LearnToPlayCoachBanner extends StatelessWidget {
   final LearnToPlayStep step;
   final double progress;
@@ -21,23 +24,18 @@ class LearnToPlayCoachBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: BalatroTheme.deepPurple,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         decoration: BoxDecoration(
-          color: BalatroTheme.darkPurple.withValues(alpha: 0.95),
+          color: BalatroTheme.darkPurple,
           border: Border.all(
-            color: BalatroTheme.glowColor.withValues(alpha: 0.5),
+            color: BalatroTheme.neonBlue.withValues(alpha: 0.7),
+            width: 1.5,
           ),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: BalatroTheme.glowColor.withValues(alpha: 0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,7 +48,7 @@ class LearnToPlayCoachBanner extends StatelessWidget {
                       ? 'HOW TO WIN'
                       : 'BASICS',
                   style: const TextStyle(
-                    color: BalatroTheme.accentText,
+                    color: BalatroTheme.neonBlue,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
@@ -82,7 +80,7 @@ class LearnToPlayCoachBanner extends StatelessWidget {
               style: const TextStyle(
                 color: BalatroTheme.primaryText,
                 fontSize: 13,
-                height: 1.3,
+                height: 1.35,
               ),
             ),
             if (showContinue && onContinue != null) ...[
