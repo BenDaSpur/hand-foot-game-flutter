@@ -406,5 +406,79 @@ void main() {
       final decision = setup.botAI.makeDecision(bot, setup.gc);
       expect(decision.action, isNotEmpty);
     });
+
+    test('multi-meld final turn only returns disjoint hand cards', () {
+      final setup = _setupFinalTurnBot();
+      final bot = setup.bot;
+      bot.melds.addAll([_cleanKingBook(), _dirtyQueenBook()]);
+      _setActiveHand(bot, [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+      ]);
+
+      final decision = setup.botAI.makeDecision(bot, setup.gc);
+      expect(decision.action, isIn(['createMultipleMelds', 'createMeld']));
+      if (decision.action == 'createMultipleMelds') {
+        final melds = List<List<PlayingCard>>.from(
+          (decision.data as List).map((e) => List<PlayingCard>.from(e as List)),
+        );
+        expect(melds.length, greaterThanOrEqualTo(2));
+        final claimed = <PlayingCard>{};
+        for (final meld in melds) {
+          for (final card in meld) {
+            expect(
+              claimed.add(card),
+              isTrue,
+              reason: 'multi-meld must not reuse the same card instance',
+            );
+            expect(identical(bot.findHandCardInstance(card), card), isTrue);
+          }
+        }
+      }
+    });
+
+    test('overlapping maximal candidates fall back to one createMeld', () {
+      final setup = _setupFinalTurnBot();
+      final bot = setup.bot;
+      // Only a clean book — wild cannot be added without spoiling it, so
+      // the create path runs and must not invent two melds sharing the two.
+      bot.melds.add(_cleanKingBook());
+      _setActiveHand(bot, [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+      ]);
+
+      final decision = setup.botAI.makeDecision(bot, setup.gc);
+      if (decision.action == 'createMultipleMelds') {
+        final melds = List<List<PlayingCard>>.from(
+          (decision.data as List).map((e) => List<PlayingCard>.from(e as List)),
+        );
+        final claimed = <PlayingCard>{};
+        for (final meld in melds) {
+          for (final card in meld) {
+            expect(
+              claimed.add(card),
+              isTrue,
+              reason: 'must not reuse cards across createMultipleMelds',
+            );
+          }
+        }
+        expect(melds.length, 1); // only one wild — at most one valid meld
+      } else {
+        expect(decision.action, 'createMeld');
+        final meld = List<PlayingCard>.from(decision.data as List);
+        expect(meld.length, greaterThanOrEqualTo(3));
+        expect(meld.where((c) => c.isWild).length, lessThanOrEqualTo(1));
+      }
+    });
   });
 }

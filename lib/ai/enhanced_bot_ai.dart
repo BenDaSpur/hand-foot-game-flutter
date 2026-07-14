@@ -2710,11 +2710,14 @@ class EnhancedBotAI {
     final playableMelds = maximalMelds
         .where((meld) => _meldCardsStillInHand(bot, meld))
         .toList();
-    if (playableMelds.length >= 2) {
-      return BotDecision(action: 'createMultipleMelds', data: playableMelds);
+    // findMaximalMeldCombination only heuristically avoids overlap — keep only
+    // melds that claim distinct hand indices before multi-meld create.
+    final disjointMelds = _selectDisjointMeldsByHandIndex(bot, playableMelds);
+    if (disjointMelds.length >= 2) {
+      return BotDecision(action: 'createMultipleMelds', data: disjointMelds);
     }
-    if (playableMelds.length == 1) {
-      return BotDecision(action: 'createMeld', data: playableMelds.first);
+    if (disjointMelds.length == 1) {
+      return BotDecision(action: 'createMeld', data: disjointMelds.first);
     }
 
     final possibleMelds = _meldAnalyzer
@@ -2749,6 +2752,61 @@ class EnhancedBotAI {
         preferLarger: true,
       ),
     );
+  }
+
+  /// Greedily keep melds whose cards map to unused hand indices (no shared cards).
+  List<List<PlayingCard>> _selectDisjointMeldsByHandIndex(
+    Player bot,
+    List<List<PlayingCard>> melds,
+  ) {
+    final usedIndices = <int>{};
+    final selected = <List<PlayingCard>>[];
+
+    // Prefer larger melds first so the greedy keep maximizes cards dumped.
+    final ordered = List<List<PlayingCard>>.from(melds)
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    for (final meld in ordered) {
+      final claimed = <int>[];
+      var ok = true;
+      for (final card in meld) {
+        var found = -1;
+        // Prefer the exact hand instance when candidates include hand references.
+        for (var i = 0; i < bot.currentHand.length; i++) {
+          if (usedIndices.contains(i) || claimed.contains(i)) {
+            continue;
+          }
+          if (identical(bot.currentHand[i], card)) {
+            found = i;
+            break;
+          }
+        }
+        if (found < 0) {
+          for (var i = 0; i < bot.currentHand.length; i++) {
+            if (usedIndices.contains(i) || claimed.contains(i)) {
+              continue;
+            }
+            final handCard = bot.currentHand[i];
+            if (handCard.rank == card.rank && handCard.suit == card.suit) {
+              found = i;
+              break;
+            }
+          }
+        }
+        if (found < 0) {
+          ok = false;
+          break;
+        }
+        claimed.add(found);
+      }
+      if (!ok) {
+        continue;
+      }
+      usedIndices.addAll(claimed);
+      selected.add(claimed.map((i) => bot.currentHand[i]).toList());
+    }
+
+    return selected;
   }
 
   /// Adds that turn a 6-card meld into a book (clean preferred — 500 vs 300).
