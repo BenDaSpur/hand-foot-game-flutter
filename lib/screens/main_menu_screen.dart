@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config/project_links.dart';
 import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
+import '../utils/debug_logger.dart';
 import 'game_screen.dart';
 import 'multiplayer_lobby_screen.dart';
 import 'solo_game_setup_screen.dart';
@@ -48,7 +51,10 @@ abstract final class _MenuButtonLayout {
 }
 
 class MainMenuScreen extends StatefulWidget {
-  const MainMenuScreen({super.key});
+  const MainMenuScreen({super.key, this.urlLauncher});
+
+  /// Optional launcher override for tests. Defaults to [launchUrl].
+  final Future<bool> Function(Uri uri)? urlLauncher;
 
   @override
   State<MainMenuScreen> createState() => _MainMenuScreenState();
@@ -229,6 +235,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         ),
                         const SizedBox(height: 40),
                         _buildInfoButton(),
+                        const SizedBox(height: 16),
+                        _buildGitHubButton(),
                         if (kIsWeb) ...[
                           const SizedBox(height: 16),
                           _buildInstallButton(),
@@ -442,6 +450,62 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGitHubButton() {
+    return TextButton(
+      onPressed: _openGitHubRepository,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.code,
+            color: BalatroTheme.neonPink.withValues(alpha: 0.7),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'View on GitHub',
+            style: TextStyle(
+              color: BalatroTheme.neonPink.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openGitHubRepository() async {
+    final uri = Uri.parse(ProjectLinks.githubRepository);
+    try {
+      final launcher = widget.urlLauncher;
+      final launched = launcher != null
+          ? await launcher(uri)
+          : await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        DebugLogger.warning('Could not open GitHub repository URL');
+        _showGitHubLaunchError();
+      }
+    } catch (e) {
+      DebugLogger.warning('Failed to open GitHub repository: $e');
+      _showGitHubLaunchError();
+    }
+  }
+
+  void _showGitHubLaunchError() {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Could not open GitHub. Try again later.'),
+        backgroundColor: BalatroTheme.neonPink,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

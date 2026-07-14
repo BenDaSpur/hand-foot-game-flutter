@@ -1,10 +1,11 @@
 # Hand & Foot Card Game
 
-![CI Status](https://github.com/BenDaSpur/hand-foot-game-flutter/workflows/CI/badge.svg)
+![CI Status](https://github.com/BenDaSpur/hand-foot-game-flutter/workflows/CI/badge.svg) <!-- pragma: allowlist secret -->
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A beautiful Flutter implementation of the classic Hand & Foot card game featuring intelligent AI opponents and a stunning Balatro-inspired neon aesthetic.
 
-🎮 **[Play Now](https://playhandfoot.com)** | 📥 **[Download](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
+🎮 **[Play Now](https://playhandfoot.com)** | 📥 **[Download](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)** | ⭐ **[GitHub](https://github.com/BenDaSpur/hand-foot-game-flutter)** <!-- pragma: allowlist secret -->
 
 ## ✨ Features
 
@@ -26,7 +27,7 @@ A beautiful Flutter implementation of the classic Hand & Foot card game featurin
 
 ## 📱 Download & Play
 
-**[📥 Download Latest Release](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)**
+**[📥 Download Latest Release](https://github.com/BenDaSpur/hand-foot-game-flutter/releases/latest)** <!-- pragma: allowlist secret -->
 
 Available for: **Web** ([playhandfoot.com](https://playhandfoot.com)) | Android (APK) | Windows | macOS | Linux
 
@@ -41,7 +42,7 @@ Available for: **Web** ([playhandfoot.com](https://playhandfoot.com)) | Android 
 
 ```bash
 # Clone the repository
-git clone https://github.com/BenDaSpur/hand-foot-game-flutter.git
+git clone https://github.com/BenDaSpur/hand-foot-game-flutter.git  # pragma: allowlist secret
 cd hand_foot_game_flutter
 
 # Install dependencies
@@ -121,12 +122,10 @@ lib/
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for setup, coding standards, and the pull request process.
+
+Please also read our [Code of Conduct](CODE_OF_CONDUCT.md). Security issues should be reported privately — see [SECURITY.md](SECURITY.md).
 
 ## 📜 License
 
-This project is available for personal and educational use.
+This project is licensed under the [MIT License](LICENSE).
