@@ -275,7 +275,7 @@ class MeldManager {
 
     final hand = player.currentHand;
     final possibleMelds = findPossibleMelds(player);
-    var possibleMeldsNeedWild = false;
+    var shouldHighlightWilds = false;
 
     for (final meld in possibleMelds) {
       final remaining = List<PlayingCard>.from(meld);
@@ -289,14 +289,31 @@ class MeldManager {
         }
       }
       if (meld.any((card) => card.isWild)) {
-        possibleMeldsNeedWild = true;
+        shouldHighlightWilds = true;
       }
+    }
+
+    // findPossibleMelds prefers clean melds when a rank has 3+ naturals, so it
+    // omits dirty alternatives. Wilds remain legal with those ranks (and with
+    // pair+wild candidates already flagged above).
+    if (!shouldHighlightWilds && hand.any((card) => card.isWild)) {
+      final naturalCounts = <CardRank, int>{};
+      for (final card in hand) {
+        if (!card.isWild && card.rank != CardRank.three) {
+          naturalCounts.update(
+            card.rank,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+        }
+      }
+      shouldHighlightWilds = naturalCounts.values.any((count) => count >= 3);
     }
 
     // findPossibleMelds reuses wildCards.take(...) without consuming, so only
     // the first wild is typically present in meld lists. Light up every wild
     // that could complete a dirty new meld.
-    if (possibleMeldsNeedWild) {
+    if (shouldHighlightWilds) {
       for (int i = 0; i < hand.length; i++) {
         if (hand[i].isWild) {
           playableIndices.add(i);

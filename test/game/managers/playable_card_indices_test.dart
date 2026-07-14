@@ -4,6 +4,9 @@ import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/widgets/playing_card_widget.dart';
+
+import '../../helpers/game_controller_test_helpers.dart';
 
 void main() {
   group('getPlayableCardIndices', () {
@@ -11,17 +14,9 @@ void main() {
     late Player human;
 
     setUp(() {
-      controller = GameController(
-        players: [
-          Player(id: '1', name: 'You', type: PlayerType.human),
-          Player(id: '2', name: 'Sue', type: PlayerType.bot),
-          Player(id: '3', name: 'Clara', type: PlayerType.bot),
-        ],
-        seed: 791591,
-      );
-      controller.initializeGame(dealCards: false);
-      human = controller.gameState.players.first;
-      controller.gameState.turnPhase = TurnPhase.meld;
+      final setup = createMeldPhaseTestController();
+      controller = setup.controller;
+      human = setup.human;
     });
 
     test(
@@ -66,6 +61,39 @@ void main() {
         expect(indices.contains(15), isTrue);
         expect(indices.contains(16), isTrue);
       },
+      tags: ['meld'],
+    );
+
+    test(
+      'marks wilds playable when findPossibleMelds only returns clean 3+',
+      () {
+        // Three kings → clean-only candidate; wild still legal for a dirty meld.
+        human.hand
+          ..clear()
+          ..addAll([
+            PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            PlayingCard(suit: Suit.spades, rank: CardRank.two),
+          ]);
+
+        final melds = controller.findPossibleMelds(human);
+        expect(melds.any((m) => m.any((c) => c.isWild)), isFalse);
+
+        final indices = controller.getPlayableCardIndices(human);
+        expect(indices.contains(0), isTrue);
+        expect(indices.contains(1), isTrue);
+        expect(indices.contains(2), isTrue);
+        expect(
+          indices.contains(4),
+          isTrue,
+          reason: 'wild usable for dirty king meld',
+        );
+        expect(indices.contains(5), isTrue, reason: 'all wilds highlighted');
+      },
+      tags: ['meld'],
     );
 
     test('returns empty set outside meld phase', () {
@@ -77,12 +105,13 @@ void main() {
       controller.gameState.turnPhase = TurnPhase.draw;
 
       expect(controller.getPlayableCardIndices(human), isEmpty);
-    });
+    }, tags: ['meld']);
   });
 
   test('handGlowPadding covers default playable glow blur', () {
-    // Original playable glow blurRadius max is 12.
-    const playableGlowBlur = 12.0;
-    expect(UIConstants.handGlowPadding, greaterThanOrEqualTo(playableGlowBlur));
+    expect(
+      UIConstants.handGlowPadding,
+      greaterThanOrEqualTo(PlayingCardWidget.playableOuterGlowBlur),
+    );
   });
 }

@@ -1,28 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
-import 'package:hand_foot_game_flutter/models/game_state.dart';
-import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/theme/balatro_theme.dart';
+import 'package:hand_foot_game_flutter/widgets/card_animation_host.dart';
 import 'package:hand_foot_game_flutter/widgets/game_hand_display.dart';
 import 'package:hand_foot_game_flutter/widgets/playing_card_widget.dart';
+
+import '../helpers/game_controller_test_helpers.dart';
 
 void main() {
   testWidgets(
     'fan hand marks dirty-meld pairs including Jacks as playable without Opacity(1)',
     (tester) async {
-      final controller = GameController(
-        players: [
-          Player(id: '1', name: 'You', type: PlayerType.human),
-          Player(id: '2', name: 'Sue', type: PlayerType.bot),
-          Player(id: '3', name: 'Clara', type: PlayerType.bot),
-        ],
-        seed: 791591,
-      );
-      controller.initializeGame(dealCards: false);
-      final human = controller.gameState.players.first;
-      controller.gameState.turnPhase = TurnPhase.meld;
+      final setup = createMeldPhaseTestController();
+      final controller = setup.controller;
+      final human = setup.human;
 
       human.hand
         ..clear()
@@ -46,13 +38,19 @@ void main() {
         MaterialApp(
           theme: BalatroTheme.testTheme,
           home: Scaffold(
-            body: SizedBox(
-              width: 800,
-              height: 200,
-              child: GameHandDisplay(
-                player: human,
-                selectedCardIndices: const [],
-                playableCardIndices: playable,
+            body: CardAnimationScope(
+              isAnimating: true,
+              // Hide one hand card so GameHandDisplay wraps it in Opacity(0),
+              // proving we never use Opacity(1) for visible cards.
+              hiddenHandIndices: const {0},
+              child: SizedBox(
+                width: 800,
+                height: 200,
+                child: GameHandDisplay(
+                  player: human,
+                  selectedCardIndices: const [],
+                  playableCardIndices: playable,
+                ),
               ),
             ),
           ),
@@ -73,15 +71,17 @@ void main() {
       expect(cardAt(8).isPlayable, isTrue, reason: 'J♦ dirty meld');
       expect(cardAt(2).isPlayable, isTrue, reason: 'clean 6s');
 
-      // Visible cards must not sit under Opacity(1) (clips outer glow).
-      final opacityWidgets = tester.widgetList<Opacity>(find.byType(Opacity));
-      for (final opacity in opacityWidgets) {
-        expect(
-          opacity.opacity,
-          isNot(1.0),
-          reason: 'Opacity(1) clips playable BoxShadows — use bare widget',
-        );
-      }
+      final opacityFinder = find.descendant(
+        of: find.byType(GameHandDisplay),
+        matching: find.byType(Opacity),
+      );
+      expect(opacityFinder, findsOneWidget);
+      expect(
+        tester.widget<Opacity>(opacityFinder).opacity,
+        0.0,
+        reason: 'hidden animating card uses Opacity(0), never Opacity(1)',
+      );
     },
+    tags: ['widget'],
   );
 }

@@ -15,18 +15,7 @@ void main() {
       final gc = result!.controller;
       final human = gc.gameState.players.first;
 
-      print(
-        'phase=${gc.gameState.turnPhase} req=${gc.gameState.playDownRequirement} pd=${human.hasPlayedDown}',
-      );
-      for (var i = 0; i < human.currentHand.length; i++) {
-        final c = human.currentHand[i];
-        print('[$i] ${c.displayName}');
-      }
-
       final melds = gc.findPossibleMelds(human);
-      for (final m in melds) {
-        print('meld: ${m.map((c) => c.displayName).join(', ')}');
-      }
 
       final jackIndices = <int>[];
       for (var i = 0; i < human.currentHand.length; i++) {
@@ -55,5 +44,6 @@ void main() {
       expect(indices.contains(6), isTrue);
       expect(indices.contains(7), isTrue);
     },
+    tags: ['regression'],
   );
 }
