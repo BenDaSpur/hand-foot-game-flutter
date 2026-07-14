@@ -78,6 +78,8 @@ class PlayingCardWidget extends StatelessWidget {
                     ? 2
                     : isNewlyDrawn
                     ? 2
+                    : isPlayable
+                    ? 2
                     : 1,
               ),
               borderRadius: BorderRadius.circular(12),
@@ -114,16 +116,23 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 3,
                   ),
                 ] else if (isPlayable) ...[
-                  // Playable cards get green glow
+                  // Playable cards get a strong green glow (must stay visible
+                  // on edge cards where scroll clipping used to hide softer
+                  // shadows).
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.5),
-                    blurRadius: 6,
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.75),
+                    blurRadius: 8,
                     spreadRadius: 1,
                   ),
                   BoxShadow(
+                    color: BalatroTheme.neonGreen.withValues(alpha: 0.45),
+                    blurRadius: 16,
+                    spreadRadius: 3,
+                  ),
+                  BoxShadow(
                     color: BalatroTheme.neonGreen.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    spreadRadius: 2,
+                    blurRadius: 22,
+                    spreadRadius: 5,
                   ),
                 ] else if (card.isWild) ...[
                   // Wild cards always have subtle rainbow glow

@@ -126,24 +126,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     });
   }
 
-  bool _isCardPlayable(PlayingCard card) {
+  Set<int> _playableCardIndices(Player humanPlayer) {
     if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
-      return false;
+      return {};
     }
 
     if (_gameController.gameState.turnPhase != TurnPhase.meld) {
-      return false;
+      return {};
     }
 
-    final currentUserPlayer = _gameController.getCurrentUserPlayer();
-    if (currentUserPlayer == null) return false;
-
-    for (int i = 0; i < currentUserPlayer.melds.length; i++) {
-      if (currentUserPlayer.melds[i].canAddCard(card)) {
-        return true;
-      }
-    }
-    return false;
+    return _gameController.getPlayableCardIndices(humanPlayer);
   }
 
   List<PlayingCard> get _selectedCards {
@@ -722,7 +714,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                         ),
                         onCardTap: _onCardTap,
                         onCardDoubleTap: _onCardDoubleTap,
-                        isCardPlayable: _isCardPlayable,
+                        playableCardIndices: _playableCardIndices(humanPlayer),
                         viewingPlayerMelds: _viewingPlayerMelds,
                         onReturnToHand: () =>
                             setState(() => _viewingPlayerMelds = null),

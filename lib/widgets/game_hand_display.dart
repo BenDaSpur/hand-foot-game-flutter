@@ -16,6 +16,8 @@ class GameHandDisplay extends StatelessWidget {
   final Function(int)? onCardTap;
   final Function(int)? onCardDoubleTap;
   final bool Function(PlayingCard)? isCardPlayable;
+  /// Preferred playable lookup by hand index (avoids equality edge cases).
+  final Set<int>? playableCardIndices;
   final Player? viewingPlayerMelds;
   final VoidCallback? onReturnToHand;
   final bool isCurrentPlayerTurn;
@@ -31,6 +33,7 @@ class GameHandDisplay extends StatelessWidget {
     this.onCardTap,
     this.onCardDoubleTap,
     this.isCardPlayable,
+    this.playableCardIndices,
     this.viewingPlayerMelds,
     this.onReturnToHand,
     this.isCurrentPlayerTurn = true,
@@ -91,7 +94,11 @@ class GameHandDisplay extends StatelessWidget {
                 child: SingleChildScrollView(
                   controller: handScrollController,
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  // Keep glow shadows visible on edge cards (pairs of 4s/5s etc.)
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: UIConstants.handGlowPadding,
+                  ),
                   child: SizedBox(
                     width: sizes.handStackWidth(player.currentHand.length),
                     height: stackHeight,
@@ -106,6 +113,9 @@ class GameHandDisplay extends StatelessWidget {
                               context,
                               index,
                             );
+                        final isPlayable = playableCardIndices != null
+                            ? playableCardIndices!.contains(index)
+                            : (isCardPlayable?.call(card) ?? false);
 
                         return Positioned(
                           left: sizes.handCardLeft(index),
@@ -130,7 +140,7 @@ class GameHandDisplay extends StatelessWidget {
                                 isSelected: selectedCardIndices.contains(index),
                                 isKeyboardFocused:
                                     keyboardFocusedCardIndex == index,
-                                isPlayable: isCardPlayable?.call(card) ?? false,
+                                isPlayable: isPlayable,
                                 isNewlyDrawn:
                                     showHighlights &&
                                     index < player.currentHand.length &&

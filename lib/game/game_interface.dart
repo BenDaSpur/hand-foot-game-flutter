@@ -34,6 +34,7 @@ abstract class GameInterface {
   bool canPlayerGoOut();
   List<List<PlayingCard>> findPossibleMelds(Player player);
   List<PlayingCard> getPlayableCards();
+  Set<int> getPlayableCardIndices(Player player);
 
   // Game management
   void initializeGame();
