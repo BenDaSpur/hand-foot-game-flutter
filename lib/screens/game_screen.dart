@@ -42,7 +42,6 @@ import '../widgets/keyboard_shortcuts_overlay.dart';
 import '../utils/game_responsive_layout.dart';
 import '../providers/game_providers.dart';
 import '../providers/computed_providers.dart';
-import '../services/learn_to_play_preferences.dart';
 import '../tutorial/learn_to_play_coordinator.dart';
 import '../tutorial/learn_to_play_session.dart';
 import '../tutorial/learn_to_play_step.dart';
@@ -134,7 +133,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     ref.read(soundEventListenerProvider); // Initialize sound effects
     if (_isLearnToPlay) {
       _learnCoordinator = LearnToPlayCoordinator();
-      LearnToPlayPreferences.dismissOffer();
     }
     _initializeGame();
   }
@@ -2182,10 +2180,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const MainMenuScreen(enableLearnToPlayOffer: false),
-                    ),
+                    MaterialPageRoute(builder: (_) => const MainMenuScreen()),
                     (route) => false,
                   );
                 },
@@ -2212,7 +2207,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   Future<void> _exitLearnToPlay() async {
-    await LearnToPlayPreferences.dismissOffer();
     if (!mounted) {
       return;
     }
