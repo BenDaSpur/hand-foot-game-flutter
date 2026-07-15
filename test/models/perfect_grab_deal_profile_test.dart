@@ -10,10 +10,19 @@ void main() {
       final profile = PerfectGrabDealProfile.standard();
 
       expect(profile.target, GameConfig.perfectGrabTarget);
-      expect(profile.baseDealIntervalMs, 340);
-      expect(profile.minDealIntervalMs, 72);
-      expect(profile.intervalStepMs, 11);
-      expect(profile.jitterMs, 45);
+      expect(
+        profile.baseDealIntervalMs,
+        GameConfig.perfectGrabStandardBaseDealIntervalMs,
+      );
+      expect(
+        profile.minDealIntervalMs,
+        GameConfig.perfectGrabStandardMinDealIntervalMs,
+      );
+      expect(
+        profile.intervalStepMs,
+        GameConfig.perfectGrabStandardIntervalStepMs,
+      );
+      expect(profile.jitterMs, GameConfig.perfectGrabStandardJitterMs);
       expect(profile.stutterBeforeCard, isEmpty);
     });
 
@@ -29,7 +38,10 @@ void main() {
           ),
         );
         expect(profile.maxCards, greaterThanOrEqualTo(profile.target));
-        expect(profile.maxCards, lessThanOrEqualTo(34));
+        expect(
+          profile.maxCards,
+          lessThanOrEqualTo(GameConfig.perfectGrabMaxCardsCap),
+        );
       }
     });
 
@@ -49,7 +61,47 @@ void main() {
 
       for (var card = 1; card <= profile.target; card++) {
         final interval = profile.dealIntervalForCard(card, random);
-        expect(interval.inMilliseconds, greaterThanOrEqualTo(55));
+        expect(
+          interval.inMilliseconds,
+          greaterThanOrEqualTo(GameConfig.perfectGrabDealIntervalFloorMs),
+        );
+      }
+    });
+
+    test('random stutters stay within configured bounds', () {
+      final random = Random(42);
+      for (var i = 0; i < 40; i++) {
+        final profile = PerfectGrabDealProfile.random(random);
+
+        expect(
+          profile.stutterBeforeCard.length,
+          lessThanOrEqualTo(GameConfig.perfectGrabMaxStutters),
+        );
+        for (final cardIndex in profile.stutterBeforeCard) {
+          expect(
+            cardIndex,
+            greaterThanOrEqualTo(GameConfig.perfectGrabMinStutterCardIndex),
+          );
+          expect(cardIndex, lessThan(profile.target));
+        }
+      }
+    });
+
+    test('stutterDelay stays within configured output range', () {
+      final profile = PerfectGrabDealProfile.random(Random(17));
+      final random = Random(17);
+
+      for (var i = 0; i < 30; i++) {
+        final delay = profile.stutterDelay(random);
+        expect(
+          delay.inMilliseconds,
+          inInclusiveRange(
+            GameConfig.perfectGrabStutterDelayMinMs,
+            GameConfig.perfectGrabStutterDelayMinMs +
+                GameConfig.perfectGrabStutterDelayRangeMs -
+                1,
+          ),
+        );
       }
     });
   });

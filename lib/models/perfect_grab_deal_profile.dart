@@ -27,10 +27,10 @@ class PerfectGrabDealProfile {
   factory PerfectGrabDealProfile.standard() {
     return const PerfectGrabDealProfile(
       target: GameConfig.perfectGrabTarget,
-      baseDealIntervalMs: 340,
-      minDealIntervalMs: 72,
-      intervalStepMs: 11,
-      jitterMs: 45,
+      baseDealIntervalMs: GameConfig.perfectGrabStandardBaseDealIntervalMs,
+      minDealIntervalMs: GameConfig.perfectGrabStandardMinDealIntervalMs,
+      intervalStepMs: GameConfig.perfectGrabStandardIntervalStepMs,
+      jitterMs: GameConfig.perfectGrabStandardJitterMs,
     );
   }
 
@@ -43,25 +43,40 @@ class PerfectGrabDealProfile {
 
     return PerfectGrabDealProfile(
       target: target,
-      baseDealIntervalMs: 270 + random.nextInt(120),
-      minDealIntervalMs: 58 + random.nextInt(35),
-      intervalStepMs: 8 + random.nextInt(8),
-      jitterMs: 55 + random.nextInt(45),
+      baseDealIntervalMs:
+          GameConfig.perfectGrabRandomBaseDealIntervalMinMs +
+          random.nextInt(GameConfig.perfectGrabRandomBaseDealIntervalRangeMs),
+      minDealIntervalMs:
+          GameConfig.perfectGrabRandomMinDealIntervalMinMs +
+          random.nextInt(GameConfig.perfectGrabRandomMinDealIntervalRangeMs),
+      intervalStepMs:
+          GameConfig.perfectGrabRandomIntervalStepMinMs +
+          random.nextInt(GameConfig.perfectGrabRandomIntervalStepRangeMs),
+      jitterMs:
+          GameConfig.perfectGrabRandomJitterMinMs +
+          random.nextInt(GameConfig.perfectGrabRandomJitterRangeMs),
       stutterBeforeCard: _randomStutters(random, target),
     );
   }
 
   static Set<int> _randomStutters(Random random, int target) {
-    final stutterCount = random.nextInt(3);
+    final stutterCount = random.nextInt(GameConfig.perfectGrabMaxStutters + 1);
     final stutters = <int>{};
     while (stutters.length < stutterCount) {
-      final cardIndex = 3 + random.nextInt(max(1, target - 3));
+      final cardIndex =
+          GameConfig.perfectGrabMinStutterCardIndex +
+          random.nextInt(
+            max(1, target - GameConfig.perfectGrabMinStutterCardIndex),
+          );
       stutters.add(cardIndex);
     }
     return stutters;
   }
 
-  int get maxCards => min(34, target + 10);
+  int get maxCards => min(
+    GameConfig.perfectGrabMaxCardsCap,
+    target + GameConfig.perfectGrabMaxCardsAboveTarget,
+  );
 
   Duration dealIntervalForCard(int nextCardIndex, Random random) {
     final baseMs = max(
@@ -69,10 +84,19 @@ class PerfectGrabDealProfile {
       baseDealIntervalMs - ((nextCardIndex - 1) * intervalStepMs),
     );
     final jitter = random.nextInt(jitterMs * 2 + 1) - jitterMs;
-    return Duration(milliseconds: max(55, baseMs + jitter));
+    return Duration(
+      milliseconds: max(
+        GameConfig.perfectGrabDealIntervalFloorMs,
+        baseMs + jitter,
+      ),
+    );
   }
 
   Duration stutterDelay(Random random) {
-    return Duration(milliseconds: 120 + random.nextInt(180));
+    return Duration(
+      milliseconds:
+          GameConfig.perfectGrabStutterDelayMinMs +
+          random.nextInt(GameConfig.perfectGrabStutterDelayRangeMs),
+    );
   }
 }

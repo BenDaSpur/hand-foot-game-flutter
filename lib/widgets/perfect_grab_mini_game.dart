@@ -348,7 +348,9 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
               final stackHeight = min(constraints.maxHeight, 220.0);
               final cardWidth = min(constraints.maxWidth * 0.34, 96.0);
               final cardHeight = cardWidth / GameConfig.cardAspectRatio;
-              final visibleCards = min(_cardCount, 8);
+              final visibleCards = widget.hideCounter
+                  ? GameConfig.perfectGrabBlindModePileCards
+                  : min(_cardCount, GameConfig.perfectGrabVisibleCardCap);
 
               return Center(
                 child: SizedBox(
