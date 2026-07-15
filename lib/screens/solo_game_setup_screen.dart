@@ -20,6 +20,7 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
   bool _isLoading = true;
   bool _botsManuallyConfigured = false;
   bool _seedManuallyConfigured = false;
+  String? _seedValidationError;
   final TextEditingController _seedController = TextEditingController();
 
   @override
@@ -76,11 +77,12 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
   void _onSeedChanged(String value) {
     final trimmed = value.trim();
     final nextConfigured = trimmed.isNotEmpty;
-    if (nextConfigured != _seedManuallyConfigured) {
-      setState(() {
-        _seedManuallyConfigured = nextConfigured;
-      });
-    }
+    setState(() {
+      _seedManuallyConfigured = nextConfigured;
+      if (!nextConfigured) {
+        _seedValidationError = null;
+      }
+    });
   }
 
   int? _parseManualSeed() {
@@ -95,6 +97,13 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
   }
 
   Future<void> _startGame() async {
+    if (_seedManuallyConfigured && _parseManualSeed() == null) {
+      setState(() {
+        _seedValidationError = 'Enter a valid non-negative seed number';
+      });
+      return;
+    }
+
     await _settings.saveToPreferences();
     if (!mounted) {
       return;
@@ -414,6 +423,7 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: 'Random',
+            errorText: _seedValidationError,
             hintStyle: TextStyle(
               color: BalatroTheme.primaryText.withValues(alpha: 0.5),
             ),

@@ -415,6 +415,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       personalities = configs.map((config) => config.personality).toList();
     }
 
+    final effectiveSettings = launch.useConfiguredBots
+        ? settings
+        : settings.copyWith(botPersonalities: personalities);
+
     // Debug logging for player setup
     DebugLogger.debug('Setting up fresh game with players:');
     for (var player in players) {
@@ -431,7 +435,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       players: players,
       seed: widget.testSeed ?? launch.gameSeed,
       eventBus: eventBus,
-      soloSettings: settings,
+      soloSettings: effectiveSettings,
     );
 
     // Store in Riverpod provider for reactive access
@@ -444,7 +448,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       botAI.assignPersonality(botPlayers[i].id, personalities[i]);
     }
 
-    _logSoloGameStarted(settings);
+    _logSoloGameStarted(effectiveSettings);
 
     newController.initializeGame(dealCards: false);
 
