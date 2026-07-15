@@ -12,7 +12,6 @@ import 'solo_game_setup_screen.dart';
 import 'multiplayer_game_screen.dart';
 import '../services/firebase_service.dart';
 import '../services/game_save_service.dart';
-import '../services/learn_to_play_preferences.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../models/player.dart';
 
@@ -53,17 +52,10 @@ abstract final class _MenuButtonLayout {
 }
 
 class MainMenuScreen extends StatefulWidget {
-  const MainMenuScreen({
-    super.key,
-    this.urlLauncher,
-    this.enableLearnToPlayOffer = true,
-  });
+  const MainMenuScreen({super.key, this.urlLauncher});
 
   /// Optional launcher override for tests. Defaults to [launchUrl].
   final Future<bool> Function(Uri uri)? urlLauncher;
-
-  /// When false, skips the first-visit Learn to Play dialog (useful in tests).
-  final bool enableLearnToPlayOffer;
 
   @override
   State<MainMenuScreen> createState() => _MainMenuScreenState();
@@ -81,61 +73,6 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     _checkForSavedSinglePlayerGame();
     _checkForRejoinableMultiplayerGame();
     _multiplayerAvailable = FirebaseService.isMultiplayerAvailable;
-    if (widget.enableLearnToPlayOffer) {
-      _maybeShowLearnToPlayOffer();
-    }
-  }
-
-  Future<void> _maybeShowLearnToPlayOffer() async {
-    final shouldShow = await LearnToPlayPreferences.shouldShowOffer();
-    if (!shouldShow || !mounted) {
-      return;
-    }
-    // Let the first frame paint before showing the dialog.
-    await Future<void>.delayed(Duration.zero);
-    if (!mounted) {
-      return;
-    }
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: BalatroTheme.darkPurple,
-          title: const Text(
-            'Learn to Play?',
-            style: TextStyle(color: BalatroTheme.primaryText),
-          ),
-          content: const Text(
-            'New to Hand & Foot or this app? Take a short guided lesson — '
-            'play along to learn the rules and controls, then a few winning tips.',
-            style: TextStyle(color: BalatroTheme.secondaryText),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await LearnToPlayPreferences.dismissOffer();
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text('Skip'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await LearnToPlayPreferences.dismissOffer();
-                if (!context.mounted) {
-                  return;
-                }
-                Navigator.of(context).pop();
-                _openLearnToPlay();
-              },
-              child: const Text('Start'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   /// Check for rejoinable multiplayer games
@@ -838,7 +775,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => GameScreen(settings: settings),
+            builder: (context) => GameScreen(
+              settings: settings,
+              launchOptions: const SoloGameLaunchOptions(),
+            ),
           ),
         );
       }

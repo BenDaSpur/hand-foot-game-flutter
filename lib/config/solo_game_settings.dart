@@ -8,6 +8,18 @@ import '../models/player.dart';
 import 'bot_configurations.dart';
 import 'game_config.dart';
 
+/// How a solo game should pick opponents and deck seed at launch.
+class SoloGameLaunchOptions {
+  const SoloGameLaunchOptions({this.useConfiguredBots = false, this.gameSeed});
+
+  /// When true, use personalities from [SoloGameSettings] (user configured them).
+  /// When false, shuffle the full bot roster for variety.
+  final bool useConfiguredBots;
+
+  /// Explicit deck seed. When null, [GameController] generates a random seed.
+  final int? gameSeed;
+}
+
 /// Configurable settings for a solo (human vs bots) game.
 class SoloGameSettings {
   static const int minBotCount = 1;
@@ -220,5 +232,27 @@ class SoloGameSettings {
       count,
       (_) => values[rng.nextInt(values.length)],
     );
+  }
+
+  /// Picks unique bots by shuffling the full roster (name + personality pairs).
+  static List<BotConfig> randomBotConfigurations(int count, {Random? random}) {
+    final rng = random ?? Random();
+    final options = List<BotConfig>.from(kBotConfigurations)..shuffle(rng);
+    return options.take(count.clamp(0, options.length)).toList();
+  }
+
+  /// Builds 1 human + N bots from pre-selected [BotConfig] entries.
+  static List<Player> buildPlayersFromBotConfigs(List<BotConfig> configs) {
+    final players = <Player>[
+      Player(id: '1', name: 'You', type: PlayerType.human),
+    ];
+
+    for (var i = 0; i < configs.length; i++) {
+      players.add(
+        Player(id: '${i + 2}', name: configs[i].name, type: PlayerType.bot),
+      );
+    }
+
+    return players;
   }
 }

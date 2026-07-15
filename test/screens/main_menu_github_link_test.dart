@@ -15,7 +15,6 @@ void main() {
       MaterialApp(
         theme: BalatroTheme.darkTheme,
         home: MainMenuScreen(
-          enableLearnToPlayOffer: false,
           urlLauncher: (uri) async {
             launchCalls++;
             launchedUri = uri;
@@ -44,10 +43,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: BalatroTheme.darkTheme,
-        home: MainMenuScreen(
-          enableLearnToPlayOffer: false,
-          urlLauncher: (_) async => false,
-        ),
+        home: MainMenuScreen(urlLauncher: (_) async => false),
       ),
     );
     await tester.pump();

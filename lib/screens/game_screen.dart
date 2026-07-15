@@ -42,7 +42,6 @@ import '../widgets/keyboard_shortcuts_overlay.dart';
 import '../utils/game_responsive_layout.dart';
 import '../providers/game_providers.dart';
 import '../providers/computed_providers.dart';
-import '../services/learn_to_play_preferences.dart';
 import '../tutorial/learn_to_play_coordinator.dart';
 import '../tutorial/learn_to_play_session.dart';
 import '../tutorial/learn_to_play_step.dart';
@@ -54,6 +53,8 @@ class GameScreen extends ConsumerStatefulWidget {
   final int? testSeed; // For deterministic testing
   final GameController? gameController; // For continuing saved games
   final SoloGameSettings? settings; // For new solo games from setup screen
+  final SoloGameLaunchOptions? launchOptions;
+
   /// When set, runs as Learn to Play on the real game board UI.
   final LearnToPlaySession? learnToPlaySession;
 
@@ -62,6 +63,7 @@ class GameScreen extends ConsumerStatefulWidget {
     this.testSeed,
     this.gameController,
     this.settings,
+    this.launchOptions,
     this.learnToPlaySession,
   });
 
@@ -131,7 +133,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     ref.read(soundEventListenerProvider); // Initialize sound effects
     if (_isLearnToPlay) {
       _learnCoordinator = LearnToPlayCoordinator();
-      LearnToPlayPreferences.dismissOffer();
     }
     _initializeGame();
   }
@@ -392,10 +393,31 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _startFreshGame() {
     final settings = widget.settings ?? SoloGameSettings.defaults;
-    final nameSeed =
-        widget.testSeed ?? settings.normalizedPersonalities.join().hashCode;
-    final players = settings.buildPlayers(random: Random(nameSeed));
-    final personalities = settings.normalizedPersonalities;
+    final launch = widget.launchOptions ?? const SoloGameLaunchOptions();
+
+    final List<Player> players;
+    final List<BotPersonality> personalities;
+
+    if (launch.useConfiguredBots) {
+      final nameSeed =
+          widget.testSeed ?? settings.normalizedPersonalities.join().hashCode;
+      players = settings.buildPlayers(random: Random(nameSeed));
+      personalities = settings.normalizedPersonalities;
+    } else {
+      final botRandom = widget.testSeed != null
+          ? Random(widget.testSeed!)
+          : Random();
+      final configs = SoloGameSettings.randomBotConfigurations(
+        settings.botCount,
+        random: botRandom,
+      );
+      players = SoloGameSettings.buildPlayersFromBotConfigs(configs);
+      personalities = configs.map((config) => config.personality).toList();
+    }
+
+    final effectiveSettings = launch.useConfiguredBots
+        ? settings
+        : settings.copyWith(botPersonalities: personalities);
 
     // Debug logging for player setup
     DebugLogger.debug('Setting up fresh game with players:');
@@ -411,9 +433,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     final newController = GameControllerFactory.createSingleplayerGame(
       players: players,
-      seed: widget.testSeed,
+      seed: widget.testSeed ?? launch.gameSeed,
       eventBus: eventBus,
-      soloSettings: settings,
+      soloSettings: effectiveSettings,
     );
 
     // Store in Riverpod provider for reactive access
@@ -426,7 +448,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       botAI.assignPersonality(botPlayers[i].id, personalities[i]);
     }
 
-    _logSoloGameStarted(settings);
+    _logSoloGameStarted(effectiveSettings);
 
     newController.initializeGame(dealCards: false);
 
@@ -2162,10 +2184,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const MainMenuScreen(enableLearnToPlayOffer: false),
-                    ),
+                    MaterialPageRoute(builder: (_) => const MainMenuScreen()),
                     (route) => false,
                   );
                 },
@@ -2192,7 +2211,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   Future<void> _exitLearnToPlay() async {
-    await LearnToPlayPreferences.dismissOffer();
     if (!mounted) {
       return;
     }
