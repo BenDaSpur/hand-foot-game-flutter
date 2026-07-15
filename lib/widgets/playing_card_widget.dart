@@ -24,6 +24,21 @@ class PlayingCardWidget extends StatelessWidget {
   static const double playableOuterGlowBlur = 12.0;
   static const double playableOuterGlowSpread = 2.0;
   static const double playableOuterGlowAlpha = 0.2;
+  static const double playableUpwardGlowBlur = 8.0;
+  static const double playableUpwardGlowSpread = 1.0;
+  static const double playableUpwardGlowAlpha = 0.45;
+  static const Offset playableUpwardGlowOffset = Offset(0, -3);
+
+  /// Shared depth shadow for playable and default hand cards.
+  static const Offset handDepthShadowOffset = Offset(2, 3);
+  static const double handDepthShadowBlur = 6.0;
+  static const double handDepthShadowSpread = 0.0;
+  static const BoxShadow handDepthShadow = BoxShadow(
+    color: Colors.black,
+    offset: handDepthShadowOffset,
+    blurRadius: handDepthShadowBlur,
+    spreadRadius: handDepthShadowSpread,
+  );
 
   /// Left-edge in-face cue width. Fan overlap buries side/outer glow on
   /// mid-hand cards; this strip stays visible in the peeking left edge.
@@ -132,19 +147,16 @@ class PlayingCardWidget extends StatelessWidget {
                   ),
                 ] else if (isPlayable) ...[
                   // Depth so playable cards don't look flatter than neighbors.
-                  const BoxShadow(
-                    color: Colors.black,
-                    offset: Offset(2, 3),
-                    blurRadius: 6,
-                    spreadRadius: 0,
-                  ),
+                  handDepthShadow,
                   // Upward glow: sibling cards cover side/bottom shadows; glow
                   // above the fan remains readable on mid-hand peeks.
                   BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(alpha: 0.45),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                    offset: const Offset(0, -3),
+                    color: BalatroTheme.neonGreen.withValues(
+                      alpha: playableUpwardGlowAlpha,
+                    ),
+                    blurRadius: playableUpwardGlowBlur,
+                    spreadRadius: playableUpwardGlowSpread,
+                    offset: playableUpwardGlowOffset,
                   ),
                   BoxShadow(
                     color: BalatroTheme.neonGreen.withValues(
@@ -188,12 +200,7 @@ class PlayingCardWidget extends StatelessWidget {
                 ] else ...[
                   // Depth only — large cyan/pink outer glows used to be mostly
                   // invisible (clipped by Opacity) and look noisy once fixed.
-                  const BoxShadow(
-                    color: Colors.black,
-                    offset: Offset(2, 3),
-                    blurRadius: 6,
-                    spreadRadius: 0,
-                  ),
+                  handDepthShadow,
                   BoxShadow(
                     color: BalatroTheme.cardBorder.withValues(alpha: 0.45),
                     blurRadius: 4,
