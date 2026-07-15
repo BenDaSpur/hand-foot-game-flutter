@@ -73,6 +73,12 @@ class GameConfig {
   /// Target card count for the perfect-grab mini-game (hand + foot)
   static const int perfectGrabTarget = handSize + footSize; // 22 cards
 
+  /// Randomized grab targets keep the mini-game from being solved by muscle memory.
+  static const int perfectGrabTargetMin = perfectGrabTarget - 2;
+
+  /// Upper bound for randomized perfect-grab targets.
+  static const int perfectGrabTargetMax = perfectGrabTarget + 2;
+
   /// Total points needed to win the game
   static const int winningScore = 8500;
 

@@ -22,7 +22,7 @@ import '../widgets/game_app_bar.dart';
 import '../widgets/game_session_info_menu.dart';
 import '../widgets/card_animation_host.dart';
 import '../widgets/final_turn_banner.dart';
-import '../widgets/perfect_grab_mini_game.dart';
+import '../widgets/round_start_mini_game.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
 import '../services/analytics/bot_decision_analytics_snapshot.dart';
@@ -444,7 +444,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
-    final earnedBonus = await PerfectGrabMiniGame.show(
+    final earnedBonus = await RoundStartMiniGame.show(
       context,
       roundNumber: roundNumber,
     );
