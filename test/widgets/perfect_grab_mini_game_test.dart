@@ -4,10 +4,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
+import 'package:hand_foot_game_flutter/models/perfect_grab_deal_profile.dart';
+import 'package:hand_foot_game_flutter/widgets/card_back_widget.dart';
 import 'package:hand_foot_game_flutter/widgets/perfect_grab_mini_game.dart';
 
 const _testDealInterval = Duration(milliseconds: 50);
 const _resultDismissDelay = Duration(milliseconds: 2200);
+final _testProfile = PerfectGrabDealProfile.standard();
 
 Future<void> _startPlayingPhase(WidgetTester tester) async {
   await tester.tap(find.text('GET READY'));
@@ -43,6 +46,7 @@ void main() {
                     result = await PerfectGrabMiniGame.show(
                       context,
                       roundNumber: 2,
+                      dealProfile: _testProfile,
                     );
                   },
                   child: const Text('Open'),
@@ -79,6 +83,7 @@ void main() {
         MaterialApp(
           home: PerfectGrabMiniGame(
             roundNumber: 1,
+            dealProfile: _testProfile,
             fixedDealInterval: _testDealInterval,
             onComplete: (_) {},
           ),
@@ -99,6 +104,7 @@ void main() {
         MaterialApp(
           home: PerfectGrabMiniGame(
             roundNumber: 1,
+            dealProfile: _testProfile,
             fixedDealInterval: _testDealInterval,
             onComplete: (earnedBonus) {
               result = earnedBonus;
@@ -132,6 +138,7 @@ void main() {
         MaterialApp(
           home: PerfectGrabMiniGame(
             roundNumber: 1,
+            dealProfile: _testProfile,
             fixedDealInterval: _testDealInterval,
             onComplete: (earnedBonus) {
               result = earnedBonus;
@@ -141,13 +148,66 @@ void main() {
       );
 
       await _startPlayingPhase(tester);
-      await _dealCards(tester, 34);
+      await _dealCards(tester, _testProfile.maxCards);
 
       expect(find.text('So Close...'), findsOneWidget);
       expect(find.textContaining('Need exactly'), findsOneWidget);
 
       await _dismissResult(tester);
       expect(result, isFalse);
+    });
+
+    testWidgets('blind mode hides live count and card pile during play', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PerfectGrabMiniGame(
+            roundNumber: 1,
+            dealProfile: _testProfile,
+            hideCounter: true,
+            title: 'Blind Grab',
+            fixedDealInterval: _testDealInterval,
+            onComplete: (_) {},
+          ),
+        ),
+      );
+
+      await _startPlayingPhase(tester);
+      await _dealCards(tester, 10);
+
+      expect(find.text('Blind Grab'), findsOneWidget);
+      expect(find.text('?'), findsOneWidget);
+      expect(find.text('count hidden'), findsOneWidget);
+      expect(find.text('10'), findsNothing);
+      expect(
+        find.byType(CardBackWidget),
+        findsNWidgets(GameConfig.perfectGrabBlindModePileCards),
+      );
+    });
+
+    testWidgets('visible mode grows card pile with dealt count', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PerfectGrabMiniGame(
+            roundNumber: 1,
+            dealProfile: _testProfile,
+            fixedDealInterval: _testDealInterval,
+            onComplete: (_) {},
+          ),
+        ),
+      );
+
+      await _startPlayingPhase(tester);
+      await _dealCards(tester, 10);
+
+      expect(find.text('10'), findsOneWidget);
+      expect(
+        find.byType(CardBackWidget),
+        findsNWidgets(GameConfig.perfectGrabVisibleCardCap),
+      );
     });
   });
 }

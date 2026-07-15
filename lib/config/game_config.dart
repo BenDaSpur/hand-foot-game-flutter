@@ -73,6 +73,46 @@ class GameConfig {
   /// Target card count for the perfect-grab mini-game (hand + foot)
   static const int perfectGrabTarget = handSize + footSize; // 22 cards
 
+  /// Randomized grab targets keep the mini-game from being solved by muscle memory.
+  static const int perfectGrabTargetMin = perfectGrabTarget - 2;
+
+  /// Upper bound for randomized perfect-grab targets.
+  static const int perfectGrabTargetMax = perfectGrabTarget + 2;
+
+  /// Absolute cap on cards dealt in the perfect-grab mini-game.
+  static const int perfectGrabMaxCardsCap = 34;
+
+  /// Extra cards dealt beyond the target before forced grab.
+  static const int perfectGrabMaxCardsAboveTarget = 10;
+
+  /// Standard deal-timing defaults (legacy behavior).
+  static const int perfectGrabStandardBaseDealIntervalMs = 340;
+  static const int perfectGrabStandardMinDealIntervalMs = 72;
+  static const int perfectGrabStandardIntervalStepMs = 11;
+  static const int perfectGrabStandardJitterMs = 45;
+
+  /// Random deal-timing ranges for per-round variance.
+  static const int perfectGrabRandomBaseDealIntervalMinMs = 270;
+  static const int perfectGrabRandomBaseDealIntervalRangeMs = 120;
+  static const int perfectGrabRandomMinDealIntervalMinMs = 58;
+  static const int perfectGrabRandomMinDealIntervalRangeMs = 35;
+  static const int perfectGrabRandomIntervalStepMinMs = 8;
+  static const int perfectGrabRandomIntervalStepRangeMs = 8;
+  static const int perfectGrabRandomJitterMinMs = 55;
+  static const int perfectGrabRandomJitterRangeMs = 45;
+  static const int perfectGrabDealIntervalFloorMs = 55;
+
+  /// Stutter pause configuration.
+  static const int perfectGrabMaxStutters = 2;
+  static const int perfectGrabMinStutterCardIndex = 3;
+  static const int perfectGrabStutterDelayMinMs = 120;
+  static const int perfectGrabStutterDelayRangeMs = 180;
+
+  /// Fixed card-back pile shown in blind-grab mode (does not reveal count).
+  static const int perfectGrabBlindModePileCards = 6;
+
+  static const int perfectGrabVisibleCardCap = 8;
+
   /// Total points needed to win the game
   static const int winningScore = 8500;
 
