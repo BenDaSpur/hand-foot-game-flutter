@@ -838,7 +838,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => GameScreen(settings: settings),
+            builder: (context) => GameScreen(
+              settings: settings,
+              launchOptions: const SoloGameLaunchOptions(),
+            ),
           ),
         );
       }

@@ -18,11 +18,20 @@ class SoloGameSetupScreen extends StatefulWidget {
 class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
   late SoloGameSettings _settings;
   bool _isLoading = true;
+  bool _botsManuallyConfigured = false;
+  bool _seedManuallyConfigured = false;
+  final TextEditingController _seedController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _seedController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -37,6 +46,7 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
 
   void _setBotCount(int count) {
     setState(() {
+      _botsManuallyConfigured = true;
       _settings = _settings.copyWith(botCount: count);
     });
   }
@@ -47,18 +57,41 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
     );
     personalities[index] = personality;
     setState(() {
+      _botsManuallyConfigured = true;
       _settings = _settings.copyWith(botPersonalities: personalities);
     });
   }
 
   void _randomizePersonalities() {
     setState(() {
+      _botsManuallyConfigured = true;
       _settings = _settings.copyWith(
         botPersonalities: SoloGameSettings.randomPersonalities(
           _settings.botCount,
         ),
       );
     });
+  }
+
+  void _onSeedChanged(String value) {
+    final trimmed = value.trim();
+    final nextConfigured = trimmed.isNotEmpty;
+    if (nextConfigured != _seedManuallyConfigured) {
+      setState(() {
+        _seedManuallyConfigured = nextConfigured;
+      });
+    }
+  }
+
+  int? _parseManualSeed() {
+    if (!_seedManuallyConfigured) {
+      return null;
+    }
+    final parsed = int.tryParse(_seedController.text.trim());
+    if (parsed == null || parsed < 0) {
+      return null;
+    }
+    return parsed;
   }
 
   Future<void> _startGame() async {
@@ -68,7 +101,15 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
     }
 
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => GameScreen(settings: _settings)),
+      MaterialPageRoute(
+        builder: (context) => GameScreen(
+          settings: _settings,
+          launchOptions: SoloGameLaunchOptions(
+            useConfiguredBots: _botsManuallyConfigured,
+            gameSeed: _parseManualSeed(),
+          ),
+        ),
+      ),
     );
   }
 
@@ -102,6 +143,8 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
                             _buildBotCountSelector(),
                             const SizedBox(height: 24),
                             _buildBotPersonalitiesSection(),
+                            const SizedBox(height: 24),
+                            _buildSeedField(),
                             const SizedBox(height: 24),
                             _buildRuleToggle(
                               title:
@@ -230,7 +273,9 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
 
   Widget _buildBotPersonalitiesSection() {
     final personalities = _settings.normalizedPersonalities;
-    final previewNames = _settings.previewBotNames;
+    final previewNames = _botsManuallyConfigured
+        ? _settings.previewBotNames
+        : List.filled(personalities.length, 'Random');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,13 +283,28 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
         Row(
           children: [
             Expanded(
-              child: Text(
-                'Bot Personalities',
-                style: TextStyle(
-                  color: BalatroTheme.neonPink,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bot Personalities',
+                    style: TextStyle(
+                      color: BalatroTheme.neonPink,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (!_botsManuallyConfigured) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Opponents are randomized unless you change these',
+                      style: TextStyle(
+                        color: BalatroTheme.primaryText.withValues(alpha: 0.7),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             TextButton.icon(
@@ -324,6 +384,61 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSeedField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Game Seed (optional)',
+          style: TextStyle(
+            color: BalatroTheme.neonPink,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Leave blank for a random seed each game',
+          style: TextStyle(
+            color: BalatroTheme.primaryText.withValues(alpha: 0.7),
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _seedController,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Random',
+            hintStyle: TextStyle(
+              color: BalatroTheme.primaryText.withValues(alpha: 0.5),
+            ),
+            filled: true,
+            fillColor: BalatroTheme.cardBackground,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: BalatroTheme.neonPink.withValues(alpha: 0.3),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: BalatroTheme.neonPink.withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: BalatroTheme.neonPink),
+            ),
+          ),
+          onChanged: _onSeedChanged,
+        ),
+      ],
     );
   }
 

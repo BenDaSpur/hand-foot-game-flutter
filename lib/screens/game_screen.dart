@@ -54,6 +54,8 @@ class GameScreen extends ConsumerStatefulWidget {
   final int? testSeed; // For deterministic testing
   final GameController? gameController; // For continuing saved games
   final SoloGameSettings? settings; // For new solo games from setup screen
+  final SoloGameLaunchOptions? launchOptions;
+
   /// When set, runs as Learn to Play on the real game board UI.
   final LearnToPlaySession? learnToPlaySession;
 
@@ -62,6 +64,7 @@ class GameScreen extends ConsumerStatefulWidget {
     this.testSeed,
     this.gameController,
     this.settings,
+    this.launchOptions,
     this.learnToPlaySession,
   });
 
@@ -392,10 +395,27 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _startFreshGame() {
     final settings = widget.settings ?? SoloGameSettings.defaults;
-    final nameSeed =
-        widget.testSeed ?? settings.normalizedPersonalities.join().hashCode;
-    final players = settings.buildPlayers(random: Random(nameSeed));
-    final personalities = settings.normalizedPersonalities;
+    final launch = widget.launchOptions ?? const SoloGameLaunchOptions();
+
+    final List<Player> players;
+    final List<BotPersonality> personalities;
+
+    if (launch.useConfiguredBots) {
+      final nameSeed =
+          widget.testSeed ?? settings.normalizedPersonalities.join().hashCode;
+      players = settings.buildPlayers(random: Random(nameSeed));
+      personalities = settings.normalizedPersonalities;
+    } else {
+      final botRandom = widget.testSeed != null
+          ? Random(widget.testSeed!)
+          : Random();
+      final configs = SoloGameSettings.randomBotConfigurations(
+        settings.botCount,
+        random: botRandom,
+      );
+      players = SoloGameSettings.buildPlayersFromBotConfigs(configs);
+      personalities = configs.map((config) => config.personality).toList();
+    }
 
     // Debug logging for player setup
     DebugLogger.debug('Setting up fresh game with players:');
@@ -411,7 +431,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     final newController = GameControllerFactory.createSingleplayerGame(
       players: players,
-      seed: widget.testSeed,
+      seed: widget.testSeed ?? launch.gameSeed,
       eventBus: eventBus,
       soloSettings: settings,
     );

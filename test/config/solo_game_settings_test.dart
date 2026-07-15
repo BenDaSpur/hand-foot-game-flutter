@@ -90,5 +90,54 @@ void main() {
           .toList();
       expect(botNames, settings.previewBotNames);
     });
+
+    test('randomBotConfigurations returns unique bots up to roster size', () {
+      final configs = SoloGameSettings.randomBotConfigurations(
+        3,
+        random: Random(42),
+      );
+
+      expect(configs, hasLength(3));
+      expect(configs.map((config) => config.name).toSet(), hasLength(3));
+    });
+
+    test('buildPlayersFromBotConfigs maps bot names from configs', () {
+      final configs = SoloGameSettings.randomBotConfigurations(
+        2,
+        random: Random(7),
+      );
+      final players = SoloGameSettings.buildPlayersFromBotConfigs(configs);
+
+      expect(players, hasLength(3));
+      expect(players.first.name, 'You');
+      expect(
+        players.skip(1).map((player) => player.name).toList(),
+        configs.map((config) => config.name).toList(),
+      );
+    });
+
+    test('randomBotConfigurations is seed-deterministic', () {
+      final first = SoloGameSettings.randomBotConfigurations(
+        2,
+        random: Random(99),
+      );
+      final second = SoloGameSettings.randomBotConfigurations(
+        2,
+        random: Random(99),
+      );
+      final third = SoloGameSettings.randomBotConfigurations(
+        2,
+        random: Random(100),
+      );
+
+      expect(
+        first.map((config) => config.name),
+        second.map((config) => config.name),
+      );
+      expect(
+        first.map((config) => config.name),
+        isNot(equals(third.map((config) => config.name))),
+      );
+    });
   });
 }
