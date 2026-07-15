@@ -17,13 +17,34 @@ class PlayingCardWidget extends StatelessWidget {
   static const double cardMargin = 2.0;
 
   /// Shared playable-treatment values (subtle green highlight).
-  static const double playableBorderWidth = 1.0;
+  static const double playableBorderWidth = 1.5;
   static const double playableInnerGlowBlur = 6.0;
   static const double playableInnerGlowSpread = 1.0;
   static const double playableInnerGlowAlpha = 0.5;
   static const double playableOuterGlowBlur = 12.0;
   static const double playableOuterGlowSpread = 2.0;
   static const double playableOuterGlowAlpha = 0.2;
+  static const double playableUpwardGlowBlur = 8.0;
+  static const double playableUpwardGlowSpread = 1.0;
+  static const double playableUpwardGlowAlpha = 0.45;
+  static const Offset playableUpwardGlowOffset = Offset(0, -3);
+
+  /// Shared depth shadow for playable and default hand cards.
+  static const Offset handDepthShadowOffset = Offset(2, 3);
+  static const double handDepthShadowBlur = 6.0;
+  static const double handDepthShadowSpread = 0.0;
+  static const BoxShadow handDepthShadow = BoxShadow(
+    color: Colors.black,
+    offset: handDepthShadowOffset,
+    blurRadius: handDepthShadowBlur,
+    spreadRadius: handDepthShadowSpread,
+  );
+
+  /// Left-edge in-face cue width. Fan overlap buries side/outer glow on
+  /// mid-hand cards; this strip stays visible in the peeking left edge.
+  static const double playableFaceStripeWidth = 3.0;
+  static const double playableFaceStripeAlpha = 0.85;
+  static const Key playableFaceStripeKey = ValueKey('playable-face-stripe');
 
   const PlayingCardWidget({
     super.key,
@@ -125,7 +146,18 @@ class PlayingCardWidget extends StatelessWidget {
                     spreadRadius: 3,
                   ),
                 ] else if (isPlayable) ...[
-                  // Playable cards get green glow (original subtle look)
+                  // Depth so playable cards don't look flatter than neighbors.
+                  handDepthShadow,
+                  // Upward glow: sibling cards cover side/bottom shadows; glow
+                  // above the fan remains readable on mid-hand peeks.
+                  BoxShadow(
+                    color: BalatroTheme.neonGreen.withValues(
+                      alpha: playableUpwardGlowAlpha,
+                    ),
+                    blurRadius: playableUpwardGlowBlur,
+                    spreadRadius: playableUpwardGlowSpread,
+                    offset: playableUpwardGlowOffset,
+                  ),
                   BoxShadow(
                     color: BalatroTheme.neonGreen.withValues(
                       alpha: playableInnerGlowAlpha,
@@ -168,12 +200,7 @@ class PlayingCardWidget extends StatelessWidget {
                 ] else ...[
                   // Depth only — large cyan/pink outer glows used to be mostly
                   // invisible (clipped by Opacity) and look noisy once fixed.
-                  const BoxShadow(
-                    color: Colors.black,
-                    offset: Offset(2, 3),
-                    blurRadius: 6,
-                    spreadRadius: 0,
-                  ),
+                  handDepthShadow,
                   BoxShadow(
                     color: BalatroTheme.cardBorder.withValues(alpha: 0.45),
                     blurRadius: 4,
@@ -183,7 +210,29 @@ class PlayingCardWidget extends StatelessWidget {
               ],
             ),
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
+                // In-face cue: survives fan overlap burying outer/side glow
+                // (visible on the peeking left strip of mid-hand cards).
+                if (isPlayable && !isSelected && !isNewlyDrawn)
+                  Positioned(
+                    key: playableFaceStripeKey,
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: playableFaceStripeWidth,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: BalatroTheme.neonGreen.withValues(
+                          alpha: playableFaceStripeAlpha,
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          bottomLeft: Radius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
                 // Holographic shimmer effect
                 if (card.isWild)
                   Container(

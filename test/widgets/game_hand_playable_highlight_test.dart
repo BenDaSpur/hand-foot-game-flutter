@@ -71,6 +71,13 @@ void main() {
       expect(cardAt(8).isPlayable, isTrue, reason: 'J♦ dirty meld');
       expect(cardAt(2).isPlayable, isTrue, reason: 'clean 6s');
 
+      // Mid-hand playable cards must keep an in-face stripe — outer glow is
+      // buried under the fan (session: first 8 looked unhighlighted).
+      expect(
+        find.byKey(PlayingCardWidget.playableFaceStripeKey).evaluate().length,
+        playable.length,
+      );
+
       final opacityFinder = find.descendant(
         of: find.byType(GameHandDisplay),
         matching: find.byType(Opacity),
