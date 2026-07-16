@@ -85,6 +85,58 @@ void main() {
         isFalse,
       );
     });
+
+    test('returns false when transitioning from human to bot turn', () {
+      expect(
+        shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: 1,
+          humanPlayerIndex: 0,
+          lastCurrentPlayerIndex: 0,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'human bot human transition resets highlight when bot turn is tracked',
+      () {
+        var lastTrackedPlayerIndex = 0;
+        int? keyboardFocus = 5;
+
+        const botPlayerIndex = 1;
+        lastTrackedPlayerIndex = botPlayerIndex;
+
+        const humanPlayerIndex = 0;
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: humanPlayerIndex,
+          humanPlayerIndex: humanPlayerIndex,
+          lastCurrentPlayerIndex: lastTrackedPlayerIndex,
+        )) {
+          keyboardFocus = null;
+        }
+
+        expect(keyboardFocus, isNull);
+      },
+    );
+
+    test(
+      'human bot human transition keeps highlight if bot turn is not tracked',
+      () {
+        const lastTrackedPlayerIndex = 0;
+        int? keyboardFocus = 5;
+
+        const humanPlayerIndex = 0;
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: humanPlayerIndex,
+          humanPlayerIndex: humanPlayerIndex,
+          lastCurrentPlayerIndex: lastTrackedPlayerIndex,
+        )) {
+          keyboardFocus = null;
+        }
+
+        expect(keyboardFocus, 5);
+      },
+    );
   });
 
   group('clampKeyboardFocus', () {

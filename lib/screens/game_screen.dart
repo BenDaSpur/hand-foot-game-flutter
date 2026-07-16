@@ -629,15 +629,23 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       );
 
       // CRITICAL: Detect and recover from stuck bot turns
-      if (currentPlayer.type == PlayerType.bot && !_isBotTurnInProgress) {
-        // Bot turn should be processing but isn't - this indicates a stuck state
-        DebugLogger.debug(
-          'Detected stuck bot turn for ${currentPlayer.name} - initiating recovery',
-        );
-        _botTurnManager.resetProcessingState();
-        // Clear any stale bot queue
-        _botTurnQueue.clear();
-        // Force bot turn processing to restart
+      if (currentPlayer.type == PlayerType.bot) {
+        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
+
+        if (!_isBotTurnInProgress) {
+          // Bot turn should be processing but isn't - this indicates a stuck state
+          DebugLogger.debug(
+            'Detected stuck bot turn for ${currentPlayer.name} - initiating recovery',
+          );
+          _botTurnManager.resetProcessingState();
+          // Clear any stale bot queue
+          _botTurnQueue.clear();
+          // Force bot turn processing to restart
+          _queueBotTurn(currentPlayer);
+          return;
+        }
+
+        DebugLogger.debug('Queueing bot turn for ${currentPlayer.name}');
         _queueBotTurn(currentPlayer);
         return;
       }
@@ -689,13 +697,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           }
         }
         return;
-      }
-
-      // Bot turn: Queue for sequential processing
-      if (currentPlayer.type == PlayerType.bot) {
-        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
-        DebugLogger.debug('Queueing bot turn for ${currentPlayer.name}');
-        _queueBotTurn(currentPlayer);
       }
     } catch (e) {
       DebugLogger.error('Error in processCurrentPlayerTurn: $e');
@@ -1184,6 +1185,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     final cardsBeforeUnlock = gameState.discardPile.length;
     if (controller.unlockDiscardPile()) {
+      _hasPlayerInteractedSinceDraw = false;
+      _clearHandHighlightState();
+      setState(() {});
       // UI will update via Riverpod reactivity when DiscardPileUnlockedEvent fires
       debugPrint('DEBUG: Discard pile unlocked successfully');
       _logHumanAction(

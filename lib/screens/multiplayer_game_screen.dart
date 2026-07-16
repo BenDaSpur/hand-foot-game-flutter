@@ -188,18 +188,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _onDrawFromDeck() {
-    _gameController.drawFromDeck();
-    setState(_clearHandHighlightState);
+    if (_gameController.drawFromDeck()) {
+      setState(_clearHandHighlightState);
+    }
   }
 
   void _onUnlockDiscard() {
-    _gameController.unlockDiscardPile();
-    setState(_clearHandHighlightState);
+    if (_gameController.unlockDiscardPile()) {
+      setState(_clearHandHighlightState);
+    }
   }
 
   void _onDiscard() {
-    if (_selectedCards.length == 1) {
-      _gameController.discardCard(_selectedCards.first);
+    if (_selectedCards.length == 1 &&
+        _gameController.discardCard(_selectedCards.first)) {
       setState(_clearHandHighlightState);
     }
   }
