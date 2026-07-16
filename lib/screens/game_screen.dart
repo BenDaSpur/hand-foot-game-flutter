@@ -111,6 +111,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   // Keyboard shortcuts
   int? _keyboardFocusedCardIndex;
+  int? _lastCurrentPlayerIndexForHighlight;
   bool _showKeyboardHelp = false;
 
   // Card draw animation anchors
@@ -255,7 +256,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       },
       onRoundEnd: () {
         // Clear UI selections and reset for next round
-        _selectedCardIndices.clear();
+        _clearHandHighlightState();
         _viewingPlayerMelds = null;
         processCurrentPlayerTurn();
       },
@@ -291,7 +292,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           _botTurnManager.assignBotPersonalities();
         }
 
-        _selectedCardIndices.clear();
+        _clearHandHighlightState();
         _viewingPlayerMelds = null;
         _isInitialized = true;
 
@@ -496,7 +497,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
     } else {
       if (mounted) {
-        _selectedCardIndices.clear();
+        _clearHandHighlightState();
         _viewingPlayerMelds = null;
 
         _persistenceManager.saveGameState().catchError((error) {
@@ -664,6 +665,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       if (currentPlayer.type == PlayerType.human ||
           currentPlayer.name == 'You') {
         DebugLogger.debug('Human turn - waiting for input');
+        final humanIndex = gameState.players.indexWhere(
+          (p) => p.type == PlayerType.human,
+        );
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: gameState.currentPlayerIndex,
+          humanPlayerIndex: humanIndex,
+          lastCurrentPlayerIndex: _lastCurrentPlayerIndexForHighlight,
+        )) {
+          _clearHandHighlightState();
+          if (mounted) {
+            setState(() {});
+          }
+        }
+        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
         _gameStateManager.validateHumanPlayerState();
         // CRITICAL: Ensure we never auto-process human turns
         _botTurnManager
@@ -678,6 +693,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
       // Bot turn: Queue for sequential processing
       if (currentPlayer.type == PlayerType.bot) {
+        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
         DebugLogger.debug('Queueing bot turn for ${currentPlayer.name}');
         _queueBotTurn(currentPlayer);
       }
@@ -1046,7 +1062,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     setState(() {
       _isInitialized = false;
-      _selectedCardIndices.clear();
+      _clearHandHighlightState();
       _viewingPlayerMelds = null;
     });
 
@@ -1072,7 +1088,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       coordinator.advanceOn(LearnToPlayAction.draw);
       _hasPlayerInteractedSinceDraw = false;
       // Keep the hand unselected so play-down happens in the meld modal.
-      _selectedCardIndices.clear();
+      _clearHandHighlightState();
       setState(() {});
       return;
     }
@@ -1087,7 +1103,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       // Cards are now automatically inserted in sorted position
       _hasPlayerInteractedSinceDraw =
           false; // Reset interaction flag after drawing
-      // UI will update automatically via provider reactivity when event fires
+      _clearHandHighlightState();
+      setState(() {});
     } else {
       // Check if the round ended automatically due to insufficient cards
       final gameState = ref.read(currentGameStateProvider);
@@ -1469,7 +1486,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
       coordinator.advanceOn(LearnToPlayAction.discard);
       session.keepHumanInControl();
-      _selectedCardIndices.clear();
+      _clearHandHighlightState();
       setState(() {});
       return;
     }
@@ -1504,7 +1521,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             _botTurnManager.handlePostDiscardState(humanPlayer);
 
             setState(() {});
-            _selectedCardIndices.clear();
+            _clearHandHighlightState();
             await _gameStateManager.checkAndHandleRoundEnd();
 
             // Schedule bot processing for next frame to avoid immediate execution during human turn
@@ -1559,7 +1576,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _botTurnManager.handlePostDiscardState(humanPlayer);
 
         // UI will update automatically via provider reactivity
-        _selectedCardIndices.clear();
+        _clearHandHighlightState();
+        setState(() {});
         await _gameStateManager.checkAndHandleRoundEnd();
 
         // Schedule bot processing for next frame to avoid immediate execution during human turn
@@ -1626,12 +1644,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
 
     setState(() {
-      _selectedCardIndices.clear();
-      _keyboardFocusedCardIndex = clampKeyboardFocus(
-        index: _keyboardFocusedCardIndex,
-        handLength: humanPlayer.currentHand.length,
-      );
+      _clearHandHighlightState();
     });
+  }
+
+  void _clearHandHighlightState() {
+    _selectedCardIndices.clear();
+    _keyboardFocusedCardIndex = null;
   }
 
   void _onFocusPreviousCard() {

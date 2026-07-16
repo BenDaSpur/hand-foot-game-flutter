@@ -49,6 +49,44 @@ void main() {
     });
   });
 
+  group('shouldResetHandHighlightOnTurnChange', () {
+    test(
+      'returns false on first human turn before any prior player tracked',
+      () {
+        expect(
+          shouldResetHandHighlightOnTurnChange(
+            currentPlayerIndex: 0,
+            humanPlayerIndex: 0,
+            lastCurrentPlayerIndex: null,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('returns true when play returns to the human after a bot turn', () {
+      expect(
+        shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: 0,
+          humanPlayerIndex: 0,
+          lastCurrentPlayerIndex: 2,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns false while the human remains the current player', () {
+      expect(
+        shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: 0,
+          humanPlayerIndex: 0,
+          lastCurrentPlayerIndex: 0,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('clampKeyboardFocus', () {
     test('returns null for empty hand', () {
       expect(clampKeyboardFocus(index: 2, handLength: 0), isNull);
