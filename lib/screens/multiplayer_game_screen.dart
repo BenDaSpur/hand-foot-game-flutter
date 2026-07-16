@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -50,17 +51,41 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   final ScrollController _handScrollController = ScrollController();
 
   int? _keyboardFocusedCardIndex;
+  String? _lastCurrentPlayerIdForHighlight;
   bool _showKeyboardHelp = false;
   bool _isCardAnimationActive = false;
+  StreamSubscription<GameState>? _gameStateSubscription;
 
   @override
   void initState() {
     super.initState();
     _gameController = widget.gameController;
+    _lastCurrentPlayerIdForHighlight =
+        _gameController.gameState.currentPlayer.id;
+    _gameStateSubscription = _gameController.gameStateStream.listen(
+      _onGameStateStreamUpdate,
+    );
+  }
+
+  void _onGameStateStreamUpdate(GameState gameState) {
+    if (!mounted) {
+      return;
+    }
+    final userId = _gameController.userId;
+    final currentPlayerId = gameState.currentPlayer.id;
+    final becameMyTurn =
+        currentPlayerId == userId &&
+        _lastCurrentPlayerIdForHighlight != null &&
+        _lastCurrentPlayerIdForHighlight != userId;
+    _lastCurrentPlayerIdForHighlight = currentPlayerId;
+    if (becameMyTurn) {
+      setState(_clearHandHighlightState);
+    }
   }
 
   @override
   void dispose() {
+    _gameStateSubscription?.cancel();
     _handScrollController.dispose();
     try {
       _gameController.dispose();
@@ -157,20 +182,27 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   // REUSE: Copy single-player action methods (simplified)
+  void _clearHandHighlightState() {
+    _selectedCardIndices.clear();
+    _keyboardFocusedCardIndex = null;
+  }
+
   void _onDrawFromDeck() {
-    _gameController.drawFromDeck();
-    setState(() => _selectedCardIndices.clear());
+    if (_gameController.drawFromDeck()) {
+      setState(_clearHandHighlightState);
+    }
   }
 
   void _onUnlockDiscard() {
-    _gameController.unlockDiscardPile();
-    setState(() => _selectedCardIndices.clear());
+    if (_gameController.unlockDiscardPile()) {
+      setState(_clearHandHighlightState);
+    }
   }
 
   void _onDiscard() {
-    if (_selectedCards.length == 1) {
-      _gameController.discardCard(_selectedCards.first);
-      setState(() => _selectedCardIndices.clear());
+    if (_selectedCards.length == 1 &&
+        _gameController.discardCard(_selectedCards.first)) {
+      setState(_clearHandHighlightState);
     }
   }
 
@@ -180,13 +212,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       return;
     }
     currentUserPlayer.sortHandByRank();
-    setState(() {
-      _selectedCardIndices.clear();
-      _keyboardFocusedCardIndex = clampKeyboardFocus(
-        index: _keyboardFocusedCardIndex,
-        handLength: currentUserPlayer.currentHand.length,
-      );
-    });
+    setState(_clearHandHighlightState);
   }
 
   void _onFocusPreviousCard() {
@@ -413,7 +439,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       );
     }
 
-    setState(() => _selectedCardIndices.clear());
+    setState(_clearHandHighlightState);
   }
 
   // REUSE: Implement meld interaction methods (copied from earlier)

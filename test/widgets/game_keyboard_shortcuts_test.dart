@@ -49,6 +49,102 @@ void main() {
     });
   });
 
+  group('shouldResetHandHighlightOnTurnChange', () {
+    test(
+      'returns false on first human turn before any prior player tracked',
+      () {
+        expect(
+          shouldResetHandHighlightOnTurnChange(
+            currentPlayerIndex: 0,
+            humanPlayerIndex: 0,
+            lastCurrentPlayerIndex: null,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('returns true when play returns to the human after a bot turn', () {
+      expect(
+        shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: 0,
+          humanPlayerIndex: 0,
+          lastCurrentPlayerIndex: 2,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns false while the human remains the current player', () {
+      expect(
+        shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: 0,
+          humanPlayerIndex: 0,
+          lastCurrentPlayerIndex: 0,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'returns false when transitioning from human to bot turn',
+      () {
+        expect(
+          shouldResetHandHighlightOnTurnChange(
+            currentPlayerIndex: 1,
+            humanPlayerIndex: 0,
+            lastCurrentPlayerIndex: 0,
+          ),
+          isFalse,
+        );
+      },
+      tags: ['hand_focus_turn_transition'],
+    );
+
+    test(
+      'human bot human transition resets highlight when bot turn is tracked',
+      () {
+        var lastTrackedPlayerIndex = 0;
+        int? keyboardFocus = 5;
+
+        const botPlayerIndex = 1;
+        lastTrackedPlayerIndex = botPlayerIndex;
+
+        const humanPlayerIndex = 0;
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: humanPlayerIndex,
+          humanPlayerIndex: humanPlayerIndex,
+          lastCurrentPlayerIndex: lastTrackedPlayerIndex,
+        )) {
+          keyboardFocus = null;
+        }
+
+        expect(keyboardFocus, isNull);
+      },
+      tags: ['hand_focus_turn_transition'],
+    );
+
+    test(
+      'human bot human transition keeps highlight if bot turn is not tracked',
+      () {
+        const lastTrackedPlayerIndex = 0;
+        int? keyboardFocus = 5;
+
+        const humanPlayerIndex = 0;
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: humanPlayerIndex,
+          humanPlayerIndex: humanPlayerIndex,
+          lastCurrentPlayerIndex: lastTrackedPlayerIndex,
+        )) {
+          keyboardFocus = null;
+        }
+
+        expect(keyboardFocus, 5);
+      },
+      tags: ['hand_focus_turn_transition'],
+    );
+  });
+
   group('clampKeyboardFocus', () {
     test('returns null for empty hand', () {
       expect(clampKeyboardFocus(index: 2, handLength: 0), isNull);

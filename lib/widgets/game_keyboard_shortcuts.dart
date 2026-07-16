@@ -231,6 +231,18 @@ class _GameKeyboardShortcutsState extends State<GameKeyboardShortcuts> {
   }
 }
 
+/// True when play just returned to the human player — keyboard focus should
+/// reset so an index from a prior turn does not highlight a different card.
+bool shouldResetHandHighlightOnTurnChange({
+  required int currentPlayerIndex,
+  required int humanPlayerIndex,
+  required int? lastCurrentPlayerIndex,
+}) {
+  return currentPlayerIndex == humanPlayerIndex &&
+      lastCurrentPlayerIndex != null &&
+      lastCurrentPlayerIndex != humanPlayerIndex;
+}
+
 /// Clamps a keyboard focus index into [0, handLength - 1], or null when empty.
 int? clampKeyboardFocus({required int? index, required int handLength}) {
   if (handLength <= 0 || index == null) {
