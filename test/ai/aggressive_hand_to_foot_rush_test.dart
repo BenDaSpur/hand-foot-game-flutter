@@ -10,6 +10,7 @@ import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
+import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
@@ -153,32 +154,53 @@ void main() {
         );
       });
 
-      test(
-        'aggressive personality rushes at 6 but not 7 without opponent pressure',
-        () {
-          configureBot(
-            personality: BotPersonality.aggressive,
-            handSize: BotConfig.handToFootRushAggressiveThreshold,
-          );
-          expect(
-            botAI.shouldRushHandToFoot(bot, context()),
-            isTrue,
-            reason:
-                'aggressive bots should rush at ${BotConfig.handToFootRushAggressiveThreshold}',
-          );
+      test('aggressive personality soft rush at 6 requires book or clear-all', () {
+        // Unmeldable 6-card hand, 0 books — do not soft-rush into noMeld stalls.
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: BotConfig.handToFootRushAggressiveThreshold,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isFalse,
+          reason:
+              'aggressive soft rush at ${BotConfig.handToFootRushAggressiveThreshold} requires books or clear-all',
+        );
 
-          configureBot(
-            personality: BotPersonality.aggressive,
-            handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
-          );
-          expect(
-            botAI.shouldRushHandToFoot(bot, context()),
-            isFalse,
-            reason:
-                'aggressive bots should not rush above ${BotConfig.handToFootRushAggressiveThreshold} without pressure',
-          );
-        },
-      );
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isFalse,
+          reason:
+              'aggressive bots should not rush above ${BotConfig.handToFootRushAggressiveThreshold} without pressure',
+        );
+
+        // Same hand size with a book — soft rush allowed.
+        configureBot(
+          personality: BotPersonality.aggressive,
+          handSize: BotConfig.handToFootRushAggressiveThreshold,
+        );
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
+        expect(bot.bookCount, 1);
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isTrue,
+          reason: 'aggressive bots with a book should soft-rush at threshold',
+        );
+      });
 
       test(
         'aggressive with opponent on foot rushes at margin threshold but not above',
@@ -259,25 +281,45 @@ void main() {
         },
       );
 
-      test('aggressive boundary returns meld-phase noMeld at 6 only', () {
-        configureBot(
-          personality: BotPersonality.aggressive,
-          handSize: BotConfig.handToFootRushAggressiveThreshold,
-        );
+      test(
+        'aggressive soft rush returns null without books; noMeld with a book',
+        () {
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold,
+          );
 
-        final rushAtThreshold = botAI.makeHandToFootRushDecision(
-          bot,
-          context(),
-        );
-        expect(rushAtThreshold, isNotNull);
-        expect(rushAtThreshold!.action, equals('noMeld'));
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
 
-        configureBot(
-          personality: BotPersonality.aggressive,
-          handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
-        );
-        expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
-      });
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold + 1,
+          );
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold,
+          );
+          bot.melds.add(
+            Meld.createMeld([
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+            ])!,
+          );
+          final rushAtThreshold = botAI.makeHandToFootRushDecision(
+            bot,
+            context(),
+          );
+          expect(rushAtThreshold, isNotNull);
+          expect(rushAtThreshold!.action, equals('noMeld'));
+        },
+      );
 
       test(
         'aggressive opponent margin returns meld-phase noMeld at 10 only',
@@ -346,13 +388,34 @@ void main() {
       });
 
       test(
-        'aggressive bot rushes via makeDecision at 6 but rush hook is null at 7',
+        'aggressive bot soft-rushes via makeDecision at 6 only when books exist',
         () {
           configureBot(
             personality: BotPersonality.aggressive,
             handSize: BotConfig.handToFootRushAggressiveThreshold,
           );
 
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+          expect(
+            botAI.makeDecision(bot, gameController).action,
+            equals('noMeld'),
+          );
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: BotConfig.handToFootRushAggressiveThreshold,
+          );
+          bot.melds.add(
+            Meld.createMeld([
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+            ])!,
+          );
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
           expectMeldPhaseDefersThenDiscards(
             meldPhaseDecision: botAI.makeDecision(bot, gameController),
