@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
@@ -34,18 +32,9 @@ Future<void> _dealCards(WidgetTester tester, int count) async {
 
 void main() {
   group('RoundStartMiniGame', () {
-    test('pickVariant returns both modes over many rolls', () {
-      final random = Random(11);
-      final variants = List.generate(
-        40,
-        (_) => RoundStartMiniGame.pickVariant(random),
-      ).toSet();
-
-      expect(variants, contains(RoundStartMiniGameVariant.perfectGrab));
-      expect(variants, contains(RoundStartMiniGameVariant.blindGrab));
-    });
-
-    testWidgets('show maps blindGrab to hidden counter UI', (tester) async {
+    testWidgets('show opens Perfect Grab with visible counter UI', (
+      tester,
+    ) async {
       _setLargeTestSurface(tester);
       await tester.pumpWidget(
         MaterialApp(
@@ -57,51 +46,6 @@ void main() {
                     RoundStartMiniGame.show(
                       context,
                       roundNumber: 2,
-                      fixedVariant: RoundStartMiniGameVariant.blindGrab,
-                      fixedDealProfile: _testProfile,
-                      fixedDealInterval: _testDealInterval,
-                    );
-                  },
-                  child: const Text('Open'),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Open'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.text('Blind Grab'), findsOneWidget);
-      expect(find.text('Perfect Grab'), findsNothing);
-
-      await _startPlayingPhase(tester);
-      await _dealCards(tester, 10);
-
-      expect(find.text('?'), findsOneWidget);
-      expect(find.text('count hidden'), findsOneWidget);
-      expect(find.text('10'), findsNothing);
-      expect(
-        find.byType(CardBackWidget),
-        findsNWidgets(GameConfig.perfectGrabBlindModePileCards),
-      );
-    });
-
-    testWidgets('show maps perfectGrab to visible counter UI', (tester) async {
-      _setLargeTestSurface(tester);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) {
-              return Scaffold(
-                body: ElevatedButton(
-                  onPressed: () {
-                    RoundStartMiniGame.show(
-                      context,
-                      roundNumber: 2,
-                      fixedVariant: RoundStartMiniGameVariant.perfectGrab,
                       fixedDealProfile: _testProfile,
                       fixedDealInterval: _testDealInterval,
                     );

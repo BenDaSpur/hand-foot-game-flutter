@@ -108,9 +108,6 @@ class GameConfig {
   static const int perfectGrabStutterDelayMinMs = 120;
   static const int perfectGrabStutterDelayRangeMs = 180;
 
-  /// Fixed card-back pile shown in blind-grab mode (does not reveal count).
-  static const int perfectGrabBlindModePileCards = 6;
-
   static const int perfectGrabVisibleCardCap = 8;
 
   /// Total points needed to win the game
