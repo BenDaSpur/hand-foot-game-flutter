@@ -384,18 +384,8 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
-    // Human analytics: prefer deck draws while accumulating (0 unlock events in 87 sessions)
-    if (_isInHumanAccumulationWindow(bot, context) &&
-        gameState.discardPile.isNotEmpty) {
-      DebugLogger.botDebug(
-        bot.id,
-        bot.name,
-        'Accumulation phase - drawing from deck (human pattern)',
-      );
-      return BotDecision(action: 'drawFromDeck');
-    }
-
-    // Evaluate discard pile opportunity - ALLOW PRE-PLAY-DOWN for valuable piles
+    // Evaluate discard pile opportunity FIRST — accumulation must not skip
+    // unlockable valuable piles (analytics: ~0.5% take-pile under prior order).
     if (gameState.discardPile.isNotEmpty) {
       try {
         final riskTolerance = _personalityManager.calculateRiskTolerance(
@@ -435,6 +425,18 @@ class EnhancedBotAI {
         );
         // Skip discard pile evaluation and continue to default
       }
+    }
+
+    // Human analytics: prefer deck draws while accumulating when pile is not
+    // worth taking / unlockable (evaluated above).
+    if (_isInHumanAccumulationWindow(bot, context) &&
+        gameState.discardPile.isNotEmpty) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Accumulation phase - drawing from deck (human pattern)',
+      );
+      return BotDecision(action: 'drawFromDeck');
     }
 
     // NEW: Even more aggressive - check discard pile before playing down if pile is huge
@@ -2366,6 +2368,14 @@ class EnhancedBotAI {
     return completePlan;
   }
 
+  /// True when soft hand→foot rush is justified by books or a clear-all path.
+  bool _hasBookOrClearAllPath(Player bot, BotGameContext context) {
+    if (bot.bookCount >= 1) {
+      return true;
+    }
+    return _checkCanPlayAllCards(bot, context) != null;
+  }
+
   /// True when the bot should melt its hand pile down to pick up foot urgently.
   bool _shouldRushHandToFoot(Player bot, BotGameContext context) {
     if (!bot.hasPlayedDown || bot.hasPickedUpFoot) {
@@ -2377,6 +2387,7 @@ class EnhancedBotAI {
       return false;
     }
 
+    // Always rush at critical hand size (avoid 1–card traps).
     if (handSize <= BotConfig.handToFootCriticalHandSize) {
       return true;
     }
@@ -2388,7 +2399,10 @@ class EnhancedBotAI {
 
     final personality = _personalityManager.getPersonality(bot.id);
     if (personality == BotPersonality.aggressive) {
-      if (handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+      // Soft aggressive rush (5–6): require book progress or clear-all so we
+      // do not noMeld-loop with 0 books (analytics hand-pile stall).
+      if (handSize <= BotConfig.handToFootRushAggressiveThreshold &&
+          _hasBookOrClearAllPath(bot, context)) {
         return true;
       }
       if (_opponentOnFootPressure(context, bot) &&
@@ -2474,6 +2488,10 @@ class EnhancedBotAI {
   }
 
   /// True when bot should empty the hand pile to pick up foot (any personality).
+  ///
+  /// Soft window (hand ≤ [BotConfig.handPileFootCompletionMaxHand] but above
+  /// critical size) requires ≥1 book or a clear-all path so bots with 0 books
+  /// keep normal meld scoring instead of noMeld-stalling.
   bool _shouldCompleteHandPileForFoot(Player bot, BotGameContext context) {
     if (!bot.hasPlayedDown || bot.hasPickedUpFoot) {
       return false;
@@ -2482,13 +2500,23 @@ class EnhancedBotAI {
     if (handSize == 0) {
       return false;
     }
-    if (handSize <= BotConfig.handPileFootCompletionMaxHand) {
+
+    // Always complete at critical hand size.
+    if (handSize <= BotConfig.handToFootCriticalHandSize) {
       return true;
     }
+
     if (_opponentOnFootPressure(context, bot) &&
         handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
       return true;
     }
+
+    // Soft completion window: only when books exist or hand can be cleared.
+    if (handSize <= BotConfig.handPileFootCompletionMaxHand &&
+        _hasBookOrClearAllPath(bot, context)) {
+      return true;
+    }
+
     return false;
   }
 

@@ -36,7 +36,45 @@ void main() {
     BotGameContext context() =>
         BotGameContext(gameController.gameState, gameController);
 
-    test('shouldCompleteHandPileForFoot at 5 cards but not 6', () {
+    test(
+      'shouldCompleteHandPileForFoot at critical 4 but not soft 5 without books',
+      () {
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          ]);
+
+        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
+
+        bot.hand.add(
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+        );
+        // Soft window (5) with 0 books and no clear-all — stay on normal meld scoring
+        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+
+        bot.hand.add(const PlayingCard(suit: Suit.spades, rank: CardRank.nine));
+        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+      },
+    );
+
+    test('shouldCompleteHandPileForFoot at 5 when bot already has a book', () {
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
+      expect(bot.bookCount, 1);
+
       bot.hand
         ..clear()
         ..addAll([
@@ -48,9 +86,21 @@ void main() {
         ]);
 
       expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
+    });
 
-      bot.hand.add(const PlayingCard(suit: Suit.spades, rank: CardRank.nine));
-      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+    test('shouldCompleteHandPileForFoot at 5 when clear-all path exists', () {
+      // Five of a kind can be melded in one action — clear-all gates soft window.
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+        ]);
+
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
     });
 
     test(
