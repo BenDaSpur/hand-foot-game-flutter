@@ -170,7 +170,11 @@ void main() {
       );
 
       await _startPlayingPhase(tester);
-      await _dealCards(tester, 10);
+
+      await _dealCards(tester, 1);
+      expect(find.byType(CardBackWidget), findsOneWidget);
+
+      await _dealCards(tester, 9);
 
       expect(find.text('Perfect Grab'), findsOneWidget);
       expect(find.text('10'), findsOneWidget);
