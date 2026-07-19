@@ -157,38 +157,7 @@ void main() {
       expect(result, isFalse);
     });
 
-    testWidgets('blind mode hides live count and card pile during play', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: PerfectGrabMiniGame(
-            roundNumber: 1,
-            dealProfile: _testProfile,
-            hideCounter: true,
-            title: 'Blind Grab',
-            fixedDealInterval: _testDealInterval,
-            onComplete: (_) {},
-          ),
-        ),
-      );
-
-      await _startPlayingPhase(tester);
-      await _dealCards(tester, 10);
-
-      expect(find.text('Blind Grab'), findsOneWidget);
-      expect(find.text('?'), findsOneWidget);
-      expect(find.text('count hidden'), findsOneWidget);
-      expect(find.text('10'), findsNothing);
-      expect(
-        find.byType(CardBackWidget),
-        findsNWidgets(GameConfig.perfectGrabBlindModePileCards),
-      );
-    });
-
-    testWidgets('visible mode grows card pile with dealt count', (
-      tester,
-    ) async {
+    testWidgets('grows card pile with dealt count', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: PerfectGrabMiniGame(
@@ -201,8 +170,13 @@ void main() {
       );
 
       await _startPlayingPhase(tester);
-      await _dealCards(tester, 10);
 
+      await _dealCards(tester, 1);
+      expect(find.byType(CardBackWidget), findsOneWidget);
+
+      await _dealCards(tester, 9);
+
+      expect(find.text('Perfect Grab'), findsOneWidget);
       expect(find.text('10'), findsOneWidget);
       expect(
         find.byType(CardBackWidget),

@@ -19,8 +19,6 @@ class PerfectGrabMiniGame extends StatefulWidget {
   final int roundNumber;
   final void Function(bool earnedBonus) onComplete;
   final PerfectGrabDealProfile dealProfile;
-  final bool hideCounter;
-  final String title;
 
   /// Fixed deal interval for deterministic widget tests.
   @visibleForTesting
@@ -31,8 +29,6 @@ class PerfectGrabMiniGame extends StatefulWidget {
     required this.roundNumber,
     required this.onComplete,
     required this.dealProfile,
-    this.hideCounter = false,
-    this.title = 'Perfect Grab',
     this.fixedDealInterval,
   });
 
@@ -40,8 +36,6 @@ class PerfectGrabMiniGame extends StatefulWidget {
     BuildContext context, {
     required int roundNumber,
     PerfectGrabDealProfile? dealProfile,
-    bool hideCounter = false,
-    String title = 'Perfect Grab',
     Duration? fixedDealInterval,
   }) {
     return showDialog<bool>(
@@ -57,8 +51,6 @@ class PerfectGrabMiniGame extends StatefulWidget {
           child: PerfectGrabMiniGame(
             roundNumber: roundNumber,
             dealProfile: dealProfile ?? PerfectGrabDealProfile.standard(),
-            hideCounter: hideCounter,
-            title: title,
             fixedDealInterval: fixedDealInterval,
             onComplete: (earnedBonus) {
               Navigator.of(dialogContext).pop(earnedBonus);
@@ -229,7 +221,7 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
     return Column(
       children: [
         Text(
-          widget.title,
+          'Perfect Grab',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
             color: BalatroTheme.neonYellow,
             fontWeight: FontWeight.bold,
@@ -261,24 +253,16 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
   }
 
   Widget _buildIntro() {
-    final blindHint = widget.hideCounter
-        ? '\n\nThe live count stays hidden — trust your timing!'
-        : '';
-
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
-          widget.hideCounter ? Icons.visibility_off : Icons.back_hand,
-          color: BalatroTheme.neonGreen,
-          size: 56,
-        ),
+        const Icon(Icons.back_hand, color: BalatroTheme.neonGreen, size: 56),
         const SizedBox(height: 16),
         Text(
           'After shuffling, reach across the table and grab your hand & foot '
           'in one swoop.\n\n'
           'Cards will deal automatically — tap GRAB at exactly $_target cards '
-          'to earn +${GameConfig.perfectGrabBonus} bonus points!$blindHint',
+          'to earn +${GameConfig.perfectGrabBonus} bonus points!',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: BalatroTheme.primaryText,
@@ -316,9 +300,7 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
   }
 
   Widget _buildPlaying() {
-    final showCount = !widget.hideCounter;
-    final isNearTarget =
-        showCount && (_cardCount - _target).abs() <= 2 && _cardCount > 0;
+    final isNearTarget = (_cardCount - _target).abs() <= 2 && _cardCount > 0;
     final counterColor = _cardCount == _target
         ? BalatroTheme.neonGreen
         : isNearTarget
@@ -328,15 +310,15 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
     return Column(
       children: [
         Text(
-          showCount ? '$_cardCount' : '?',
+          '$_cardCount',
           style: Theme.of(context).textTheme.displayMedium?.copyWith(
-            color: showCount ? counterColor : BalatroTheme.neonPink,
+            color: counterColor,
             fontWeight: FontWeight.bold,
             fontSize: 72,
           ),
         ),
         Text(
-          showCount ? 'cards grabbed' : 'count hidden',
+          'cards grabbed',
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(color: BalatroTheme.secondaryText),
@@ -348,9 +330,10 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
               final stackHeight = min(constraints.maxHeight, 220.0);
               final cardWidth = min(constraints.maxWidth * 0.34, 96.0);
               final cardHeight = cardWidth / GameConfig.cardAspectRatio;
-              final visibleCards = widget.hideCounter
-                  ? GameConfig.perfectGrabBlindModePileCards
-                  : min(_cardCount, GameConfig.perfectGrabVisibleCardCap);
+              final visibleCards = min(
+                _cardCount,
+                GameConfig.perfectGrabVisibleCardCap,
+              );
 
               return Center(
                 child: SizedBox(
