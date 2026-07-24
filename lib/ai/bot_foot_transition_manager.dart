@@ -122,7 +122,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // PRIORITY 3: Discard as last resort
@@ -297,7 +299,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Discard strategically to get closer to foot
@@ -342,7 +346,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Consider discarding if hand value is poor
@@ -386,7 +392,9 @@ class BotFootTransitionManager {
       final possibleMelds = controller.findPossibleMelds(bot);
       if (possibleMelds.isNotEmpty) {
         final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-        return BotDecision(action: 'createMeld', data: bestMeld);
+        if (bestMeld.isNotEmpty) {
+          return BotDecision(action: 'createMeld', data: bestMeld);
+        }
       }
     }
 
@@ -420,7 +428,9 @@ class BotFootTransitionManager {
         .toList();
     if (smallMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, smallMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Default: strategic discard
@@ -449,7 +459,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Strategic discard of worst cards
@@ -471,7 +483,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Emergency risk management
@@ -599,22 +613,24 @@ class BotFootTransitionManager {
   }
 
   /// Best new meld using analyzer scoring (clean/dirty balance), not list order.
-  /// While a clean book is missing, prefer candidates that will not merge a
-  /// wild into an existing naturals-only pile (MeldManager merges same-rank
-  /// melds, which would silently poison the clean-book lane).
+  /// While a clean book is missing, candidates that would merge a wild into an
+  /// existing naturals-only pile are excluded (MeldManager merges same-rank
+  /// melds, which would silently poison the clean-book lane). Returns an empty
+  /// list when no safe candidate exists — callers fall through to their
+  /// add-to-meld/discard logic instead of creating a poisoning meld.
   List<PlayingCard> _selectBestNewMeld(
     Player bot,
     List<List<PlayingCard>> possibleMelds,
   ) {
     var candidates = possibleMelds;
     if (!bot.hasCleanBook) {
-      final safeCandidates = candidates
+      candidates = candidates
           .where(
             (meld) => !BotMeldAnalyzer.newMeldPoisonsNaturalPile(bot, meld),
           )
           .toList();
-      if (safeCandidates.isNotEmpty) {
-        candidates = safeCandidates;
+      if (candidates.isEmpty) {
+        return [];
       }
     }
     return _meldAnalyzer.findBestMeld(candidates, bot: bot, preferLarger: true);
@@ -627,10 +643,8 @@ class BotFootTransitionManager {
 
   /// Choose the best card to discard from bot's hand: threes first, then the
   /// lowest-value card that does not feed a rank opponents have melded.
+  /// Empty hands recover via the analyzer's fallback card instead of throwing.
   PlayingCard _chooseCardToDiscard(Player bot, GameController controller) {
-    // This method should only be called when hand is non-empty
-    assert(bot.currentHand.isNotEmpty, 'Cannot discard from empty hand');
-
     return BotDiscardAnalyzer.chooseSafeLowValueDiscard(
       bot,
       controller.gameState,

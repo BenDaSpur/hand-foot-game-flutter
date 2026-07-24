@@ -247,9 +247,8 @@ class BotDiscardAnalyzer {
     GameState gameState,
   ) {
     final hand = bot.currentHand;
-    assert(hand.isNotEmpty, 'Cannot discard from empty hand');
     if (hand.isEmpty) {
-      // Graceful recovery in release builds — never crash the game session.
+      // Graceful recovery — never crash the game session.
       print(
         'Warning: chooseSafeLowValueDiscard called with empty hand for '
         '${bot.name}, using fallback card',
