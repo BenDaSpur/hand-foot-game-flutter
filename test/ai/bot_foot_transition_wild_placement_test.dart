@@ -1,3 +1,6 @@
+@Tags(['wild_placement'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_end_game_manager.dart';
 import 'package:hand_foot_game_flutter/ai/bot_foot_transition_manager.dart';

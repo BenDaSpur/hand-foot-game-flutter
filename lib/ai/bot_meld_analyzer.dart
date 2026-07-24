@@ -18,6 +18,20 @@ class BotMeldAnalyzer {
   static bool isAllNatural(Meld meld) =>
       !meld.cards.any((PlayingCard c) => c.isWild);
 
+  /// Additions scored at or below this by [findCardsToAddToExistingMelds] are
+  /// hard-blocked (they would poison a clean-book lane; blocks return -50000
+  /// or -25000). Ordinary penalty stacks sum to roughly -13500 at worst, so
+  /// this floor cleanly separates blocks from legitimate low-priority plays.
+  /// Callers that take candidates unconditionally must filter these out.
+  static const int hardBlockedAdditionPriorityFloor = -20000;
+
+  /// Whether an addition candidate from [findCardsToAddToExistingMelds] is
+  /// hard-blocked and must never be played.
+  static bool isHardBlockedAddition(Map<String, dynamic> addition) {
+    return (addition['priority'] as int? ?? 0) <=
+        hardBlockedAdditionPriorityFloor;
+  }
+
   /// MeldManager merges a "new" meld into an existing meld of the same rank,
   /// so a wild-containing candidate whose rank matches one of the bot's
   /// naturals-only piles would silently poison that clean-book lane.

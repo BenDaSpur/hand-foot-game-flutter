@@ -637,25 +637,19 @@ class BotFootTransitionManager {
     );
   }
 
-  /// Analyzer hard-blocks (deeply negative priorities) mark additions that
-  /// would contaminate a clean-book lane. Transition paths take `.first`
-  /// unconditionally, so blocked candidates must be dropped here — otherwise a
-  /// wild with no legal dirty target gets dumped onto a naturals-only meld
-  /// (observed in production: clean 3-ace meld poisoned at foot transition).
-  static const int _blockedAdditionPriorityFloor = -20000;
-
   /// Add-to-meld candidates with clean/wild scoring from [BotMeldAnalyzer],
-  /// excluding hard-blocked (clean-book-poisoning) additions.
+  /// excluding hard-blocked (clean-book-poisoning) additions. Transition
+  /// paths take `.first` unconditionally, so blocked candidates must be
+  /// dropped here — otherwise a wild with no legal dirty target gets dumped
+  /// onto a naturals-only meld (observed in production: clean 3-ace meld
+  /// poisoned at foot transition).
   List<Map<String, dynamic>> _findCardsToAddToExistingMelds(
     Player bot,
     GameController controller,
   ) {
     return _meldAnalyzer
         .findCardsToAddToExistingMelds(bot, controller)
-        .where(
-          (addition) =>
-              (addition['priority'] as int) > _blockedAdditionPriorityFloor,
-        )
+        .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
         .toList();
   }
 

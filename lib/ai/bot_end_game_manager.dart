@@ -816,12 +816,17 @@ class BotEndGameManager {
     return card.rank == naturalCard.rank;
   }
 
-  /// Find cards that can be added to existing melds
+  /// Find cards that can be added to existing melds, excluding hard-blocked
+  /// (clean-book-poisoning) additions — end-game paths pick from this list
+  /// without re-checking analyzer priorities.
   List<Map<String, dynamic>> _findCardsToAddToExistingMelds(
     Player bot,
     GameController controller,
   ) {
-    return _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller);
+    return _meldAnalyzer
+        .findCardsToAddToExistingMelds(bot, controller)
+        .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
+        .toList();
   }
 
   /// Additions safe to play while going out — never one that would flip the

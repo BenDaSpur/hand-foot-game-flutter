@@ -248,6 +248,14 @@ class BotDiscardAnalyzer {
   ) {
     final hand = bot.currentHand;
     assert(hand.isNotEmpty, 'Cannot discard from empty hand');
+    if (hand.isEmpty) {
+      // Graceful recovery in release builds — never crash the game session.
+      print(
+        'Warning: chooseSafeLowValueDiscard called with empty hand for '
+        '${bot.name}, using fallback card',
+      );
+      return const PlayingCard(rank: CardRank.ace, suit: Suit.spades);
+    }
 
     // Priority 1: 3s (penalty cards), red 3s first (-300 vs black -5).
     // Threes can never be melded, so they are always safe to discard.
