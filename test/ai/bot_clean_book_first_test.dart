@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is clean-book-first', () {
-      expect(BotConfig.botAiVersion, '2026.07-clean-book-first');
+    test('botAiVersion bumped for safe-discards-wild-placement', () {
+      expect(BotConfig.botAiVersion, '2026.07-safe-discards-wild-placement');
     });
 
     test(

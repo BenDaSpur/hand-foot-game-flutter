@@ -130,9 +130,10 @@ class BotGameAnalyzer {
   List<CardRank> _analyzeLikelyNeededRanks(Player player) {
     final neededRanks = <CardRank>[];
 
-    // Look for melds that are close to becoming books (6+ cards)
+    // Any face-up meld (3+ cards) shows a rank the player is collecting —
+    // waiting for near-books (6+) missed most feeding opportunities.
     for (final meld in player.melds) {
-      if (meld.cards.length >= BotConfig.nearBookThreshold) {
+      if (meld.cards.length >= BotConfig.meldRankTrackingThreshold) {
         // Find the natural cards to determine rank
         final naturalCard = meld.cards.firstWhere(
           (card) => !card.isWild,

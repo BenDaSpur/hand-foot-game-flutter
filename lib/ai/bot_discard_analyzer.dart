@@ -87,16 +87,15 @@ class BotDiscardAnalyzer {
     // Invert: high point cards (aces=20, wilds=50) get negative score
     score += 50 - card.pointValue;
 
-    // 5. DEFENSIVE: Check if opponents need this card
-    if (analyzer != null) {
-      final opponentNeedScore = _calculateOpponentNeedScore(
-        card,
-        gameState,
-        analyzer,
-        bot.id,
-      );
-      score -= opponentNeedScore; // Reduce score if opponents need it
-    }
+    // 5. DEFENSIVE: Check if opponents need this card (visible melds are
+    // always scanned; the analyzer only adds tracked-rank intelligence)
+    final opponentNeedScore = _calculateOpponentNeedScore(
+      card,
+      gameState,
+      analyzer,
+      bot.id,
+    );
+    score -= opponentNeedScore; // Reduce score if opponents need it
 
     // 6. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
     final sameRankCount = bot.currentHand
@@ -170,12 +169,21 @@ class BotDiscardAnalyzer {
   }
 
   /// Calculate how much opponents might want this card.
+  ///
+  /// Penalties must dominate the low-rank dump bonuses: discarding a rank an
+  /// opponent has visibly melded feeds their books and lets them unlock the
+  /// discard pile with a matching natural pair.
   int _calculateOpponentNeedScore(
     PlayingCard card,
     GameState gameState,
-    BotGameAnalyzer analyzer,
+    BotGameAnalyzer? analyzer,
     String botId,
   ) {
+    if (card.isWild) {
+      // Wild discards freeze the pile and fit no specific opponent rank
+      return 0;
+    }
+
     int needScore = 0;
 
     for (final player in gameState.players) {
@@ -189,17 +197,25 @@ class BotDiscardAnalyzer {
           // Near-book melds are critical - don't feed them!
           if (meldSize >= 6) {
             needScore +=
-                BotConfig.nearBookPenalty; // Would complete their book!
+                BotConfig.opponentBookFeedPenalty; // Would complete their book!
           } else if (meldSize >= 5) {
-            needScore += BotConfig.opponentNeedsWeight * 2; // Getting close
-          } else if (meldSize >= 3) {
-            needScore += BotConfig.opponentNeedsWeight; // They're building this
+            needScore += BotConfig.opponentNearBookFeedPenalty; // Getting close
+          } else {
+            needScore +=
+                BotConfig.opponentMeldedRankPenalty; // They're building this
+          }
+
+          // Large hand + visible meld of this rank = unlock risk: they can
+          // hold matching naturals and take the whole pile.
+          if (player.currentHand.length >=
+              BotConfig.opponentUnlockRiskHandSize) {
+            needScore += BotConfig.opponentUnlockRiskPenalty;
           }
         }
       }
 
       // Check analyzer's tracked "likely needed ranks"
-      final analysis = analyzer.opponentAnalysis[player.id];
+      final analysis = analyzer?.opponentAnalysis[player.id];
       if (analysis != null) {
         if (analysis.likelyNeededRanks.contains(card.rank)) {
           needScore += BotConfig.opponentNeedsWeight;
@@ -208,6 +224,61 @@ class BotDiscardAnalyzer {
     }
 
     return needScore;
+  }
+
+  /// Ranks any opponent has face-up melds for. Discarding these ranks feeds
+  /// opponent books and enables discard-pile unlocks.
+  static Set<CardRank> opponentMeldedRanks(GameState gameState, String botId) {
+    final ranks = <CardRank>{};
+    for (final player in gameState.players) {
+      if (player.id == botId) continue;
+      for (final meld in player.melds) {
+        ranks.add(meld.rank);
+      }
+    }
+    return ranks;
+  }
+
+  /// Opponent-aware version of the managers' legacy "threes first, then
+  /// lowest point value" discard. Keeps that ordering, but avoids ranks any
+  /// opponent has visibly melded whenever a safe alternative exists.
+  static PlayingCard chooseSafeLowValueDiscard(
+    Player bot,
+    GameState gameState,
+  ) {
+    final hand = bot.currentHand;
+    assert(hand.isNotEmpty, 'Cannot discard from empty hand');
+
+    // Priority 1: 3s (penalty cards), red 3s first (-300 vs black -5).
+    // Threes can never be melded, so they are always safe to discard.
+    final threes = hand.where((card) => card.isThree).toList();
+    if (threes.isNotEmpty) {
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return threes.first;
+    }
+
+    var candidates = List<PlayingCard>.from(hand);
+
+    // Never discard wilds in foot while missing required go-out books
+    if (mustProtectWildsInFoot(bot)) {
+      final nonWilds = candidates.where((card) => !card.isWild).toList();
+      if (nonWilds.isNotEmpty) {
+        candidates = nonWilds;
+      }
+    }
+
+    // Avoid feeding ranks opponents have visibly melded when possible.
+    // Wilds count as safe: they freeze the pile instead of feeding it.
+    final meldedRanks = opponentMeldedRanks(gameState, bot.id);
+    final safeCandidates = candidates
+        .where((card) => card.isWild || !meldedRanks.contains(card.rank))
+        .toList();
+    if (safeCandidates.isNotEmpty) {
+      candidates = safeCandidates;
+    }
+
+    candidates.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+    return candidates.first;
   }
 
   /// Ranks humans discard most while trimming large hands (analytics).

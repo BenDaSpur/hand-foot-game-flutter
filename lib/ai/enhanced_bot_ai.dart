@@ -803,7 +803,7 @@ class EnhancedBotAI {
     if (bot.hasPlayedDown &&
         !bot.hasPickedUpFoot &&
         bot.currentHand.length <= BotConfig.handPileFootCompletionMaxHand) {
-      cardToDiscard = _chooseHandPileTransitionDiscard(bot);
+      cardToDiscard = _chooseHandPileTransitionDiscard(bot, context.gameState);
     }
     cardToDiscard ??= _chooseCardToDiscard(bot, context.gameState);
     if (cardToDiscard == null) {
@@ -3309,22 +3309,14 @@ class EnhancedBotAI {
     return null;
   }
 
-  /// Discard choice when clearing a small hand pile toward foot pickup.
-  PlayingCard? _chooseHandPileTransitionDiscard(Player bot) {
-    final hand = bot.currentHand;
-    if (hand.isEmpty) {
+  /// Discard choice when clearing a small hand pile toward foot pickup:
+  /// threes first, then the lowest-value card that does not feed a rank
+  /// opponents have visibly melded.
+  PlayingCard? _chooseHandPileTransitionDiscard(Player bot, GameState state) {
+    if (bot.currentHand.isEmpty) {
       return null;
     }
-
-    final threes = hand.where((card) => card.rank == CardRank.three).toList();
-    if (threes.isNotEmpty) {
-      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return threes.first;
-    }
-
-    final sortedHand = List<PlayingCard>.from(hand);
-    sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-    return sortedHand.first;
+    return BotDiscardAnalyzer.chooseSafeLowValueDiscard(bot, state);
   }
 
   /// Enhanced book completion strategy for competitive play
