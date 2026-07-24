@@ -23,6 +23,14 @@ class BotEndGameManager {
   BotEndGameManager({BotMeldAnalyzer? meldAnalyzer})
     : _meldAnalyzer = meldAnalyzer ?? BotMeldAnalyzer();
 
+  /// True when discarding would empty the foot without go-out eligibility.
+  /// Callers should end the turn instead of discarding into an error state.
+  static bool wouldEmptyFootWithoutGoOut(Player bot) {
+    return bot.hasPickedUpFoot &&
+        !bot.canGoOutWithBooks &&
+        bot.currentHand.length <= 1;
+  }
+
   /// True when a meld would leave 0–1 cards while the bot still cannot go out.
   static bool leavesUnfinishableSingleCard(
     Player bot, {
@@ -330,9 +338,7 @@ class BotEndGameManager {
       // Dirty books but no clean book: never discard into an empty-hand trap.
       // Return endTurn (not null) so callers do not fall through to a normal discard.
       if (gameState.turnPhase == TurnPhase.discard &&
-          bot.currentHand.length <= 1 &&
-          bot.hasPickedUpFoot &&
-          !bot.canGoOutWithBooks) {
+          wouldEmptyFootWithoutGoOut(bot)) {
         DebugLogger.warning(
           'Bot ${bot.name}: refusing last-card discard without go-out books '
           '(clean=${bot.hasCleanBook}, dirty=${bot.hasDirtyBook})',
@@ -448,13 +454,14 @@ class BotEndGameManager {
     }
 
     // Priority 2: Add to existing melds to build toward books
+    // (respects clean-book filters in _findBestBookProgressAddition)
     final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
     if (cardsToAdd.isNotEmpty) {
       final bestAddition = _findBestBookProgressAddition(bot, cardsToAdd);
       if (bestAddition != null) {
         return BotDecision(action: 'addToMeld', data: bestAddition);
       }
-      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      // No clean-book-safe addition — fall through to create a new meld
     }
 
     // Priority 3: Create new melds that can become books

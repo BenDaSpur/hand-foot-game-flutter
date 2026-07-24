@@ -791,9 +791,7 @@ class EnhancedBotAI {
     }
 
     // Refuse discarding into an unfinishable empty foot (analytics: empty-hand errors)
-    if (bot.hasPickedUpFoot &&
-        !bot.canGoOutWithBooks &&
-        bot.currentHand.length <= 1) {
+    if (BotEndGameManager.wouldEmptyFootWithoutGoOut(bot)) {
       DebugLogger.warning(
         'Bot ${bot.name}: endTurn instead of last-card discard without go-out books',
       );
