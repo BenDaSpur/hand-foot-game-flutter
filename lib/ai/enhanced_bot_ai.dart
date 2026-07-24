@@ -769,7 +769,9 @@ class EnhancedBotAI {
   /// Handle discard phase decisions
   BotDecision _makeDiscardDecision(Player bot, BotGameContext context) {
     // CORE RULE: Bots MUST always discard a card in discard phase
-    // The ONLY exception is if they have no cards and can go out (end round/game)
+    // The ONLY exceptions:
+    // 1. Empty hand and can go out
+    // 2. Last card(s) on foot without go-out books — refuse empty-hand trap
 
     // Exception: Bot has no cards - check if they can go out properly
     if (bot.currentHand.isEmpty) {
@@ -786,6 +788,14 @@ class EnhancedBotAI {
         print('  - This indicates poor meld planning in earlier phases');
         return BotDecision(action: 'error'); // Invalid state
       }
+    }
+
+    // Refuse discarding into an unfinishable empty foot (analytics: empty-hand errors)
+    if (BotEndGameManager.wouldEmptyFootWithoutGoOut(bot)) {
+      DebugLogger.warning(
+        'Bot ${bot.name}: endTurn instead of last-card discard without go-out books',
+      );
+      return BotDecision(action: 'endTurn');
     }
 
     // RULE ENFORCEMENT: Bot must discard a card to follow Hand & Foot rules
@@ -1558,6 +1568,13 @@ class EnhancedBotAI {
       adjustedSizeThreshold *= 0.7; // Lower threshold to prevent hand overflow
     }
 
+    // Human-rate nudge: after play-down, take moderately large piles more often
+    // (analytics: humans ~10% unlock-of-draws vs bots ~1.3%).
+    if (pileSize >= 8) {
+      adjustedValueThreshold *= 0.55;
+      adjustedSizeThreshold *= 0.65;
+    }
+
     // Standard post-play-down thresholds with competitive adjustments
     return pileValue >
             adjustedValueThreshold * 0.7 || // 30% lower value threshold
@@ -1717,9 +1734,14 @@ class EnhancedBotAI {
     }
 
     // Check if bot has clean books for strategic decision-making
-    final hasCleanBook = bot.melds.any((m) => m.isClean && m.cards.length >= 7);
+    final hasCleanBook = bot.hasCleanBook;
     final cleanMeldsNearBook = bot.melds
-        .where((m) => m.isClean && m.cards.length >= 5)
+        .where(
+          (m) =>
+              BotMeldAnalyzer.isAllNatural(m) &&
+              m.cards.length >= 5 &&
+              m.cards.length < BotConfig.bookSize,
+        )
         .toList();
 
     // Find singletons but PROTECT potential clean book cards
@@ -1870,6 +1892,11 @@ class EnhancedBotAI {
 
     // On foot without both book types — keep melding, never hoard toward go-out
     if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+      return false;
+    }
+
+    // On foot with both book types and a tiny hand — finish, don't strategic-hold
+    if (bot.hasPickedUpFoot && bot.canGoOutWithBooks && handSize <= 3) {
       return false;
     }
 
@@ -2091,13 +2118,15 @@ class EnhancedBotAI {
         final meld = addition['meld'] as Meld;
         final card = addition['card'] as PlayingCard;
 
-        // If we need a clean book, prioritize keeping clean melds clean
-        if (needsCleanBook && meld.isClean && !card.isWild) {
+        // If we need a clean book, prioritize extending natural-only piles with naturals
+        if (needsCleanBook &&
+            BotMeldAnalyzer.isAllNatural(meld) &&
+            !card.isWild) {
           return BotDecision(action: 'addToMeld', data: addition);
         }
 
-        // If we need a dirty book, prioritize adding to dirty melds
-        if (needsDirtyBook && !meld.isClean) {
+        // If we need a dirty book, prioritize adding to already-mixed melds
+        if (needsDirtyBook && !BotMeldAnalyzer.isAllNatural(meld)) {
           return BotDecision(action: 'addToMeld', data: addition);
         }
 
@@ -3689,10 +3718,10 @@ class EnhancedBotAI {
     for (int i = 0; i < bot.melds.length; i++) {
       final meld = bot.melds[i];
       if (meld.cards.length >= minNearBookSize) {
-        // Near book
-        final isClean = meld.isClean;
+        // Near book — use all-natural (Meld.isClean only applies to completed books)
+        final allNatural = BotMeldAnalyzer.isAllNatural(meld);
 
-        if ((needsClean && isClean) || (needsDirty && !isClean)) {
+        if ((needsClean && allNatural) || (needsDirty && !allNatural)) {
           // Try to add cards to complete this book
           final addableCards = bot.currentHand
               .where((card) => meld.canAddCard(card))

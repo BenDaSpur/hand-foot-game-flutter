@@ -23,6 +23,14 @@ class BotEndGameManager {
   BotEndGameManager({BotMeldAnalyzer? meldAnalyzer})
     : _meldAnalyzer = meldAnalyzer ?? BotMeldAnalyzer();
 
+  /// True when discarding would empty the foot without go-out eligibility.
+  /// Callers should end the turn instead of discarding into an error state.
+  static bool wouldEmptyFootWithoutGoOut(Player bot) {
+    return bot.hasPickedUpFoot &&
+        !bot.canGoOutWithBooks &&
+        bot.currentHand.length <= 1;
+  }
+
   /// True when a meld would leave 0–1 cards while the bot still cannot go out.
   static bool leavesUnfinishableSingleCard(
     Player bot, {
@@ -327,12 +335,15 @@ class BotEndGameManager {
       if (incompleteBookDecision != null) {
         return incompleteBookDecision;
       }
-      // Dirty books but no clean book: never discard into an empty-hand trap
+      // Dirty books but no clean book: never discard into an empty-hand trap.
+      // Return endTurn (not null) so callers do not fall through to a normal discard.
       if (gameState.turnPhase == TurnPhase.discard &&
-          bot.currentHand.length <= 1 &&
-          bot.hasDirtyBook &&
-          !bot.hasCleanBook) {
-        return null;
+          wouldEmptyFootWithoutGoOut(bot)) {
+        DebugLogger.warning(
+          'Bot ${bot.name}: refusing last-card discard without go-out books '
+          '(clean=${bot.hasCleanBook}, dirty=${bot.hasDirtyBook})',
+        );
+        return BotDecision(action: 'endTurn');
       }
     }
 
@@ -443,13 +454,14 @@ class BotEndGameManager {
     }
 
     // Priority 2: Add to existing melds to build toward books
+    // (respects clean-book filters in _findBestBookProgressAddition)
     final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
     if (cardsToAdd.isNotEmpty) {
       final bestAddition = _findBestBookProgressAddition(bot, cardsToAdd);
       if (bestAddition != null) {
         return BotDecision(action: 'addToMeld', data: bestAddition);
       }
-      return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+      // No clean-book-safe addition — fall through to create a new meld
     }
 
     // Priority 3: Create new melds that can become books
@@ -480,7 +492,8 @@ class BotEndGameManager {
           dirtyBooks++;
         }
       } else if (meld.cards.length >= 5) {
-        if (meld.isClean) {
+        // Near-books: use all-natural (Meld.isClean is only for completed books)
+        if (BotMeldAnalyzer.isAllNatural(meld)) {
           cleanMeldsNearBook++;
         } else {
           dirtyMeldsNearBook++;
@@ -500,13 +513,13 @@ class BotEndGameManager {
 
     // If we need a clean book, check our potential - MORE AGGRESSIVE
     if (needsCleanBook) {
-      // Check if we have clean melds close to book status
+      // Check if we have natural melds close to book status
       if (cleanMeldsNearBook > 0) {
-        // We have clean melds that could become books
+        // We have natural melds that could become clean books
         for (final meld in bot.melds) {
           if (meld.cards.length >= 4 && // Reduced from 5 - more optimistic
               meld.cards.length < BotConfig.bookSize &&
-              meld.isClean) {
+              BotMeldAnalyzer.isAllNatural(meld)) {
             // Check if we can add natural cards (not wilds) to complete it
             for (final card in bot.currentHand) {
               if (_canAddCardToMeld(card, meld) && !card.isWild) {
@@ -594,11 +607,12 @@ class BotEndGameManager {
 
   /// Try to complete books (7+ card melds) with clean book priority
   BotDecision? _tryCompleteBooks(Player bot, GameController controller) {
-    // Priority 1: Complete clean books first (500 pts vs 300 for dirty)
+    // Priority 1: Complete clean books first (500 pts vs 300 for dirty).
+    // Use all-natural (not Meld.isClean) — isClean is only true for completed 7+ books.
     for (int i = 0; i < bot.melds.length; i++) {
       final meld = bot.melds[i];
-      if (meld.cards.length == 6 && meld.isClean) {
-        // Clean meld one card from book - only add natural cards
+      if (meld.cards.length == 6 && BotMeldAnalyzer.isAllNatural(meld)) {
+        // Natural meld one card from book - only add natural cards
         for (final card in bot.currentHand) {
           if (_canAddCardToMeld(card, meld) && !card.isWild) {
             return BotDecision(
@@ -621,7 +635,7 @@ class BotEndGameManager {
 
     for (int i = 0; i < bot.melds.length; i++) {
       final meld = bot.melds[i];
-      if (meld.cards.length == 6 && !meld.isClean) {
+      if (meld.cards.length == 6 && !BotMeldAnalyzer.isAllNatural(meld)) {
         // Dirty meld one card from book - can add wilds if needed
         for (final card in bot.currentHand) {
           if (_canAddCardToMeld(card, meld)) {
@@ -655,26 +669,32 @@ class BotEndGameManager {
       final meldIndex = addition['meldIndex'] as int;
       final meld = bot.melds[meldIndex];
       final card = addition['card'] as PlayingCard;
+      final allNatural = BotMeldAnalyzer.isAllNatural(meld);
 
+      // Missing clean book: only extend natural-only piles with naturals
       if (needsCleanBook) {
-        if (!meld.isClean || card.isWild) {
+        if (!allNatural || card.isWild) {
           continue;
         }
       }
 
       // Base score on meld progress toward book status
       int score = meld.cards.length;
-      if (meld.cards.length == 6) score += 100; // Almost a book!
-      if (meld.cards.length >= 4) score += 50; // Good progress
+      if (meld.cards.length == 6) {
+        score += 100; // Almost a book!
+      }
+      if (meld.cards.length >= 4) {
+        score += 50; // Good progress
+      }
 
-      // Clean book protection: heavily prioritize keeping clean melds clean
-      if (meld.isClean) {
+      // Clean book protection: heavily prioritize keeping natural piles clean
+      if (allNatural) {
         if (!card.isWild) {
           score +=
               BotConfig.cleanMeldProtectionBonus; // Massive bonus for naturals
         } else {
-          // Penalty for making clean meld dirty, unless already a book
-          if (meld.cards.length >= BotConfig.bookSize) {
+          // Penalty for making natural meld dirty, unless already a clean book
+          if (meld.isClean) {
             score += 25; // Small bonus - already a clean book
           } else {
             score -= BotConfig
@@ -814,10 +834,13 @@ class BotEndGameManager {
       return null;
     }
 
+    // Clean-book-first (human pattern): always chase natural piles before dirty.
     if (needsClean) {
       for (int i = 0; i < bot.melds.length; i++) {
         final meld = bot.melds[i];
-        if (meld.isClean && meld.cards.length < BotConfig.bookSize) {
+        // Use all-natural — Meld.isClean is only true for completed 7+ books.
+        if (BotMeldAnalyzer.isAllNatural(meld) &&
+            meld.cards.length < BotConfig.bookSize) {
           for (final card in bot.currentHand) {
             if (!card.isWild && _canAddCardToMeld(card, meld)) {
               final addition = {'meldIndex': i, 'card': card};
@@ -840,14 +863,19 @@ class BotEndGameManager {
           return BotDecision(action: 'createMeld', data: bestMeld);
         }
       }
+
+      // Still missing clean book — do not fall through into dirty inflation.
+      return null;
     }
 
+    // Dirty book only (clean already secured)
     if (needsDirty) {
       final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
       for (final addition in cardsToAdd) {
         final meldIndex = addition['meldIndex'] as int;
         final meld = bot.melds[meldIndex];
-        if (!meld.isClean &&
+        // Only extend already-mixed piles toward a dirty book
+        if (!BotMeldAnalyzer.isAllNatural(meld) &&
             meld.cards.length < BotConfig.bookSize &&
             isSafeAddToMeld(bot, addition)) {
           return BotDecision(action: 'addToMeld', data: addition);

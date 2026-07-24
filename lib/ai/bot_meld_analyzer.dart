@@ -15,7 +15,7 @@ class BotMeldAnalyzer {
 
   /// Naturals-only pile (wilds contaminate toward a dirty book). Not the same as [Meld.isClean],
   /// which is only true for a **completed** clean book (7+ cards).
-  static bool _isAllNatural(Meld meld) =>
+  static bool isAllNatural(Meld meld) =>
       !meld.cards.any((PlayingCard c) => c.isWild);
 
   // Cached results for performance
@@ -97,7 +97,7 @@ class BotMeldAnalyzer {
             dirtyBooks++;
           }
         } else if (meld.cards.length >= 5) {
-          if (_isAllNatural(meld)) {
+          if (isAllNatural(meld)) {
             cleanMeldsNearBook++;
           } else {
             dirtyMeldsNearBook++;
@@ -275,15 +275,21 @@ class BotMeldAnalyzer {
 
     // CRITICAL: Check clean book protection FIRST before any bonuses
     // Check if meld has no wild cards (potential clean meld/book)
-    final meldHasNoWilds = !meld.cards.any((c) => c.isWild);
+    final meldHasNoWilds = isAllNatural(meld);
     if (card.isWild && bot != null && meldHasNoWilds) {
-      final cleanBookCount = bot.melds
-          .where((m) => m.isClean && m.cards.length >= 7)
-          .length;
+      final hasCleanBook = bot.hasCleanBook;
 
-      // HARD BLOCK: Never contaminate large clean melds when we need clean books
+      // HARD BLOCK: Never contaminate any natural-only pile until a clean book exists
+      // (humans complete clean books first ~77% of the time; bots were dirty-first ~80%).
+      if (!hasCleanBook) {
+        return -50000;
+      }
+
+      final cleanBookCount = bot.melds.where((m) => m.isClean).length;
+
+      // With a clean book already secured, still protect additional large natural piles
+      // when a smaller/already-dirty alternative exists for the wild.
       if (meld.cards.length >= 5 && cleanBookCount < 2) {
-        // Check if there are smaller alternatives for this wild card
         final alternativeTargets = bot.melds
             .where(
               (m) =>
@@ -299,7 +305,7 @@ class BotMeldAnalyzer {
       }
 
       // Strong protection for medium-sized clean melds too
-      if (meld.cards.length >= 4 && cleanBookCount == 0) {
+      if (meld.cards.length >= 4 && cleanBookCount < 2) {
         final alternativeTargets = bot.melds
             .where(
               (m) => m != meld && m.canAddCard(card) && m.cards.length <= 3,
@@ -356,7 +362,7 @@ class BotMeldAnalyzer {
     }
 
     // ENHANCED Clean meld protection — use naturals-only (in-progress piles are not [Meld.isClean])
-    final meldIsAllNatural = _isAllNatural(meld);
+    final meldIsAllNatural = isAllNatural(meld);
     if (meldIsAllNatural) {
       if (!card.isWild) {
         priority += 200; // Keep it clean
@@ -440,7 +446,7 @@ class BotMeldAnalyzer {
     // Strategy 2: FOOT PHASE - Prioritize completing books, but PROTECT clean books
     else if (bot.hasPickedUpFoot && bot.currentHand.length <= 6) {
       // Incomplete naturals-only piles are "clean builders"; mixed piles are dirty lanes
-      final isNaturalOnlyMeld = _isAllNatural(meld);
+      final isNaturalOnlyMeld = isAllNatural(meld);
       final cleanBookCount = bot.melds
           .where((m) => m.isClean && m.cards.length >= 7)
           .length;
@@ -536,7 +542,7 @@ class BotMeldAnalyzer {
       // Need both books and already building a strong naturals pile — stay off wild dumps.
       if (!hasCleanBook &&
           !hasDirtyBook &&
-          bot.melds.any((m) => m.cards.length >= 4 && _isAllNatural(m))) {
+          bot.melds.any((m) => m.cards.length >= 4 && isAllNatural(m))) {
         return false;
       }
 
@@ -1099,7 +1105,7 @@ class BotMeldAnalyzer {
 
       if (!hasCleanBook &&
           !hasDirtyBook &&
-          bot.melds.any((m) => m.cards.length >= 4 && _isAllNatural(m))) {
+          bot.melds.any((m) => m.cards.length >= 4 && isAllNatural(m))) {
         return false;
       }
 

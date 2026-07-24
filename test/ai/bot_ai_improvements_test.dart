@@ -83,29 +83,27 @@ void main() {
         ); // Lower value wild
       });
 
-      test(
-        'should discard wild card in emergency case - last card but cannot go out',
-        () {
-          // Setup bot with 1 wild card and cannot go out
-          final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
-          bot.hasPlayedDown = true;
-          bot.hasPickedUpFoot = true;
+      test('refuses last-card wild discard on foot when cannot go out', () {
+        // Setup bot with 1 wild card and cannot go out — emptying the foot
+        // would leave an unfinishable error state (production analytics).
+        final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
 
-          // Put wild card in foot (since hasPickedUpFoot = true means currentHand = foot)
-          bot.foot.add(
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          ); // Only wild card
-          // Cannot go out - no clean/dirty books (empty melds list)
+        // Put wild card in foot (since hasPickedUpFoot = true means currentHand = foot)
+        bot.foot.add(
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        ); // Only wild card
+        // Cannot go out - no clean/dirty books (empty melds list)
 
-          // Set game state to discard phase so bot will make discard decision
-          controller.gameState.turnPhase = TurnPhase.discard;
+        // Set game state to discard phase so bot will make discard decision
+        controller.gameState.turnPhase = TurnPhase.discard;
 
-          final decision = botAI.makeDecision(bot, controller);
+        final decision = botAI.makeDecision(bot, controller);
 
-          expect(decision.action, 'discard');
-          expect((decision.data as PlayingCard).isWild, true);
-        },
-      );
+        expect(decision.action, isNot('discard'));
+        expect(decision.action, equals('endTurn'));
+      });
     });
 
     group('Adaptive Discard Strategy', () {

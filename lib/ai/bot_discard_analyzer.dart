@@ -145,6 +145,27 @@ class BotDiscardAnalyzer {
       }
     }
 
+    // 9. UNLOCK KEYS: Keep 2+ matching naturals for an attractive discard pile
+    if (bot.hasPlayedDown &&
+        !card.isWild &&
+        !card.isThree &&
+        gameState.discardPile.isNotEmpty) {
+      final top = gameState.topDiscard;
+      if (top != null && !top.isWild && !top.isThree && card.rank == top.rank) {
+        final matchingNaturals = bot.currentHand
+            .where((c) => c.rank == top.rank && !c.isWild)
+            .length;
+        final pileSize = gameState.discardPile.length;
+        if (matchingNaturals >= 2 && pileSize >= 5) {
+          // Preserve unlock ability — humans take ~10% of draws from pile
+          score -= 80;
+          if (pileSize >= 10) {
+            score -= 40;
+          }
+        }
+      }
+    }
+
     return score;
   }
 
