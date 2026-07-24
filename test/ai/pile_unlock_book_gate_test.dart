@@ -173,7 +173,7 @@ void main() {
     });
 
     test('botAiVersion bumped for this analytics fix', () {
-      expect(BotConfig.botAiVersion, '2026.07-pile-unlock-book-gate');
+      expect(BotConfig.botAiVersion, '2026.07-clean-book-first');
     });
   });
 }

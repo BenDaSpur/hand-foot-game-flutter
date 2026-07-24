@@ -19,14 +19,13 @@ void main() {
       analyzer = BotMeldAnalyzer();
     });
 
-    test('Bot should prefer smaller meld over large clean meld for wild card', () {
-      // Create a bot player with the same scenario as Carl
+    test('Bot should prefer dirty meld over natural melds for wild card', () {
+      // Without a clean book, wilds must go to already-dirty piles — never naturals.
       final bot = Player(id: '2', name: 'Carl', type: PlayerType.bot);
       bot.hasPlayedDown = true;
       bot.hasPickedUpFoot = true;
 
-      // Add melds exactly like Carl's scenario
-      // Large clean Kings meld (6 cards)
+      // Large natural Kings meld (6 cards) — must not contaminate
       final kingsMeld = Meld(
         rank: CardRank.king,
         cards: [
@@ -39,29 +38,27 @@ void main() {
         ],
       );
 
-      // Small clean 10s meld (3 cards)
+      // Already-dirty 10s meld — preferred wild target
       final tensMeld = Meld(
         rank: CardRank.ten,
         cards: [
           PlayingCard(rank: CardRank.ten, suit: Suit.hearts),
           PlayingCard(rank: CardRank.ten, suit: Suit.spades),
           PlayingCard(rank: CardRank.ten, suit: Suit.hearts),
+          PlayingCard(rank: CardRank.two, suit: Suit.clubs),
         ],
       );
 
       bot.melds.addAll([kingsMeld, tensMeld]);
 
-      // Add a wild card to bot's hand
       final wildCard = PlayingCard(rank: CardRank.two, suit: Suit.diamonds);
       bot.currentHand.add(wildCard);
 
-      // Find all possible meld additions
       final meldOptions = analyzer.findCardsToAddToExistingMelds(
         bot,
         controller,
       );
 
-      // Filter for wild card additions
       final wildCardOptions = meldOptions
           .where((option) => option['card'] == wildCard)
           .toList();
@@ -72,37 +69,29 @@ void main() {
         reason: 'Wild card should be addable to both Kings and 10s melds',
       );
 
-      // Sort by priority (highest first)
       wildCardOptions.sort((a, b) => b['priority'].compareTo(a['priority']));
 
-      // The top priority should be the smaller 10s meld, not the large Kings meld
-      final topChoice = wildCardOptions.first;
-      final topChoiceMeld = topChoice['meld'] as Meld;
-
+      final topChoiceMeld = wildCardOptions.first['meld'] as Meld;
       expect(
         topChoiceMeld.rank,
         equals(CardRank.ten),
-        reason:
-            'Bot should prefer adding wild to smaller 10s meld instead of large Kings meld',
+        reason: 'Bot should prefer adding wild to already-dirty 10s meld',
       );
 
-      // Verify the Kings meld gets very negative priority due to protection
       final kingsOption = wildCardOptions.firstWhere(
         (option) => (option['meld'] as Meld).rank == CardRank.king,
       );
-      final kingsOptionPriority = kingsOption['priority'] as int;
-
       expect(
-        kingsOptionPriority,
-        lessThan(-10000),
-        reason: 'Large clean Kings meld should get massive negative priority',
+        kingsOption['priority'] as int,
+        lessThanOrEqualTo(-50000),
+        reason: 'Natural Kings meld must be hard-blocked without clean book',
       );
     });
 
     test(
-      'Bot should still allow contaminating large clean meld if no alternatives',
+      'Bot hard-blocks contaminating natural meld when no clean book exists',
       () {
-        // Create bot with only one large clean meld and no alternatives
+        // Create bot with only one large natural meld and no clean book
         final bot = Player(id: '2', name: 'Carl', type: PlayerType.bot);
         bot.hasPlayedDown = true;
         bot.hasPickedUpFoot = true;
@@ -143,11 +132,74 @@ void main() {
         final option = wildCardOptions.first;
         final priority = option['priority'] as int;
 
-        // Should not be the massive negative value since no alternatives exist
+        // Clean-book-first: never spoil the only natural path when clean book missing
+        expect(
+          priority,
+          lessThanOrEqualTo(-50000),
+          reason: 'Must hard-block contamination until a clean book exists',
+        );
+      },
+    );
+
+    test(
+      'Bot may contaminate extra natural meld only after clean book exists',
+      () {
+        final bot = Player(id: '2', name: 'Carl', type: PlayerType.bot);
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+
+        // Existing clean book (sevens)
+        bot.melds.add(
+          Meld(
+            rank: CardRank.seven,
+            cards: [
+              PlayingCard(rank: CardRank.seven, suit: Suit.spades),
+              PlayingCard(rank: CardRank.seven, suit: Suit.hearts),
+              PlayingCard(rank: CardRank.seven, suit: Suit.diamonds),
+              PlayingCard(rank: CardRank.seven, suit: Suit.clubs),
+              PlayingCard(rank: CardRank.seven, suit: Suit.spades),
+              PlayingCard(rank: CardRank.seven, suit: Suit.hearts),
+              PlayingCard(rank: CardRank.seven, suit: Suit.diamonds),
+            ],
+          ),
+        );
+
+        // Only other meld is natural kings — wild has no dirty target
+        bot.melds.add(
+          Meld(
+            rank: CardRank.king,
+            cards: [
+              PlayingCard(rank: CardRank.king, suit: Suit.spades),
+              PlayingCard(rank: CardRank.king, suit: Suit.hearts),
+              PlayingCard(rank: CardRank.king, suit: Suit.diamonds),
+              PlayingCard(rank: CardRank.king, suit: Suit.diamonds),
+              PlayingCard(rank: CardRank.king, suit: Suit.clubs),
+              PlayingCard(rank: CardRank.king, suit: Suit.hearts),
+            ],
+          ),
+        );
+
+        final wildCard = PlayingCard(rank: CardRank.two, suit: Suit.diamonds);
+        bot.currentHand.add(wildCard);
+
+        expect(bot.hasCleanBook, isTrue);
+
+        final meldOptions = analyzer.findCardsToAddToExistingMelds(
+          bot,
+          controller,
+        );
+        final wildCardOptions = meldOptions
+            .where((option) => option['card'] == wildCard)
+            .toList();
+
+        expect(wildCardOptions, isNotEmpty);
+        final priority = wildCardOptions.first['priority'] as int;
         expect(
           priority,
           greaterThan(-50000),
-          reason: 'Should allow contamination when no alternatives exist',
+          reason:
+              'With a clean book secured, contamination of another natural '
+              'pile is allowed when no dirty alternative exists',
         );
       },
     );

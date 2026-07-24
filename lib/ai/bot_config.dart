@@ -270,7 +270,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-pile-unlock-book-gate';
+  static const String botAiVersion = '2026.07-clean-book-first';
 
   // Prevent instantiation
   BotConfig._();
