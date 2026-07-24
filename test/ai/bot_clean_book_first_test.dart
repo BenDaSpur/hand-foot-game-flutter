@@ -1,3 +1,6 @@
+@Tags(['clean_book_first'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_end_game_manager.dart';
@@ -10,7 +13,6 @@ import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
-@Tags(['clean_book_first'])
 void main() {
   group('Clean-book-first AI (2026.07-clean-book-first)', () {
     late BotEndGameManager endGameManager;
