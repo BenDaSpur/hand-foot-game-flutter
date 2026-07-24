@@ -60,6 +60,20 @@ class BotEndGameManager {
     return !(willHaveClean && willHaveDirty);
   }
 
+  /// True when adding [card] to [meld] would destroy the bot's only clean
+  /// book — a wild on a completed all-natural book turns it dirty, revoking
+  /// go-out eligibility at the worst possible moment.
+  static bool wouldDestroyOnlyCleanBook(
+    Player bot,
+    Meld meld,
+    PlayingCard card,
+  ) {
+    if (!card.isWild || !(meld.isBook && meld.isClean)) {
+      return false;
+    }
+    return !bot.melds.any((m) => !identical(m, meld) && m.isBook && m.isClean);
+  }
+
   static Meld? projectMeldAfterAdd(
     Player bot,
     int meldIndex,
@@ -81,6 +95,11 @@ class BotEndGameManager {
     if (meldIndex == null || card == null) {
       return false;
     }
+    if (meldIndex >= 0 &&
+        meldIndex < bot.melds.length &&
+        wouldDestroyOnlyCleanBook(bot, bot.melds[meldIndex], card)) {
+      return false;
+    }
     final projected = projectMeldAfterAdd(bot, meldIndex, card);
     return !leavesUnfinishableSingleCard(
       bot,
@@ -93,6 +112,15 @@ class BotEndGameManager {
     if (meldCards.isEmpty) {
       return false;
     }
+
+    // MeldManager merges same-rank melds: a wild-containing "new" meld would
+    // silently poison an existing naturals-only pile. Never allow this while
+    // a clean book is still required.
+    if (!bot.hasCleanBook &&
+        BotMeldAnalyzer.newMeldPoisonsNaturalPile(bot, meldCards)) {
+      return false;
+    }
+
     final projected = meldCards.length >= BotConfig.bookSize
         ? Meld.createMeld(meldCards)
         : null;
@@ -171,6 +199,9 @@ class BotEndGameManager {
 
       for (int meldIndex = 0; meldIndex < bot.melds.length; meldIndex++) {
         final meld = bot.melds[meldIndex];
+        if (wouldDestroyOnlyCleanBook(bot, meld, card)) {
+          continue; // Never break go-out eligibility to shrink the hand
+        }
         if (meld.canAddCard(card)) {
           // Simulate adding this card and calculate resulting go-out timeline
           final turnsAfterMeld = _simulateTurnsAfterMelding(bot, card);
@@ -264,7 +295,7 @@ class BotEndGameManager {
       if (turnPhase == TurnPhase.discard) {
         return BotDecision(action: 'discard', data: bot.currentHand.first);
       }
-      final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+      final cardsToAdd = _findGoOutSafeAdditions(bot, controller);
       if (cardsToAdd.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
       }
@@ -280,7 +311,10 @@ class BotEndGameManager {
         return BotDecision(action: 'noMeld');
       }
       if (turnPhase == TurnPhase.discard) {
-        return BotDecision(action: 'discard', data: _chooseCardToDiscard(bot));
+        return BotDecision(
+          action: 'discard',
+          data: _chooseCardToDiscard(bot, controller),
+        );
       }
     }
 
@@ -387,7 +421,7 @@ class BotEndGameManager {
     }
 
     // Default: discard conservatively in discard phase
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
@@ -422,7 +456,7 @@ class BotEndGameManager {
     // With 1 card: try to go out
     if (bot.currentHand.length == 1) {
       final lastCard = bot.currentHand.first;
-      final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+      final cardsToAdd = _findGoOutSafeAdditions(bot, controller);
 
       for (final addition in cardsToAdd) {
         if ((addition['card'] as PlayingCard) == lastCard) {
@@ -435,13 +469,13 @@ class BotEndGameManager {
     }
 
     // With 2-4 cards: reduce hand strategically
-    final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
+    final cardsToAdd = _findGoOutSafeAdditions(bot, controller);
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
     }
 
     // No useful additions - discard to reduce hand size
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
@@ -464,15 +498,24 @@ class BotEndGameManager {
       // No clean-book-safe addition — fall through to create a new meld
     }
 
-    // Priority 3: Create new melds that can become books
-    final possibleMelds = controller.findPossibleMelds(bot);
+    // Priority 3: Create new melds that can become books. While a clean book
+    // is still required, skip candidates that would merge a wild into an
+    // existing naturals-only pile (MeldManager merges same-rank melds).
+    var possibleMelds = controller.findPossibleMelds(bot);
+    if (!bot.hasCleanBook) {
+      possibleMelds = possibleMelds
+          .where(
+            (meld) => !BotMeldAnalyzer.newMeldPoisonsNaturalPile(bot, meld),
+          )
+          .toList();
+    }
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _findBestBookPotentialMeld(possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
     // No good options - discard conservatively
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
 
@@ -773,16 +816,40 @@ class BotEndGameManager {
     return card.rank == naturalCard.rank;
   }
 
-  /// Find cards that can be added to existing melds
+  /// Find cards that can be added to existing melds, excluding hard-blocked
+  /// (clean-book-poisoning) additions — end-game paths pick from this list
+  /// without re-checking analyzer priorities.
   List<Map<String, dynamic>> _findCardsToAddToExistingMelds(
     Player bot,
     GameController controller,
   ) {
-    return _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller);
+    return _meldAnalyzer
+        .findCardsToAddToExistingMelds(bot, controller)
+        .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
+        .toList();
   }
 
-  /// Choose the best card to discard from bot's hand
-  PlayingCard _chooseCardToDiscard(Player bot) {
+  /// Additions safe to play while going out — never one that would flip the
+  /// bot's only clean book to dirty and revoke go-out eligibility.
+  List<Map<String, dynamic>> _findGoOutSafeAdditions(
+    Player bot,
+    GameController controller,
+  ) {
+    return _findCardsToAddToExistingMelds(bot, controller)
+        .where(
+          (addition) => !wouldDestroyOnlyCleanBook(
+            bot,
+            addition['meld'] as Meld,
+            addition['card'] as PlayingCard,
+          ),
+        )
+        .toList();
+  }
+
+  /// Choose the best card to discard from bot's hand: threes first, wilds
+  /// protected in foot, then the lowest-value card that does not feed a rank
+  /// opponents have visibly melded.
+  PlayingCard _chooseCardToDiscard(Player bot, GameController controller) {
     final hand = bot.currentHand;
     if (hand.isEmpty) {
       // This indicates a logic error - empty hand should trigger foot pickup or go out
@@ -795,27 +862,10 @@ class BotEndGameManager {
       return const PlayingCard(rank: CardRank.ace, suit: Suit.spades);
     }
 
-    // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
-    final threes = hand.where((card) => card.rank == CardRank.three).toList();
-    if (threes.isNotEmpty) {
-      // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
-      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return threes.first;
-    }
-
-    // Never discard wilds in foot while missing required go-out books
-    if (BotDiscardAnalyzer.mustProtectWildsInFoot(bot)) {
-      final nonWilds = hand.where((card) => !card.isWild).toList();
-      if (nonWilds.isNotEmpty) {
-        nonWilds.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-        return nonWilds.first;
-      }
-    }
-
-    // Then discard lowest value cards
-    final sortedHand = List<PlayingCard>.from(hand);
-    sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-    return sortedHand.first;
+    return BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+      bot,
+      controller.gameState,
+    );
   }
 
   /// Build toward the missing clean or dirty book before attempting to go out.

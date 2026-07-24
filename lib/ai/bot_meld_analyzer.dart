@@ -18,6 +18,40 @@ class BotMeldAnalyzer {
   static bool isAllNatural(Meld meld) =>
       !meld.cards.any((PlayingCard c) => c.isWild);
 
+  /// Additions scored at or below this by [findCardsToAddToExistingMelds] are
+  /// hard-blocked (they would poison a clean-book lane; blocks return -50000
+  /// or -25000). Ordinary penalty stacks sum to roughly -13500 at worst, so
+  /// this floor cleanly separates blocks from legitimate low-priority plays.
+  /// Callers that take candidates unconditionally must filter these out.
+  static const int hardBlockedAdditionPriorityFloor = -20000;
+
+  /// Whether an addition candidate from [findCardsToAddToExistingMelds] is
+  /// hard-blocked and must never be played.
+  static bool isHardBlockedAddition(Map<String, dynamic> addition) {
+    return (addition['priority'] as int? ?? 0) <=
+        hardBlockedAdditionPriorityFloor;
+  }
+
+  /// MeldManager merges a "new" meld into an existing meld of the same rank,
+  /// so a wild-containing candidate whose rank matches one of the bot's
+  /// naturals-only piles would silently poison that clean-book lane.
+  static bool newMeldPoisonsNaturalPile(
+    Player bot,
+    List<PlayingCard> meldCards,
+  ) {
+    if (!meldCards.any((c) => c.isWild)) {
+      return false;
+    }
+    final naturalCard = meldCards.firstWhere(
+      (c) => !c.isWild,
+      orElse: () => meldCards.first,
+    );
+    if (naturalCard.isWild) {
+      return false;
+    }
+    return bot.melds.any((m) => m.rank == naturalCard.rank && isAllNatural(m));
+  }
+
   // Cached results for performance
   List<List<PlayingCard>>? _cachedPossibleMelds;
   String? _cachedPlayerId;
@@ -217,6 +251,12 @@ class BotMeldAnalyzer {
 
     // NEW: MASSIVE PENALTY for creating new melds with wild cards
     if (wildCount > 0) {
+      // Hard-block candidates that would merge a wild into an existing
+      // naturals-only pile (clean-book lane) — see newMeldPoisonsNaturalPile.
+      if (bot != null && newMeldPoisonsNaturalPile(bot, meld)) {
+        score -= 50000;
+      }
+
       score -=
           wildCount *
           GameConfig
@@ -278,6 +318,17 @@ class BotMeldAnalyzer {
     final meldHasNoWilds = isAllNatural(meld);
     if (card.isWild && bot != null && meldHasNoWilds) {
       final hasCleanBook = bot.hasCleanBook;
+
+      // HARD BLOCK: Never contaminate a naturals-only pile while an
+      // already-dirty meld can still legally accept this wild (analytics:
+      // session 17849271160166016 — a bot poisoned its only clean-book lane
+      // at foot transition despite four dirty melds with wild capacity).
+      final dirtyMeldCanTakeWild = bot.melds.any(
+        (m) => m != meld && m.cards.any((c) => c.isWild) && m.canAddCard(card),
+      );
+      if (dirtyMeldCanTakeWild) {
+        return -50000;
+      }
 
       // HARD BLOCK: Never contaminate any natural-only pile until a clean book exists
       // (humans complete clean books first ~77% of the time; bots were dirty-first ~80%).
@@ -432,9 +483,13 @@ class BotMeldAnalyzer {
     int bonus = 0;
     // Strategy 1: HAND PHASE - Prioritize smallest melds to concentrate wilds
     if (!bot.hasPickedUpFoot && bot.currentHand.length <= 4) {
-      // Bonus for adding to smallest melds (concentrate wilds on fewer melds)
+      // Bonus for adding to smallest melds (concentrate wilds on fewer melds).
+      // Naturals-only piles never get the tiny-meld bonus — small clean melds
+      // are clean-book lanes, not wild dumping grounds.
       if (meld.cards.length <= 3) {
-        bonus += 800; // Big bonus for tiny melds
+        if (!isAllNatural(meld)) {
+          bonus += 800; // Big bonus for tiny already-dirty melds
+        }
       } else if (meld.cards.length <= 5) {
         bonus += 400; // Medium bonus for small melds
       }

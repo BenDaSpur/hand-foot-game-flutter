@@ -243,6 +243,27 @@ class BotConfig {
   /// Extra penalty for near-book cards
   static const int nearBookPenalty = 100;
 
+  /// Penalty for discarding a rank an opponent has visibly melded (size 3-4).
+  /// Must dominate low-rank dump bonuses — analytics session 17849271160166016
+  /// showed 18/37 bot discards feeding ranks the human had already melded.
+  static const int opponentMeldedRankPenalty = 150;
+
+  /// Penalty for feeding an opponent meld that is close to a book (size 5)
+  static const int opponentNearBookFeedPenalty = 300;
+
+  /// Penalty for a discard that could complete an opponent book (size 6+)
+  static const int opponentBookFeedPenalty = 500;
+
+  /// Opponent hand size at which a matching visible meld implies they can
+  /// hold natural pairs to unlock the discard pile
+  static const int opponentUnlockRiskHandSize = 10;
+
+  /// Extra penalty when the opponent with a matching meld also has a large hand
+  static const int opponentUnlockRiskPenalty = 100;
+
+  /// Opponent melds at or above this size reveal a rank they are collecting
+  static const int meldRankTrackingThreshold = 3;
+
   /// Bonus for keeping duplicates
   static const int duplicateBonus = 20;
 
@@ -270,7 +291,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-clean-book-first';
+  static const String botAiVersion = '2026.07-safe-discards-wild-placement';
 
   // Prevent instantiation
   BotConfig._();

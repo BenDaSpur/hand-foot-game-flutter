@@ -5,6 +5,7 @@ import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_decision.dart';
 import 'bot_config.dart';
+import 'bot_discard_analyzer.dart';
 import 'bot_meld_analyzer.dart';
 
 /// Manages intelligent foot transition decisions for bot players.
@@ -121,14 +122,16 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // PRIORITY 3: Discard as last resort
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -263,7 +266,7 @@ class BotFootTransitionManager {
       if (bot.currentHand.isEmpty) {
         return BotDecision(action: 'error');
       }
-      final cardToDiscard = _chooseCardToDiscard(bot);
+      final cardToDiscard = _chooseCardToDiscard(bot, controller);
       return _phaseAwareTransitionDecision(
         controller,
         BotDecision(action: 'discard', data: cardToDiscard),
@@ -296,14 +299,16 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Discard strategically to get closer to foot
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -323,7 +328,7 @@ class BotFootTransitionManager {
       if (bot.currentHand.isEmpty) {
         return BotDecision(action: 'error');
       }
-      final cardToDiscard = _chooseCardToDiscard(bot);
+      final cardToDiscard = _chooseCardToDiscard(bot, controller);
       return _phaseAwareTransitionDecision(
         controller,
         BotDecision(action: 'discard', data: cardToDiscard),
@@ -341,7 +346,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Consider discarding if hand value is poor
@@ -357,7 +364,7 @@ class BotFootTransitionManager {
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -385,7 +392,9 @@ class BotFootTransitionManager {
       final possibleMelds = controller.findPossibleMelds(bot);
       if (possibleMelds.isNotEmpty) {
         final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-        return BotDecision(action: 'createMeld', data: bestMeld);
+        if (bestMeld.isNotEmpty) {
+          return BotDecision(action: 'createMeld', data: bestMeld);
+        }
       }
     }
 
@@ -393,7 +402,7 @@ class BotFootTransitionManager {
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -419,14 +428,16 @@ class BotFootTransitionManager {
         .toList();
     if (smallMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, smallMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Default: strategic discard
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -448,14 +459,16 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Strategic discard of worst cards
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -470,7 +483,9 @@ class BotFootTransitionManager {
     final possibleMelds = controller.findPossibleMelds(bot);
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (bestMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // Emergency risk management
@@ -487,7 +502,7 @@ class BotFootTransitionManager {
     if (bot.currentHand.isEmpty) {
       return BotDecision(action: 'error');
     }
-    final cardToDiscard = _chooseCardToDiscard(bot);
+    final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return _phaseAwareTransitionDecision(
       controller,
       BotDecision(action: 'discard', data: cardToDiscard),
@@ -598,15 +613,27 @@ class BotFootTransitionManager {
   }
 
   /// Best new meld using analyzer scoring (clean/dirty balance), not list order.
+  /// While a clean book is missing, candidates that would merge a wild into an
+  /// existing naturals-only pile are excluded (MeldManager merges same-rank
+  /// melds, which would silently poison the clean-book lane). Returns an empty
+  /// list when no safe candidate exists — callers fall through to their
+  /// add-to-meld/discard logic instead of creating a poisoning meld.
   List<PlayingCard> _selectBestNewMeld(
     Player bot,
     List<List<PlayingCard>> possibleMelds,
   ) {
-    return _meldAnalyzer.findBestMeld(
-      possibleMelds,
-      bot: bot,
-      preferLarger: true,
-    );
+    var candidates = possibleMelds;
+    if (!bot.hasCleanBook) {
+      candidates = candidates
+          .where(
+            (meld) => !BotMeldAnalyzer.newMeldPoisonsNaturalPile(bot, meld),
+          )
+          .toList();
+      if (candidates.isEmpty) {
+        return [];
+      }
+    }
+    return _meldAnalyzer.findBestMeld(candidates, bot: bot, preferLarger: true);
   }
 
   /// Calculate the total point value of a hand
@@ -614,32 +641,30 @@ class BotFootTransitionManager {
     return hand.fold(0, (sum, card) => sum + card.pointValue);
   }
 
-  /// Choose the best card to discard from bot's hand
-  PlayingCard _chooseCardToDiscard(Player bot) {
-    final hand = bot.currentHand;
-    // This method should only be called when hand is non-empty
-    assert(hand.isNotEmpty, 'Cannot discard from empty hand');
-
-    // Priority 1: Discard 3s (penalty cards), red 3s first (-300 vs black -5)
-    final threes = hand.where((card) => card.rank == CardRank.three).toList();
-    if (threes.isNotEmpty) {
-      // Sort by point value (most negative first) - red 3s are -300, black 3s are -5
-      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-      return threes.first;
-    }
-
-    // Then discard lowest value cards
-    final sortedHand = List<PlayingCard>.from(hand);
-    sortedHand.sort((a, b) => a.pointValue.compareTo(b.pointValue));
-    return sortedHand.first;
+  /// Choose the best card to discard from bot's hand: threes first, then the
+  /// lowest-value card that does not feed a rank opponents have melded.
+  /// Empty hands recover via the analyzer's fallback card instead of throwing.
+  PlayingCard _chooseCardToDiscard(Player bot, GameController controller) {
+    return BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+      bot,
+      controller.gameState,
+    );
   }
 
-  /// Add-to-meld candidates with clean/wild scoring from [BotMeldAnalyzer].
+  /// Add-to-meld candidates with clean/wild scoring from [BotMeldAnalyzer],
+  /// excluding hard-blocked (clean-book-poisoning) additions. Transition
+  /// paths take `.first` unconditionally, so blocked candidates must be
+  /// dropped here — otherwise a wild with no legal dirty target gets dumped
+  /// onto a naturals-only meld (observed in production: clean 3-ace meld
+  /// poisoned at foot transition).
   List<Map<String, dynamic>> _findCardsToAddToExistingMelds(
     Player bot,
     GameController controller,
   ) {
-    return _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller);
+    return _meldAnalyzer
+        .findCardsToAddToExistingMelds(bot, controller)
+        .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
+        .toList();
   }
 
   /// Same as [_findCardsToAddToExistingMelds], optionally boosting wild targets after analyzer ordering.
@@ -648,10 +673,10 @@ class BotFootTransitionManager {
     GameController controller, {
     bool prioritizeWilds = false,
   }) {
-    final additions = _meldAnalyzer
-        .findCardsToAddToExistingMelds(bot, controller)
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    final additions = _findCardsToAddToExistingMelds(
+      bot,
+      controller,
+    ).map((e) => Map<String, dynamic>.from(e)).toList();
     if (prioritizeWilds) {
       for (final a in additions) {
         final card = a['card'] as PlayingCard;
