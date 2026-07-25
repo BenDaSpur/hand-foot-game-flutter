@@ -37,10 +37,13 @@ void main() {
     test(
       'conservative bot melds on foot with small hand when books incomplete',
       () {
+        // 5 foot cards: melding the 4s trio safely keeps 2 cards in hand.
         dealBotFoot([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
           const PlayingCard(suit: Suit.spades, rank: CardRank.four),
           const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
         ]);
         bot.melds.add(
           Meld.createMeld([
@@ -67,6 +70,41 @@ void main() {
         );
       },
       tags: ['personality_regression'],
+    );
+
+    test(
+      'never melds a fully-meldable foot hand down to 0 without go-out books',
+      () {
+        // Session 17849474674147414: the adaptive bot melded itself to hand=0
+        // twice without a clean book, producing unrecoverable error states.
+        dealBotFoot([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        ]);
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
+
+        expect(bot.hasDirtyBook, isTrue);
+        expect(bot.canGoOutWithBooks, isFalse);
+
+        final meldDecision = botAI.makeDecision(bot, gameController);
+        expect(meldDecision.action, equals('noMeld'));
+
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(bot, gameController);
+        expect(discardDecision.action, equals('discard'));
+      },
+      tags: ['empty_hand_regression'],
     );
 
     test(

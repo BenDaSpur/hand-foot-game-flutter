@@ -131,6 +131,52 @@ class BotEndGameManager {
     );
   }
 
+  /// Simulates a multi-meld plan: rejects plans that would poison the
+  /// clean-book lane or leave 0–1 foot cards while the bot cannot go out
+  /// (a bot must keep a discard card until go-out books are secured).
+  static bool isSafeCreateMultipleMelds(
+    Player bot,
+    List<List<PlayingCard>> melds,
+  ) {
+    if (melds.isEmpty || melds.any((meld) => meld.isEmpty)) {
+      return false;
+    }
+
+    if (!bot.hasCleanBook &&
+        melds.any(
+          (meld) => BotMeldAnalyzer.newMeldPoisonsNaturalPile(bot, meld),
+        )) {
+      return false;
+    }
+
+    if (!bot.hasPickedUpFoot || bot.canGoOutWithBooks) {
+      return true; // Emptying the hand pile (foot pickup) is desirable
+    }
+
+    final cardsRemoved = melds.fold<int>(0, (sum, meld) => sum + meld.length);
+    if (bot.currentHand.length - cardsRemoved > 1) {
+      return true;
+    }
+
+    var willHaveClean = bot.hasCleanBook;
+    var willHaveDirty = bot.hasDirtyBook;
+    for (final meldCards in melds) {
+      if (meldCards.length < BotConfig.bookSize) {
+        continue;
+      }
+      final projected = Meld.createMeld(meldCards);
+      if (projected == null) {
+        continue;
+      }
+      if (projected.isClean) {
+        willHaveClean = true;
+      } else {
+        willHaveDirty = true;
+      }
+    }
+    return willHaveClean && willHaveDirty;
+  }
+
   /// Calculate minimum number of turns needed for bot to go out.
   /// Returns -1 if bot cannot go out (doesn't have required books).
   int calculateTurnsToGoOut(Player bot, GameController controller) {
@@ -318,6 +364,27 @@ class BotEndGameManager {
       }
     }
 
+    // RACE DISCIPLINE: under aggressive go-out pressure (opponent hoarding a
+    // big penalty pile), the 3-4 card case must always shed toward an empty
+    // hand instead of returning null and falling back to book farming
+    // (analytics: conservative bot sat go-out-ready for 6 minutes).
+    if (bot.currentHand.length <= 4 &&
+        shouldGoOutAggressively(bot, controller.gameState)) {
+      if (turnPhase == TurnPhase.meld) {
+        final safeAdditions = _findGoOutSafeAdditions(bot, controller);
+        if (safeAdditions.isNotEmpty) {
+          return BotDecision(action: 'addToMeld', data: safeAdditions.first);
+        }
+        return BotDecision(action: 'noMeld');
+      }
+      if (turnPhase == TurnPhase.discard) {
+        return BotDecision(
+          action: 'discard',
+          data: _chooseCardToDiscard(bot, controller),
+        );
+      }
+    }
+
     return null;
   }
 
@@ -382,7 +449,7 @@ class BotEndGameManager {
     }
 
     // Aggressive go-out under competitive pressure (only when books are valid)
-    if (_shouldGoOutAggressively(bot, gameState)) {
+    if (shouldGoOutAggressively(bot, gameState)) {
       final goOutDecision = _attemptAggressiveGoOut(bot, controller);
       if (goOutDecision != null) {
         return goOutDecision;
@@ -409,7 +476,10 @@ class BotEndGameManager {
         }
       }
 
-      final possibleMelds = controller.findPossibleMelds(bot);
+      final possibleMelds = BotMeldAnalyzer.filterCleanLaneMeldCandidates(
+        bot,
+        controller.findPossibleMelds(bot),
+      );
       if (possibleMelds.isNotEmpty) {
         final bestMeld = _findBestBookPotentialMeld(possibleMelds);
         if (isSafeCreateMeld(bot, bestMeld)) {
@@ -499,16 +569,12 @@ class BotEndGameManager {
     }
 
     // Priority 3: Create new melds that can become books. While a clean book
-    // is still required, skip candidates that would merge a wild into an
-    // existing naturals-only pile (MeldManager merges same-rank melds).
-    var possibleMelds = controller.findPossibleMelds(bot);
-    if (!bot.hasCleanBook) {
-      possibleMelds = possibleMelds
-          .where(
-            (meld) => !BotMeldAnalyzer.newMeldPoisonsNaturalPile(bot, meld),
-          )
-          .toList();
-    }
+    // is still required, keep the clean lane open: skip natural-pile-poisoning
+    // candidates and prefer wild-free melds over wild-containing ones.
+    final possibleMelds = BotMeldAnalyzer.filterCleanLaneMeldCandidates(
+      bot,
+      controller.findPossibleMelds(bot),
+    );
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _findBestBookPotentialMeld(possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
@@ -947,8 +1013,10 @@ class BotEndGameManager {
     return null;
   }
 
-  /// NEW: Check if bot should go out aggressively under pressure
-  bool _shouldGoOutAggressively(Player bot, dynamic gameState) {
+  /// Whether the bot should go out aggressively under competitive pressure
+  /// (e.g. an opponent hoarding a large penalty pile). Public/static so draw
+  /// and meld paths can enforce go-out race discipline.
+  static bool shouldGoOutAggressively(Player bot, dynamic gameState) {
     if (!bot.canGoOutWithBooks) {
       return false;
     }

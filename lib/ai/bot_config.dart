@@ -137,6 +137,10 @@ class BotConfig {
   /// Prefer aggressive go-out when an opponent's hand+foot penalty value is at least this high
   static const int aggressiveGoOutOpponentPenaltyThreshold = 180;
 
+  /// A played-down opponent holding at least this many unmelded cards is a
+  /// hoarder — adaptive bots counter with max go-out urgency and pile freezing
+  static const int hoarderCounterHandThreshold = 20;
+
   /// If all opponents' unplayed-card penalty is below this, bots may delay rushing go-out (when safe)
   static const int rushDelayOpponentPenaltyCeiling = 140;
 
@@ -291,7 +295,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-safe-discards-wild-placement';
+  static const String botAiVersion = '2026.07-go-out-race-clean-lane';
 
   // Prevent instantiation
   BotConfig._();

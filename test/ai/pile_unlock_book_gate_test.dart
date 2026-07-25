@@ -173,7 +173,7 @@ void main() {
     });
 
     test('botAiVersion bumped for this analytics fix', () {
-      expect(BotConfig.botAiVersion, '2026.07-safe-discards-wild-placement');
+      expect(BotConfig.botAiVersion, '2026.07-go-out-race-clean-lane');
     });
   });
 }
