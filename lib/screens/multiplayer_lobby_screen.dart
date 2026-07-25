@@ -4,6 +4,7 @@ import 'dart:async';
 import '../theme/balatro_theme.dart';
 import '../services/firebase_service.dart';
 import '../services/firebase_constants.dart';
+import '../services/game_code.dart';
 import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../models/game_state.dart';
@@ -142,7 +143,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
               hint: 'Enter game ID to join',
               icon: Icons.games,
               inputFormatters: [
-                // Auto-convert 4-character codes to uppercase
+                // Auto-convert short join codes to uppercase
                 _GameIdFormatter(),
               ],
             ),
@@ -504,7 +505,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   Future<void> _joinGame() async {
     final gameId = _gameIdController.text.trim();
     // Normalize short game IDs to uppercase for consistency
-    final normalizedGameId = gameId.length == 4 ? gameId.toUpperCase() : gameId;
+    final normalizedGameId = GameCode.normalize(gameId);
 
     final controller = await GameControllerFactory.joinMultiplayerGame(
       gameId: normalizedGameId,
@@ -634,15 +635,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
 }
 
 /// Custom TextInputFormatter for Game ID fields
-/// Automatically converts 4-character game codes to uppercase for consistency
+/// Automatically converts short game codes to uppercase for consistency
 class _GameIdFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    // Only apply uppercase conversion for 4-character codes
-    if (newValue.text.length <= 4) {
+    // Only apply uppercase conversion within join-code length. Uses the
+    // longest accepted code, not the length this build generates, so a
+    // 6-character code from a future build is still typable today.
+    if (newValue.text.length <= GameCode.maxLength) {
       final upperCaseText = newValue.text.toUpperCase();
       return newValue.copyWith(
         text: upperCaseText,

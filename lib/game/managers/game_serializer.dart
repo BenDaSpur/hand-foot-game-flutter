@@ -184,6 +184,7 @@ class GameSerializer {
       'f': gameState.discardPileFrozen,
       'd': gameState.hasDrawnFromDeck,
       'm': gameState.hasMelded,
+      'u': gameState.hasTakenDiscardThisTurn,
       'q': gameState.playDownRequirement,
     };
   }
@@ -287,6 +288,8 @@ class GameSerializer {
       'discardPileFrozen': data['f'],
       'hasDrawnFromDeck': data['d'],
       'hasMelded': data['m'],
+      // Absent in exports written before the once-per-turn pickup rule.
+      'hasTakenDiscardThisTurn': data['u'] ?? false,
       'playDownRequirement':
           data['q'] ?? 60, // Default for backward compatibility
     };

@@ -20,6 +20,13 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   // Configuration constants
   static const Duration _syncRetryDelay = Duration(seconds: 2);
   static const Duration _reconnectionDelay = Duration(seconds: 5);
+
+  /// How long a card-revealing log detail is kept so it can be re-attached to
+  /// the server's echo of the same action.
+  static const Duration _privateLogDetailRetention = Duration(minutes: 5);
+
+  /// Hard ceiling on retained details, in case retention alone is not enough.
+  static const int _maxRetainedPrivateLogDetails = 100;
   final String gameId;
   final String currentUserId;
   final GameController _gameController;
@@ -42,6 +49,12 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   final StreamController<GameState> _stateStreamController =
       StreamController<GameState>.broadcast();
   bool _isDisposed = false;
+
+  /// Card-revealing log text this device is entitled to see, kept outside
+  /// [GameState.recentActions] because that list is replaced wholesale by
+  /// every server snapshot. Keyed by [_logEntryKey].
+  final Map<String, ({String message, DateTime loggedAt})> _privateLogDetails =
+      {};
 
   EnhancedMultiplayerController._({
     required this.gameId,
@@ -422,9 +435,14 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     localGameState.discardPileFrozen = newGameState.discardPileFrozen;
     localGameState.hasDrawnFromDeck = newGameState.hasDrawnFromDeck;
     localGameState.hasMelded = newGameState.hasMelded;
+    localGameState.hasTakenDiscardThisTurn =
+        newGameState.hasTakenDiscardThisTurn;
 
     // Set multiplayer privacy controls
     localGameState.setMultiplayerMode(true, currentUserId);
+
+    // Computed before the list is cleared below.
+    final mergedActions = _mergePrivateLogDetails(newGameState.recentActions);
 
     // Atomic collection updates
     _replaceCollectionAtomically(localGameState.players, newGameState.players);
@@ -432,13 +450,76 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       localGameState.discardPile,
       newGameState.discardPile,
     );
-    _replaceCollectionAtomically(
-      localGameState.recentActions,
-      newGameState.recentActions,
-    );
+    _replaceCollectionAtomically(localGameState.recentActions, mergedActions);
 
     // Keep deck in sync after draws (authoritative server state)
     localGameState.deck.replaceCards(newGameState.deck.cards);
+  }
+
+  /// Remembers the card-revealing text of any locally logged action.
+  ///
+  /// Called as soon as an action is logged, before any server snapshot can
+  /// replace [GameState.recentActions]. Without this, a stale snapshot that
+  /// arrives between the local action and its own echo would destroy the only
+  /// copy of the detail and the acting player would never get it back.
+  void _rememberPrivateLogDetails() {
+    for (final action in _gameController.gameState.recentActions) {
+      final privateMessage = action.privateMessage;
+      if (privateMessage != null) {
+        _privateLogDetails[_logEntryKey(action)] = (
+          message: privateMessage,
+          loggedAt: DateTime.now(),
+        );
+      }
+    }
+    _prunePrivateLogDetails();
+  }
+
+  void _prunePrivateLogDetails() {
+    final cutoff = DateTime.now().subtract(_privateLogDetailRetention);
+    _privateLogDetails.removeWhere(
+      (_, detail) => detail.loggedAt.isBefore(cutoff),
+    );
+
+    final excess = _privateLogDetails.length - _maxRetainedPrivateLogDetails;
+    if (excess <= 0) {
+      return;
+    }
+
+    final oldestFirst = _privateLogDetails.entries.toList()
+      ..sort((a, b) => a.value.loggedAt.compareTo(b.value.loggedAt));
+    for (final entry in oldestFirst.take(excess)) {
+      _privateLogDetails.remove(entry.key);
+    }
+  }
+
+  /// Re-attaches locally known private log details to the server's log.
+  ///
+  /// The shared game document deliberately omits card-revealing text, so the
+  /// echo of our own actions would otherwise wipe the detail the acting player
+  /// just saw. Entries we have no local detail for are returned untouched.
+  List<GameAction> _mergePrivateLogDetails(List<GameAction> serverActions) {
+    if (_privateLogDetails.isEmpty) {
+      return serverActions;
+    }
+
+    return serverActions.map((action) {
+      final detail = _privateLogDetails[_logEntryKey(action)];
+      if (detail == null) {
+        return action;
+      }
+      return GameAction.withTimestamp(
+        message: action.message,
+        playerName: action.playerName,
+        timestamp: action.timestamp,
+        privateMessage: detail.message,
+      );
+    }).toList();
+  }
+
+  static String _logEntryKey(GameAction action) {
+    return '${action.playerName}|${action.timestamp.microsecondsSinceEpoch}'
+        '|${action.message}';
   }
 
   void _replaceCollectionAtomically<T>(List<T> targetList, List<T> newData) {
@@ -673,6 +754,13 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     _gameController.gameState.discardPileFrozen = serverState.discardPileFrozen;
     _gameController.gameState.hasDrawnFromDeck = serverState.hasDrawnFromDeck;
     _gameController.gameState.hasMelded = serverState.hasMelded;
+    _gameController.gameState.hasTakenDiscardThisTurn =
+        serverState.hasTakenDiscardThisTurn;
+
+    // Same privacy controls as the steady-state sync path, so actions logged
+    // before the first _updateLocalGameState use the viewer's perspective
+    // instead of falling back to "is the acting player a human".
+    _gameController.gameState.setMultiplayerMode(true, currentUserId);
 
     // Keep minimal logging for important game state changes
     if (serverState.currentPlayerIndex !=
@@ -693,9 +781,10 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     _gameController.gameState.discardPile.clear();
     _gameController.gameState.discardPile.addAll(serverState.discardPile);
 
-    // Replace recent actions
+    // Replace recent actions, keeping any card details only this device knows
+    final mergedActions = _mergePrivateLogDetails(serverState.recentActions);
     _gameController.gameState.recentActions.clear();
-    _gameController.gameState.recentActions.addAll(serverState.recentActions);
+    _gameController.gameState.recentActions.addAll(mergedActions);
   }
 
   @override
@@ -913,6 +1002,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   /// Helper method to emit state updates to UI listeners
   @visibleForTesting
   void emitStateUpdate() {
+    // Every local action funnels through here, so this is the choke point
+    // where private log detail is guaranteed to still be present.
+    _rememberPrivateLogDetails();
     if (!_isDisposed && !_stateStreamController.isClosed) {
       _stateStreamController.add(_gameController.gameState);
     }
@@ -975,6 +1067,13 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
           if (gameState.canDrawFromDiscard) {
             actions.add('drawFromDiscardPile');
           }
+          // Taking the discard pile is the once-per-turn alternative to
+          // drawing from the deck, so the draw phase is the only place it is
+          // offered. GameRulesEngine.canUnlockDiscard() enforces the same
+          // restriction for the bot and network paths.
+          if (_gameController.canUnlockDiscard()) {
+            actions.add('unlockDiscardPile');
+          }
         }
         break;
 
@@ -990,11 +1089,6 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
           if (currentPlayer.hasPlayedDown && currentPlayer.melds.isNotEmpty) {
             actions.add('addToMeld');
           }
-        }
-
-        // Allow unlocking discard pile if conditions are met
-        if (_gameController.canUnlockDiscard()) {
-          actions.add('unlockDiscardPile');
         }
         break;
 
@@ -1074,6 +1168,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     // Clear network operation queue to prevent memory leaks
     _networkOperationQueue.clear();
     _isNetworkOperationInProgress = false;
+    _privateLogDetails.clear();
 
     // Only clear active game info when explicitly leaving (not on crashes)
     // MultiplayerResumeService.clearActiveGame() should be called manually when leaving

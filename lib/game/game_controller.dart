@@ -730,6 +730,8 @@ class GameController implements GameInterface {
     gameState.discardPileFrozen = data['discardPileFrozen'] as bool;
     gameState.hasDrawnFromDeck = data['hasDrawnFromDeck'] as bool;
     gameState.hasMelded = data['hasMelded'] as bool;
+    gameState.hasTakenDiscardThisTurn =
+        data['hasTakenDiscardThisTurn'] as bool? ?? false;
 
     final phaseName = data['phase'] as String;
     gameState.phase = GamePhase.values.firstWhere(

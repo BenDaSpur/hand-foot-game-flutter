@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,6 +11,7 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/multiplayer_result.dart';
 import 'firebase_constants.dart';
+import 'game_code.dart';
 import 'device_service.dart';
 
 // Import Firebase options - production builds inject config via Vercel or CI secrets
@@ -670,9 +670,7 @@ class FirebaseService {
       }
 
       // Normalize game ID (convert short codes to uppercase)
-      final normalizedGameId = gameId.length == 4
-          ? gameId.toUpperCase()
-          : gameId;
+      final normalizedGameId = GameCode.normalize(gameId);
 
       // Validate inputs
       if (!_isValidGameId(normalizedGameId)) {
@@ -959,6 +957,9 @@ class FirebaseService {
       'discardPileFrozen': gameState.discardPileFrozen,
       'hasDrawnFromDeck': gameState.hasDrawnFromDeck,
       'hasMelded': gameState.hasMelded,
+      // Clients that predate this key simply ignore it; they read named keys
+      // and never enumerate the document, so the extra field is inert to them.
+      'hasTakenDiscardThisTurn': gameState.hasTakenDiscardThisTurn,
     };
   }
 
@@ -1011,6 +1012,7 @@ class FirebaseService {
       discardPileFrozen: data['discardPileFrozen'] ?? false,
       hasDrawnFromDeck: data['hasDrawnFromDeck'] ?? false,
       hasMelded: data['hasMelded'] ?? false,
+      hasTakenDiscardThisTurn: data['hasTakenDiscardThisTurn'] ?? false,
     );
   }
 
@@ -1118,9 +1120,13 @@ class FirebaseService {
   }
 
   /// Convert Firestore map to GameAction
+  ///
+  /// Inbound messages are sanitized because they bypass [GameState.logAction]
+  /// entirely. A client running an older build still writes card lists into
+  /// the shared log, and this is what stops updated clients from showing them.
   static GameAction _gameActionFromMap(Map<String, dynamic> data) {
     return GameAction.withTimestamp(
-      message: data['message'] ?? '',
+      message: GameState.sanitizeLogMessage(data['message'] ?? ''),
       playerName: data['playerName'] ?? 'Unknown',
       timestamp: (data['timestamp'] as Timestamp).toDate(),
     );
@@ -1155,38 +1161,19 @@ class FirebaseService {
 
   /// Validate game ID format
   static bool _isValidGameId(String gameId) {
-    if (gameId.trim().isEmpty) return false;
-
-    // Accept either short format (4 chars) or long Firebase format
-    if (gameId.length == 4) {
-      // Short game ID format: AB12
-      final validChars = RegExp(r'^[A-Z0-9]{4}$');
-      return validChars.hasMatch(gameId.toUpperCase());
-    }
-
-    // Original validation for longer IDs
-    if (gameId.length < FirebaseConstants.minGameIdLength) return false;
-    final validChars = RegExp(r'^[a-zA-Z0-9]+$');
-    return validChars.hasMatch(gameId);
+    return GameCode.isValid(gameId);
   }
 
   /// Generate a short, user-friendly game ID (e.g., AB12)
+  ///
+  /// Length and format come from [GameCode.generatedCodeLength]; see the notes
+  /// there on the two-stage widening rollout.
   static Future<String?> _generateShortGameId() async {
-    const maxAttempts =
-        20; // More attempts since shorter IDs have higher collision chance
+    const maxAttempts = 20;
 
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
-      // Generate cryptographically secure 4-character code: 2 letters + 2 numbers
-      final letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      final numbers = '0123456789';
-
-      // Use crypto-secure random generation instead of predictable timestamp
-      final secureRandom = math.Random.secure();
-      String gameId = '';
-      gameId += letters[secureRandom.nextInt(letters.length)];
-      gameId += letters[secureRandom.nextInt(letters.length)];
-      gameId += numbers[secureRandom.nextInt(numbers.length)];
-      gameId += numbers[secureRandom.nextInt(numbers.length)];
+      // Crypto-secure code
+      final gameId = GameCode.generate();
 
       // Check if this ID already exists
       try {

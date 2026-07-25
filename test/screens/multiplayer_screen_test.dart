@@ -53,16 +53,16 @@ void main() {
         ),
       );
 
-      // Find game ID text field
-      final gameIdField = find.byType(TextField).first;
+      // Join mode renders the player name field first, then the game ID field
+      final gameIdField = find.byType(TextField).at(1);
       expect(gameIdField, findsOneWidget);
 
-      // Enter valid game ID
-      await tester.enterText(gameIdField, 'AB12');
+      // Enter a valid game ID in lowercase to confirm auto-uppercasing
+      await tester.enterText(gameIdField, 'hk4rqm');
       await tester.pump();
 
-      // Should accept the input
-      expect(find.text('AB12'), findsOneWidget);
+      // Should accept the input and normalize it to the canonical form
+      expect(find.text('HK4RQM'), findsOneWidget);
     });
 
     testWidgets('player name input validation', (WidgetTester tester) async {

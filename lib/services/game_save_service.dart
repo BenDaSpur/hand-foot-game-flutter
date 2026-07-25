@@ -95,12 +95,17 @@ class GameSaveService {
       'players': gameState.players.map(_serializePlayer).toList(),
       'deck': _serializeDeck(gameState.deck.cards),
       'discardPile': gameState.discardPile.map(_serializeCard).toList(),
+      // This save never leaves the device, so the card-revealing detail is
+      // persisted here to keep a resumed solo log readable. FirebaseService
+      // owns the separate multiplayer encoding that other players can read;
+      // privateMessage must never be added there.
       'recentActions': gameState.recentActions
           .map(
             (action) => {
               'message': action.message,
               'playerName': action.playerName,
               'timestamp': action.timestamp.toIso8601String(),
+              'privateMessage': action.privateMessage,
             },
           )
           .toList(),
@@ -112,6 +117,7 @@ class GameSaveService {
       'discardPileFrozen': gameState.discardPileFrozen,
       'hasDrawnFromDeck': gameState.hasDrawnFromDeck,
       'hasMelded': gameState.hasMelded,
+      'hasTakenDiscardThisTurn': gameState.hasTakenDiscardThisTurn,
       'soloSettings': gameState.soloSettings.toJson(),
       'botPersonalities': serializeBotPersonalities(resolved),
       'finalTurnPhaseActive': gameState.finalTurnPhaseActive,
@@ -238,6 +244,8 @@ class GameSaveService {
           message: actionData['message'] as String,
           playerName: actionData['playerName'] as String,
           timestamp: DateTime.parse(actionData['timestamp'] as String),
+          // Absent in saves written before the log became privacy-aware.
+          privateMessage: actionData['privateMessage'] as String?,
         ),
       ),
     );
@@ -250,6 +258,9 @@ class GameSaveService {
     gameState.discardPileFrozen = savedData['discardPileFrozen'] as bool;
     gameState.hasDrawnFromDeck = savedData['hasDrawnFromDeck'] as bool;
     gameState.hasMelded = savedData['hasMelded'] as bool;
+    // Absent in saves written before the once-per-turn pickup rule existed.
+    gameState.hasTakenDiscardThisTurn =
+        savedData['hasTakenDiscardThisTurn'] as bool? ?? false;
 
     if (savedData['soloSettings'] != null) {
       gameState.soloSettings = SoloGameSettings.fromJson(

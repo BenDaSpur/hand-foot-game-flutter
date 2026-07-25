@@ -7,6 +7,7 @@ import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
 import '../models/game_state.dart';
+import '../game/game_action_feedback.dart';
 import '../game/game_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../ai/enhanced_bot_ai.dart';
@@ -1154,32 +1155,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
 
     if (!controller.canUnlockDiscard()) {
-      // Provide specific feedback on why unlock is not available
-      String reason;
-      if (gameState.turnPhase != TurnPhase.draw) {
-        reason = 'You can only take the discard pile during the draw phase.';
-      } else if (gameState.hasDrawnFromDeck) {
-        reason = 'You have already drawn this turn.';
-      } else if (gameState.discardPile.isEmpty) {
-        reason = 'The discard pile is empty.';
-      } else if (topCard?.isWild == true) {
-        reason = 'Cannot take discard pile when a wild card is on top.';
-      } else if (topCard?.isThree == true) {
-        reason = 'Cannot take discard pile when a 3 is on top.';
-      } else if (!currentPlayer.hasPlayedDown) {
-        reason = 'You must play down first before taking the discard pile.';
-      } else {
-        final matchingCards = currentPlayer.currentHand
-            .where((card) => card.rank == topCard!.rank && !card.isWild)
-            .toList();
-        if (matchingCards.length < 2) {
-          reason =
-              'You need at least 2 ${topCard?.rank.name}s in your hand to take the discard.';
-        } else {
-          reason = 'Cannot take discard pile at this time.';
-        }
-      }
-      _dialogManager.showErrorDialog(reason);
+      _dialogManager.showErrorDialog(
+        GameActionFeedback.unlockDiscardBlockerMessage(gameState),
+      );
       return;
     }
 

@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/firebase_service.dart';
+import 'package:hand_foot_game_flutter/services/game_code.dart';
 import 'package:hand_foot_game_flutter/services/device_service.dart';
 import 'package:hand_foot_game_flutter/game/game_controller_factory.dart';
 import 'package:hand_foot_game_flutter/game/enhanced_multiplayer_controller.dart';
@@ -227,6 +230,7 @@ void main() {
   group('Data Consistency Tests', () {
     test('game ID normalization is consistent', () {
       const testCases = [
+        {'input': 'hk4rqm', 'expected': 'HK4RQM'},
         {'input': 'ab12', 'expected': 'AB12'},
         {'input': 'XY89', 'expected': 'XY89'},
         {'input': 'longId123', 'expected': 'longId123'},
@@ -236,9 +240,7 @@ void main() {
         final input = testCase['input'] as String;
         final expected = testCase['expected'] as String;
 
-        // Test normalization logic
-        final normalized = input.length == 4 ? input.toUpperCase() : input;
-        expect(normalized, equals(expected));
+        expect(GameCode.normalize(input), equals(expected));
       }
     });
 
@@ -295,13 +297,22 @@ void main() {
       );
     });
 
-    test('game ID space is sufficient', () {
-      // 4 characters: 2 letters (26^2) + 2 digits (10^2) = 67,600 combinations
-      const expectedCombinations = 26 * 26 * 10 * 10;
-      expect(expectedCombinations, equals(67600));
+    test('widened game ID space would resist enumeration', () {
+      // The legacy format (2 letters + 2 digits) has only 67,600 codes, a
+      // space small enough to walk end to end. Stage one of the widening
+      // rollout only teaches clients to accept maxLength codes; generation
+      // still emits the legacy format, so this asserts the space that stage
+      // two unlocks, not the one in use today.
+      const legacyCombinations = 26 * 26 * 10 * 10;
+      expect(legacyCombinations, equals(67600));
 
-      // Should be enough for concurrent games
-      expect(expectedCombinations, greaterThan(10000));
+      final combinations = math.pow(
+        GameCode.alphabet.length,
+        GameCode.maxLength,
+      );
+      expect(combinations, greaterThan(100000000));
+
+      expect(GameCode.generatedCodeLength, equals(GameCode.legacyLength));
     });
 
     test('cleanup batch size is reasonable', () {
@@ -357,8 +368,7 @@ void main() {
       // Game ID generation should use timestamp variation
       // Test that sequential calls don't produce sequential IDs
 
-      // This is more of a design validation than a functional test
-      const sampleIds = ['AB12', 'XY34', 'MN56'];
+      final sampleIds = List.generate(3, (_) => GameCode.generate());
 
       for (int i = 1; i < sampleIds.length; i++) {
         final prev = sampleIds[i - 1];

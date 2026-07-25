@@ -5,11 +5,35 @@ import '../theme/balatro_theme.dart';
 /// A visual turn timer that counts down during a player's turn.
 /// Shows warning colors as time runs low.
 class TurnTimer extends StatefulWidget {
+  /// Default turn length in seconds.
+  static const int defaultTurnDurationSeconds = 120;
+
+  /// Remaining seconds at which the countdown turns orange.
+  static const int lowTimeWarningSeconds = 30;
+
+  /// Remaining seconds at which the countdown turns red.
+  static const int criticalTimeWarningSeconds = 10;
+
+  /// Longest a pause may hold the countdown before it resumes on its own.
+  ///
+  /// Pausing exists so a player thinking through a play-down is not
+  /// auto-discarded mid-decision, but an untimed modal must not be able to
+  /// stall the table indefinitely.
+  static const int defaultMaxPauseSeconds = 60;
+
   /// Duration of the turn in seconds
   final int turnDurationSeconds;
 
   /// Whether the timer is active (should count down)
   final bool isActive;
+
+  /// Whether the countdown is temporarily suspended, for example while a
+  /// modal has the player's attention. Unlike clearing [isActive], pausing
+  /// preserves the remaining time instead of restarting the turn.
+  final bool isPaused;
+
+  /// How long [isPaused] may hold the countdown before it resumes anyway.
+  final int maxPauseSeconds;
 
   /// Callback when time runs out
   final VoidCallback? onTimeUp;
@@ -19,8 +43,10 @@ class TurnTimer extends StatefulWidget {
 
   const TurnTimer({
     super.key,
-    this.turnDurationSeconds = 120, // 2 minutes default
+    this.turnDurationSeconds = defaultTurnDurationSeconds,
     this.isActive = true,
+    this.isPaused = false,
+    this.maxPauseSeconds = defaultMaxPauseSeconds,
     this.onTimeUp,
     this.onTick,
   });
@@ -31,6 +57,7 @@ class TurnTimer extends StatefulWidget {
 
 class _TurnTimerState extends State<TurnTimer> {
   Timer? _timer;
+  Timer? _pauseCapTimer;
   late int _remainingSeconds;
 
   @override
@@ -38,7 +65,11 @@ class _TurnTimerState extends State<TurnTimer> {
     super.initState();
     _remainingSeconds = widget.turnDurationSeconds;
     if (widget.isActive) {
-      _startTimer();
+      if (widget.isPaused) {
+        _pauseTimer();
+      } else {
+        _startTimer();
+      }
     }
   }
 
@@ -49,9 +80,20 @@ class _TurnTimerState extends State<TurnTimer> {
     // Reset timer when turn changes (isActive toggles off then on)
     if (widget.isActive && !oldWidget.isActive) {
       _remainingSeconds = widget.turnDurationSeconds;
-      _startTimer();
+      if (widget.isPaused) {
+        _pauseTimer();
+      } else {
+        _startTimer();
+      }
     } else if (!widget.isActive && oldWidget.isActive) {
       _stopTimer();
+    } else if (widget.isActive && widget.isPaused != oldWidget.isPaused) {
+      // Suspend/resume without losing the remaining time.
+      if (widget.isPaused) {
+        _pauseTimer();
+      } else {
+        _startTimer();
+      }
     }
   }
 
@@ -60,6 +102,25 @@ class _TurnTimerState extends State<TurnTimer> {
     _stopTimer();
     super.dispose();
   }
+
+  /// Suspends the countdown, but only for [TurnTimer.maxPauseSeconds] so an
+  /// abandoned modal cannot hold the turn open forever.
+  void _pauseTimer() {
+    _stopTimer();
+    _pauseCapTimer = Timer(Duration(seconds: widget.maxPauseSeconds), () {
+      if (!mounted || !widget.isActive) {
+        return;
+      }
+      _startTimer();
+      // The countdown is running again even though isPaused is still set, so
+      // the paused indicator has to be repainted.
+      setState(() {});
+    });
+  }
+
+  /// True while the countdown is genuinely suspended, as opposed to paused for
+  /// longer than [TurnTimer.maxPauseSeconds] and resumed by the cap.
+  bool get _isCountdownSuspended => widget.isPaused && _timer == null;
 
   void _startTimer() {
     _stopTimer(); // Cancel any existing timer
@@ -85,6 +146,8 @@ class _TurnTimerState extends State<TurnTimer> {
   void _stopTimer() {
     _timer?.cancel();
     _timer = null;
+    _pauseCapTimer?.cancel();
+    _pauseCapTimer = null;
   }
 
   /// Reset the timer to full duration
@@ -92,15 +155,20 @@ class _TurnTimerState extends State<TurnTimer> {
     setState(() {
       _remainingSeconds = widget.turnDurationSeconds;
     });
-    if (widget.isActive) {
+    if (!widget.isActive) {
+      return;
+    }
+    if (widget.isPaused) {
+      _pauseTimer();
+    } else {
       _startTimer();
     }
   }
 
   Color _getTimerColor() {
-    if (_remainingSeconds <= 10) {
+    if (_remainingSeconds <= TurnTimer.criticalTimeWarningSeconds) {
       return Colors.red;
-    } else if (_remainingSeconds <= 30) {
+    } else if (_remainingSeconds <= TurnTimer.lowTimeWarningSeconds) {
       return Colors.orange;
     } else {
       return BalatroTheme.neonGreen;
@@ -137,7 +205,11 @@ class _TurnTimerState extends State<TurnTimer> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.timer, color: color, size: 18),
+          Icon(
+            _isCountdownSuspended ? Icons.pause_circle_outline : Icons.timer,
+            color: color,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           // Progress indicator
           SizedBox(
@@ -163,10 +235,12 @@ class _TurnTimerState extends State<TurnTimer> {
             ),
           ),
           // Warning indicator when low on time
-          if (_remainingSeconds <= 30) ...[
+          if (_remainingSeconds <= TurnTimer.lowTimeWarningSeconds) ...[
             const SizedBox(width: 4),
             Icon(
-              _remainingSeconds <= 10 ? Icons.warning : Icons.schedule,
+              _remainingSeconds <= TurnTimer.criticalTimeWarningSeconds
+                  ? Icons.warning
+                  : Icons.schedule,
               color: color,
               size: 16,
             ),
@@ -185,7 +259,7 @@ class TurnTimerSettings {
 
   const TurnTimerSettings({
     this.enabled = false,
-    this.durationSeconds = 120,
+    this.durationSeconds = TurnTimer.defaultTurnDurationSeconds,
     this.autoDiscardOnTimeout = true,
   });
 

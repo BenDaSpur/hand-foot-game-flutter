@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/firebase_service.dart';
 import 'package:hand_foot_game_flutter/game/game_controller_factory.dart';
 import 'package:hand_foot_game_flutter/services/firebase_constants.dart';
+import 'package:hand_foot_game_flutter/services/game_code.dart';
 
 void main() {
   group('Multiplayer Game Creation', () {
@@ -294,15 +295,32 @@ void main() {
   });
 
   group('Data Validation', () {
-    test('game ID length validation', () {
-      expect(_validateGameIdFormat('AB12'), true);
-      expect(_validateGameIdFormat('XY89'), true);
+    test('game ID length validation accepts both code lengths', () {
+      // Stage one of the code widening accepts maxLength codes even though it
+      // still generates legacyLength ones, so both must validate here.
+      expect(_validateGameIdFormat('HK4RQM'), true);
+      expect(_validateGameIdFormat('hk4rqm'), true);
+      expect(_validateGameIdFormat('AB12'), true); // legacy in-flight games
+      expect(_validateGameIdFormat('ab12'), true);
 
       expect(_validateGameIdFormat(''), false);
       expect(_validateGameIdFormat('A'), false);
       expect(_validateGameIdFormat('AB1'), false);
-      expect(_validateGameIdFormat('ABCD'), false);
-      expect(_validateGameIdFormat('ab12'), false); // Should be uppercase
+      expect(_validateGameIdFormat('HK4RQ'), false);
+      expect(_validateGameIdFormat('HK4RQM!'), false);
+    });
+
+    test('generated game IDs pass the shared format validator', () {
+      for (int i = 0; i < 25; i++) {
+        final gameId = GameCode.generate();
+
+        expect(gameId.length, GameCode.legacyLength);
+        expect(
+          _validateGameIdFormat(gameId),
+          true,
+          reason: '$gameId should be accepted by the shared validator',
+        );
+      }
     });
 
     test('player count validation', () {
@@ -374,8 +392,10 @@ void main() {
 
 // Helper methods for validation testing
 bool _validateGameIdFormat(String gameId) {
-  if (gameId.length != 4) return false;
-  return RegExp(r'^[A-Z]{2}[0-9]{2}$').hasMatch(gameId);
+  if (!GameCode.isShortCode(gameId)) {
+    return false;
+  }
+  return GameCode.isValid(gameId);
 }
 
 bool _validatePlayerCount(int count) {
