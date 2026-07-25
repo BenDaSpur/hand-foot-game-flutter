@@ -551,12 +551,12 @@ class EnhancedBotAI {
       // Try to meld all remaining cards to minimize hand size for going out.
       // Skip hard-blocked (clean-lane-poisoning) and unsafe additions — a
       // rush must never revoke its own go-out eligibility.
+      final rushController = context.controller as GameController?;
+      if (rushController == null) {
+        return BotDecision(action: 'noMeld');
+      }
       final cardsToAdd = _meldAnalyzer
-          .findCardsToAddToExistingMelds(
-            bot,
-            (context.controller as GameController?) ??
-                (throw StateError('Controller required for meld analysis')),
-          )
+          .findCardsToAddToExistingMelds(bot, rushController)
           .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
           .where((addition) => BotEndGameManager.isSafeAddToMeld(bot, addition))
           .toList();

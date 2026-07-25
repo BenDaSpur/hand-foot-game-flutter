@@ -577,7 +577,9 @@ class BotEndGameManager {
     );
     if (possibleMelds.isNotEmpty) {
       final bestMeld = _findBestBookPotentialMeld(possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+      if (isSafeCreateMeld(bot, bestMeld)) {
+        return BotDecision(action: 'createMeld', data: bestMeld);
+      }
     }
 
     // No good options - discard conservatively
@@ -1016,7 +1018,7 @@ class BotEndGameManager {
   /// Whether the bot should go out aggressively under competitive pressure
   /// (e.g. an opponent hoarding a large penalty pile). Public/static so draw
   /// and meld paths can enforce go-out race discipline.
-  static bool shouldGoOutAggressively(Player bot, dynamic gameState) {
+  static bool shouldGoOutAggressively(Player bot, GameState gameState) {
     if (!bot.canGoOutWithBooks) {
       return false;
     }

@@ -79,56 +79,64 @@ void main() {
   });
 
   group('Clean-book lane at meld creation (adaptive all-dirty bug)', () {
-    test('filterCleanLaneMeldCandidates prefers wild-free candidates', () {
-      bot.melds.add(dirtyBook(CardRank.ace));
+    test(
+      'filterCleanLaneMeldCandidates prefers wild-free candidates',
+      () {
+        bot.melds.add(dirtyBook(CardRank.ace));
 
-      final wildMeld = [
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-      ];
-      final naturalMeld = [
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-      ];
+        final wildMeld = [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ];
+        final naturalMeld = [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+        ];
 
-      final filtered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, [
-        wildMeld,
-        naturalMeld,
-      ]);
+        final filtered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, [
+          wildMeld,
+          naturalMeld,
+        ]);
 
-      expect(filtered, equals([naturalMeld]));
-    });
+        expect(filtered, equals([naturalMeld]));
+      },
+      tags: ['clean_book_lane'],
+    );
 
-    test('filterCleanLaneMeldCandidates drops natural-pile poisoners', () {
-      bot.melds.add(dirtyBook(CardRank.ace));
-      bot.melds.add(
-        Meld.createMeld([
+    test(
+      'filterCleanLaneMeldCandidates drops natural-pile poisoners',
+      () {
+        bot.melds.add(dirtyBook(CardRank.ace));
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+          ])!,
+        );
+
+        final poisoningMeld = [
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
           const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-        ])!,
-      );
+          const PlayingCard(suit: null, rank: CardRank.joker),
+        ];
+        final dirtyNine = [
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ];
 
-      final poisoningMeld = [
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-        const PlayingCard(suit: null, rank: CardRank.joker),
-      ];
-      final dirtyNine = [
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-      ];
+        final filtered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, [
+          poisoningMeld,
+          dirtyNine,
+        ]);
 
-      final filtered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, [
-        poisoningMeld,
-        dirtyNine,
-      ]);
-
-      expect(filtered, equals([dirtyNine]));
-    });
+        expect(filtered, equals([dirtyNine]));
+      },
+      tags: ['clean_book_lane'],
+    );
 
     test('no filtering once a clean book exists', () {
       bot.melds.add(cleanBook(CardRank.queen));
@@ -150,7 +158,7 @@ void main() {
       ]);
 
       expect(filtered.length, equals(2));
-    });
+    }, tags: ['clean_book_lane']);
 
     test(
       'adaptive bot with only dirty books creates a wild-free meld when one exists',
@@ -180,6 +188,7 @@ void main() {
           expect((addition['card'] as PlayingCard).isWild, isFalse);
         }
       },
+      tags: ['clean_book_lane'],
     );
   });
 
@@ -210,6 +219,7 @@ void main() {
         final discardDecision = botAI.makeDecision(bot, gameController);
         expect(discardDecision.action, equals('discard'));
       },
+      tags: ['empty_hand_guard'],
     );
 
     test('never adds the last foot card to a meld without go-out books '
@@ -237,30 +247,34 @@ void main() {
       gameController.gameState.turnPhase = TurnPhase.discard;
       final discardDecision = botAI.makeDecision(bot, gameController);
       expect(discardDecision.action, equals('endTurn'));
-    });
+    }, tags: ['empty_hand_guard']);
 
-    test('isSafeCreateMultipleMelds rejects plans emptying the foot', () {
-      bot.melds.add(dirtyBook(CardRank.ace));
-      bot.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-      ]);
+    test(
+      'isSafeCreateMultipleMelds rejects plans emptying the foot',
+      () {
+        bot.melds.add(dirtyBook(CardRank.ace));
+        bot.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+        ]);
 
-      final plan = [
-        bot.currentHand.sublist(0, 3),
-        bot.currentHand.sublist(3, 6),
-      ];
+        final plan = [
+          bot.currentHand.sublist(0, 3),
+          bot.currentHand.sublist(3, 6),
+        ];
 
-      expect(BotEndGameManager.isSafeCreateMultipleMelds(bot, plan), isFalse);
+        expect(BotEndGameManager.isSafeCreateMultipleMelds(bot, plan), isFalse);
 
-      // Same plan is fine once both go-out books exist.
-      bot.melds.add(cleanBook(CardRank.queen));
-      expect(BotEndGameManager.isSafeCreateMultipleMelds(bot, plan), isTrue);
-    });
+        // Same plan is fine once both go-out books exist.
+        bot.melds.add(cleanBook(CardRank.queen));
+        expect(BotEndGameManager.isSafeCreateMultipleMelds(bot, plan), isTrue);
+      },
+      tags: ['empty_hand_guard'],
+    );
 
     test(
       'isSafeCreateMultipleMelds allows emptying the hand pile pre-foot',
@@ -279,6 +293,7 @@ void main() {
           isTrue,
         );
       },
+      tags: ['empty_hand_guard'],
     );
   });
 
@@ -288,37 +303,41 @@ void main() {
       makeHumanHoarder(handSize: 27);
     });
 
-    test('go-out-ready bot never takes the discard pile mid-race', () {
-      // Session: the go-out-ready conservative bot unlocked a 39-card pile
-      // (+7 cards) while racing a 30-card hoarder.
-      bot.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-      ]);
-      gameController.gameState.discardPile.addAll(
-        List.generate(
-          20,
-          (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.five),
-        ),
-      );
-      gameController.gameState.turnPhase = TurnPhase.draw;
-      gameController.gameState.hasDrawnFromDeck = false;
+    test(
+      'go-out-ready bot never takes the discard pile mid-race',
+      () {
+        // Session: the go-out-ready conservative bot unlocked a 39-card pile
+        // (+7 cards) while racing a 30-card hoarder.
+        bot.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        ]);
+        gameController.gameState.discardPile.addAll(
+          List.generate(
+            20,
+            (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.five),
+          ),
+        );
+        gameController.gameState.turnPhase = TurnPhase.draw;
+        gameController.gameState.hasDrawnFromDeck = false;
 
-      expect(bot.canGoOutWithBooks, isTrue);
-      expect(
-        BotEndGameManager.shouldGoOutAggressively(
-          bot,
-          gameController.gameState,
-        ),
-        isTrue,
-      );
+        expect(bot.canGoOutWithBooks, isTrue);
+        expect(
+          BotEndGameManager.shouldGoOutAggressively(
+            bot,
+            gameController.gameState,
+          ),
+          isTrue,
+        );
 
-      final decision = botAI.makeDecision(bot, gameController);
-      expect(decision.action, equals('drawFromDeck'));
-    });
+        final decision = botAI.makeDecision(bot, gameController);
+        expect(decision.action, equals('drawFromDeck'));
+      },
+      tags: ['go_out_race'],
+    );
 
     test(
       'buildFinishRoundDecision always sheds at 3-4 cards under pressure',
@@ -339,61 +358,66 @@ void main() {
         expect(discardDecision, isNotNull);
         expect(discardDecision!.action, equals('discard'));
       },
+      tags: ['go_out_race'],
     );
 
-    test('go-out-ready bot facing a hoarder goes out within 2 turns', () {
-      bot.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-      ]);
+    test(
+      'go-out-ready bot facing a hoarder goes out within 2 turns',
+      () {
+        bot.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+        ]);
 
-      var wentOut = false;
-      for (var turn = 0; turn < 2 && !wentOut; turn++) {
-        // Meld phase: apply shedding decisions until the bot stops melding.
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        for (var step = 0; step < 8; step++) {
-          final decision = botAI.makeDecision(bot, gameController);
-          expect(decision.action, isNot('drawFromDiscard'));
-          expect(decision.action, isNot('error'));
-          if (decision.action == 'addToMeld') {
-            final addition = decision.data as Map<String, dynamic>;
-            final card = addition['card'] as PlayingCard;
-            final meldIndex = addition['meldIndex'] as int;
-            expect(bot.melds[meldIndex].addCard(card), isTrue);
-            expect(bot.removeCardFromHand(card), isNotNull);
-          } else if (decision.action == 'createMeld') {
-            final meldCards = decision.data as List<PlayingCard>;
-            bot.melds.add(Meld.createMeld(meldCards)!);
-            for (final card in meldCards) {
+        var wentOut = false;
+        for (var turn = 0; turn < 2 && !wentOut; turn++) {
+          // Meld phase: apply shedding decisions until the bot stops melding.
+          gameController.gameState.turnPhase = TurnPhase.meld;
+          for (var step = 0; step < 8; step++) {
+            final decision = botAI.makeDecision(bot, gameController);
+            expect(decision.action, isNot('drawFromDiscard'));
+            expect(decision.action, isNot('error'));
+            if (decision.action == 'addToMeld') {
+              final addition = decision.data as Map<String, dynamic>;
+              final card = addition['card'] as PlayingCard;
+              final meldIndex = addition['meldIndex'] as int;
+              expect(bot.melds[meldIndex].addCard(card), isTrue);
               expect(bot.removeCardFromHand(card), isNotNull);
+            } else if (decision.action == 'createMeld') {
+              final meldCards = decision.data as List<PlayingCard>;
+              bot.melds.add(Meld.createMeld(meldCards)!);
+              for (final card in meldCards) {
+                expect(bot.removeCardFromHand(card), isNotNull);
+              }
+            } else {
+              break;
             }
-          } else {
-            break;
           }
-        }
 
-        // Discard phase: shed one more card or go out.
-        gameController.gameState.turnPhase = TurnPhase.discard;
-        final decision = botAI.makeDecision(bot, gameController);
-        expect(decision.action, isNot('error'));
-        if (decision.action == 'goOut') {
-          wentOut = true;
-        } else {
-          expect(decision.action, equals('discard'));
-          expect(
-            bot.removeCardFromHand(decision.data as PlayingCard),
-            isNotNull,
-          );
-          if (bot.currentHand.isEmpty && bot.canGoOut) {
+          // Discard phase: shed one more card or go out.
+          gameController.gameState.turnPhase = TurnPhase.discard;
+          final decision = botAI.makeDecision(bot, gameController);
+          expect(decision.action, isNot('error'));
+          if (decision.action == 'goOut') {
             wentOut = true;
+          } else {
+            expect(decision.action, equals('discard'));
+            expect(
+              bot.removeCardFromHand(decision.data as PlayingCard),
+              isNotNull,
+            );
+            if (bot.currentHand.isEmpty && bot.canGoOut) {
+              wentOut = true;
+            }
           }
         }
-      }
 
-      expect(wentOut, isTrue);
-    });
+        expect(wentOut, isTrue);
+      },
+      tags: ['go_out_race'],
+    );
   });
 
   group('Adaptive hoarder counter (the missing punish)', () {
@@ -401,50 +425,58 @@ void main() {
       botAI.assignPersonality(bot.id, BotPersonality.adaptive);
     });
 
-    test('played-down hoarder activates hoarder_counter strategy', () {
-      // speed_counter requires !hasPlayedDown, so the session pattern
-      // (minimal play-down, then 34-card hoard) matched no strategy.
-      makeHumanHoarder(handSize: 25);
-      bot.melds.add(dirtyBook(CardRank.ace));
-      bot.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-      ]);
-
-      botAI.makeDecision(bot, gameController);
-
-      expect(
-        botAI.personalityManager.getAdaptiveStrategy(bot.id),
-        equals('hoarder_counter'),
-      );
-    });
-
-    test('hoarder_counter discards a wild to freeze the discard pile', () {
-      makeHumanHoarder(handSize: 25);
-      // Pre-foot bot: wilds are not yet needed for a missing go-out book.
-      bot.hasPickedUpFoot = false;
-      bot.melds.add(
-        Meld.createMeld([
+    test(
+      'played-down hoarder activates hoarder_counter strategy',
+      () {
+        // speed_counter requires !hasPlayedDown, so the session pattern
+        // (minimal play-down, then 34-card hoard) matched no strategy.
+        makeHumanHoarder(handSize: 25);
+        bot.melds.add(dirtyBook(CardRank.ace));
+        bot.foot.addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
           const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-        ])!,
-      );
-      bot.hand.addAll([
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
-      ]);
-      gameController.gameState.turnPhase = TurnPhase.discard;
-      gameController.gameState.discardPileFrozen = false;
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+        ]);
 
-      final decision = botAI.makeDecision(bot, gameController);
+        botAI.makeDecision(bot, gameController);
 
-      expect(decision.action, equals('discard'));
-      expect((decision.data as PlayingCard).isWild, isTrue);
-    });
+        expect(
+          botAI.personalityManager.getAdaptiveStrategy(bot.id),
+          equals('hoarder_counter'),
+        );
+      },
+      tags: ['hoarder_counter'],
+    );
+
+    test(
+      'hoarder_counter discards a wild to freeze the discard pile',
+      () {
+        makeHumanHoarder(handSize: 25);
+        // Pre-foot bot: wilds are not yet needed for a missing go-out book.
+        bot.hasPickedUpFoot = false;
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          ])!,
+        );
+        bot.hand.addAll([
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+        ]);
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        gameController.gameState.discardPileFrozen = false;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        expect(decision.action, equals('discard'));
+        expect((decision.data as PlayingCard).isWild, isTrue);
+      },
+      tags: ['hoarder_counter'],
+    );
 
     test(
       'hoarder_counter never freezes with a wild needed for the dirty book',
@@ -464,38 +496,43 @@ void main() {
         expect(decision.action, equals('discard'));
         expect((decision.data as PlayingCard).isWild, isFalse);
       },
+      tags: ['hoarder_counter'],
     );
 
-    test('played-down hoarder triggers the hoarding rush for any bot', () {
-      // Even below the 180-point penalty threshold, 20+ unmelded cards after
-      // play-down is a punish window (new scenario 4b branch).
-      human.hasPlayedDown = true;
-      human.hand.clear();
-      human.hand.addAll(
-        List.generate(
-          22,
-          (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.four),
-        ),
-      );
+    test(
+      'played-down hoarder triggers the hoarding rush for any bot',
+      () {
+        // Even below the 180-point penalty threshold, 20+ unmelded cards after
+        // play-down is a punish window (new scenario 4b branch).
+        human.hasPlayedDown = true;
+        human.hand.clear();
+        human.hand.addAll(
+          List.generate(
+            22,
+            (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.four),
+          ),
+        );
 
-      bot.melds.addAll([cleanBook(CardRank.queen), dirtyBook(CardRank.five)]);
-      bot.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-      ]);
+        bot.melds.addAll([cleanBook(CardRank.queen), dirtyBook(CardRank.five)]);
+        bot.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+        ]);
 
-      expect(bot.canGoOutWithBooks, isTrue);
+        expect(bot.canGoOutWithBooks, isTrue);
 
-      final decision = botAI.makeDecision(bot, gameController);
+        final decision = botAI.makeDecision(bot, gameController);
 
-      // Rush path: shed via meld or skip straight to the go-out discard —
-      // never a strategic hold.
-      expect(decision.action, anyOf('addToMeld', 'createMeld', 'noMeld'));
-      gameController.gameState.turnPhase = TurnPhase.discard;
-      final discardDecision = botAI.makeDecision(bot, gameController);
-      // Still shedding: meld the 5 into the five book or discard.
-      expect(discardDecision.action, anyOf('discard', 'addToMeld'));
-    });
+        // Rush path: shed via meld or skip straight to the go-out discard —
+        // never a strategic hold.
+        expect(decision.action, anyOf('addToMeld', 'createMeld', 'noMeld'));
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(bot, gameController);
+        // Still shedding: meld the 5 into the five book or discard.
+        expect(discardDecision.action, anyOf('discard', 'addToMeld'));
+      },
+      tags: ['hoarder_counter'],
+    );
   });
 }
