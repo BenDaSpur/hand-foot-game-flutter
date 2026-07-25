@@ -52,6 +52,31 @@ class BotMeldAnalyzer {
     return bot.melds.any((m) => m.rank == naturalCard.rank && isAllNatural(m));
   }
 
+  /// Keep the clean-book lane open at meld creation. While a played-down bot
+  /// has no clean book, drop candidates that would poison an existing
+  /// naturals-only pile and prefer wild-free candidates whenever a
+  /// natural-only alternative exists (wilds belong in already-dirty piles).
+  /// Analytics: session 17849474674147414 — the adaptive bot put wilds in
+  /// every meld it created and could never go out.
+  static List<List<PlayingCard>> filterCleanLaneMeldCandidates(
+    Player bot,
+    List<List<PlayingCard>> possibleMelds,
+  ) {
+    if (!bot.hasPlayedDown || bot.hasCleanBook || possibleMelds.isEmpty) {
+      return possibleMelds;
+    }
+
+    final nonPoisoning = possibleMelds
+        .where((meld) => !newMeldPoisonsNaturalPile(bot, meld))
+        .toList();
+    final candidates = nonPoisoning.isNotEmpty ? nonPoisoning : possibleMelds;
+
+    final wildFree = candidates
+        .where((meld) => !meld.any((card) => card.isWild))
+        .toList();
+    return wildFree.isNotEmpty ? wildFree : candidates;
+  }
+
   // Cached results for performance
   List<List<PlayingCard>>? _cachedPossibleMelds;
   String? _cachedPlayerId;

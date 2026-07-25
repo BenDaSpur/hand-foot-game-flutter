@@ -88,8 +88,27 @@ class EnhancedBotAI {
     return _makeDecisionWithContext(bot, context);
   }
 
-  /// Internal decision-making method using BotGameContext for decoupling
+  /// Internal decision-making method using BotGameContext for decoupling.
+  ///
+  /// Every decision — including priority paths that return early (pressure
+  /// responses, emergency melds, finish-round shortcuts) — is validated so no
+  /// path can meld/discard a foot hand down to 0 cards without go-out books
+  /// (analytics: session 17849474674147414 `error` states).
   BotDecision _makeDecisionWithContext(Player bot, BotGameContext context) {
+    final decision = _computeDecisionWithContext(bot, context);
+    if (_isValidDecision(decision, bot, context)) {
+      return decision;
+    }
+    DebugLogger.botDebug(
+      bot.id,
+      bot.name,
+      'Unsafe decision ${decision.action} from priority path - using safe fallback',
+    );
+    return _getSafeDecision(context.gameState.turnPhase, bot, context);
+  }
+
+  /// Computes the raw decision; callers must validate via [_isValidDecision].
+  BotDecision _computeDecisionWithContext(Player bot, BotGameContext context) {
     final gameState = context.gameState;
 
     try {
@@ -384,6 +403,20 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
+    // GO-OUT RACE DISCIPLINE: a go-out-ready bot racing to punish a hoarding
+    // opponent must never take the discard pile — extra cards delay going out
+    // (analytics: conservative bot took +7 pile cards mid-race).
+    if (bot.hasPickedUpFoot &&
+        bot.canGoOutWithBooks &&
+        BotEndGameManager.shouldGoOutAggressively(bot, gameState)) {
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'RACE DISCIPLINE: go-out-ready under pressure - drawing from deck only',
+      );
+      return BotDecision(action: 'drawFromDeck');
+    }
+
     // Evaluate discard pile opportunity FIRST — accumulation must not skip
     // unlockable valuable piles (analytics: ~0.5% take-pile under prior order).
     if (gameState.discardPile.isNotEmpty) {
@@ -515,12 +548,18 @@ class EnhancedBotAI {
         '${bot.name}: RUSHING TO GO OUT - melding everything possible ($handSize cards)',
       );
 
-      // Try to meld all remaining cards to minimize hand size for going out
-      final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
-        bot,
-        (context.controller as GameController?) ??
-            (throw StateError('Controller required for meld analysis')),
-      );
+      // Try to meld all remaining cards to minimize hand size for going out.
+      // Skip hard-blocked (clean-lane-poisoning) and unsafe additions — a
+      // rush must never revoke its own go-out eligibility.
+      final rushController = context.controller as GameController?;
+      if (rushController == null) {
+        return BotDecision(action: 'noMeld');
+      }
+      final cardsToAdd = _meldAnalyzer
+          .findCardsToAddToExistingMelds(bot, rushController)
+          .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
+          .where((addition) => BotEndGameManager.isSafeAddToMeld(bot, addition))
+          .toList();
       if (cardsToAdd.isNotEmpty) {
         DebugLogger.debug(
           '${bot.name}: Adding to existing meld to reduce hand size',
@@ -730,7 +769,7 @@ class EnhancedBotAI {
       if (rushMelds.isNotEmpty) {
         return BotDecision(
           action: 'createMeld',
-          data: _meldAnalyzer.findBestMeld(rushMelds, bot: bot),
+          data: _selectBestNewMeld(bot, rushMelds),
         );
       }
     }
@@ -755,10 +794,10 @@ class EnhancedBotAI {
     }
 
     // Try to create new melds with book balance consideration
+    // (clean-lane filter applied via _selectBestNewMeld)
     final possibleMelds = _getCachedPossibleMelds(bot, context);
     if (possibleMelds.isNotEmpty) {
-      // Pass bot context to consider book balance
-      final bestMeld = _meldAnalyzer.findBestMeld(possibleMelds, bot: bot);
+      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
       return BotDecision(action: 'createMeld', data: bestMeld);
     }
 
@@ -798,6 +837,24 @@ class EnhancedBotAI {
       return BotDecision(action: 'endTurn');
     }
 
+    // HOARDER COUNTER (adaptive): shed 3s first, then freeze the pile with a
+    // wild to starve the hoarder's repeated discard-pile unlocks.
+    if (_personalityManager.getAdaptiveStrategy(bot.id) == 'hoarder_counter') {
+      final counterDiscard = _chooseHoarderCounterDiscard(
+        bot,
+        context.gameState,
+      );
+      if (counterDiscard != null) {
+        DebugLogger.botDebug(
+          bot.id,
+          bot.name,
+          'HOARDER COUNTER: discarding ${counterDiscard.displayName} '
+          '(${counterDiscard.isWild ? 'pile freeze' : 'penalty shed'})',
+        );
+        return BotDecision(action: 'discard', data: counterDiscard);
+      }
+    }
+
     // RULE ENFORCEMENT: Bot must discard a card to follow Hand & Foot rules
     PlayingCard? cardToDiscard;
     if (bot.hasPlayedDown &&
@@ -815,6 +872,31 @@ class EnhancedBotAI {
     // and meets the going out requirements. This is handled by the game controller.
 
     return BotDecision(action: 'discard', data: cardToDiscard);
+  }
+
+  /// Hoarder-counter discard: 3s first (penalty shedding), then a wild to
+  /// freeze the discard pile and starve repeated unlocks. Returns null when
+  /// neither applies so normal discard selection takes over.
+  PlayingCard? _chooseHoarderCounterDiscard(Player bot, GameState gameState) {
+    final threes = bot.currentHand.where((card) => card.isThree).toList();
+    if (threes.isNotEmpty) {
+      threes.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+      return threes.first;
+    }
+
+    if (gameState.discardPileFrozen) {
+      return null; // Pile already frozen — don't waste another wild
+    }
+    if (BotDiscardAnalyzer.mustProtectWildsInFoot(bot)) {
+      return null; // Wilds are still needed for the missing go-out book
+    }
+    final wilds = bot.currentHand.where((card) => card.isWild).toList();
+    if (wilds.isEmpty) {
+      return null;
+    }
+    // Freeze with the cheapest wild (a two before a joker).
+    wilds.sort((a, b) => a.pointValue.compareTo(b.pointValue));
+    return wilds.first;
   }
 
   /// EMERGENCY: Handle emergency play-down when hand size is critical
@@ -1006,6 +1088,16 @@ class EnhancedBotAI {
           BotConfig.aggressiveGoOutOpponentPenaltyThreshold) {
         DebugLogger.debug(
           '${bot.name}: HOARDING RUSH - Opponent penalty ${opponent.calculateAllUnplayedCardsValue()} >= ${BotConfig.aggressiveGoOutOpponentPenaltyThreshold}',
+        );
+        return true;
+      }
+      // Played-down hoarder: a large unmelded hand is a punish window even
+      // before its raw point value crosses the penalty threshold.
+      if (opponent.hasPlayedDown &&
+          opponent.currentHand.length >=
+              BotConfig.hoarderCounterHandThreshold) {
+        DebugLogger.debug(
+          '${bot.name}: HOARDING RUSH - Opponent holds ${opponent.currentHand.length} unmelded cards after play-down',
         );
         return true;
       }
@@ -3577,23 +3669,23 @@ class EnhancedBotAI {
       return _executeSpeedDemonStrategy(bot, context, gameState, human);
     }
 
-    // OTHER BOTS: General counter-tactics
+    // OTHER BOTS: General counter-tactics.
+    // RACE DISCIPLINE: never take the pile while go-out-ready — denying the
+    // hoarder cards is worthless compared to ending the round before they
+    // can dump (analytics: conservative bot took +7 cards mid-race).
+    final goOutReady = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
     if (gameState.turnPhase == TurnPhase.draw &&
-        gameState.discardPile.length >= 6) {
+        gameState.discardPile.length >= 6 &&
+        !goOutReady) {
       // Take large discard piles to deny accumulation opportunities
       if (bot.hasPlayedDown && context.canUnlockDiscard()) {
         return BotDecision(action: 'drawFromDiscard');
       }
     }
 
-    if (gameState.turnPhase == TurnPhase.meld &&
-        bot.hasPickedUpFoot &&
-        bot.currentHand.length <= 10 &&
-        bot.canGoOutWithBooks) {
-      // Rush to finish — meld what we can, then discard to go out
-      return BotDecision(action: 'noMeld');
-    }
-
+    // Go-out-ready in meld phase: fall through to normal logic — the rush
+    // path melds/sheds every turn. (Previously returned a bare noMeld that
+    // skipped melding entirely and stalled the race.)
     return null;
   }
 
@@ -3607,8 +3699,12 @@ class EnhancedBotAI {
     // Must draw before melding — pressure tactics cannot skip the draw phase.
     if (gameState.turnPhase == TurnPhase.draw) {
       if (!gameState.hasDrawnFromDeck) {
-        // Prefer discard pile when unlockable to speed up the game.
-        if (gameState.discardPile.length >= 4 && context.canUnlockDiscard()) {
+        // Prefer discard pile when unlockable to speed up the game — unless
+        // go-out-ready: extra pile cards only delay ending the round.
+        final goOutReady = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+        if (!goOutReady &&
+            gameState.discardPile.length >= 4 &&
+            context.canUnlockDiscard()) {
           return BotDecision(action: 'drawFromDiscard');
         }
         return BotDecision(action: 'drawFromDeck');
@@ -4150,6 +4246,28 @@ class EnhancedBotAI {
           return;
         }
 
+        // ADAPTATION 1b: HOARDER COUNTER — human played down (often minimally)
+        // but hoards a large unmelded penalty pile. speed_counter never matches
+        // this pattern because it requires !hasPlayedDown (analytics: session
+        // 17849474674147414 — human held 34 cards after an early play-down).
+        // Effects: max go-out urgency, finish clean+dirty books over farming,
+        // and discard safety (3s/wilds — a wild freezes the pile and starves
+        // repeated unlocks).
+        if (human.hasPlayedDown &&
+            (human.currentHand.length >=
+                    BotConfig.hoarderCounterHandThreshold ||
+                human.calculateAllUnplayedCardsValue() >=
+                    BotConfig.aggressiveGoOutOpponentPenaltyThreshold)) {
+          _overrideAdaptiveConstants(bot, 'hoarder_counter', {
+            'maxTurnsBeforeForcePlayDown': 1, // Strike fast
+            'aggressivenessMultiplier': 2.0, // Max go-out urgency
+            'bookCompletionPriority': 400, // Books over farming
+            'handPileValueThreshold': 20, // Keep tempo toward foot
+            'footPileValueThreshold': 25,
+          });
+          return;
+        }
+
         // ADAPTATION 2: Match human book building with patience
         if (human.melds.length >= 8 && human.hasPlayedDown) {
           // Human is building many books - switch to book builder mode
@@ -4206,6 +4324,10 @@ class EnhancedBotAI {
     BotGameContext context,
   ) {
     try {
+      // Final turn: the round is already ending, melding everything (even to
+      // an empty hand) maximizes points — only structural checks apply.
+      final finalTurnActive = context.gameState.finalTurnPhaseActive;
+
       switch (decision.action) {
         case 'goOut':
           return bot.canGoOut && bot.hasPickedUpFoot;
@@ -4214,11 +4336,21 @@ class EnhancedBotAI {
             return false;
           }
           final meldCards = decision.data as List<PlayingCard>;
-          return meldCards.isNotEmpty &&
+          if (meldCards.isEmpty) {
+            return false;
+          }
+          return finalTurnActive ||
               BotEndGameManager.isSafeCreateMeld(bot, meldCards);
         case 'createMultipleMelds':
-          return decision.data is List<List<PlayingCard>> &&
-              (decision.data as List<List<PlayingCard>>).isNotEmpty;
+          if (decision.data is! List<List<PlayingCard>>) {
+            return false;
+          }
+          final melds = decision.data as List<List<PlayingCard>>;
+          if (melds.isEmpty || melds.any((meld) => meld.isEmpty)) {
+            return false;
+          }
+          return finalTurnActive ||
+              BotEndGameManager.isSafeCreateMultipleMelds(bot, melds);
         case 'addToMeld':
           if (decision.data is! Map<String, dynamic>) {
             return false;
@@ -4230,10 +4362,16 @@ class EnhancedBotAI {
               meldIndex >= bot.melds.length) {
             return false;
           }
-          return BotEndGameManager.isSafeAddToMeld(bot, data);
+          return finalTurnActive ||
+              BotEndGameManager.isSafeAddToMeld(bot, data);
         case 'discard':
-          return decision.data is PlayingCard &&
-              bot.hasHandCard(decision.data as PlayingCard);
+          if (decision.data is! PlayingCard ||
+              !bot.hasHandCard(decision.data as PlayingCard)) {
+            return false;
+          }
+          // Never discard the last foot card without go-out books.
+          return finalTurnActive ||
+              !BotEndGameManager.wouldEmptyFootWithoutGoOut(bot);
         case 'drawFromDeck':
         case 'drawFromDiscard':
         case 'unlockDiscardPile':
@@ -4271,13 +4409,13 @@ class EnhancedBotAI {
           }
           return BotDecision(action: 'error');
         }
-        // Try simple meld if possible, otherwise skip
+        // Try simple meld if possible (and safe), otherwise skip
         final possibleMelds = context.controller?.findPossibleMelds(bot) ?? [];
         if (possibleMelds.isNotEmpty && bot.hasPlayedDown) {
-          return BotDecision(
-            action: 'createMeld',
-            data: _selectBestNewMeld(bot, possibleMelds),
-          );
+          final bestMeld = _selectBestNewMeld(bot, possibleMelds);
+          if (BotEndGameManager.isSafeCreateMeld(bot, bestMeld)) {
+            return BotDecision(action: 'createMeld', data: bestMeld);
+          }
         }
         return BotDecision(action: 'noMeld');
       case TurnPhase.discard:
@@ -4288,6 +4426,11 @@ class EnhancedBotAI {
             return BotDecision(action: 'goOut');
           }
           return BotDecision(action: 'error');
+        }
+
+        // Never discard the last foot card into an unfinishable empty hand
+        if (BotEndGameManager.wouldEmptyFootWithoutGoOut(bot)) {
+          return BotDecision(action: 'endTurn');
         }
 
         // Find any valid discard
@@ -4336,13 +4479,19 @@ class EnhancedBotAI {
   }
 
   /// Highest-scoring new meld via analyzer (clean/dirty balance); never uses raw list order from [findPossibleMelds].
+  /// Applies the clean-lane filter: while no clean book exists, wild-free
+  /// candidates win over wild-containing ones (route wilds into dirty piles).
   List<PlayingCard> _selectBestNewMeld(
     Player bot,
     List<List<PlayingCard>> possibleMelds,
   ) {
     assert(possibleMelds.isNotEmpty);
-    return _meldAnalyzer.findBestMeld(
+    final laneFiltered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(
+      bot,
       possibleMelds,
+    );
+    return _meldAnalyzer.findBestMeld(
+      laneFiltered.isNotEmpty ? laneFiltered : possibleMelds,
       bot: bot,
       preferLarger: true,
     );
