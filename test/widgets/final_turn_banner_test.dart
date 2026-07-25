@@ -143,7 +143,7 @@ void main() {
         expect(find.textContaining('Bot 1 went out'), findsOneWidget);
         expect(find.textContaining('Meld every card you can'), findsNothing);
         expect(find.byIcon(Icons.expand_more), findsOneWidget);
-      });
+      }, tags: ['widget']);
 
       testWidgets('tapping expands and collapses the full guidance', (
         tester,
@@ -174,7 +174,37 @@ void main() {
           tester.getSize(find.byType(FinalTurnBanner)).height,
           collapsedHeight,
         );
-      });
+      }, tags: ['widget']);
+
+      testWidgets('compact summary survives large text scales', (tester) async {
+        tester.view.physicalSize = const Size(320, 700);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        gameState.finalTurnPhaseActive = true;
+        gameState.playerWhoWentOutIndex = 1;
+        gameState.playersAwaitingFinalTurn.add(0);
+        gameState.currentPlayerIndex = 0;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(320, 700),
+                textScaler: TextScaler.linear(2.5),
+              ),
+              child: Scaffold(
+                body: FinalTurnBanner(
+                  gameState: gameState,
+                  localPlayerId: human.id,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+      }, tags: ['widget']);
 
       testWidgets('uses short headline while waiting on other players', (
         tester,
@@ -197,8 +227,8 @@ void main() {
         );
 
         expect(find.text('FINAL TURNS'), findsOneWidget);
-        expect(find.textContaining('You went out'), findsOneWidget);
-      });
+        expect(find.text('You went out — 1 left'), findsOneWidget);
+      }, tags: ['widget']);
     });
   });
 }

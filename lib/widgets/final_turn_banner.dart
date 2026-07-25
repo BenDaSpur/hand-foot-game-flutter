@@ -27,6 +27,18 @@ class FinalTurnBanner extends StatefulWidget {
 }
 
 class _FinalTurnBannerState extends State<FinalTurnBanner> {
+  static const _detailedPadding = EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: 10,
+  );
+  static const _compactPadding = EdgeInsets.fromLTRB(10, 6, 6, 6);
+  static const _detailedIconSize = 26.0;
+  static const _compactIconSize = 18.0;
+  static const _chevronSize = 20.0;
+  static const _detailedIconGap = 10.0;
+  static const _compactVerticalMargin = 3.0;
+  static const _cornerRadius = 12.0;
+
   bool _expanded = false;
 
   @override
@@ -37,7 +49,7 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
     }
 
     final isCompact =
-        MediaQuery.of(context).size.width <= UIConstants.smallScreenBreakpoint;
+        MediaQuery.sizeOf(context).width <= UIConstants.smallScreenBreakpoint;
     final showDetails = !isCompact || _expanded;
 
     final wentOut = gameState.playerWhoWentOut;
@@ -50,9 +62,7 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
         : BalatroTheme.neonYellow;
 
     final content = Padding(
-      padding: showDetails
-          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-          : const EdgeInsets.fromLTRB(10, 6, 6, 6),
+      padding: showDetails ? _detailedPadding : _compactPadding,
       child: Row(
         crossAxisAlignment: showDetails
             ? CrossAxisAlignment.start
@@ -61,9 +71,11 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
           Icon(
             isLocalFinalTurn ? Icons.timer : Icons.hourglass_bottom,
             color: urgencyColor,
-            size: showDetails ? 26 : 18,
+            size: showDetails ? _detailedIconSize : _compactIconSize,
           ),
-          SizedBox(width: showDetails ? 10 : 8),
+          SizedBox(
+            width: showDetails ? _detailedIconGap : UIConstants.mediumSpacing,
+          ),
           Expanded(
             child: showDetails
                 ? _buildDetails(
@@ -80,11 +92,11 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
                   ),
           ),
           if (isCompact) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: UIConstants.smallSpacing),
             Icon(
               _expanded ? Icons.expand_less : Icons.expand_more,
               color: urgencyColor,
-              size: 20,
+              size: _chevronSize,
             ),
           ],
         ],
@@ -92,7 +104,10 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
     );
 
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: isCompact ? 3 : 4),
+      margin: EdgeInsets.symmetric(
+        horizontal: UIConstants.defaultMargin,
+        vertical: isCompact ? _compactVerticalMargin : UIConstants.smallSpacing,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -100,7 +115,7 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
             BalatroTheme.neonPink.withValues(alpha: 0.18),
           ],
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(_cornerRadius),
         border: Border.all(color: urgencyColor, width: 2),
         boxShadow: [
           BoxShadow(
@@ -111,16 +126,16 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
         ],
       ),
       child: isCompact
-          ? Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => setState(() => _expanded = !_expanded),
-                borderRadius: BorderRadius.circular(12),
-                child: Semantics(
-                  button: true,
-                  label: _expanded
-                      ? 'Hide final turn details'
-                      : 'Show final turn details',
+          ? Semantics(
+              button: true,
+              label: _expanded
+                  ? 'Hide final turn details'
+                  : 'Show final turn details',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  borderRadius: BorderRadius.circular(_cornerRadius),
                   child: content,
                 ),
               ),
@@ -180,13 +195,17 @@ class _FinalTurnBannerState extends State<FinalTurnBanner> {
   }) {
     return Row(
       children: [
-        Text(
-          _compactHeadline(isLocalFinalTurn),
-          style: TextStyle(
-            color: urgencyColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-            letterSpacing: 0.3,
+        Flexible(
+          child: Text(
+            _compactHeadline(isLocalFinalTurn),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: urgencyColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              letterSpacing: 0.3,
+            ),
           ),
         ),
         const SizedBox(width: 6),
