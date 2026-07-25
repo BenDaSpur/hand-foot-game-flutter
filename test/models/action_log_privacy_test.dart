@@ -1,3 +1,6 @@
+@Tags(['privacy'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
@@ -315,6 +318,12 @@ void main() {
     test('trims the card list but keeps the rest of the message', () {
       expect(GameState.sanitizeLogMessage('🎯 drew: K ♥, Q ♠'), '🎯 drew');
       expect(GameState.sanitizeLogMessage('Alice drew: K ♥'), 'Alice drew');
+      expect(
+        GameState.sanitizeLogMessage(
+          'took 2 more cards from discard pile: 9 ♥, 4 ♣',
+        ),
+        'took 2 more cards from discard pile',
+      );
     });
   });
 
@@ -345,5 +354,26 @@ void main() {
         );
       }
     });
+
+    test(
+      'a leaky discard-pickup message from an old client is sanitized on read',
+      () {
+        final gameState = buildGameState(multiplayer: true);
+        expect(gameState.drawFromDeck(), isTrue);
+
+        final document = FirebaseService.gameStateToMapForTesting(gameState);
+        final actions = (document['recentActions'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+        const leakyText = 'took 2 more cards from discard pile: 9 ♥, 4 ♣';
+        actions.last['message'] = leakyText;
+
+        final restored = FirebaseService.gameStateFromMapForTesting(document);
+
+        final received = restored.recentActions.last;
+        expect(received.message, 'took 2 more cards from discard pile');
+        expect(received.displayMessage.contains('9 ♥'), isFalse);
+        expect(received.displayMessage.contains('4 ♣'), isFalse);
+      },
+    );
   });
 }

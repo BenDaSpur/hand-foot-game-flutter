@@ -1112,19 +1112,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       final gameState = ref.read(currentGameStateProvider);
       if (gameState?.phase == GamePhase.roundEnd) {
         _dialogManager.showEmergencyRoundEndDialog();
-      } else {
-        // Check if deck is empty or insufficient
-        if (gameState?.deck.isEmpty ?? false) {
-          _dialogManager.showErrorDialog(
-            'Cannot draw from deck: The deck is empty!\n\n'
-            'The round will continue until a player goes out or all players pass.',
-          );
-        } else if ((gameState?.deck.size ?? 0) < 2) {
-          _dialogManager.showErrorDialog(
-            'Cannot draw from deck: Only ${gameState?.deck.size ?? 0} card(s) remaining.\n\n'
-            'You must draw exactly 2 cards from the deck. Try drawing from the discard pile instead.',
-          );
-        }
+      } else if (gameState != null) {
+        _dialogManager.showErrorDialog(
+          GameActionFeedback.drawFromDeckFailureMessage(gameState),
+        );
       }
     }
   }
@@ -1521,22 +1512,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
         // This would end the game - check requirements
         if (!humanPlayer.canGoOutWithBooks) {
-          String missingBooks = '';
-          final cleanBooks = humanPlayer.melds.where((m) => m.isClean).length;
-          final dirtyBooks = humanPlayer.melds.where((m) => m.isDirty).length;
-          final totalBooks = humanPlayer.melds.where((m) => m.isBook).length;
-
-          if (!humanPlayer.hasCleanBook && !humanPlayer.hasDirtyBook) {
-            missingBooks =
-                'You need both a clean book (no wild cards) and a dirty book (with wild cards) to go out.';
-          } else if (!humanPlayer.hasCleanBook) {
-            missingBooks = 'You need a clean book (no wild cards) to go out.';
-          } else if (!humanPlayer.hasDirtyBook) {
-            missingBooks = 'You need a dirty book (with wild cards) to go out.';
-          }
-
           _dialogManager.showErrorDialog(
-            'Cannot go out! $missingBooks\n\nYou currently have:\n• $totalBooks book(s) total\n• $cleanBooks clean book(s)\n• $dirtyBooks dirty book(s)',
+            GameActionFeedback.goOutBlockerMessage(humanPlayer),
           );
           return;
         }

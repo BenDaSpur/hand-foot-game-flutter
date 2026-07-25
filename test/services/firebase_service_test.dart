@@ -136,12 +136,11 @@ void main() {
       final widened = math.pow(GameCode.alphabet.length, GameCode.maxLength);
       expect(widened, greaterThan(legacyCombinations * 1000));
 
-      final generated = math.pow(
-        GameCode.alphabet.length,
-        GameCode.generatedCodeLength,
-      );
+      // Practical generation still uses the legacy letters-then-digits shape,
+      // so compare the widened space against that real legacy space — not
+      // alphabet^generatedCodeLength, which overstates what this build draws.
       expect(
-        generated,
+        legacyCombinations,
         lessThan(widened),
         reason:
             'generation is still legacy-length, so the practical space is '
@@ -177,6 +176,13 @@ void main() {
       expect(GameCode.normalize('ab12'), 'AB12');
       expect(GameCode.normalize('AB12'), 'AB12');
       expect(GameCode.normalize('longFirebaseId123'), 'longFirebaseId123');
+    });
+
+    test('trims surrounding whitespace before normalizing short codes', () {
+      expect(GameCode.normalize('  ab12  '), 'AB12');
+      expect(GameCode.normalize('\thk4rqm\n'), 'HK4RQM');
+      expect(GameCode.isValid('  ab12  '), isTrue);
+      expect(GameCode.normalize('  longFirebaseId123  '), 'longFirebaseId123');
     });
 
     test('lowercase codes of either length round-trip through normalize', () {

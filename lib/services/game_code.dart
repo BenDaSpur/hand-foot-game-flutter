@@ -69,13 +69,15 @@ class GameCode {
 
   /// Canonical (uppercase) form of a hand-typed join code.
   ///
-  /// Longer ids are returned unchanged because they may be case-sensitive
-  /// Firestore document ids.
+  /// Surrounding whitespace is always removed. Longer ids are otherwise
+  /// returned unchanged because they may be case-sensitive Firestore document
+  /// ids.
   static String normalize(String gameId) {
-    if (isShortCode(gameId)) {
-      return gameId.toUpperCase();
+    final trimmed = gameId.trim();
+    if (isShortCode(trimmed)) {
+      return trimmed.toUpperCase();
     }
-    return gameId;
+    return trimmed;
   }
 
   /// Whether [gameId] is a usable game identifier.

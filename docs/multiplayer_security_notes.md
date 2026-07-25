@@ -78,7 +78,7 @@ every hand and overwrite the state.
 
 Move anything that must stay secret out of the shared document.
 
-```
+```text
 games/{gameCode}                      // public: turn, phase, round, discard
                                       //         pile, melds, scores, log
 games/{gameCode}/private/{playerId}   // secret: that player's hand and foot
@@ -98,7 +98,7 @@ games/{gameCode}/private/_deck        // secret: undealt deck order
 
 ### Step 2 — Firestore rules for the new shape
 
-```
+```text
 match /games/{gameId} {
   allow read: if request.auth != null;
 

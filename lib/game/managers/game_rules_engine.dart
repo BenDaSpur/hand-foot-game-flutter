@@ -1,3 +1,4 @@
+import '../../config/game_config.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 
@@ -50,12 +51,12 @@ class GameRulesEngine {
       return false;
     }
 
-    // Check if player has at least 2 matching natural cards
+    // Check if player has enough matching natural cards to form a meld
     final matchingCards = currentPlayer.currentHand
         .where((card) => card.rank == topCard.rank && !card.isWild)
         .toList();
 
-    return matchingCards.length >= 2;
+    return matchingCards.length >= GameConfig.minNaturalCardsForMeld;
   }
 
   /// Validates if any player (other than the current player) can immediately unlock
@@ -128,12 +129,12 @@ class GameRulesEngine {
       return false;
     }
 
-    // Check if player has at least 2 matching natural cards
+    // Check if player has enough matching natural cards to form a meld
     final matchingCards = player.currentHand
         .where((card) => card.rank == topCard.rank && !card.isWild)
         .toList();
 
-    return matchingCards.length >= 2;
+    return matchingCards.length >= GameConfig.minNaturalCardsForMeld;
   }
 
   /// Validates if the current player can end their turn.

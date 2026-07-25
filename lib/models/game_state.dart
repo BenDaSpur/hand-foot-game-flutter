@@ -246,8 +246,14 @@ class GameState {
     );
   }
 
-  /// Marker that precedes a card list in a draw message.
-  static const String _drawDetailMarker = 'drew:';
+  /// Markers that precede a card list in a log message.
+  ///
+  /// Each marker ends with `:` so the trailing colon and following card names
+  /// can be stripped while the non-sensitive action text is preserved.
+  static const List<String> _cardDetailMarkers = [
+    'drew:',
+    'from discard pile:',
+  ];
 
   /// Strips card details from a log message that must not reveal them.
   ///
@@ -257,10 +263,15 @@ class GameState {
   static String sanitizeLogMessage(String message) {
     // Remove specific card details from actions that shouldn't be visible.
     // Matched anywhere in the message so emoji-prefixed variants such as
-    // '🎯 drew: Q ♠' are sanitized too.
-    final markerIndex = message.indexOf(_drawDetailMarker);
-    if (markerIndex >= 0) {
-      return '${message.substring(0, markerIndex)}drew'.trimRight();
+    // '🎯 drew: Q ♠' and legacy discard-pickup leaks are sanitized too.
+    for (final marker in _cardDetailMarkers) {
+      final markerIndex = message.indexOf(marker);
+      if (markerIndex >= 0) {
+        final kept = marker.endsWith(':')
+            ? marker.substring(0, marker.length - 1)
+            : marker;
+        return '${message.substring(0, markerIndex)}$kept'.trimRight();
+      }
     }
     return message;
   }
