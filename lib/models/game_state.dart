@@ -22,21 +22,39 @@ class GameStateException implements Exception {
 }
 
 class GameAction {
+  /// Shared text for this action. This is the only part that is ever written
+  /// to the multiplayer game document, so it must never reveal card identities
+  /// that belong to a single player's hand.
   final String message;
+
   final DateTime timestamp;
   final String playerName;
 
-  GameAction({required this.message, required this.playerName})
-    : timestamp = DateTime.now();
+  /// Card-revealing detail that is only ever shown on the acting player's own
+  /// device. It may be written to a device-local save so a resumed solo game
+  /// keeps its log readable, but it is deliberately excluded from the
+  /// multiplayer encoding in `FirebaseService`, which opponents can read.
+  final String? privateMessage;
+
+  GameAction({
+    required this.message,
+    required this.playerName,
+    this.privateMessage,
+  }) : timestamp = DateTime.now();
 
   GameAction.withTimestamp({
     required this.message,
     required this.playerName,
     required this.timestamp,
+    this.privateMessage,
   });
 
+  /// Text to render locally: the private detail when this device is entitled
+  /// to see it, otherwise the shared message.
+  String get displayMessage => privateMessage ?? message;
+
   @override
-  String toString() => '$playerName: $message';
+  String toString() => '$playerName: $displayMessage';
 }
 
 class GameState {
@@ -53,6 +71,14 @@ class GameState {
   bool discardPileFrozen;
   bool hasDrawnFromDeck;
   bool hasMelded;
+
+  /// True once the current player has taken the discard pile this turn.
+  ///
+  /// Taking the pile is a draw-phase alternative to drawing from the deck, so
+  /// it is allowed at most once per turn. [unlockDiscard] leaves the turn in
+  /// [TurnPhase.meld] without setting [hasDrawnFromDeck], so this flag is what
+  /// stops a second pickup when the new top card also matches two naturals.
+  bool hasTakenDiscardThisTurn;
 
   // Track 3s stalemate situation
   /// Player index where stalemate detection started (null if no stalemate detected)
@@ -90,6 +116,7 @@ class GameState {
     this.discardPileFrozen = false,
     this.hasDrawnFromDeck = false,
     this.hasMelded = false,
+    this.hasTakenDiscardThisTurn = false,
     SoloGameSettings? soloSettings,
     this.finalTurnPhaseActive = false,
     this.playerWhoWentOutIndex,
@@ -148,7 +175,17 @@ class GameState {
     _viewerId = viewerId;
   }
 
-  void _logAction(String message, {bool showCardDetails = true}) {
+  /// Logs a game action.
+  ///
+  /// [message] is the shared text and must be safe for every player to read.
+  /// [privateMessage] is an optional card-revealing variant that is attached
+  /// only when this device is entitled to see the detail; it is omitted from
+  /// the multiplayer encoding, so it cannot leak through the sync.
+  void _logAction(
+    String message, {
+    bool showCardDetails = true,
+    String? privateMessage,
+  }) {
     // Determine if card details should be shown based on player type and action visibility
     final isHuman = currentPlayer.type == PlayerType.human;
     final isPublicAction =
@@ -158,24 +195,29 @@ class GameState {
         message.contains('picked up foot') ||
         message.contains('went out');
 
-    // In multiplayer, only show card details for the viewer's own actions or public actions
-    // In single player, show details for human actions or public actions
-    bool shouldShowDetails;
-    if (_isMultiplayer && _viewerId != null) {
-      // Multiplayer mode: only show details if this is the viewer's turn or public action
-      final isViewersTurn = currentPlayer.id == _viewerId;
-      shouldShowDetails = showCardDetails && (isViewersTurn || isPublicAction);
-    } else {
-      // Single player mode: show details for human players or public actions
-      shouldShowDetails = showCardDetails && (isHuman || isPublicAction);
-    }
+    // Whether the acting player is the person sitting at this device.
+    // In multiplayer that is the viewer; in single player it is the human.
+    final isLocalActingPlayer = _isMultiplayer && _viewerId != null
+        ? currentPlayer.id == _viewerId
+        : isHuman;
+
+    final shouldShowDetails =
+        showCardDetails && (isLocalActingPlayer || isPublicAction);
+
+    // Private details are for the acting player's eyes only, so unlike
+    // [shouldShowDetails] they are never unlocked by an action being public.
+    final shouldAttachPrivateDetail = showCardDetails && isLocalActingPlayer;
 
     final finalMessage = shouldShowDetails
         ? message
         : _sanitizeMessage(message);
 
     recentActions.add(
-      GameAction(message: finalMessage, playerName: currentPlayer.name),
+      GameAction(
+        message: finalMessage,
+        playerName: currentPlayer.name,
+        privateMessage: shouldAttachPrivateDetail ? privateMessage : null,
+      ),
     );
 
     // Keep only the last N actions to avoid memory issues
@@ -185,8 +227,16 @@ class GameState {
   }
 
   /// Public method for logging game actions with proper privacy controls
-  void logAction(String message, {bool showCardDetails = true}) {
-    _logAction(message, showCardDetails: showCardDetails);
+  void logAction(
+    String message, {
+    bool showCardDetails = true,
+    String? privateMessage,
+  }) {
+    _logAction(
+      message,
+      showCardDetails: showCardDetails,
+      privateMessage: privateMessage,
+    );
   }
 
   void logPerfectGrabBonus(String playerName) {
@@ -196,13 +246,37 @@ class GameState {
     );
   }
 
-  String _sanitizeMessage(String message) {
-    // Remove specific card details from bot actions that shouldn't be visible
-    if (message.startsWith('drew:')) {
-      return 'drew';
+  /// Markers that precede a card list in a log message.
+  ///
+  /// Each marker ends with `:` so the trailing colon and following card names
+  /// can be stripped while the non-sensitive action text is preserved.
+  static const List<String> _cardDetailMarkers = [
+    'drew:',
+    'from discard pile:',
+  ];
+
+  /// Strips card details from a log message that must not reveal them.
+  ///
+  /// Also applied to log entries arriving from the network, so a client that
+  /// predates the privacy rules cannot make an updated client render the cards
+  /// it wrote into the shared document.
+  static String sanitizeLogMessage(String message) {
+    // Remove specific card details from actions that shouldn't be visible.
+    // Matched anywhere in the message so emoji-prefixed variants such as
+    // '🎯 drew: Q ♠' and legacy discard-pickup leaks are sanitized too.
+    for (final marker in _cardDetailMarkers) {
+      final markerIndex = message.indexOf(marker);
+      if (markerIndex >= 0) {
+        final kept = marker.endsWith(':')
+            ? marker.substring(0, marker.length - 1)
+            : marker;
+        return '${message.substring(0, markerIndex)}$kept'.trimRight();
+      }
     }
     return message;
   }
+
+  String _sanitizeMessage(String message) => sanitizeLogMessage(message);
 
   bool get canDrawFromDiscard {
     // Players can only draw from discard if they can unlock it
@@ -239,6 +313,7 @@ class GameState {
     turnPhase = TurnPhase.draw;
     hasDrawnFromDeck = false;
     hasMelded = false;
+    hasTakenDiscardThisTurn = false;
 
     // Clear newly drawn cards from the NEW current player at the start of their turn
     // This clears highlights from their PREVIOUS turn when it's their turn again
@@ -345,6 +420,7 @@ class GameState {
     discardPileFrozen = false;
     hasDrawnFromDeck = false;
     hasMelded = false;
+    hasTakenDiscardThisTurn = false;
 
     _resetFinalTurnState();
 
@@ -424,14 +500,14 @@ class GameState {
     hasDrawnFromDeck = true;
     turnPhase = TurnPhase.meld;
 
-    // Only show specific cards drawn for human players to prevent cheating
-    if (currentPlayer.type == PlayerType.human) {
-      final cardNames = cardsDrawn.map((c) => c.compactName).join(', ');
-      _logAction('🎯 drew: $cardNames');
-    } else {
-      // For bot players, only show that they drew cards, not which ones
-      _logAction('🎴 drew ${cardsDrawn.length} cards from deck');
-    }
+    // The shared log only ever records how many cards were drawn. The card
+    // names are attached as a private detail so the drawing player still sees
+    // them locally without them reaching opponents through the sync.
+    final cardNames = cardsDrawn.map((c) => c.compactName).join(', ');
+    _logAction(
+      '🎴 drew ${cardsDrawn.length} cards from deck',
+      privateMessage: '🎯 drew: $cardNames',
+    );
 
     return true;
   }
@@ -528,26 +604,23 @@ class GameState {
     if (additionalDiscards.isNotEmpty) {
       currentPlayer.addNewlyDrawnCards(additionalDiscards);
 
-      // Only show specific cards for human players to prevent cheating
-      if (currentPlayer.type == PlayerType.human) {
-        final additionalNames = additionalDiscards
-            .map((c) => c.compactName)
-            .join(', ');
-        _logAction(
-          'took ${additionalDiscards.length} more cards from discard pile: $additionalNames',
-        );
-      } else {
-        // For bot players, only show count, not which cards
-        _logAction(
-          'took ${additionalDiscards.length} more cards from discard pile',
-        );
-      }
+      // Same privacy rule as drawing: the shared log records only the count,
+      // while the card names stay a device-local detail for the acting player.
+      final additionalNames = additionalDiscards
+          .map((c) => c.compactName)
+          .join(', ');
+      _logAction(
+        'took ${additionalDiscards.length} more cards from discard pile',
+        privateMessage:
+            'took ${additionalDiscards.length} more cards from discard pile: $additionalNames',
+      );
     } else {
       _logAction('no additional cards available in discard pile');
     }
 
     turnPhase = TurnPhase.meld;
     discardPileFrozen = false;
+    hasTakenDiscardThisTurn = true;
     return true;
   }
 

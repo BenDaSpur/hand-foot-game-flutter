@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/game/enhanced_multiplayer_controller.dart';
 import 'package:hand_foot_game_flutter/game/network_adapter.dart';
+import 'package:hand_foot_game_flutter/models/card.dart';
+import 'package:hand_foot_game_flutter/models/deck.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 
@@ -135,6 +137,296 @@ void main() {
           expect(mockAdapter.syncCalls, lessThan(5));
         },
       );
+    });
+
+    group('Discard Pile Unlock', () {
+      setUp(() async {
+        mockAdapter._mockUserId = 'test-user';
+        mockAdapter._mockGameId = 'TEST123';
+
+        controller = await EnhancedMultiplayerController.createGame(
+          hostPlayerName: 'TestHost',
+          maxPlayers: 4,
+          networkAdapter: mockAdapter,
+        );
+      });
+
+      /// Puts the local player in a draw phase where taking the discard pile
+      /// is legal: they have played down and hold two matching naturals.
+      void setUpUnlockableDiscardPile() {
+        final gameState = controller!.gameState;
+        gameState.currentPlayerIndex = 0;
+        gameState.turnPhase = TurnPhase.draw;
+        gameState.hasDrawnFromDeck = false;
+        gameState.discardPile
+          ..clear()
+          ..add(const PlayingCard(suit: Suit.spades, rank: CardRank.king));
+
+        final player = gameState.currentPlayer;
+        player.dealHand(const [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+        ]);
+        player.hasPlayedDown = true;
+      }
+
+      test('offers unlockDiscardPile during the draw phase', () {
+        setUpUnlockableDiscardPile();
+
+        expect(controller!.canUnlockDiscard(), isTrue);
+        expect(
+          controller!.getAvailableActions(),
+          contains('unlockDiscardPile'),
+        );
+        expect(controller!.canPerformAction('unlockDiscardPile'), isTrue);
+      });
+
+      test('actually performs the unlock instead of silently failing', () {
+        setUpUnlockableDiscardPile();
+        final player = controller!.gameState.currentPlayer;
+
+        expect(controller!.unlockDiscardPile(), isTrue);
+
+        expect(controller!.gameState.discardPile, isEmpty);
+        expect(player.melds, hasLength(1));
+        expect(player.melds.first.rank, CardRank.king);
+        expect(mockAdapter.syncCalls, equals(1));
+      });
+
+      test('is unavailable once the player has drawn from the deck', () {
+        setUpUnlockableDiscardPile();
+        controller!.gameState.hasDrawnFromDeck = true;
+        controller!.gameState.turnPhase = TurnPhase.meld;
+
+        expect(controller!.canUnlockDiscard(), isFalse);
+        expect(
+          controller!.getAvailableActions(),
+          isNot(contains('unlockDiscardPile')),
+        );
+        expect(controller!.unlockDiscardPile(), isFalse);
+      });
+
+      test('is unavailable when it is not the local player\'s turn', () {
+        setUpUnlockableDiscardPile();
+        controller!.gameState.players.add(
+          Player(id: 'other-user', name: 'Other', type: PlayerType.human),
+        );
+        controller!.gameState.currentPlayerIndex = 1;
+
+        expect(controller!.getAvailableActions(), isEmpty);
+        expect(controller!.unlockDiscardPile(), isFalse);
+      });
+
+      test('cannot be taken twice in the same turn', () {
+        final gameState = controller!.gameState;
+        gameState.currentPlayerIndex = 0;
+        gameState.turnPhase = TurnPhase.draw;
+        gameState.hasDrawnFromDeck = false;
+
+        // Taking the pile removes the top card plus five more, so the queen
+        // sits seven deep and is left on top once the king pickup is done.
+        gameState.discardPile
+          ..clear()
+          ..addAll(const [
+            PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+            PlayingCard(suit: Suit.spades, rank: CardRank.six),
+            PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+            PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          ]);
+
+        final player = gameState.currentPlayer;
+        player.dealHand(const [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+        ]);
+        player.hasPlayedDown = true;
+
+        expect(controller!.unlockDiscardPile(), isTrue);
+
+        // The pile still has cards and the new top card matches two naturals
+        // the player is holding, so only the once-per-turn rule stands in the
+        // way of a second pickup.
+        expect(gameState.discardPile, isNotEmpty);
+        expect(gameState.topDiscard!.rank, CardRank.queen);
+        expect(gameState.hasTakenDiscardThisTurn, isTrue);
+
+        expect(controller!.canUnlockDiscard(), isFalse);
+        expect(
+          controller!.getAvailableActions(),
+          isNot(contains('unlockDiscardPile')),
+        );
+        expect(controller!.unlockDiscardPile(), isFalse);
+        expect(player.melds.map((meld) => meld.rank), [CardRank.king]);
+      });
+
+      test('the meld phase never offers taking the pile', () {
+        setUpUnlockableDiscardPile();
+        // Reach the meld phase the way an unlock does: without setting
+        // hasDrawnFromDeck.
+        controller!.gameState.turnPhase = TurnPhase.meld;
+        controller!.gameState.hasTakenDiscardThisTurn = true;
+
+        expect(
+          controller!.getAvailableActions(),
+          isNot(contains('unlockDiscardPile')),
+        );
+      });
+
+      test('taking the pile again is allowed on a later turn', () {
+        setUpUnlockableDiscardPile();
+
+        expect(controller!.unlockDiscardPile(), isTrue);
+        expect(controller!.gameState.hasTakenDiscardThisTurn, isTrue);
+
+        controller!.gameState.players.add(
+          Player(id: 'other-user', name: 'Other', type: PlayerType.human),
+        );
+        controller!.gameState.nextPlayer();
+        controller!.gameState.nextPlayer();
+
+        expect(controller!.gameState.hasTakenDiscardThisTurn, isFalse);
+      });
+    });
+
+    group('Action Log Privacy', () {
+      setUp(() async {
+        mockAdapter._mockUserId = 'test-user';
+        mockAdapter._mockGameId = 'TEST123';
+
+        controller = await EnhancedMultiplayerController.createGame(
+          hostPlayerName: 'TestHost',
+          maxPlayers: 4,
+          networkAdapter: mockAdapter,
+        );
+      });
+
+      /// Builds the snapshot the server would hand back for [actions]: the
+      /// shared document stores only `message`, so every private detail is
+      /// stripped on the way through.
+      GameState serverSnapshot(List<GameAction> actions) {
+        final gameState = controller!.gameState;
+        return GameState(
+          players: List.of(gameState.players),
+          deck: Deck.fromCards(gameState.deck.cards),
+          discardPile: List.of(gameState.discardPile),
+          recentActions: actions
+              .map(
+                (action) => GameAction.withTimestamp(
+                  message: action.message,
+                  playerName: action.playerName,
+                  timestamp: action.timestamp,
+                ),
+              )
+              .toList(),
+          phase: GamePhase.playing,
+          currentPlayerIndex: gameState.currentPlayerIndex,
+          turnPhase: gameState.turnPhase,
+        );
+      }
+
+      /// Delivers [state] the way Firestore does, through the adapter stream,
+      /// so the controller takes its real `_updateLocalGameState` sync path.
+      Future<void> deliverServerSnapshot(GameState state) async {
+        // The controller ignores inbound snapshots while it is pushing its own
+        // state, so let any in-flight sync drain first.
+        await Future.delayed(const Duration(milliseconds: 60));
+        mockAdapter.simulateGameStateUpdate(state);
+        await Future.delayed(const Duration(milliseconds: 60));
+      }
+
+      /// Puts the controller past first-sync so later snapshots exercise the
+      /// steady-state path rather than `initializeFromServerState`.
+      Future<void> completeFirstSync() async {
+        await deliverServerSnapshot(serverSnapshot(const []));
+        expect(controller!.gameState.phase, GamePhase.playing);
+      }
+
+      test('server echo does not erase the local card detail', () async {
+        await completeFirstSync();
+
+        final gameState = controller!.gameState;
+        gameState.currentPlayerIndex = 0;
+        gameState.turnPhase = TurnPhase.draw;
+
+        expect(controller!.drawFromDeck(), isTrue);
+        final drawAction = gameState.recentActions.last;
+        final localDetail = drawAction.privateMessage;
+        expect(localDetail, isNotNull);
+
+        // An opponent action only the server knows about proves the snapshot
+        // really was applied rather than quietly ignored.
+        final opponentAction = GameAction.withTimestamp(
+          message: '🗑️ discarded 4 ♣',
+          playerName: 'Other',
+          timestamp: DateTime.now(),
+        );
+        await deliverServerSnapshot(
+          serverSnapshot([drawAction, opponentAction]),
+        );
+
+        expect(controller!.gameState.recentActions, hasLength(2));
+        final merged = controller!.gameState.recentActions.first;
+        expect(merged.privateMessage, equals(localDetail));
+        expect(merged.message, '🎴 drew 2 cards from deck');
+      });
+
+      test(
+        'a stale snapshot before the echo does not lose the card detail',
+        () async {
+          await completeFirstSync();
+
+          final gameState = controller!.gameState;
+          gameState.currentPlayerIndex = 0;
+          gameState.turnPhase = TurnPhase.draw;
+
+          expect(controller!.drawFromDeck(), isTrue);
+          final drawAction = gameState.recentActions.last;
+          final localDetail = drawAction.privateMessage;
+          expect(localDetail, isNotNull);
+
+          // A snapshot written before our draw arrives first and replaces the
+          // log wholesale, so no copy of the detail survives in the list.
+          await deliverServerSnapshot(serverSnapshot(const []));
+          expect(controller!.gameState.recentActions, isEmpty);
+
+          // Our own echo finally lands, carrying only the shared text.
+          await deliverServerSnapshot(serverSnapshot([drawAction]));
+
+          final merged = controller!.gameState.recentActions.last;
+          expect(
+            merged.privateMessage,
+            equals(localDetail),
+            reason: 'the drawing player must still see their own cards',
+          );
+          expect(merged.displayMessage, equals(localDetail));
+        },
+      );
+
+      test('the sync path switches privacy to the viewer id', () async {
+        await completeFirstSync();
+
+        final gameState = controller!.gameState;
+        gameState.players.add(
+          Player(id: 'other-user', name: 'Other', type: PlayerType.human),
+        );
+        gameState.currentPlayerIndex = 1;
+        gameState.turnPhase = TurnPhase.draw;
+        gameState.hasDrawnFromDeck = false;
+
+        expect(gameState.drawFromDeck(), isTrue);
+
+        // Under the singleplayer fallback this human player's draw would keep
+        // its card list, so a null detail proves the viewer-id branch ran.
+        final action = gameState.recentActions.last;
+        expect(action.privateMessage, isNull);
+        expect(action.displayMessage, '🎴 drew 2 cards from deck');
+      });
     });
 
     group('Connection Management', () {

@@ -4,6 +4,7 @@ import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
 import '../game/enhanced_multiplayer_controller.dart';
+import '../game/game_action_feedback.dart';
 import '../widgets/game_app_bar.dart';
 import '../widgets/game_session_info_menu.dart';
 import '../widgets/game_action_buttons.dart';
@@ -42,7 +43,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   // Turn timer settings
   // ignore: prefer_final_fields - may be toggled in future settings
   bool _turnTimerEnabled = true;
-  static const int _turnDurationSeconds = 120; // 2 minutes per turn
+  static const int _turnDurationSeconds =
+      TurnTimer.defaultTurnDurationSeconds; // 2 minutes per turn
+
+  /// Remaining seconds at which the player gets a "running out of time" nudge.
+  static const int _turnTimeWarningSeconds = TurnTimer.lowTimeWarningSeconds;
+
+  /// Number of advanced meld modals currently on screen. The turn timer is
+  /// paused while any is open so a player planning their play-down is not
+  /// auto-discarded mid-decision. A counter rather than a flag because a
+  /// double-tap can push two dialogs, and the first to close must not report
+  /// the screen as free while the second is still up.
+  int _openMeldModalCount = 0;
+
+  bool get _isMeldModalOpen => _openMeldModalCount > 0;
 
   final GlobalKey _deckKey = GlobalKey();
   final GlobalKey _discardKey = GlobalKey();
@@ -187,23 +201,78 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     _keyboardFocusedCardIndex = null;
   }
 
+  /// Explains that the action was refused because another player is active.
+  ///
+  /// Returns null when it really is the local player's turn.
+  String? _notYourTurnMessage() {
+    if (_gameController.isMyTurn) {
+      return null;
+    }
+    return 'It is ${_gameController.gameState.currentPlayer.name}\'s turn.';
+  }
+
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
       setState(_clearHandHighlightState);
+      return;
     }
+
+    _showErrorDialog(
+      'Cannot Draw',
+      _notYourTurnMessage() ??
+          GameActionFeedback.drawFromDeckFailureMessage(
+            _gameController.gameState,
+          ),
+    );
   }
 
   void _onUnlockDiscard() {
     if (_gameController.unlockDiscardPile()) {
       setState(_clearHandHighlightState);
+      return;
     }
+
+    final turnMessage = _notYourTurnMessage();
+    final String message;
+    if (turnMessage != null) {
+      message = turnMessage;
+    } else if (_gameController.canUnlockDiscard()) {
+      message = 'Failed to take discard pile. Please try again.';
+    } else {
+      message = GameActionFeedback.unlockDiscardBlockerMessage(
+        _gameController.gameState,
+      );
+    }
+    _showErrorDialog('Cannot Take Discard Pile', message);
   }
 
   void _onDiscard() {
-    if (_selectedCards.length == 1 &&
-        _gameController.discardCard(_selectedCards.first)) {
+    final selectedCards = _selectedCards;
+
+    // Singleplayer blocks this discard with an explanation rather than letting
+    // the player throw away their last card and forfeit the go-out; multiplayer
+    // does the same so the two screens agree.
+    final currentUserPlayer = _gameController.getCurrentUserPlayer();
+    final wouldStrandPlayer =
+        currentUserPlayer != null &&
+        _gameController.isMyTurn &&
+        GameActionFeedback.wouldGoOutWithoutBooks(currentUserPlayer);
+
+    if (!wouldStrandPlayer &&
+        selectedCards.length == 1 &&
+        _gameController.discardCard(selectedCards.first)) {
       setState(_clearHandHighlightState);
+      return;
     }
+
+    _showErrorDialog(
+      'Cannot Discard',
+      _notYourTurnMessage() ??
+          GameActionFeedback.discardFailureMessage(
+            _gameController.gameState,
+            selectedCardCount: selectedCards.length,
+          ),
+    );
   }
 
   void _sortHand() {
@@ -333,21 +402,46 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       return;
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AdvancedMeldSelector(
-        player: currentUserPlayer,
-        playDownRequirement: _gameController.gameState.playDownRequirement,
-        onCancel: () {
-          Navigator.of(context).pop();
-        },
-        onConfirm: (meldIndices) {
-          Navigator.of(context).pop();
-          _executeAdvancedMeldCreation(meldIndices);
-        },
-      ),
-    );
+    setState(() {
+      _openMeldModalCount++;
+    });
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AdvancedMeldSelector(
+          player: currentUserPlayer,
+          playDownRequirement: _gameController.gameState.playDownRequirement,
+          onCancel: () {
+            Navigator.of(context).pop();
+          },
+          onConfirm: (meldIndices) {
+            Navigator.of(context).pop();
+            _executeAdvancedMeldCreation(meldIndices);
+          },
+        ),
+      ).whenComplete(_onMeldModalClosed);
+    } catch (e) {
+      // showDialog can throw synchronously (no Navigator in scope, disposed
+      // context). whenComplete never registers in that case, so release the
+      // pause here or the turn timer stays frozen for the rest of the session.
+      debugPrint('Failed to open advanced meld selector: $e');
+      _onMeldModalClosed();
+    }
+  }
+
+  void _onMeldModalClosed() {
+    if (_openMeldModalCount == 0) {
+      return;
+    }
+    if (!mounted) {
+      _openMeldModalCount--;
+      return;
+    }
+    setState(() {
+      _openMeldModalCount--;
+    });
   }
 
   void _executeAdvancedMeldCreation(List<List<int>> meldIndices) {
@@ -409,6 +503,27 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     );
   }
 
+  /// Chooses the card to throw away when the turn clock runs out.
+  ///
+  /// A black 3 is the ideal throwaway because holding one costs 100 points,
+  /// and a red 3 is the worst because holding one is worth 100. Returns null
+  /// only when the hand is empty, which the caller must handle.
+  PlayingCard? _pickAutoDiscardCard(Player player) {
+    final hand = player.currentHand;
+
+    for (final card in hand) {
+      if (card.isBlackThree) {
+        return card;
+      }
+    }
+    for (final card in hand) {
+      if (!card.isRedThree) {
+        return card;
+      }
+    }
+    return hand.isEmpty ? null : hand.first;
+  }
+
   /// Handle turn timeout - auto-discard a random card
   void _handleTurnTimeout() {
     if (!_gameController.isMyTurn) return;
@@ -423,9 +538,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       _gameController.drawFromDeck();
     }
 
-    // Auto-discard the first card in hand
+    // Auto-discard, avoiding red 3s since holding one is worth points
     if (_gameController.gameState.turnPhase == TurnPhase.meld) {
-      final cardToDiscard = currentUserPlayer.currentHand.first;
+      final cardToDiscard = _pickAutoDiscardCard(currentUserPlayer);
+      if (cardToDiscard == null) {
+        setState(_clearHandHighlightState);
+        return;
+      }
       _gameController.discardCard(cardToDiscard);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -684,12 +803,17 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                             key: ValueKey(gameState.currentPlayer.id),
                             turnDurationSeconds: _turnDurationSeconds,
                             isActive: _gameController.isMyTurn,
+                            isPaused: _isMeldModalOpen,
                             onTimeUp: _handleTurnTimeout,
                             onTick: (remaining) {
-                              if (remaining == 30 && _gameController.isMyTurn) {
+                              if (remaining == _turnTimeWarningSeconds &&
+                                  _gameController.isMyTurn) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('⏰ 30 seconds remaining!'),
+                                    content: Text(
+                                      '⏰ $_turnTimeWarningSeconds seconds '
+                                      'remaining!',
+                                    ),
                                     backgroundColor: Colors.orange,
                                     duration: Duration(seconds: 2),
                                   ),
@@ -726,9 +850,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                         selectedCardIndices: _selectedCardIndices,
                         showKeyboardHints: showDesktopKeyboardHints,
                         onDrawFromDeck: _onDrawFromDeck,
-                        onUnlockDiscard:
-                            (gameState.turnPhase == TurnPhase.draw &&
-                                _gameController.canUnlockDiscard())
+                        onUnlockDiscard: _gameController.canUnlockDiscard()
                             ? _onUnlockDiscard
                             : null,
                         onShowAdvancedMeldSelector: _showAdvancedMeldSelector,

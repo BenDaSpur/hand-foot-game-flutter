@@ -1,3 +1,4 @@
+import '../../config/game_config.dart';
 import '../../models/player.dart';
 import '../../models/game_state.dart';
 
@@ -14,14 +15,17 @@ class GameRulesEngine {
   /// Rules for unlocking discard pile:
   /// 1. Discard pile must not be empty
   /// 2. Player must not have already drawn from deck this turn
-  /// 3. Top discard card must not be wild (2s or Jokers)
-  /// 4. Top discard card must not be a 3 (3s cannot be melded)
-  /// 5. Player must have already played down this round
-  /// 6. Player must have at least 2 matching natural cards of the same rank as top discard
+  /// 3. Player must not have already taken the discard pile this turn
+  /// 4. Top discard card must not be wild (2s or Jokers)
+  /// 5. Top discard card must not be a 3 (3s cannot be melded)
+  /// 6. Player must have already played down this round
+  /// 7. Player must have at least 2 matching natural cards of the same rank as top discard
   ///
   /// Returns true if all conditions are met, false otherwise.
   static bool canUnlockDiscard(GameState gameState) {
-    if (gameState.discardPile.isEmpty || gameState.hasDrawnFromDeck) {
+    if (gameState.discardPile.isEmpty ||
+        gameState.hasDrawnFromDeck ||
+        gameState.hasTakenDiscardThisTurn) {
       return false;
     }
 
@@ -47,12 +51,12 @@ class GameRulesEngine {
       return false;
     }
 
-    // Check if player has at least 2 matching natural cards
+    // Check if player has enough matching natural cards to form a meld
     final matchingCards = currentPlayer.currentHand
         .where((card) => card.rank == topCard.rank && !card.isWild)
         .toList();
 
-    return matchingCards.length >= 2;
+    return matchingCards.length >= GameConfig.minNaturalCardsForMeld;
   }
 
   /// Validates if any player (other than the current player) can immediately unlock
@@ -86,7 +90,7 @@ class GameRulesEngine {
           .where((card) => card.rank == topCard.rank && !card.isWild)
           .toList();
 
-      if (matchingCards.length >= 2) {
+      if (matchingCards.length >= GameConfig.minNaturalCardsForMeld) {
         return true;
       }
     }
@@ -125,12 +129,12 @@ class GameRulesEngine {
       return false;
     }
 
-    // Check if player has at least 2 matching natural cards
+    // Check if player has enough matching natural cards to form a meld
     final matchingCards = player.currentHand
         .where((card) => card.rank == topCard.rank && !card.isWild)
         .toList();
 
-    return matchingCards.length >= 2;
+    return matchingCards.length >= GameConfig.minNaturalCardsForMeld;
   }
 
   /// Validates if the current player can end their turn.

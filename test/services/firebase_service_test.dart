@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/firebase_service.dart';
 import 'package:hand_foot_game_flutter/services/firebase_constants.dart';
+import 'package:hand_foot_game_flutter/services/game_code.dart';
 import 'package:hand_foot_game_flutter/models/multiplayer_result.dart';
 
 void main() {
@@ -69,64 +72,126 @@ void main() {
     });
   });
 
-  group('Game ID Generation', () {
-    test('generates 4-character game IDs', () {
-      // Test the validation logic for short game IDs
-      const validGameIds = ['AB12', 'XY89', 'ZZ99', 'AA00'];
-      const invalidGameIds = ['ABC12', 'AB1', '', 'ab12', '1234', 'ABCD'];
+  // Generation and acceptance are deliberately different during the two-stage
+  // widening rollout (see lib/services/game_code.dart and
+  // docs/multiplayer_security_notes.md). Stage one generates legacy-length
+  // codes but accepts both lengths, so both properties are asserted separately
+  // and must not drift into each other.
+  group('Game ID Generation (stage one: legacy format)', () {
+    test('this build generates legacy-length codes', () {
+      expect(GameCode.generatedCodeLength, GameCode.legacyLength);
 
-      for (final gameId in validGameIds) {
-        // Use a test helper method to validate game ID format
-        expect(
-          _isValidShortGameId(gameId),
-          true,
-          reason: '$gameId should be valid',
-        );
+      for (int i = 0; i < 100; i++) {
+        expect(GameCode.generate().length, GameCode.legacyLength);
       }
+    });
 
-      for (final gameId in invalidGameIds) {
+    test('generated codes keep the legacy letters-then-digits shape', () {
+      for (int i = 0; i < 100; i++) {
+        final code = GameCode.generate();
+
+        for (int index = 0; index < code.length; index++) {
+          final character = code[index];
+          final expected = index < GameCode.legacyLetterCount
+              ? GameCode.legacyLetters
+              : GameCode.legacyDigits;
+
+          expect(
+            expected.contains(character),
+            isTrue,
+            reason:
+                '$code position $index is "$character", which is not in the '
+                'legacy character set for that position',
+          );
+        }
+      }
+    });
+
+    test('generated codes are accepted and already normalized', () {
+      for (int i = 0; i < 100; i++) {
+        final code = GameCode.generate();
+
+        expect(GameCode.isShortCode(code), isTrue);
+        expect(GameCode.isValid(code), isTrue, reason: '$code was rejected');
+        expect(GameCode.normalize(code), code);
+      }
+    });
+
+    test('widened alphabet excludes look-alike characters players mistype', () {
+      for (final ambiguous in ['0', 'O', '1', 'I', 'L']) {
         expect(
-          _isValidShortGameId(gameId),
-          false,
-          reason: '$gameId should be invalid',
+          GameCode.alphabet.contains(ambiguous),
+          isFalse,
+          reason: '"$ambiguous" is too easy to confuse in a spoken code',
         );
       }
     });
 
-    test('validates both short and long game ID formats', () {
-      // Short format (4 chars)
-      expect(_isValidShortGameId('AB12'), true);
-      expect(_isValidShortGameId('ZZ99'), true);
+    test('widening to maxLength would dwarf the legacy code space', () {
+      // Stage two flips generatedCodeLength to maxLength; this is the space
+      // that unlocks. It is NOT the space this build actually uses.
+      const legacyCombinations = 26 * 26 * 10 * 10; // 2 letters + 2 digits
+      expect(legacyCombinations, 67600);
 
-      // Invalid short format
-      expect(_isValidShortGameId('ab12'), false); // lowercase
-      expect(_isValidShortGameId('ABC1'), false); // 3 letters, 1 number
-      expect(_isValidShortGameId('1234'), false); // all numbers
-      expect(_isValidShortGameId('ABCD'), false); // all letters
-    });
+      final widened = math.pow(GameCode.alphabet.length, GameCode.maxLength);
+      expect(widened, greaterThan(legacyCombinations * 1000));
 
-    test('normalizes game ID case correctly', () {
-      // Test the normalization logic
-      expect(_normalizeGameId('ab12'), 'AB12');
-      expect(_normalizeGameId('xy89'), 'XY89');
-      expect(_normalizeGameId('AB12'), 'AB12'); // already uppercase
+      // Practical generation still uses the legacy letters-then-digits shape,
+      // so compare the widened space against that real legacy space — not
+      // alphabet^generatedCodeLength, which overstates what this build draws.
       expect(
-        _normalizeGameId('longFirebaseId123'),
-        'longFirebaseId123',
-      ); // long IDs unchanged
+        legacyCombinations,
+        lessThan(widened),
+        reason:
+            'generation is still legacy-length, so the practical space is '
+            'smaller than the widened one until stage two ships',
+      );
+    });
+  });
+
+  group('Game ID Acceptance (stage one: both lengths)', () {
+    test('accepts widened codes, legacy codes and long Firebase ids', () {
+      expect(GameCode.isValid('HK4RQM'), true); // widened, stage two format
+      expect(GameCode.isValid('hk4rqm'), true); // normalized before lookup
+      expect(GameCode.isValid('AB12'), true); // legacy in-flight games
+      expect(GameCode.isValid('ab12'), true);
+      expect(GameCode.isValid('longFirebaseId123'), true);
+
+      expect(GameCode.isValid(''), false);
+      expect(GameCode.isValid('AB1'), false);
+      expect(GameCode.isValid('HK4RQ'), false); // 5 chars is not a code
+      expect(GameCode.isValid('HK4RQ!'), false);
     });
 
-    test('generates unique game ID patterns', () {
-      // Test that the pattern is correct (2 letters + 2 numbers)
-      const testIds = ['AB12', 'XY34', 'ZZ99'];
+    test('both code lengths are treated as short hand-typed codes', () {
+      expect(GameCode.isShortCode('HK4RQM'), true);
+      expect(GameCode.isShortCode('AB12'), true);
+      expect(GameCode.isShortCode('HK4RQ'), false);
+      expect(GameCode.isShortCode('longFirebaseId123'), false);
+    });
 
-      for (final id in testIds) {
-        // First 2 chars should be letters A-Z
-        expect(RegExp(r'^[A-Z]{2}').hasMatch(id), true);
-        // Last 2 chars should be numbers 0-9
-        expect(RegExp(r'[0-9]{2}$').hasMatch(id), true);
-        // Total length should be 4
-        expect(id.length, 4);
+    test('normalizes join codes of either length, leaving long ids alone', () {
+      expect(GameCode.normalize('hk4rqm'), 'HK4RQM');
+      expect(GameCode.normalize('HK4RQM'), 'HK4RQM');
+      expect(GameCode.normalize('ab12'), 'AB12');
+      expect(GameCode.normalize('AB12'), 'AB12');
+      expect(GameCode.normalize('longFirebaseId123'), 'longFirebaseId123');
+    });
+
+    test('trims surrounding whitespace before normalizing short codes', () {
+      expect(GameCode.normalize('  ab12  '), 'AB12');
+      expect(GameCode.normalize('\thk4rqm\n'), 'HK4RQM');
+      expect(GameCode.isValid('  ab12  '), isTrue);
+      expect(GameCode.normalize('  longFirebaseId123  '), 'longFirebaseId123');
+    });
+
+    test('lowercase codes of either length round-trip through normalize', () {
+      for (final code in ['HK4RQM', 'AB12']) {
+        final typed = code.toLowerCase();
+
+        expect(GameCode.isValid(typed), isTrue, reason: '$typed was rejected');
+        expect(GameCode.normalize(typed), code);
+        expect(GameCode.normalize(GameCode.normalize(typed)), code);
       }
     });
   });
@@ -299,17 +364,6 @@ void main() {
 }
 
 // Helper methods for testing (simulating private method behavior)
-bool _isValidShortGameId(String gameId) {
-  if (gameId.length != 4) return false;
-  // Must be exactly uppercase letters and numbers (no conversion)
-  final validChars = RegExp(r'^[A-Z]{2}[0-9]{2}$');
-  return validChars.hasMatch(gameId);
-}
-
-String _normalizeGameId(String gameId) {
-  return gameId.length == 4 ? gameId.toUpperCase() : gameId;
-}
-
 bool _isValidPlayerName(String name) {
   if (name.trim().isEmpty) return false;
   if (name.length > 20) return false; // Assume max length of 20
