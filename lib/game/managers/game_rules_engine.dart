@@ -90,7 +90,7 @@ class GameRulesEngine {
           .where((card) => card.rank == topCard.rank && !card.isWild)
           .toList();
 
-      if (matchingCards.length >= 2) {
+      if (matchingCards.length >= GameConfig.minNaturalCardsForMeld) {
         return true;
       }
     }
