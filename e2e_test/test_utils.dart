@@ -3,20 +3,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'test_app.dart';
 
+/// Viewport sizes used by the E2E harness.
+enum E2ETestViewport {
+  /// Desktop width keeps the action dock inside Chrome's hit-test viewport.
+  desktop,
+
+  /// Phone width exercises compact layout (≤430 logical px).
+  phone,
+}
+
 /// Utility class for E2E testing with improved timing and state management
 class E2ETestUtils {
-  /// Desktop-sized surface: tall phone sizes put the action dock outside the
-  /// Chrome integration-test hit-test viewport, so taps miss Play Cards/etc.
-  static void _ensureTestSurface(WidgetTester tester) {
-    tester.view.physicalSize = const Size(1280, 900);
+  static const Size desktopSurface = Size(1280, 900);
+  // Width under [GameResponsiveLayout.normalPhoneBreakpoint] (430).
+  static const Size phoneSurface = Size(390, 844);
+
+  /// Applies a desktop or phone surface for the current test.
+  static void _ensureTestSurface(
+    WidgetTester tester, {
+    required E2ETestViewport viewport,
+  }) {
+    final size = switch (viewport) {
+      E2ETestViewport.desktop => desktopSurface,
+      E2ETestViewport.phone => phoneSurface,
+    };
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  /// Start the app with clean state and deterministic seed
-  static Future<void> startAppWithCleanState(WidgetTester tester) async {
-    _ensureTestSurface(tester);
+  /// Start the app with clean state and deterministic seed.
+  ///
+  /// Defaults to [E2ETestViewport.desktop] for Chrome hit-testing reliability.
+  /// Pass [E2ETestViewport.phone] to exercise the compact action dock layout.
+  static Future<void> startAppWithCleanState(
+    WidgetTester tester, {
+    E2ETestViewport viewport = E2ETestViewport.desktop,
+  }) async {
+    _ensureTestSurface(tester, viewport: viewport);
     // e2e_test/ is outside package:flutter_test's test/ visibility root
     // ignore: invalid_use_of_visible_for_testing_member
     SharedPreferences.setMockInitialValues({});
@@ -116,10 +141,9 @@ class E2ETestUtils {
     String? debugLabel,
   }) async {
     if (finder.evaluate().isEmpty) {
-      if (debugLabel != null) {
-        print('⚠️ $debugLabel - element not found');
-      }
-      return;
+      final target = debugLabel ?? finder.toString();
+      print('⚠️ $target - element not found');
+      throw TestFailure('safeTap target not found: $target');
     }
 
     // Invoke Material button callbacks directly when possible. Integration
