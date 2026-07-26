@@ -10,11 +10,14 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Phone layout E2E', () {
-    testWidgets('Game starts on phone viewport', (WidgetTester tester) async {
+    testWidgets('Game starts on phone viewport layout', (
+      WidgetTester tester,
+    ) async {
       await E2ETestUtils.startAppWithCleanState(
         tester,
         viewport: E2ETestViewport.phone,
       );
+      addTearDown(() => E2ETestUtils.cleanShutdown(tester));
 
       expect(find.text('HAND & FOOT'), findsOneWidget);
       expect(find.text('ROUND 1'), findsOneWidget);
@@ -22,7 +25,6 @@ void main() {
       expect(find.text('Draw from deck'), findsOneWidget);
 
       print('✅ Phone layout startup verified');
-      await E2ETestUtils.cleanShutdown(tester);
     });
 
     testWidgets('Draw and Play Cards work on phone action dock', (
@@ -32,6 +34,7 @@ void main() {
         tester,
         viewport: E2ETestViewport.phone,
       );
+      addTearDown(() => E2ETestUtils.cleanShutdown(tester));
 
       await E2ETestUtils.safeTap(
         tester,
@@ -67,7 +70,6 @@ void main() {
 
       expect(find.text('Multi-Meld Play-Down'), findsNothing);
       print('✅ Phone action dock draw/play verified');
-      await E2ETestUtils.cleanShutdown(tester);
     });
   });
 }
