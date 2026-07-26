@@ -274,6 +274,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     if (_isDisposed) return; // Don't process updates after disposal
 
     _isUpdating = true;
+    // Capture outside the try so we can sync after finally clears _isUpdating.
+    // _syncGameState() no-ops while _isUpdating is true.
+    var recoveredStuckGoOut = false;
 
     try {
       // Check for player disconnections (player count decreased)
@@ -298,16 +301,12 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
       // Heal games stuck after a go-out whose final-turn fields never synced
       // (documents written before those fields were persisted).
-      final recoveredStuckGoOut = _gameController.gameState
+      recoveredStuckGoOut = _gameController.gameState
           .recoverStuckGoOutIfNeeded();
 
       // Emit state to UI listeners (only if not disposed)
       if (!_isDisposed) {
         emitStateUpdate();
-      }
-
-      if (recoveredStuckGoOut && _isOnline && !_isDisposed) {
-        await _syncGameState();
       }
 
       // State has been successfully updated and emitted
@@ -316,6 +315,10 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       _handleConnectionError(e);
     } finally {
       _isUpdating = false;
+    }
+
+    if (recoveredStuckGoOut && _isOnline && !_isDisposed) {
+      await _syncGameState();
     }
   }
 
