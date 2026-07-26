@@ -274,6 +274,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     if (_isDisposed) return; // Don't process updates after disposal
 
     _isUpdating = true;
+    // Capture outside the try so we can sync after finally clears _isUpdating.
+    // _syncGameState() no-ops while _isUpdating is true.
+    var recoveredStuckGoOut = false;
 
     try {
       // Check for player disconnections (player count decreased)
@@ -296,6 +299,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
         await initializeFromServerState(newGameState);
       }
 
+      // Heal games stuck after a go-out whose final-turn fields never synced
+      // (documents written before those fields were persisted).
+      recoveredStuckGoOut = _gameController.gameState
+          .recoverStuckGoOutIfNeeded();
+
       // Emit state to UI listeners (only if not disposed)
       if (!_isDisposed) {
         emitStateUpdate();
@@ -307,6 +315,10 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       _handleConnectionError(e);
     } finally {
       _isUpdating = false;
+    }
+
+    if (recoveredStuckGoOut && _isOnline && !_isDisposed) {
+      await _syncGameState();
     }
   }
 
@@ -437,6 +449,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     localGameState.hasMelded = newGameState.hasMelded;
     localGameState.hasTakenDiscardThisTurn =
         newGameState.hasTakenDiscardThisTurn;
+    localGameState.finalTurnPhaseActive = newGameState.finalTurnPhaseActive;
+    localGameState.playerWhoWentOutIndex = newGameState.playerWhoWentOutIndex;
+    localGameState.playersAwaitingFinalTurn
+      ..clear()
+      ..addAll(newGameState.playersAwaitingFinalTurn);
 
     // Set multiplayer privacy controls
     localGameState.setMultiplayerMode(true, currentUserId);
@@ -756,6 +773,13 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     _gameController.gameState.hasMelded = serverState.hasMelded;
     _gameController.gameState.hasTakenDiscardThisTurn =
         serverState.hasTakenDiscardThisTurn;
+    _gameController.gameState.finalTurnPhaseActive =
+        serverState.finalTurnPhaseActive;
+    _gameController.gameState.playerWhoWentOutIndex =
+        serverState.playerWhoWentOutIndex;
+    _gameController.gameState.playersAwaitingFinalTurn
+      ..clear()
+      ..addAll(serverState.playersAwaitingFinalTurn);
 
     // Same privacy controls as the steady-state sync path, so actions logged
     // before the first _updateLocalGameState use the viewer's perspective
@@ -811,10 +835,18 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     print('  deckSize: ${_gameController.gameState.deck.size}');
     print('  requiredDrawCount: ${GameConfig.requiredDrawCount}');
 
+    final phaseBefore = _gameController.gameState.phase;
     final success = _gameController.drawFromDeck();
     print('DEBUG: drawFromDeck result: $success');
 
-    if (success && !_isDisposed) {
+    // recoverStuckGoOutIfNeeded ends the round inside drawFromDeck and returns
+    // false (no cards drawn) — still sync so opponents see roundEnd.
+    final roundEndedByRecovery =
+        phaseBefore == GamePhase.playing &&
+        (_gameController.gameState.phase == GamePhase.roundEnd ||
+            _gameController.gameState.phase == GamePhase.gameEnd);
+
+    if ((success || roundEndedByRecovery) && !_isDisposed) {
       emitStateUpdate();
       if (_isOnline) {
         _syncGameState();

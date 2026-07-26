@@ -456,6 +456,13 @@ class GameState {
   bool drawFromDeck() {
     if (hasDrawnFromDeck) return false;
 
+    // Heal desynced online games where someone already went out but the round
+    // never ended (final-turn fields dropped from Firestore). Do not deal more
+    // cards onto an empty winning hand.
+    if (recoverStuckGoOutIfNeeded()) {
+      return false;
+    }
+
     // Check if deck has insufficient cards BEFORE starting the draw
     // Reshuffle proactively when deck has fewer cards than required
     if (deck.size < GameConfig.requiredDrawCount) {
@@ -1109,6 +1116,30 @@ class GameState {
     return ordered;
   }
 
+  /// Ends the round when a player already meets go-out conditions but the
+  /// playing phase never transitioned (e.g. multiplayer sync lost final-turn
+  /// fields). Returns true when recovery ended the round.
+  ///
+  /// Uses an immediate round end — opponents may already have taken turns
+  /// while the go-out flag was missing.
+  bool recoverStuckGoOutIfNeeded() {
+    if (phase != GamePhase.playing || finalTurnPhaseActive) {
+      return false;
+    }
+
+    final stuckIndex = players.indexWhere((player) => player.canGoOut);
+    if (stuckIndex < 0) {
+      return false;
+    }
+
+    playerWhoWentOutIndex = stuckIndex;
+    _logAction(
+      'Recovered stuck go-out for ${players[stuckIndex].name} — ending round',
+    );
+    endRound();
+    return true;
+  }
+
   /// Validates the current game state for consistency and logs any issues found.
   /// This is a defensive measure to catch edge cases where the game state becomes inconsistent.
   void validateGameState() {
@@ -1116,7 +1147,12 @@ class GameState {
 
     // Check if any player meets going out conditions but game is still in playing phase
     for (final player in players) {
-      if (player.canGoOut && phase == GamePhase.playing) {
+      final playerIndex = players.indexOf(player);
+      final isExpectedWentOutDuringFinalTurn =
+          finalTurnPhaseActive && playerIndex == playerWhoWentOutIndex;
+      if (player.canGoOut &&
+          phase == GamePhase.playing &&
+          !isExpectedWentOutDuringFinalTurn) {
         validationErrors.add(
           'Player ${player.name} can go out but game phase is still playing',
         );
@@ -1145,8 +1181,8 @@ class GameState {
       }
     }
 
-    // Check if round should have ended but hasn't
-    if (phase == GamePhase.playing) {
+    // Check if round should have ended but hasn't (skip expected final-turn state)
+    if (phase == GamePhase.playing && !finalTurnPhaseActive) {
       final playersWhoCanGoOut = players.where((p) => p.canGoOut).toList();
       if (playersWhoCanGoOut.isNotEmpty) {
         for (final player in playersWhoCanGoOut) {

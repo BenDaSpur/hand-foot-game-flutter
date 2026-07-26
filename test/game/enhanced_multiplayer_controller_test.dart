@@ -3,6 +3,7 @@ import 'package:hand_foot_game_flutter/game/enhanced_multiplayer_controller.dart
 import 'package:hand_foot_game_flutter/game/network_adapter.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/deck.dart';
+import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 
@@ -427,6 +428,103 @@ void main() {
         expect(action.privateMessage, isNull);
         expect(action.displayMessage, '🎴 drew 2 cards from deck');
       });
+
+      test('sync preserves final-turn-after-go-out fields', () async {
+        await completeFirstSync();
+
+        final gameState = controller!.gameState;
+        gameState.players.add(
+          Player(id: 'other-user', name: 'Other', type: PlayerType.human),
+        );
+
+        final remote = GameState(
+          players: List.of(gameState.players),
+          deck: Deck.fromCards(gameState.deck.cards),
+          discardPile: List.of(gameState.discardPile),
+          recentActions: const [],
+          phase: GamePhase.playing,
+          turnPhase: TurnPhase.meld,
+          currentPlayerIndex: 1,
+          finalTurnPhaseActive: true,
+          playerWhoWentOutIndex: 0,
+          playersAwaitingFinalTurn: {1},
+        );
+
+        await deliverServerSnapshot(remote);
+
+        expect(controller!.gameState.finalTurnPhaseActive, isTrue);
+        expect(controller!.gameState.playerWhoWentOutIndex, 0);
+        expect(controller!.gameState.playersAwaitingFinalTurn, {1});
+        expect(controller!.gameState.currentPlayerIndex, 1);
+      });
+
+      test(
+        'stuck go-out snapshot recovers and syncs after _isUpdating clears',
+        () async {
+          await completeFirstSync();
+          final syncCallsBefore = mockAdapter.syncCalls;
+
+          final wentOut = Player(
+            id: 'test-user',
+            name: 'TestHost',
+            type: PlayerType.human,
+          );
+          wentOut.hasPlayedDown = true;
+          wentOut.hasPickedUpFoot = true;
+          wentOut.melds.addAll([
+            Meld.createMeld([
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            ])!,
+            Meld.createMeld([
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+            ])!,
+          ]);
+
+          final opponent = Player(
+            id: 'other-user',
+            name: 'Other',
+            type: PlayerType.human,
+          );
+          opponent.hand.addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+          ]);
+
+          // Legacy stuck document: empty winner, still "playing", no final-turn
+          // fields. Recovery must sync only after _isUpdating is cleared.
+          final stuckSnapshot = GameState(
+            players: [wentOut, opponent],
+            deck: Deck.fromCards(controller!.gameState.deck.cards),
+            discardPile: List.of(controller!.gameState.discardPile),
+            recentActions: const [],
+            phase: GamePhase.playing,
+            turnPhase: TurnPhase.draw,
+            currentPlayerIndex: 0,
+          );
+
+          expect(wentOut.canGoOut, isTrue);
+
+          await deliverServerSnapshot(stuckSnapshot);
+          // Allow the post-finally recovery sync (queued network op) to finish.
+          await Future.delayed(const Duration(milliseconds: 80));
+
+          expect(controller!.gameState.phase, GamePhase.roundEnd);
+          expect(mockAdapter.syncCalls, greaterThan(syncCallsBefore));
+          expect(mockAdapter.lastSyncedGameState?.phase, GamePhase.roundEnd);
+        },
+      );
     });
 
     group('Connection Management', () {
@@ -544,6 +642,7 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
   bool _mockJoinSuccess = false;
   bool leaveGameCalled = false;
   int syncCalls = 0;
+  GameState? lastSyncedGameState;
   bool isDisposed = false;
 
   // Public setters for easier testing
@@ -569,6 +668,7 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
   @override
   Future<bool> syncGameState(String gameId, GameState gameState) async {
     syncCalls++;
+    lastSyncedGameState = gameState;
     await Future.delayed(
       const Duration(milliseconds: 10),
     ); // Simulate network delay
