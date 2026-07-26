@@ -15,6 +15,9 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onLoadGame;
   final VoidCallback? onHowToPlay;
   final VoidCallback? onLeaveGame;
+  final VoidCallback? onEndGameForEveryone;
+  final VoidCallback? onReturnToMainMenu;
+  final bool isHost;
   final GameSessionInfo? sessionInfo;
   final List<Widget> additionalActions;
 
@@ -30,6 +33,9 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onLoadGame,
     this.onHowToPlay,
     this.onLeaveGame,
+    this.onEndGameForEveryone,
+    this.onReturnToMainMenu,
+    this.isHost = false,
     this.sessionInfo,
     this.additionalActions = const [],
   });
@@ -137,13 +143,20 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
               case 'leave_game':
                 onLeaveGame?.call();
                 break;
+              case 'end_game_for_everyone':
+                onEndGameForEveryone?.call();
+                break;
               case GameSessionInfoMenu.copyValue:
                 if (sessionInfo != null) {
                   GameSessionInfoMenu.copyToClipboard(context, sessionInfo!);
                 }
                 break;
               case 'main_menu':
-                _returnToMainMenu(context);
+                if (isMultiplayer && onReturnToMainMenu != null) {
+                  onReturnToMainMenu!();
+                } else {
+                  _returnToMainMenu(context);
+                }
                 break;
             }
           },
@@ -217,16 +230,28 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                 const PopupMenuDivider(),
               ],
             ] else ...[
-              const PopupMenuItem<String>(
-                value: 'leave_game',
-                child: Row(
-                  children: [
-                    Icon(Icons.exit_to_app, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Leave Game'),
-                  ],
+              if (isHost && onEndGameForEveryone != null)
+                const PopupMenuItem<String>(
+                  value: 'end_game_for_everyone',
+                  child: Row(
+                    children: [
+                      Icon(Icons.stop_circle_outlined, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('End Game for Everyone'),
+                    ],
+                  ),
                 ),
-              ),
+              if (onLeaveGame != null)
+                PopupMenuItem<String>(
+                  value: 'leave_game',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.exit_to_app, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Text(isHost ? 'Leave & End Game' : 'Leave Game'),
+                    ],
+                  ),
+                ),
               const PopupMenuDivider(),
             ],
             const PopupMenuItem<String>(

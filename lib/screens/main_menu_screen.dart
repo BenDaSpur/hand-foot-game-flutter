@@ -67,17 +67,35 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   bool _multiplayerAvailable = false;
   Map<String, dynamic>? _rejoinableGame;
 
+  bool _didAttemptAutoResume = false;
+
   @override
   void initState() {
     super.initState();
     _checkForSavedSinglePlayerGame();
-    _checkForRejoinableMultiplayerGame();
     _multiplayerAvailable = FirebaseService.isMultiplayerAvailable;
+    _attemptAutoResumeOrOfferRejoin();
   }
 
-  /// Check for rejoinable multiplayer games
-  void _checkForRejoinableMultiplayerGame() async {
+  /// Jackbox-style: auto-resume when bookmark + Auth UID still match a live game.
+  /// Falls back to showing the REJOIN GAME button if auto-nav fails.
+  void _attemptAutoResumeOrOfferRejoin() async {
+    if (_didAttemptAutoResume) {
+      return;
+    }
+    _didAttemptAutoResume = true;
+
+    if (!_multiplayerAvailable) {
+      return;
+    }
+
     try {
+      final autoResume = await MultiplayerResumeService.attemptAutoResume();
+      if (autoResume != null && mounted) {
+        _navigateToResumedGame(autoResume);
+        return;
+      }
+
       final rejoinOpportunity =
           await MultiplayerResumeService.checkForRejoinOpportunity();
       if (rejoinOpportunity != null && mounted) {
@@ -88,6 +106,27 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     } catch (e) {
       debugPrint('Error checking for rejoinable games: $e');
     }
+  }
+
+  void _navigateToResumedGame(MultiplayerResumeResult result) {
+    if (result.isWaiting) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => MultiplayerLobbyScreen.resume(
+            controller: result.controller,
+            playerName: result.playerName,
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) =>
+            MultiplayerGameScreen(gameController: result.controller),
+      ),
+    );
   }
 
   /// Check if there's a saved single player game against bots
@@ -716,7 +755,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   /// Rejoin an active multiplayer game after crash/disconnect
   void _rejoinMultiplayerGame() async {
-    if (_rejoinableGame == null) return;
+    if (_rejoinableGame == null) {
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -724,25 +765,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       final gameId = _rejoinableGame!['gameId'] as String;
       final playerName = _rejoinableGame!['playerName'] as String;
 
-      // Attempt to rejoin the game
-      final controller = await MultiplayerResumeService.rejoinGame(
+      final result = await MultiplayerResumeService.rejoinGameWithStatus(
         gameId: gameId,
         playerName: playerName,
       );
 
-      if (controller != null && mounted) {
-        // Navigate directly to the game screen
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) =>
-                MultiplayerGameScreen(gameController: controller),
-          ),
-        );
-
-        // Clear the rejoin state since we successfully rejoined
+      if (result != null && mounted) {
         setState(() {
           _rejoinableGame = null;
         });
+        _navigateToResumedGame(result);
       } else {
         // Failed to rejoin - clear stale data and show error
         await MultiplayerResumeService.clearActiveGame();

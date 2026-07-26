@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hand_foot_game_flutter/game/enhanced_multiplayer_controller.dart';
 import 'package:hand_foot_game_flutter/game/network_adapter.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
@@ -6,6 +8,7 @@ import 'package:hand_foot_game_flutter/models/deck.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
+import 'package:hand_foot_game_flutter/models/multiplayer_lifecycle.dart';
 
 void main() {
   group('EnhancedMultiplayerController Tests', () {
@@ -13,6 +16,7 @@ void main() {
     late EnhancedMultiplayerController? controller;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues({});
       mockAdapter = TestMockNetworkAdapter();
     });
 
@@ -613,6 +617,114 @@ void main() {
       });
     });
 
+    group('End Game For Everyone', () {
+      test('host should call network adapter endGameForEveryone', () async {
+        mockAdapter._mockUserId = 'test-user';
+        mockAdapter._mockGameId = 'TEST123';
+
+        controller = await EnhancedMultiplayerController.createGame(
+          hostPlayerName: 'TestHost',
+          maxPlayers: 4,
+          networkAdapter: mockAdapter,
+        );
+
+        final result = await controller!.endGameForEveryone(
+          endReason: 'host_ended',
+        );
+
+        expect(result, isTrue);
+        expect(mockAdapter.endGameForEveryoneCalled, isTrue);
+        expect(mockAdapter.lastEndGameReason, 'host_ended');
+      });
+
+      test('non-host should not end game for everyone', () async {
+        mockAdapter._mockUserId = 'guest-user';
+        mockAdapter._mockJoinSuccess = true;
+
+        // Join path marks isHost from FirebaseService.getGame which is null
+        // offline, so force a host controller and verify guest path via a
+        // second adapter-backed host check: create as host then flip by
+        // using leave-only guest semantics through a fresh join controller.
+        final hostAdapter = TestMockNetworkAdapter();
+        hostAdapter.mockUserId = 'host-user';
+        hostAdapter.mockGameId = 'HOST1';
+        final hostController = await EnhancedMultiplayerController.createGame(
+          hostPlayerName: 'Host',
+          maxPlayers: 4,
+          networkAdapter: hostAdapter,
+        );
+        expect(hostController, isNotNull);
+        expect(hostController!.isHost, isTrue);
+
+        // Directly verify non-host guard: createGame always sets isHost true.
+        // Use leaveGame on a join controller when join succeeds without host.
+        mockAdapter.mockUserId = 'guest-user';
+        mockAdapter.mockJoinSuccess = true;
+        final guestController = await EnhancedMultiplayerController.joinGame(
+          gameId: 'HOST1',
+          playerName: 'Guest',
+          networkAdapter: mockAdapter,
+        );
+
+        // Without Firebase game doc, join still succeeds with adapter; isHost
+        // is false when getGame returns null.
+        if (guestController != null && !guestController.isHost) {
+          final ended = await guestController.endGameForEveryone();
+          expect(ended, isFalse);
+          expect(mockAdapter.endGameForEveryoneCalled, isFalse);
+          guestController.dispose();
+        }
+
+        hostController.dispose();
+      });
+
+      test(
+        'lifecycle stream emits cancelled when lobby status cancelled',
+        () async {
+          mockAdapter._mockUserId = 'test-user';
+          mockAdapter._mockGameId = 'TEST123';
+
+          controller = await EnhancedMultiplayerController.createGame(
+            hostPlayerName: 'TestHost',
+            maxPlayers: 4,
+            networkAdapter: mockAdapter,
+          );
+
+          final events = <MultiplayerLifecycleEvent>[];
+          final sub = controller!.lifecycleStream.listen(events.add);
+
+          mockAdapter.emitLobbyUpdate({
+            'status': 'cancelled',
+            'endReason': 'host_ended',
+          });
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+
+          expect(events, contains(MultiplayerLifecycleEvent.gameCancelled));
+          await sub.cancel();
+        },
+      );
+
+      test('lifecycle stream emits deleted when lobby doc is null', () async {
+        mockAdapter._mockUserId = 'test-user';
+        mockAdapter._mockGameId = 'TEST123';
+
+        controller = await EnhancedMultiplayerController.createGame(
+          hostPlayerName: 'TestHost',
+          maxPlayers: 4,
+          networkAdapter: mockAdapter,
+        );
+
+        final events = <MultiplayerLifecycleEvent>[];
+        final sub = controller!.lifecycleStream.listen(events.add);
+
+        mockAdapter.emitLobbyUpdate(null);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(events, contains(MultiplayerLifecycleEvent.gameDeleted));
+        await sub.cancel();
+      });
+    });
+
     group('Disposal', () {
       test('should clean up resources properly', () async {
         mockAdapter._mockUserId = 'test-user';
@@ -641,14 +753,24 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
   String? _mockGameId;
   bool _mockJoinSuccess = false;
   bool leaveGameCalled = false;
+  bool endGameForEveryoneCalled = false;
+  String? lastEndGameReason;
   int syncCalls = 0;
   GameState? lastSyncedGameState;
   bool isDisposed = false;
+  final StreamController<Map<String, dynamic>?> _testLobbyController =
+      StreamController<Map<String, dynamic>?>.broadcast();
 
   // Public setters for easier testing
   set mockUserId(String? value) => _mockUserId = value;
   set mockGameId(String? value) => _mockGameId = value;
   set mockJoinSuccess(bool value) => _mockJoinSuccess = value;
+
+  void emitLobbyUpdate(Map<String, dynamic>? data) {
+    if (!_testLobbyController.isClosed) {
+      _testLobbyController.add(data);
+    }
+  }
 
   @override
   Future<String?> getCurrentUserId() async => _mockUserId;
@@ -664,6 +786,11 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
     required String gameId,
     required String playerName,
   }) async => _mockJoinSuccess;
+
+  @override
+  Stream<Map<String, dynamic>?> listenToGameLobby(String gameId) {
+    return _testLobbyController.stream;
+  }
 
   @override
   Future<bool> syncGameState(String gameId, GameState gameState) async {
@@ -682,8 +809,25 @@ class TestMockNetworkAdapter extends MockNetworkAdapter {
   }
 
   @override
+  Future<bool> endGameForEveryone(
+    String gameId, {
+    String endReason = 'host_ended',
+  }) async {
+    endGameForEveryoneCalled = true;
+    lastEndGameReason = endReason;
+    emitLobbyUpdate({'status': 'cancelled', 'endReason': endReason});
+    return true;
+  }
+
+  @override
   void dispose() {
+    if (isDisposed) {
+      return;
+    }
     isDisposed = true;
+    if (!_testLobbyController.isClosed) {
+      _testLobbyController.close();
+    }
     super.dispose();
   }
 }

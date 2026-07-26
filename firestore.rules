@@ -44,7 +44,9 @@ service cloud.firestore {
   function isValidGameUpdate(oldData, newData) {
     let allowedStatusTransitions = [
       ['waiting', 'playing'],
-      ['playing', 'finished']
+      ['waiting', 'cancelled'],
+      ['playing', 'finished'],
+      ['playing', 'cancelled']
     ];
     
     // Check if status transition is allowed

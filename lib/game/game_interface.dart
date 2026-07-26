@@ -1,6 +1,7 @@
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../models/multiplayer_lifecycle.dart';
 
 /// Common interface for all game controllers (singleplayer and multiplayer)
 /// This enables the UI to work seamlessly with any game type
@@ -68,5 +69,12 @@ abstract class MultiplayerGameInterface extends GameInterface {
   // Multiplayer game management
   Future<bool> startMultiplayerGame();
   Future<bool> leaveGame();
+
+  /// Host-only: cancel the game for all connected players.
+  Future<bool> endGameForEveryone({String endReason = 'host_ended'});
+
+  /// Emits when the remote game is cancelled or deleted.
+  Stream<MultiplayerLifecycleEvent> get lifecycleStream;
+
   Player? getCurrentUserPlayer();
 }
