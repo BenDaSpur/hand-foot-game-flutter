@@ -100,19 +100,22 @@ void main() {
         debugLabel: 'Open How to Play',
       );
 
-      if (await E2ETestUtils.waitForElement(tester, find.text('Game Rules'))) {
-        expect(find.text('Got it!'), findsOneWidget);
+      expect(
+        await E2ETestUtils.waitForElement(tester, find.text('Game Rules')),
+        isTrue,
+        reason: 'How to Play dialog should show Game Rules',
+      );
+      expect(find.text('Got it!'), findsOneWidget);
 
-        // Close dialog
-        await E2ETestUtils.safeTap(
-          tester,
-          find.text('Got it!'),
-          debugLabel: 'Close dialog',
-        );
-        await E2ETestUtils.stabilize(tester);
+      // Close dialog
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Got it!'),
+        debugLabel: 'Close dialog',
+      );
+      await E2ETestUtils.stabilize(tester);
 
-        expect(find.text('Game Rules'), findsNothing);
-      }
+      expect(find.text('Game Rules'), findsNothing);
 
       print('✅ Menu functionality complete');
       await E2ETestUtils.cleanShutdown(tester);
@@ -238,28 +241,26 @@ void main() {
         debugLabel: 'Open Play Cards modal',
       );
 
-      if (await E2ETestUtils.waitForElement(
-        tester,
-        find.text('Multi-Meld Play-Down'),
-      )) {
-        // Modal opened successfully, check for key elements
-        if (find.textContaining('Available Cards').evaluate().isNotEmpty) {
-          expect(find.textContaining('Available Cards'), findsWidgets);
-        }
-        if (find.textContaining('Proposed Melds').evaluate().isNotEmpty) {
-          expect(find.textContaining('Proposed Melds'), findsWidgets);
-        }
-
-        // Close the modal
-        await E2ETestUtils.safeTap(
+      expect(
+        await E2ETestUtils.waitForElement(
           tester,
-          find.text('Cancel'),
-          debugLabel: 'Close modal',
-        );
-        await E2ETestUtils.stabilize(tester);
+          find.text('Multi-Meld Play-Down'),
+        ),
+        isTrue,
+        reason: 'Play Cards should open Multi-Meld Play-Down modal',
+      );
+      expect(find.textContaining('Available Cards'), findsWidgets);
+      expect(find.textContaining('Proposed Melds'), findsWidgets);
 
-        expect(find.text('Multi-Meld Play-Down'), findsNothing);
-      }
+      // Close the modal
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Cancel'),
+        debugLabel: 'Close modal',
+      );
+      await E2ETestUtils.stabilize(tester);
+
+      expect(find.text('Multi-Meld Play-Down'), findsNothing);
 
       print('✅ Advanced meld modal complete');
       await E2ETestUtils.cleanShutdown(tester);

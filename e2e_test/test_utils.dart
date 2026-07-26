@@ -5,9 +5,10 @@ import 'test_app.dart';
 
 /// Utility class for E2E testing with improved timing and state management
 class E2ETestUtils {
-  /// Phone-sized surface large enough to avoid compact score-chip overflows.
+  /// Desktop-sized surface: tall phone sizes put the action dock outside the
+  /// Chrome integration-test hit-test viewport, so taps miss Play Cards/etc.
   static void _ensureTestSurface(WidgetTester tester) {
-    tester.view.physicalSize = const Size(1280, 2400);
+    tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -78,9 +79,12 @@ class E2ETestUtils {
 
   /// Pump until core game chrome is visible, with a hard timeout.
   static Future<void> _pumpUntilGameReady(WidgetTester tester) async {
-    final endTime = DateTime.now().add(const Duration(seconds: 8));
-    while (DateTime.now().isBefore(endTime)) {
-      await tester.pump(const Duration(milliseconds: 100));
+    const step = Duration(milliseconds: 100);
+    const timeout = Duration(seconds: 8);
+    final maxIterations = timeout.inMilliseconds ~/ step.inMilliseconds;
+
+    for (var i = 0; i < maxIterations; i++) {
+      await tester.pump(step);
       if (find.text('HAND & FOOT').evaluate().isNotEmpty &&
           find.text('ROUND 1').evaluate().isNotEmpty) {
         // Extra settle frames for hand/actions
@@ -90,6 +94,11 @@ class E2ETestUtils {
       // Keep dismissing Perfect Grab if it appears late
       await _dismissPerfectGrabIfPresent(tester);
     }
+
+    throw TestFailure(
+      'Timed out after ${timeout.inSeconds}s waiting for game chrome '
+      '(HAND & FOOT / ROUND 1)',
+    );
   }
 
   /// Handle save game dialog if it appears
@@ -106,18 +115,75 @@ class E2ETestUtils {
     Finder finder, {
     String? debugLabel,
   }) async {
-    if (finder.evaluate().isNotEmpty) {
-      await tester.tap(finder.first);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      if (debugLabel != null) {
-        print('✅ $debugLabel');
-      }
-    } else {
+    if (finder.evaluate().isEmpty) {
       if (debugLabel != null) {
         print('⚠️ $debugLabel - element not found');
       }
+      return;
     }
+
+    // Invoke Material button callbacks directly when possible. Integration
+    // tests on Chrome often fail hit-tests against the bottom action dock
+    // while the card-fly overlay (or live binding timing) is settling.
+    final invoked = await _invokeButtonStyleOnPressed(tester, finder);
+    if (invoked) {
+      if (debugLabel != null) {
+        print('✅ $debugLabel');
+      }
+      return;
+    }
+
+    final target = finder.first;
+    await tester.ensureVisible(target);
+    await tester.pump();
+    await tester.tap(target);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    if (debugLabel != null) {
+      print('✅ $debugLabel');
+    }
+  }
+
+  /// Waits for a [ButtonStyleButton] ancestor to enable, then calls onPressed.
+  static Future<bool> _invokeButtonStyleOnPressed(
+    WidgetTester tester,
+    Finder finder,
+  ) async {
+    const step = Duration(milliseconds: 100);
+    const timeout = Duration(seconds: 5);
+    final maxIterations = timeout.inMilliseconds ~/ step.inMilliseconds;
+
+    for (var i = 0; i < maxIterations; i++) {
+      if (finder.evaluate().isEmpty) {
+        return false;
+      }
+
+      final buttonFinder = find.ancestor(
+        of: finder.first,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is ButtonStyleButton,
+        ),
+      );
+      if (buttonFinder.evaluate().isEmpty) {
+        return false;
+      }
+
+      final button = tester.widget<ButtonStyleButton>(buttonFinder.first);
+      final onPressed = button.onPressed;
+      if (onPressed != null) {
+        onPressed();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        return true;
+      }
+
+      // Button disabled (e.g. card-fly isAnimating) — skip overlay and wait.
+      await _dismissCardFlyOverlayIfPresent(tester);
+      await tester.pump(step);
+      await Future<void>.delayed(step);
+    }
+
+    return false;
   }
 
   /// Wait for element to appear with timeout
@@ -127,10 +193,11 @@ class E2ETestUtils {
     Duration timeout = const Duration(seconds: 3),
     String? debugLabel,
   }) async {
-    final endTime = DateTime.now().add(timeout);
+    const step = Duration(milliseconds: 100);
+    final maxIterations = timeout.inMilliseconds ~/ step.inMilliseconds;
 
-    while (DateTime.now().isBefore(endTime)) {
-      await tester.pump(const Duration(milliseconds: 100));
+    for (var i = 0; i < maxIterations; i++) {
+      await tester.pump(step);
       if (finder.evaluate().isNotEmpty) {
         if (debugLabel != null) {
           print('✅ $debugLabel found');
@@ -145,11 +212,39 @@ class E2ETestUtils {
     return false;
   }
 
-  /// Stabilize the app state after actions
+  /// Stabilize the app state after actions.
+  ///
+  /// IntegrationTest uses a live binding, so card-fly animations advance in
+  /// wall time. Avoid synthetic corner-taps here — they dismiss open menus.
   static Future<void> stabilize(WidgetTester tester) async {
     await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 200));
+  }
+
+  /// Skip the full-screen card-fly GestureDetector when it is blocking input.
+  ///
+  /// Only used while waiting for a disabled action button to enable — never
+  /// during general stabilize (corner taps dismiss PopupMenus).
+  static Future<void> _dismissCardFlyOverlayIfPresent(
+    WidgetTester tester,
+  ) async {
+    final overlay = find.byWidgetPredicate(
+      (widget) =>
+          widget is GestureDetector &&
+          widget.behavior == HitTestBehavior.opaque &&
+          widget.onTap != null,
+    );
+    if (overlay.evaluate().isEmpty) {
+      return;
+    }
+
+    // Tap a corner of the overlay (skip handler) away from action buttons.
+    await tester.tapAt(const Offset(12, 12));
+    await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await tester.pump();
   }
 
   /// Clean shutdown to prevent setState after dispose

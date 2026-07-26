@@ -62,7 +62,7 @@ Comprehensive game flow testing with improved timing:
 ## Test Architecture
 
 ### Key Features
-- **Improved Timing Management:** Uses `pumpAndSettle()` with timeouts and fallback graceful handling
+- **Improved Timing Management:** Uses bounded timed `pump()` loops (not `pumpAndSettle()`) so bot timers and repeating animations cannot hang the harness
 - **Smart State Management:** Handles SharedPreferences unavailability in test environments
 - **Error Resilience:** Tests continue even if some UI elements aren't found
 - **Clean Shutdown:** Prevents setState() after dispose() issues
