@@ -12,7 +12,7 @@ on:
         type: boolean
         default: false
       run_e2e_tests:
-        description: 'Run E2E tests on macOS'
+        description: 'Run E2E tests on Chrome (Ubuntu)'
         type: boolean
         default: false
       flutter_version:
@@ -106,7 +106,7 @@ jobs:
 
   e2e-tests:
     if: inputs.run_e2e_tests
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -123,16 +123,14 @@ jobs:
         with:
           path: |
             ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-pub-e2e-${{ hashFiles('**/pubspec.lock') }}
           restore-keys: |
+            ${{ runner.os }}-pub-e2e-
             ${{ runner.os }}-pub-
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Enable macOS desktop
-        run: flutter config --enable-macos-desktop
-
       - name: Run E2E Tests
-        run: flutter test e2e_test/ -d macos
+        run: flutter test e2e_test/ -d chrome
         timeout-minutes: 15

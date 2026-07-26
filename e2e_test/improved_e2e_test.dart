@@ -16,7 +16,7 @@ void main() {
       // Verify core UI elements are present
       expect(find.text('HAND & FOOT'), findsOneWidget);
       expect(find.text('ROUND 1'), findsOneWidget);
-      expect(find.text('Your Hand (11 cards)'), findsOneWidget);
+      expect(find.text('Your Hand (11)'), findsOneWidget);
       expect(find.text('Draw from deck'), findsOneWidget);
 
       // Verify player information exists (may be multiple instances)
@@ -55,7 +55,7 @@ void main() {
       await E2ETestUtils.startAppWithCleanState(tester);
 
       // Verify starting state
-      expect(find.text('Your Hand (11 cards)'), findsOneWidget);
+      expect(find.text('Your Hand (11)'), findsOneWidget);
       expect(find.text('Draw from deck'), findsOneWidget);
 
       // Draw from deck
@@ -67,9 +67,10 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify transition to meld phase
-      expect(find.text('Your Hand (13 cards)'), findsOneWidget);
+      expect(find.text('Your Hand (13)'), findsOneWidget);
       expect(find.text('Play Cards'), findsOneWidget);
-      expect(find.text('Discard'), findsOneWidget);
+      // "Discard" appears on the action button and pile/phase labels
+      expect(find.text('Discard'), findsWidgets);
       expect(find.text('Draw from deck'), findsNothing);
 
       print('✅ Draw and phase transition complete');
@@ -99,22 +100,22 @@ void main() {
         debugLabel: 'Open How to Play',
       );
 
-      if (await E2ETestUtils.waitForElement(
+      expect(
+        await E2ETestUtils.waitForElement(tester, find.text('Game Rules')),
+        isTrue,
+        reason: 'How to Play dialog should show Game Rules',
+      );
+      expect(find.text('Got it!'), findsOneWidget);
+
+      // Close dialog
+      await E2ETestUtils.safeTap(
         tester,
-        find.text('How to Play Hand & Foot'),
-      )) {
-        expect(find.text('🎯 OBJECTIVE'), findsOneWidget);
+        find.text('Got it!'),
+        debugLabel: 'Close dialog',
+      );
+      await E2ETestUtils.stabilize(tester);
 
-        // Close dialog
-        await E2ETestUtils.safeTap(
-          tester,
-          find.text('Got it!'),
-          debugLabel: 'Close dialog',
-        );
-        await E2ETestUtils.stabilize(tester);
-
-        expect(find.text('How to Play Hand & Foot'), findsNothing);
-      }
+      expect(find.text('Game Rules'), findsNothing);
 
       print('✅ Menu functionality complete');
       await E2ETestUtils.cleanShutdown(tester);
@@ -156,24 +157,22 @@ void main() {
       if (foundBotToSwitch) {
         // Look for any bot's melds display or the back button
         final meldsDisplayFound = botNames.any(
-          (name) =>
-              find.textContaining('$name\'s Melds:').evaluate().isNotEmpty,
+          (name) => find.textContaining('$name\'s Melds').evaluate().isNotEmpty,
         );
 
-        if (meldsDisplayFound ||
-            find.text('Back to yours').evaluate().isNotEmpty) {
-          expect(find.text('Back to yours'), findsOneWidget);
+        if (meldsDisplayFound || find.text('← Yours').evaluate().isNotEmpty) {
+          expect(find.text('← Yours'), findsOneWidget);
 
           // Switch back to player's melds
           await E2ETestUtils.safeTap(
             tester,
-            find.text('Back to yours'),
+            find.text('← Yours'),
             debugLabel: 'Back to player melds',
           );
           await E2ETestUtils.stabilize(tester);
 
-          expect(find.text('Your Melds:'), findsOneWidget);
-          expect(find.text('Back to yours'), findsNothing);
+          expect(find.text('Your Melds'), findsOneWidget);
+          expect(find.text('← Yours'), findsNothing);
         }
       }
 
@@ -215,7 +214,7 @@ void main() {
           // Verify card was discarded (should have 12 cards now)
           await E2ETestUtils.waitForElement(
             tester,
-            find.text('Your Hand (12 cards)'),
+            find.text('Your Hand (12)'),
           );
         }
       }
@@ -242,28 +241,26 @@ void main() {
         debugLabel: 'Open Play Cards modal',
       );
 
-      if (await E2ETestUtils.waitForElement(
-        tester,
-        find.text('Multi-Meld Play-Down'),
-      )) {
-        // Modal opened successfully, check for key elements
-        if (find.text('Available Cards').evaluate().isNotEmpty) {
-          expect(find.text('Available Cards'), findsOneWidget);
-        }
-        if (find.text('Proposed Melds').evaluate().isNotEmpty) {
-          expect(find.text('Proposed Melds'), findsOneWidget);
-        }
-
-        // Close the modal
-        await E2ETestUtils.safeTap(
+      expect(
+        await E2ETestUtils.waitForElement(
           tester,
-          find.text('Cancel'),
-          debugLabel: 'Close modal',
-        );
-        await E2ETestUtils.stabilize(tester);
+          find.text('Multi-Meld Play-Down'),
+        ),
+        isTrue,
+        reason: 'Play Cards should open Multi-Meld Play-Down modal',
+      );
+      expect(find.textContaining('Available Cards'), findsWidgets);
+      expect(find.textContaining('Proposed Melds'), findsWidgets);
 
-        expect(find.text('Multi-Meld Play-Down'), findsNothing);
-      }
+      // Close the modal
+      await E2ETestUtils.safeTap(
+        tester,
+        find.text('Cancel'),
+        debugLabel: 'Close modal',
+      );
+      await E2ETestUtils.stabilize(tester);
+
+      expect(find.text('Multi-Meld Play-Down'), findsNothing);
 
       print('✅ Advanced meld modal complete');
       await E2ETestUtils.cleanShutdown(tester);
@@ -290,7 +287,7 @@ void main() {
       // Wait for export confirmation
       if (await E2ETestUtils.waitForElement(
         tester,
-        find.text('Game state exported to clipboard'),
+        find.text('Compact game save copied to clipboard'),
       )) {
         print('✅ Export confirmation shown');
       }
@@ -348,11 +345,11 @@ void main() {
           );
           await E2ETestUtils.stabilize(tester);
 
-          if (find.text('Back to yours').evaluate().isNotEmpty) {
+          if (find.text('← Yours').evaluate().isNotEmpty) {
             await E2ETestUtils.safeTap(
               tester,
-              find.text('Back to yours'),
-              debugLabel: 'Back to yours iteration $i',
+              find.text('← Yours'),
+              debugLabel: '← Yours iteration $i',
             );
             await E2ETestUtils.stabilize(tester);
           }

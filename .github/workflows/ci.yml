@@ -15,12 +15,38 @@ jobs:
       flutter_version: "3.44.6"
     secrets: inherit
 
-  # E2E tests temporarily disabled - re-enable when needed
-  # e2e-tests:
-  #   uses: ./.github/workflows/shared-quality-checks.yml
-  #   with:
-  #     setup_firebase_android: false
-  #     run_e2e_tests: true
-  #     flutter_version: "3.44.6"
-  #   secrets: inherit
-  #   needs: quality-checks
+  e2e-tests:
+    needs: quality-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: "stable"
+          cache: true
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-e2e-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-e2e-
+            ${{ runner.os }}-pub-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run E2E Tests
+        run: flutter test e2e_test/ -d chrome
+        timeout-minutes: 15

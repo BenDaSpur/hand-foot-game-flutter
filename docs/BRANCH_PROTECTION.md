@@ -62,10 +62,10 @@ The following checks must pass:
 - Static analysis (`flutter analyze`)
 - Dependency verification (`flutter pub deps`)
 
-### `e2e-tests` (macOS, ~2 minutes) 
-- Desktop app startup verification
+### `e2e-tests` (Ubuntu Chrome, ~2–4 minutes)
+- App startup verification via integration tests
 - Core game flow testing (draw, meld, discard)
-- UI interaction validation  
+- UI interaction validation
 - Menu and dialog functionality
 
 ### `claude-review` (AI-powered, ~1 minute)

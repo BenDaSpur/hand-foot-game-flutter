@@ -468,10 +468,17 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
-    final earnedBonus = await RoundStartMiniGame.show(
-      context,
-      roundNumber: roundNumber,
-    );
+    // Deterministic widget/e2e tests pass [testSeed] and skip the timing
+    // mini-game so startup is stable under IntegrationTest bindings.
+    final bool earnedBonus;
+    if (widget.testSeed != null) {
+      earnedBonus = false;
+    } else {
+      earnedBonus = await RoundStartMiniGame.show(
+        context,
+        roundNumber: roundNumber,
+      );
+    }
     if (_disposed || !mounted) {
       return;
     }
