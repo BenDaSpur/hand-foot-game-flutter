@@ -58,7 +58,7 @@ See `docs/firebase_mcp_quickstart.md`, `docs/firebase_agent_setup.md`, and `docs
 ### Testing
 - `flutter test` runs the full unit/widget suite (~750 tests) and passes headlessly with no extra setup. Tests skip Firebase automatically under `FLUTTER_TEST`.
 - `flutter analyze` must be clean (zero issues) — the repo enforces this.
-- E2E integration tests (`e2e_test/`) are documented to run on `-d macos` and are **disabled in CI**; they are not runnable in this Linux/web environment.
+- E2E integration tests (`e2e_test/`) run in CI on Ubuntu Chrome (`flutter test e2e_test/ -d chrome`). Locally: same command, or `-d macos` on a Mac with desktop enabled.
 
 ### Code quality (required before commit/PR)
 

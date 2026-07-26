@@ -17,8 +17,8 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify we start in our own view
-      expect(find.text('Your Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsNothing);
+      expect(find.text('Your Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsNothing);
 
       print('✅ Confirmed starting in own melds view');
 
@@ -51,28 +51,28 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify we switched to bot's view
-      expect(find.textContaining('$firstBotFound\'s Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsOneWidget);
-      expect(find.text('Your Melds:'), findsNothing);
+      expect(find.textContaining('$firstBotFound\'s Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsOneWidget);
+      expect(find.text('Your Melds'), findsNothing);
 
       print('✅ Successfully switched to bot\'s melds view');
-      print('✅ Confirmed "Back to yours" button is visible');
+      print('✅ Confirmed "← Yours" button is visible');
 
-      // Test tapping "Back to yours" button
+      // Test tapping "← Yours" button
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Back to yours'),
+        find.text('← Yours'),
         debugLabel: 'Back to own view',
       );
       await E2ETestUtils.stabilize(tester);
 
       // Verify we're back to our own view
-      expect(find.text('Your Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsNothing);
-      expect(find.textContaining('$firstBotFound\'s Melds:'), findsNothing);
+      expect(find.text('Your Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsNothing);
+      expect(find.textContaining('$firstBotFound\'s Melds'), findsNothing);
 
       print('✅ Successfully returned to own melds view');
-      print('✅ Confirmed "Back to yours" button is hidden');
+      print('✅ Confirmed "← Yours" button is hidden');
 
       print('✅ Player view switching test complete');
       await E2ETestUtils.cleanShutdown(tester);
@@ -113,8 +113,8 @@ void main() {
         await E2ETestUtils.stabilize(tester);
 
         // Verify we're viewing bot's melds
-        expect(find.textContaining('$firstBotFound\'s Melds:'), findsOneWidget);
-        expect(find.text('Back to yours'), findsOneWidget);
+        expect(find.textContaining('$firstBotFound\'s Melds'), findsOneWidget);
+        expect(find.text('← Yours'), findsOneWidget);
 
         print('✅ Currently viewing bot\'s melds');
 
@@ -130,14 +130,14 @@ void main() {
         await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
         // Verify we're back to our own view
-        expect(find.text('Your Melds:'), findsOneWidget);
-        expect(find.text('Back to yours'), findsNothing);
-        expect(find.textContaining('$firstBotFound\'s Melds:'), findsNothing);
+        expect(find.text('Your Melds'), findsOneWidget);
+        expect(find.text('← Yours'), findsNothing);
+        expect(find.textContaining('$firstBotFound\'s Melds'), findsNothing);
 
         print(
           '✅ Successfully returned to own view by clicking own player card',
         );
-        print('✅ "Back to yours" button correctly hidden');
+        print('✅ "← Yours" button correctly hidden');
 
         await E2ETestUtils.cleanShutdown(tester);
       },
@@ -185,8 +185,8 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify we're viewing first bot's melds
-      expect(find.textContaining('$firstBot\'s Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsOneWidget);
+      expect(find.textContaining('$firstBot\'s Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsOneWidget);
 
       print('✅ Viewing $firstBot\'s melds');
 
@@ -199,12 +199,12 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify we're viewing second bot's melds
-      expect(find.textContaining('$secondBot\'s Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsOneWidget);
-      expect(find.textContaining('$firstBot\'s Melds:'), findsNothing);
+      expect(find.textContaining('$secondBot\'s Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsOneWidget);
+      expect(find.textContaining('$firstBot\'s Melds'), findsNothing);
 
       print('✅ Successfully switched from $firstBot to $secondBot');
-      print('✅ "Back to yours" button remains visible');
+      print('✅ "← Yours" button remains visible');
 
       // Switch back to first bot
       await E2ETestUtils.safeTap(
@@ -215,23 +215,23 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify we're viewing first bot's melds again
-      expect(find.textContaining('$firstBot\'s Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsOneWidget);
-      expect(find.textContaining('$secondBot\'s Melds:'), findsNothing);
+      expect(find.textContaining('$firstBot\'s Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsOneWidget);
+      expect(find.textContaining('$secondBot\'s Melds'), findsNothing);
 
       print('✅ Successfully switched back to $firstBot');
 
       // Return to own view
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Back to yours'),
+        find.text('← Yours'),
         debugLabel: 'Return to own view',
       );
       await E2ETestUtils.stabilize(tester);
 
       // Verify we're back to our own view
-      expect(find.text('Your Melds:'), findsOneWidget);
-      expect(find.text('Back to yours'), findsNothing);
+      expect(find.text('Your Melds'), findsOneWidget);
+      expect(find.text('← Yours'), findsNothing);
 
       print('✅ Successfully returned to own view');
       print('✅ Multiple bot switching test complete');
@@ -248,7 +248,7 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify initial header text
-      expect(find.text('Your Melds:'), findsOneWidget);
+      expect(find.text('Your Melds'), findsOneWidget);
 
       // Find a bot to switch to
       final botNames = [
@@ -279,24 +279,24 @@ void main() {
       await E2ETestUtils.stabilize(tester);
 
       // Verify header text changed to bot's name
-      expect(find.textContaining('$firstBotFound\'s Melds:'), findsOneWidget);
-      expect(find.text('Your Melds:'), findsNothing);
+      expect(find.textContaining('$firstBotFound\'s Melds'), findsOneWidget);
+      expect(find.text('Your Melds'), findsNothing);
 
-      print('✅ Header text correctly shows "$firstBotFound\'s Melds:"');
+      print('✅ Header text correctly shows "$firstBotFound\'s Melds"');
 
       // Switch back to own view
       await E2ETestUtils.safeTap(
         tester,
-        find.text('Back to yours'),
+        find.text('← Yours'),
         debugLabel: 'Return to own view for header test',
       );
       await E2ETestUtils.stabilize(tester);
 
-      // Verify header text changed back to "Your Melds:"
-      expect(find.text('Your Melds:'), findsOneWidget);
-      expect(find.textContaining('$firstBotFound\'s Melds:'), findsNothing);
+      // Verify header text changed back to "Your Melds"
+      expect(find.text('Your Melds'), findsOneWidget);
+      expect(find.textContaining('$firstBotFound\'s Melds'), findsNothing);
 
-      print('✅ Header text correctly shows "Your Melds:" again');
+      print('✅ Header text correctly shows "Your Melds" again');
       print('✅ Header text changes test complete');
 
       await E2ETestUtils.cleanShutdown(tester);

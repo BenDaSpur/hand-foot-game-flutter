@@ -13,7 +13,7 @@ void main() {
       // Basic verification that the app started
       expect(find.text('HAND & FOOT'), findsOneWidget);
       expect(find.text('ROUND 1'), findsOneWidget);
-      expect(find.text('Your Hand (11 cards)'), findsOneWidget);
+      expect(find.text('Your Hand (11)'), findsOneWidget);
 
       print('✅ Basic app startup verified');
       await E2ETestUtils.cleanShutdown(tester);
@@ -32,10 +32,11 @@ void main() {
       // Verify phase transition occurred
       if (await E2ETestUtils.waitForElement(
         tester,
-        find.text('Your Hand (13 cards)'),
+        find.text('Your Hand (13)'),
       )) {
         expect(find.text('Play Cards'), findsOneWidget);
-        expect(find.text('Discard'), findsOneWidget);
+        // "Discard" appears on the action button and pile/phase labels
+        expect(find.text('Discard'), findsWidgets);
       }
 
       // Verify app is still functional

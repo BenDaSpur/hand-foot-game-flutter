@@ -27,12 +27,15 @@ flutter test test/models/meld_test.dart
 End-to-end tests that run the full Flutter app, similar to Selenium/Cypress/Playwright.
 
 ```bash
-# Run all E2E tests (macOS desktop)
+# Run all E2E tests (Chrome — matches CI)
+flutter test e2e_test/ -d chrome
+
+# macOS desktop (optional, local Mac only)
 flutter test e2e_test/ -d macos
 
 # Run specific test suite
-flutter test e2e_test/basic_flow_test.dart -d macos
-flutter test e2e_test/improved_e2e_test.dart -d macos
+flutter test e2e_test/basic_flow_test.dart -d chrome
+flutter test e2e_test/improved_e2e_test.dart -d chrome
 ```
 
 ## E2E Test Suites
@@ -77,19 +80,19 @@ await E2ETestUtils.cleanShutdown(tester); // Proper test cleanup
 
 ### Prerequisites
 - Flutter SDK installed
-- macOS desktop target (integration tests)
+- Chrome (CI and Linux/web) or macOS desktop target
 - No need for physical devices
 
 ### Command Examples
 ```bash
 # Quick smoke test
-flutter test e2e_test/basic_flow_test.dart -d macos
+flutter test e2e_test/basic_flow_test.dart -d chrome
 
-# Full E2E regression testing  
-flutter test e2e_test/improved_e2e_test.dart -d macos
+# Full E2E regression testing
+flutter test e2e_test/improved_e2e_test.dart -d chrome
 
 # All tests (unit + E2E)
-flutter test test/ && flutter test e2e_test/ -d macos
+flutter test test/ && flutter test e2e_test/ -d chrome
 ```
 
 ### CI/CD Integration
@@ -102,12 +105,12 @@ quality-checks:
   steps:
     - run: flutter test test/
 
-# E2E tests run on macOS (desktop environment required)  
+# E2E tests run on Ubuntu Chrome
 e2e-tests:
-  runs-on: macos-latest
+  runs-on: ubuntu-latest
   needs: quality-checks
   steps:
-    - run: flutter test e2e_test/basic_flow_test.dart -d macos
+    - run: flutter test e2e_test/ -d chrome
 ```
 
 **Branch Protection:** All PRs must pass both `quality-checks`, `e2e-tests`, and `claude-review` to merge.

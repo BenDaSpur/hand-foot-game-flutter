@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Format code**: `dart format .` — **required after every change**; CI fails if formatting differs (`dart format --set-exit-if-changed .`)
 - **Run all quality checks**: `./format_and_test.sh` (format + test + analyze + deps)
 - **Static analysis**: `flutter analyze`
-- **Run tests**: `flutter test test/` for unit tests, `flutter test e2e/ -d macos` for e2e integration tests
+- **Run tests**: `flutter test test/` for unit tests, `flutter test e2e_test/ -d chrome` for e2e integration tests
 - **Hot reload**: Available when running with `flutter run` - press `r` to reload
 - **Clean build**: `flutter clean && flutter pub get` to resolve dependency issues
 
