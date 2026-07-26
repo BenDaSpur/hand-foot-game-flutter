@@ -129,6 +129,17 @@ class GameController implements GameInterface {
   @override
   bool drawFromDeck() {
     final handSizeBefore = _gameState.currentPlayer.currentHand.length;
+    final phaseBefore = _gameState.phase;
+    final roundBefore = _gameState.round;
+    // Capture before draw: stuck go-out recovery clears playerWhoWentOutIndex
+    // inside endRound(), and the acting player may not be who went out.
+    Player? stuckGoOutPlayer;
+    for (final player in _gameState.players) {
+      if (player.canGoOut) {
+        stuckGoOutPlayer = player;
+        break;
+      }
+    }
     final result = _gameState.drawFromDeck();
 
     if (result) {
@@ -142,6 +153,12 @@ class GameController implements GameInterface {
           CardDrawnEvent(cards: drawnCards, fromDeck: true, player: player),
         );
       }
+    } else if (stuckGoOutPlayer != null &&
+        phaseBefore == GamePhase.playing &&
+        (_gameState.phase == GamePhase.roundEnd ||
+            _gameState.phase == GamePhase.gameEnd)) {
+      // Stuck go-out recovery inside GameState.drawFromDeck ended the round.
+      _publishRoundOrGameEndEvents(stuckGoOutPlayer, roundBefore);
     }
 
     return result;

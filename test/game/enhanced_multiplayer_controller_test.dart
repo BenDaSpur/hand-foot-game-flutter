@@ -427,6 +427,35 @@ void main() {
         expect(action.privateMessage, isNull);
         expect(action.displayMessage, '🎴 drew 2 cards from deck');
       });
+
+      test('sync preserves final-turn-after-go-out fields', () async {
+        await completeFirstSync();
+
+        final gameState = controller!.gameState;
+        gameState.players.add(
+          Player(id: 'other-user', name: 'Other', type: PlayerType.human),
+        );
+
+        final remote = GameState(
+          players: List.of(gameState.players),
+          deck: Deck.fromCards(gameState.deck.cards),
+          discardPile: List.of(gameState.discardPile),
+          recentActions: const [],
+          phase: GamePhase.playing,
+          turnPhase: TurnPhase.meld,
+          currentPlayerIndex: 1,
+          finalTurnPhaseActive: true,
+          playerWhoWentOutIndex: 0,
+          playersAwaitingFinalTurn: {1},
+        );
+
+        await deliverServerSnapshot(remote);
+
+        expect(controller!.gameState.finalTurnPhaseActive, isTrue);
+        expect(controller!.gameState.playerWhoWentOutIndex, 0);
+        expect(controller!.gameState.playersAwaitingFinalTurn, {1});
+        expect(controller!.gameState.currentPlayerIndex, 1);
+      });
     });
 
     group('Connection Management', () {

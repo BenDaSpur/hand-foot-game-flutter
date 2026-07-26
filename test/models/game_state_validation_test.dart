@@ -134,6 +134,140 @@ void main() {
       expect(errorActions.length, greaterThan(0));
     });
 
+    test('does not flag the went-out player during final turns', () {
+      final opponent = Player(
+        id: '2',
+        name: 'Opponent',
+        type: PlayerType.human,
+      );
+      gameState.players.add(opponent);
+
+      player.hasPlayedDown = true;
+      player.hasPickedUpFoot = true;
+      player.melds.addAll([
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      ]);
+
+      gameState.finalTurnPhaseActive = true;
+      gameState.playerWhoWentOutIndex = 0;
+      gameState.playersAwaitingFinalTurn.add(1);
+      gameState.currentPlayerIndex = 1;
+
+      final initialActionsCount = gameState.recentActions.length;
+      gameState.validateGameState();
+
+      expect(gameState.recentActions.length, equals(initialActionsCount));
+    });
+
+    test('recoverStuckGoOutIfNeeded ends a desynced go-out round', () {
+      final opponent = Player(
+        id: '2',
+        name: 'Opponent',
+        type: PlayerType.human,
+      );
+      opponent.hand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+      ]);
+      gameState.players.add(opponent);
+
+      player.hasPlayedDown = true;
+      player.hasPickedUpFoot = true;
+      player.melds.addAll([
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      ]);
+
+      expect(player.canGoOut, isTrue);
+      expect(gameState.phase, GamePhase.playing);
+
+      final recovered = gameState.recoverStuckGoOutIfNeeded();
+
+      expect(recovered, isTrue);
+      expect(gameState.phase, GamePhase.roundEnd);
+      expect(
+        gameState.recentActions.any(
+          (action) => action.message.contains('Recovered stuck go-out'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('drawFromDeck recovers stuck go-out instead of dealing cards', () {
+      final opponent = Player(
+        id: '2',
+        name: 'Opponent',
+        type: PlayerType.human,
+      );
+      gameState.players.add(opponent);
+
+      player.hasPlayedDown = true;
+      player.hasPickedUpFoot = true;
+      player.melds.addAll([
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      ]);
+
+      gameState.turnPhase = TurnPhase.draw;
+      gameState.hasDrawnFromDeck = false;
+      final seededDeck = Deck.createHandAndFootDeck(2, seed: 99);
+      gameState.deck.replaceCards(seededDeck.cards);
+
+      expect(player.currentHand, isEmpty);
+      expect(gameState.drawFromDeck(), isFalse);
+      expect(player.currentHand, isEmpty);
+      expect(gameState.phase, GamePhase.roundEnd);
+    });
+
     test('should catch empty melds', () {
       // Create a meld and then manually make it empty (impossible state)
       final meld = Meld.createMeld([

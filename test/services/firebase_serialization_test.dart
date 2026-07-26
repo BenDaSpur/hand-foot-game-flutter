@@ -90,5 +90,71 @@ void main() {
       expect(restored.recentActions.length, 1);
       expect(restored.recentActions.first.playerName, 'Alice');
     });
+
+    test('round-trips final-turn-after-go-out fields', () {
+      final playerA = Player(
+        id: 'player-a',
+        name: 'Alice',
+        type: PlayerType.human,
+      );
+      final playerB = Player(
+        id: 'player-b',
+        name: 'Bob',
+        type: PlayerType.human,
+      );
+
+      final original = GameState(
+        players: [playerA, playerB],
+        deck: Deck.createHandAndFootDeck(2, seed: 7),
+        phase: GamePhase.playing,
+        turnPhase: TurnPhase.meld,
+        currentPlayerIndex: 1,
+        finalTurnPhaseActive: true,
+        playerWhoWentOutIndex: 0,
+        playersAwaitingFinalTurn: {1},
+      );
+
+      final serialized = FirebaseService.gameStateToMapForTesting(original);
+
+      expect(serialized['finalTurnPhaseActive'], isTrue);
+      expect(serialized['playerWhoWentOutIndex'], 0);
+      expect(serialized['playersAwaitingFinalTurn'], [1]);
+
+      final restored = FirebaseService.gameStateFromMapForTesting(serialized);
+
+      expect(restored.finalTurnPhaseActive, isTrue);
+      expect(restored.playerWhoWentOutIndex, 0);
+      expect(restored.playersAwaitingFinalTurn, {1});
+      expect(restored.currentPlayerIndex, 1);
+    });
+
+    test('defaults missing final-turn fields for legacy documents', () {
+      final playerA = Player(
+        id: 'player-a',
+        name: 'Alice',
+        type: PlayerType.human,
+      );
+      final playerB = Player(
+        id: 'player-b',
+        name: 'Bob',
+        type: PlayerType.human,
+      );
+
+      final legacy = GameState(
+        players: [playerA, playerB],
+        deck: Deck.createHandAndFootDeck(2, seed: 11),
+        phase: GamePhase.playing,
+      );
+      final serialized = FirebaseService.gameStateToMapForTesting(legacy)
+        ..remove('finalTurnPhaseActive')
+        ..remove('playerWhoWentOutIndex')
+        ..remove('playersAwaitingFinalTurn');
+
+      final restored = FirebaseService.gameStateFromMapForTesting(serialized);
+
+      expect(restored.finalTurnPhaseActive, isFalse);
+      expect(restored.playerWhoWentOutIndex, isNull);
+      expect(restored.playersAwaitingFinalTurn, isEmpty);
+    });
   });
 }

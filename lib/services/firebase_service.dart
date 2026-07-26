@@ -960,6 +960,11 @@ class FirebaseService {
       // Clients that predate this key simply ignore it; they read named keys
       // and never enumerate the document, so the extra field is inert to them.
       'hasTakenDiscardThisTurn': gameState.hasTakenDiscardThisTurn,
+      // Final-turn-after-go-out must sync online; without these fields the round
+      // stays "playing" after someone empties with books (see games/FB90).
+      'finalTurnPhaseActive': gameState.finalTurnPhaseActive,
+      'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
+      'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
     };
   }
 
@@ -993,6 +998,10 @@ class FirebaseService {
       }
     }
 
+    final awaitingFinalTurn = List<int>.from(
+      data['playersAwaitingFinalTurn'] ?? const <int>[],
+    );
+
     return GameState(
       players: players,
       deck: deck,
@@ -1013,6 +1022,12 @@ class FirebaseService {
       hasDrawnFromDeck: data['hasDrawnFromDeck'] ?? false,
       hasMelded: data['hasMelded'] ?? false,
       hasTakenDiscardThisTurn: data['hasTakenDiscardThisTurn'] ?? false,
+      // Absent on documents written before final-turn multiplayer sync.
+      finalTurnPhaseActive: data['finalTurnPhaseActive'] ?? false,
+      playerWhoWentOutIndex: data['playerWhoWentOutIndex'] == null
+          ? null
+          : (data['playerWhoWentOutIndex'] as num).toInt(),
+      playersAwaitingFinalTurn: awaitingFinalTurn.toSet(),
     );
   }
 
