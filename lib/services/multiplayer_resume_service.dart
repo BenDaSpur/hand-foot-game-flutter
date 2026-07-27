@@ -201,18 +201,18 @@ class MultiplayerResumeService {
         return null;
       }
 
-      final wasHost = activeGame?['isHost'] as bool? ?? controller.isHost;
+      final isHost = controller.isHost;
 
-      // Save the rejoined game info with correct host status + playerId
+      // Save the rejoined game info with authoritative host status + playerId
       await saveActiveGame(
         gameId: gameId,
         playerName: playerName,
-        isHost: wasHost,
+        isHost: isHost,
         playerId: controller.userId,
       );
 
       DebugLogger.debug(
-        'Successfully rejoined game: $gameId (wasHost: $wasHost, status: $status)',
+        'Successfully rejoined game: $gameId (isHost: $isHost, status: $status)',
       );
 
       return MultiplayerResumeResult(
@@ -220,7 +220,7 @@ class MultiplayerResumeService {
         status: status!,
         gameId: gameId,
         playerName: playerName,
-        isHost: wasHost,
+        isHost: isHost,
       );
     } catch (e) {
       DebugLogger.error('Failed to rejoin game: $e');

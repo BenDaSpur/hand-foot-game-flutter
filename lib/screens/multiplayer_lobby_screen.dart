@@ -10,7 +10,7 @@ import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../models/game_state.dart';
 import '../models/multiplayer_lifecycle.dart';
-import 'main_menu_screen.dart';
+import 'multiplayer_exit_flow.dart';
 import 'multiplayer_game_screen.dart';
 
 enum LobbyMode { create, join }
@@ -113,10 +113,17 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   void _generateUserId() async {
-    _currentUserId = await FirebaseService.getMultiplayerUserId();
-    if (mounted && _currentUserId != null) {
-      setState(() {});
+    final userId = await FirebaseService.getMultiplayerUserId();
+    if (!mounted || userId == null) {
+      return;
     }
+    // Do not overwrite identity restored by an already-joined controller.
+    if (_currentUserId != null) {
+      return;
+    }
+    setState(() {
+      _currentUserId = userId;
+    });
   }
 
   @override
@@ -680,10 +687,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       if (!mounted || _isExiting) {
         return;
       }
-      final message = event == MultiplayerLifecycleEvent.gameCancelled
-          ? 'The host ended this game.'
-          : 'This game was ended by the host.';
-      _handleRemoteGameEnded(message);
+      _handleRemoteGameEnded(
+        MultiplayerExitFlow.messageForLifecycleEvent(event),
+      );
     });
   }
 
@@ -743,20 +749,27 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     }
     _isExiting = true;
 
+    var success = false;
     try {
-      await _gameController?.endGameForEveryone();
+      success = await _gameController?.endGameForEveryone() ?? false;
     } catch (e) {
       debugPrint('Warning: Failed to end multiplayer game: $e');
+      success = false;
+    }
+
+    if (!success) {
+      _isExiting = false;
+      if (mounted) {
+        _showErrorDialog('Failed to end the game. Please try again.');
+      }
+      return;
     }
 
     await MultiplayerResumeService.clearActiveGame();
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
-    );
+    MultiplayerExitFlow.goToMainMenu(context);
   }
 
   Future<void> _leaveLobbyAndExit() async {
@@ -775,59 +788,20 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
-    );
+    MultiplayerExitFlow.goToMainMenu(context);
   }
 
   Future<void> _handleRemoteGameEnded(String message) async {
-    if (_isExiting) {
-      return;
-    }
-    _isExiting = true;
-    await MultiplayerResumeService.clearActiveGame();
-
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog(
+    await MultiplayerExitFlow.handleRemoteGameEnded(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: BalatroTheme.cardBackground,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: BalatroTheme.neonPink.withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
-        title: const Text(
-          'Game Ended',
-          style: TextStyle(
-            color: BalatroTheme.neonPink,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK', style: TextStyle(color: BalatroTheme.neonBlue)),
-          ),
-        ],
+      alreadyExiting: _isExiting,
+      markExiting: () => _isExiting = true,
+      message: message,
+      dialogBackground: BalatroTheme.cardBackground,
+      dialogBorder: BorderSide(
+        color: BalatroTheme.neonPink.withValues(alpha: 0.3),
+        width: 1,
       ),
-    );
-
-    if (!mounted) {
-      return;
-    }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
     );
   }
 

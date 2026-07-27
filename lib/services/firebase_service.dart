@@ -10,6 +10,7 @@ import '../models/deck.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/multiplayer_result.dart';
+import '../config/game_config.dart';
 import 'firebase_constants.dart';
 import 'game_code.dart';
 import 'device_service.dart';
@@ -420,36 +421,42 @@ class FirebaseService {
         return false;
       }
 
-      final gameDoc = await _firestore
-          .collection(gamesCollection)
-          .doc(gameId)
-          .get();
+      final docRef = _firestore.collection(gamesCollection).doc(gameId);
+      final success = await _firestore.runTransaction<bool>((
+        transaction,
+      ) async {
+        final gameDoc = await transaction.get(docRef);
+        if (!gameDoc.exists) {
+          return false;
+        }
 
-      if (!gameDoc.exists) {
-        return false;
-      }
+        final gameData = gameDoc.data()!;
+        if (gameData['hostId'] != userId) {
+          _logger.warning('Only host can end game for everyone');
+          return false;
+        }
 
-      final gameData = gameDoc.data()!;
-      if (gameData['hostId'] != userId) {
-        _logger.warning('Only host can end game for everyone');
-        return false;
-      }
+        final status = gameData['status'] as String?;
+        if (status == FirebaseConstants.gameStatusCancelled ||
+            status == FirebaseConstants.gameStatusFinished) {
+          return true;
+        }
 
-      final status = gameData['status'] as String?;
-      if (status == FirebaseConstants.gameStatusCancelled ||
-          status == FirebaseConstants.gameStatusFinished) {
+        transaction.update(docRef, {
+          'status': FirebaseConstants.gameStatusCancelled,
+          'endedAt': FieldValue.serverTimestamp(),
+          'completedAt': FieldValue.serverTimestamp(),
+          'cleanupAt': Timestamp.fromDate(
+            DateTime.now().add(GameConfig.gameCleanupDelay),
+          ),
+          'endReason': endReason,
+        });
         return true;
-      }
-
-      await _firestore.collection(gamesCollection).doc(gameId).update({
-        'status': FirebaseConstants.gameStatusCancelled,
-        'endedAt': FieldValue.serverTimestamp(),
-        'completedAt': FieldValue.serverTimestamp(),
-        'cleanupAt': Timestamp.fromDate(
-          DateTime.now().add(const Duration(hours: 1)),
-        ),
-        'endReason': endReason,
       });
+
+      if (!success) {
+        return false;
+      }
 
       _logger.info('Ended game for everyone: $gameId ($endReason)');
       await logGameEvent(
@@ -474,77 +481,83 @@ class FirebaseService {
         return false;
       }
 
-      final gameDoc = await _firestore
-          .collection(gamesCollection)
-          .doc(gameId)
-          .get();
+      final docRef = _firestore.collection(gamesCollection).doc(gameId);
+      final leaveOutcome = await _firestore.runTransaction<String>((
+        transaction,
+      ) async {
+        final gameDoc = await transaction.get(docRef);
+        if (!gameDoc.exists) {
+          return 'missing';
+        }
 
-      if (!gameDoc.exists) {
+        final gameData = gameDoc.data()!;
+        final status = gameData['status'] as String?;
+
+        // Host leaving ends the session for everyone (host-only cancel).
+        if (gameData['hostId'] == userId) {
+          if (status == FirebaseConstants.gameStatusCancelled ||
+              status == FirebaseConstants.gameStatusFinished) {
+            return 'already_ended';
+          }
+
+          transaction.update(docRef, {
+            'status': FirebaseConstants.gameStatusCancelled,
+            'endedAt': FieldValue.serverTimestamp(),
+            'completedAt': FieldValue.serverTimestamp(),
+            'cleanupAt': Timestamp.fromDate(
+              DateTime.now().add(GameConfig.gameCleanupDelay),
+            ),
+            'endReason': 'host_left',
+          });
+          return 'host_cancelled';
+        }
+
+        if (status == FirebaseConstants.gameStatusCancelled ||
+            status == FirebaseConstants.gameStatusFinished) {
+          return 'already_ended';
+        }
+
+        final players = List<Map<String, dynamic>>.from(
+          gameData['players'] ?? [],
+        );
+        players.removeWhere((player) => player['id'] == userId);
+
+        final updateData = <String, dynamic>{'players': players};
+
+        // Mid-game leave must also update authoritative gameState / turn order.
+        // Cancellation is host-only in rules, so non-host leave never writes
+        // status=cancelled even if fewer than two players remain.
+        if (status == FirebaseConstants.gameStatusPlaying &&
+            gameData['gameState'] is Map<String, dynamic>) {
+          final gameState = Map<String, dynamic>.from(
+            gameData['gameState'] as Map<String, dynamic>,
+          );
+          final updatedGameState = _removePlayerFromSerializedGameState(
+            gameState,
+            userId,
+          );
+
+          if (updatedGameState != null) {
+            updateData['gameState'] = updatedGameState;
+          }
+        }
+
+        transaction.update(docRef, updateData);
+        return 'left';
+      });
+
+      if (leaveOutcome == 'missing') {
         return false;
       }
 
-      final gameData = gameDoc.data()!;
-      final status = gameData['status'] as String?;
-
-      // Host leaving ends the session for everyone
-      if (gameData['hostId'] == userId) {
-        return await endGameForEveryone(gameId, endReason: 'host_left');
-      }
-
-      if (status == FirebaseConstants.gameStatusCancelled ||
-          status == FirebaseConstants.gameStatusFinished) {
+      if (leaveOutcome == 'host_cancelled') {
+        _logger.info('Ended game for everyone: $gameId (host_left)');
+        await logGameEvent(
+          'game_cancelled',
+          parameters: {'game_id': gameId, 'end_reason': 'host_left'},
+        );
         return true;
       }
-
-      final players = List<Map<String, dynamic>>.from(
-        gameData['players'] ?? [],
-      );
-      players.removeWhere((player) => player['id'] == userId);
-
-      final updateData = <String, dynamic>{'players': players};
-
-      // Mid-game leave must also update authoritative gameState / turn order
-      if (status == FirebaseConstants.gameStatusPlaying &&
-          gameData['gameState'] is Map<String, dynamic>) {
-        final gameState = Map<String, dynamic>.from(
-          gameData['gameState'] as Map<String, dynamic>,
-        );
-        final updatedGameState = _removePlayerFromSerializedGameState(
-          gameState,
-          userId,
-        );
-
-        if (updatedGameState != null) {
-          updateData['gameState'] = updatedGameState;
-        }
-
-        final remainingCount = updatedGameState == null
-            ? 0
-            : (updatedGameState['players'] as List).length;
-        if (remainingCount < 2) {
-          // Not enough players to continue — cancel for everyone.
-          // Rules authorize this update because the leaver is still in the
-          // pre-update players list.
-          updateData['status'] = FirebaseConstants.gameStatusCancelled;
-          updateData['endedAt'] = FieldValue.serverTimestamp();
-          updateData['completedAt'] = FieldValue.serverTimestamp();
-          updateData['cleanupAt'] = Timestamp.fromDate(
-            DateTime.now().add(const Duration(hours: 1)),
-          );
-          updateData['endReason'] = 'insufficient_players';
-        }
-      } else if (status == FirebaseConstants.gameStatusWaiting &&
-          players.isEmpty) {
-        updateData['status'] = FirebaseConstants.gameStatusCancelled;
-        updateData['endedAt'] = FieldValue.serverTimestamp();
-        updateData['completedAt'] = FieldValue.serverTimestamp();
-        updateData['endReason'] = 'empty_lobby';
-      }
-
-      await _firestore
-          .collection(gamesCollection)
-          .doc(gameId)
-          .update(updateData);
 
       _logger.info('Left game: $gameId');
       await logGameEvent('game_left', parameters: {'game_id': gameId});
@@ -582,7 +595,7 @@ class FirebaseService {
       return null;
     }
 
-    var currentIndex = (gameState['currentPlayerIndex'] as int?) ?? 0;
+    var currentIndex = (gameState['currentPlayerIndex'] as num?)?.toInt() ?? 0;
     final wasCurrentPlayer = removedIndex == currentIndex;
 
     if (removedIndex < currentIndex) {
@@ -610,7 +623,7 @@ class FirebaseService {
       }
     }
 
-    var wentOut = gameState['playerWhoWentOutIndex'] as int?;
+    var wentOut = (gameState['playerWhoWentOutIndex'] as num?)?.toInt();
     if (wentOut != null) {
       if (wentOut == removedIndex) {
         wentOut = null;
@@ -1016,27 +1029,30 @@ class FirebaseService {
     GameState gameState,
   ) async {
     try {
-      final updateData = {
-        'gameState': _gameStateToMap(gameState),
-        'lastUpdated': FieldValue.serverTimestamp(),
-      };
+      final docRef = _firestore.collection(gamesCollection).doc(gameId);
+      return await _firestore.runTransaction<bool>((transaction) async {
+        final gameDoc = await transaction.get(docRef);
+        if (!gameDoc.exists) {
+          return false;
+        }
 
-      // If game has ended, mark for cleanup (must match Firestore rules: playing -> finished)
-      if (gameState.phase == GamePhase.gameEnd) {
-        updateData['status'] = FirebaseConstants.gameStatusFinished;
-        updateData['completedAt'] = FieldValue.serverTimestamp();
+        final updateData = <String, dynamic>{
+          'gameState': _gameStateToMap(gameState),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        };
 
-        // Schedule automatic cleanup after 1 hour
-        updateData['cleanupAt'] = Timestamp.fromDate(
-          DateTime.now().add(const Duration(hours: 1)),
-        );
-      }
+        // If game has ended, mark for cleanup (must match Firestore rules: playing -> finished)
+        if (gameState.phase == GamePhase.gameEnd) {
+          updateData['status'] = FirebaseConstants.gameStatusFinished;
+          updateData['completedAt'] = FieldValue.serverTimestamp();
+          updateData['cleanupAt'] = Timestamp.fromDate(
+            DateTime.now().add(GameConfig.gameCleanupDelay),
+          );
+        }
 
-      await _firestore
-          .collection(gamesCollection)
-          .doc(gameId)
-          .update(updateData);
-      return true;
+        transaction.update(docRef, updateData);
+        return true;
+      });
     } catch (e) {
       _logger.severe('Failed to update game state: $e');
       return false;
@@ -1058,11 +1074,11 @@ class FirebaseService {
     }
   }
 
-  /// Clean up finished and cancelled games older than 1 hour.
+  /// Clean up finished and cancelled games older than [GameConfig.gameCleanupDelay].
   static Future<void> cleanupCompletedGames() async {
     try {
       final cutoffTime = Timestamp.fromDate(
-        DateTime.now().subtract(const Duration(hours: 1)),
+        DateTime.now().subtract(GameConfig.gameCleanupDelay),
       );
 
       var cleanedCount = 0;

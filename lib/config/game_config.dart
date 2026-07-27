@@ -329,6 +329,9 @@ class GameConfig {
   // =============================================================================
 
   /// Debounce delay for user input to prevent accidental double-actions
+  /// How long finished/cancelled multiplayer games are kept before cleanup.
+  static const Duration gameCleanupDelay = Duration(hours: 1);
+
   static const Duration debounceDelay = Duration(milliseconds: 300);
 
   /// Animation duration for card movements and UI transitions

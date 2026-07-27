@@ -50,8 +50,18 @@ service cloud.firestore {
     ];
     
     // Check if status transition is allowed
-    let statusValid = oldData.status == newData.status 
-      || [oldData.status, newData.status] in allowedStatusTransitions;
+    let statusUnchanged = oldData.status == newData.status;
+    let statusTransitionAllowed =
+      [oldData.status, newData.status] in allowedStatusTransitions;
+    let statusValid = statusUnchanged || statusTransitionAllowed;
+
+    // Start/cancel are host-only; finished remains available to in-game sync.
+    let hostOnlyTransition =
+      (oldData.status == 'waiting' && newData.status == 'playing')
+      || (oldData.status == 'waiting' && newData.status == 'cancelled')
+      || (oldData.status == 'playing' && newData.status == 'cancelled');
+    let hostAuthorizedForStatus = !hostOnlyTransition
+      || request.auth.uid == oldData.hostId;
     
     // Don't allow changing host
     let hostUnchanged = oldData.hostId == newData.hostId;
@@ -59,7 +69,10 @@ service cloud.firestore {
     // Don't allow exceeding max players
     let playerCountValid = newData.players.size() <= newData.maxPlayers;
     
-    return statusValid && hostUnchanged && playerCountValid;
+    return statusValid
+      && hostAuthorizedForStatus
+      && hostUnchanged
+      && playerCountValid;
   }
 
   function isPlayerJoining(oldData, newData) {

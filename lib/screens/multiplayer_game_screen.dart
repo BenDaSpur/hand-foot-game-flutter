@@ -22,7 +22,7 @@ import '../widgets/game_keyboard_shortcuts.dart';
 import '../widgets/keyboard_shortcuts_overlay.dart';
 import '../utils/game_responsive_layout.dart';
 import '../theme/balatro_theme.dart';
-import 'main_menu_screen.dart';
+import 'multiplayer_exit_flow.dart';
 
 /// Multiplayer game screen that reuses single-player components for consistency
 class MultiplayerGameScreen extends StatefulWidget {
@@ -91,10 +91,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     if (!mounted || _isExiting) {
       return;
     }
-    final message = event == MultiplayerLifecycleEvent.gameCancelled
-        ? 'The host ended this game.'
-        : 'This game was ended by the host.';
-    _handleRemoteGameEnded(message);
+    _handleRemoteGameEnded(MultiplayerExitFlow.messageForLifecycleEvent(event));
   }
 
   void _onGameStateStreamUpdate(GameState gameState) {
@@ -1127,10 +1124,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
-    );
+    MultiplayerExitFlow.goToMainMenu(context);
   }
 
   Future<void> _endGameForEveryoneAndExit() async {
@@ -1139,30 +1133,39 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     }
     _isExiting = true;
 
+    var success = false;
     try {
-      await _gameController.endGameForEveryone();
+      success = await _gameController.endGameForEveryone();
     } catch (e) {
       debugPrint('Warning: Failed to end multiplayer game: $e');
+      success = false;
+    }
+
+    if (!success) {
+      _isExiting = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to end the game. Please try again.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+      return;
     }
 
     await MultiplayerResumeService.clearActiveGame();
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
-    );
+    MultiplayerExitFlow.goToMainMenu(context);
   }
 
   void _cleanupAndExit() {
     _leaveAndExit().catchError((e) {
       debugPrint('Warning: Failed to leave multiplayer game: $e');
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-          (route) => false,
-        );
+        MultiplayerExitFlow.goToMainMenu(context);
       }
     });
   }
@@ -1297,52 +1300,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   Future<void> _handleRemoteGameEnded(String message) async {
-    if (_isExiting) {
-      return;
-    }
-    _isExiting = true;
-    await MultiplayerResumeService.clearActiveGame();
-
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog(
+    await MultiplayerExitFlow.handleRemoteGameEnded(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: BalatroTheme.darkPurple,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: BalatroTheme.neonPink, width: 1),
-        ),
-        title: const Text(
-          'Game Ended',
-          style: TextStyle(
-            color: BalatroTheme.neonPink,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(message, style: const TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'OK',
-              style: TextStyle(color: BalatroTheme.neonBlue),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) {
-      return;
-    }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
+      alreadyExiting: _isExiting,
+      markExiting: () => _isExiting = true,
+      message: message,
+      dialogBackground: BalatroTheme.darkPurple,
+      dialogBorder: const BorderSide(color: BalatroTheme.neonPink, width: 1),
     );
   }
 }

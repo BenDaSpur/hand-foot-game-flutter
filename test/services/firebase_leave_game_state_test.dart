@@ -83,5 +83,33 @@ void main() {
           );
       expect(updated, isNull);
     });
+
+    test('parses Firestore numeric indices via num.toInt()', () {
+      final gameState = <String, dynamic>{
+        'players': [
+          {'id': 'p1', 'name': 'Alice'},
+          {'id': 'p2', 'name': 'Bob'},
+          {'id': 'p3', 'name': 'Carol'},
+        ],
+        // Firestore may decode integers as doubles on some platforms.
+        'currentPlayerIndex': 1.0,
+        'turnPhase': 'meld',
+        'hasDrawnFromDeck': true,
+        'hasMelded': true,
+        'hasTakenDiscardThisTurn': false,
+        'playersAwaitingFinalTurn': <int>[],
+        'playerWhoWentOutIndex': 2.0,
+      };
+
+      final updated =
+          FirebaseService.removePlayerFromSerializedGameStateForTest(
+            gameState,
+            'p2',
+          );
+
+      expect(updated, isNotNull);
+      expect(updated!['currentPlayerIndex'], 1);
+      expect(updated['playerWhoWentOutIndex'], 1);
+    });
   });
 }

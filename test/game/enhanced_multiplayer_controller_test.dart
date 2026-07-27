@@ -638,28 +638,9 @@ void main() {
       });
 
       test('non-host should not end game for everyone', () async {
-        mockAdapter._mockUserId = 'guest-user';
-        mockAdapter._mockJoinSuccess = true;
-
-        // Join path marks isHost from FirebaseService.getGame which is null
-        // offline, so force a host controller and verify guest path via a
-        // second adapter-backed host check: create as host then flip by
-        // using leave-only guest semantics through a fresh join controller.
-        final hostAdapter = TestMockNetworkAdapter();
-        hostAdapter.mockUserId = 'host-user';
-        hostAdapter.mockGameId = 'HOST1';
-        final hostController = await EnhancedMultiplayerController.createGame(
-          hostPlayerName: 'Host',
-          maxPlayers: 4,
-          networkAdapter: hostAdapter,
-        );
-        expect(hostController, isNotNull);
-        expect(hostController!.isHost, isTrue);
-
-        // Directly verify non-host guard: createGame always sets isHost true.
-        // Use leaveGame on a join controller when join succeeds without host.
         mockAdapter.mockUserId = 'guest-user';
         mockAdapter.mockJoinSuccess = true;
+
         final guestController = await EnhancedMultiplayerController.joinGame(
           gameId: 'HOST1',
           playerName: 'Guest',
@@ -668,14 +649,13 @@ void main() {
 
         // Without Firebase game doc, join still succeeds with adapter; isHost
         // is false when getGame returns null.
-        if (guestController != null && !guestController.isHost) {
-          final ended = await guestController.endGameForEveryone();
-          expect(ended, isFalse);
-          expect(mockAdapter.endGameForEveryoneCalled, isFalse);
-          guestController.dispose();
-        }
+        expect(guestController, isNotNull);
+        expect(guestController!.isHost, isFalse);
 
-        hostController.dispose();
+        final ended = await guestController.endGameForEveryone();
+        expect(ended, isFalse);
+        expect(mockAdapter.endGameForEveryoneCalled, isFalse);
+        guestController.dispose();
       });
 
       test(
