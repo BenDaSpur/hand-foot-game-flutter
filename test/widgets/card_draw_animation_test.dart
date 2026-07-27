@@ -4,14 +4,21 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event_bus.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/deck.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/theme/balatro_theme.dart';
+import 'package:hand_foot_game_flutter/widgets/card_animation_host.dart';
 import 'package:hand_foot_game_flutter/widgets/card_back_widget.dart';
 import 'package:hand_foot_game_flutter/widgets/card_draw_animation_overlay.dart';
+import 'package:hand_foot_game_flutter/widgets/game_hand_display.dart';
 import 'package:hand_foot_game_flutter/widgets/game_piles_row.dart';
 import 'package:hand_foot_game_flutter/widgets/playing_card_widget.dart';
+
+import '../helpers/game_controller_test_helpers.dart';
 
 void main() {
   group('Card draw animation widgets', () {
@@ -209,6 +216,8 @@ void main() {
         },
         onSkip: () {
           skipped = true;
+          // Mirror CardAnimationHost: skip completes the gate.
+          completed = true;
         },
       );
 
@@ -256,6 +265,7 @@ void main() {
           },
           onSkip: () {
             skipped = true;
+            completed = true;
           },
         );
 
@@ -324,6 +334,7 @@ void main() {
         },
         onSkip: () {
           skipped = true;
+          completed = true;
         },
       );
 
@@ -336,6 +347,171 @@ void main() {
       expect(skipped, isTrue);
       expect(completed, isTrue);
       scrollController.dispose();
+    });
+  });
+
+  group('CardAnimationHost interaction gates', () {
+    testWidgets('dispose notifies animation inactive so parent gates clear', (
+      tester,
+    ) async {
+      final eventBus = GameEventBus();
+      final deckKey = GlobalKey();
+      final discardKey = GlobalKey();
+      final handStackKey = GlobalKey();
+      final meldAreaKey = GlobalKey();
+      final scrollController = ScrollController();
+      final animationStates = <bool>[];
+
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final cardA = PlayingCard(suit: Suit.hearts, rank: CardRank.five);
+      final cardB = PlayingCard(suit: Suit.spades, rank: CardRank.six);
+      human.hand.addAll([cardA, cardB]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CardAnimationHost(
+              eventBus: eventBus,
+              deckKey: deckKey,
+              discardKey: discardKey,
+              handStackKey: handStackKey,
+              meldAreaKey: meldAreaKey,
+              handScrollController: scrollController,
+              onAnimationStateChanged: animationStates.add,
+              child: Column(
+                children: [
+                  SizedBox(key: deckKey, width: 60, height: 80),
+                  SizedBox(key: discardKey, width: 60, height: 80),
+                  SizedBox(key: handStackKey, width: 300, height: 120),
+                  SizedBox(key: meldAreaKey, width: 300, height: 200),
+                  const Text('child'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      eventBus.publish(
+        CardDrawnEvent(cards: [cardA, cardB], fromDeck: true, player: human),
+      );
+      await tester.pump();
+      expect(animationStates, contains(true));
+      expect(
+        CardAnimationScope.animationActive(tester.element(find.text('child'))),
+        isTrue,
+      );
+
+      // Remount without the host while animating — reproduces the production
+      // desync where the screen-level flag stayed true after host disposal.
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: Text('gone'))),
+      );
+      await tester.pump();
+
+      expect(animationStates.last, isFalse);
+      scrollController.dispose();
+      eventBus.dispose();
+    });
+
+    testWidgets('safety timeout unlocks UI if overlay never completes', (
+      tester,
+    ) async {
+      final eventBus = GameEventBus();
+      final deckKey = GlobalKey();
+      final discardKey = GlobalKey();
+      final handStackKey = GlobalKey();
+      final meldAreaKey = GlobalKey();
+      final scrollController = ScrollController();
+      var isAnimating = false;
+
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final cards = [
+        PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ];
+      human.hand.addAll(cards);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CardAnimationHost(
+              eventBus: eventBus,
+              deckKey: deckKey,
+              discardKey: discardKey,
+              handStackKey: handStackKey,
+              meldAreaKey: meldAreaKey,
+              handScrollController: scrollController,
+              safetyTimeout: const Duration(milliseconds: 40),
+              onAnimationStateChanged: (value) => isAnimating = value,
+              child: Column(
+                children: [
+                  SizedBox(key: deckKey, width: 60, height: 80),
+                  SizedBox(key: discardKey, width: 60, height: 80),
+                  SizedBox(key: handStackKey, width: 300, height: 120),
+                  SizedBox(key: meldAreaKey, width: 300, height: 200),
+                  const Text('board'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      eventBus.publish(
+        CardDrawnEvent(cards: cards, fromDeck: true, player: human),
+      );
+      await tester.pump();
+      expect(isAnimating, isTrue);
+
+      // Advance only the safety timer — not enough for the full fly-in.
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pump();
+
+      expect(isAnimating, isFalse);
+      scrollController.dispose();
+      eventBus.dispose();
+    });
+
+    testWidgets('hand taps work when CardAnimationScope is idle', (
+      tester,
+    ) async {
+      final setup = createMeldPhaseTestController();
+      final human = setup.human;
+      human.hand
+        ..clear()
+        ..addAll([
+          PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          PlayingCard(suit: Suit.spades, rank: CardRank.six),
+        ]);
+      var tapCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: BalatroTheme.testTheme,
+          home: Scaffold(
+            body: CardAnimationScope(
+              isAnimating: false,
+              hiddenHandIndices: const {},
+              child: SizedBox(
+                width: 800,
+                height: 200,
+                child: GameHandDisplay(
+                  player: human,
+                  selectedCardIndices: const [],
+                  onCardTap: (_) => tapCount++,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(PlayingCardWidget).first);
+      await tester.pump();
+
+      expect(tapCount, 1);
     });
   });
 }

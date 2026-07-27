@@ -114,6 +114,15 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
   @override
   void didUpdateWidget(CardDrawAnimationOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.request == null && oldWidget.request != null) {
+      // Host cleared the request (complete/interrupt) — drop any leftover
+      // blocker so a stale scrim cannot keep eating hand taps.
+      _skipped = true;
+      _activeController?.stop();
+      _showScrim = false;
+      _visuals = [];
+      return;
+    }
     if (widget.request != null && widget.request != oldWidget.request) {
       _skipped = false;
       _showScrim = true;
@@ -139,8 +148,9 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       _showScrim = false;
       _visuals = [];
     });
+    // Host wires onSkip -> complete. Avoid also calling onComplete here so a
+    // replacement animation started in onSkip is not immediately cleared.
     widget.onSkip();
-    widget.onComplete();
   }
 
   Future<void> _startAnimation(CardAnimationRequest request) async {
@@ -422,11 +432,17 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
           0.0,
           widget.handScrollController.position.maxScrollExtent,
         );
-    await widget.handScrollController.animateTo(
-      targetOffset,
-      duration: GameConfig.cardRevealDuration,
-      curve: Curves.easeOut,
-    );
+    try {
+      await widget.handScrollController
+          .animateTo(
+            targetOffset,
+            duration: GameConfig.cardRevealDuration,
+            curve: Curves.easeOut,
+          )
+          .timeout(GameConfig.cardRevealDuration + const Duration(seconds: 1));
+    } catch (_) {
+      // Scroll is best-effort — never let a hung animateTo freeze discard.
+    }
   }
 
   Offset? _anchorCenter(GlobalKey key) {
