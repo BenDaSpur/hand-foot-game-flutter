@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_discard_analyzer.dart';
 import 'package:hand_foot_game_flutter/ai/bot_game_analyzer.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
@@ -237,7 +238,7 @@ void main() {
       expect(discard.isWild, isFalse);
     });
 
-    test('wild is spendable once the hand shrinks to desperation size', () {
+    test('wild is spendable at exactly the desperation hand size', () {
       humanPlayer.melds.add(
         Meld(
           rank: CardRank.eight,
@@ -253,20 +254,34 @@ void main() {
       botPlayer.hand.clear();
       botPlayer.dealHand([
         const PlayingCard(rank: CardRank.eight, suit: Suit.diamonds),
+        const PlayingCard(rank: CardRank.eight, suit: Suit.spades),
         const PlayingCard(rank: CardRank.two, suit: Suit.hearts),
       ]);
 
-      final discard = BotDiscardAnalyzer.chooseSafeLowValueDiscard(
-        botPlayer,
-        controller.gameState,
+      expect(
+        botPlayer.currentHand.length,
+        equals(BotConfig.wildDiscardDesperationHandSize),
+        reason: 'Pins the boundary this test is exercising',
       );
 
+      const reason =
+          'At exactly BotConfig.wildDiscardDesperationHandSize the bot may '
+          'burn a wild rather than feed the opponent eights meld';
+
       expect(
-        discard.isWild,
+        BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+          botPlayer,
+          controller.gameState,
+        ).isWild,
         isTrue,
-        reason:
-            'At or below BotConfig.wildDiscardDesperationHandSize the bot may '
-            'still burn a wild rather than feed the opponent eights meld',
+        reason: reason,
+      );
+      expect(
+        discardAnalyzer
+            .chooseCardToDiscard(botPlayer, controller.gameState)
+            .isWild,
+        isTrue,
+        reason: reason,
       );
     });
 

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_end_game_manager.dart';
 import 'package:hand_foot_game_flutter/ai/bot_meld_analyzer.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
@@ -467,6 +468,44 @@ void main() {
           const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
           const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
         ]);
+        gameController.gameState.turnPhase = TurnPhase.discard;
+        gameController.gameState.discardPileFrozen = false;
+
+        final decision = botAI.makeDecision(bot, gameController);
+
+        expect(decision.action, equals('discard'));
+        expect((decision.data as PlayingCard).isWild, isTrue);
+      },
+      tags: ['hoarder_counter'],
+    );
+
+    test(
+      'hoarder_counter freezes the pile with a hand above the wild guard',
+      () {
+        // The pile freeze is chosen before BotDiscardAnalyzer runs, so
+        // shouldProtectWilds must not reach it. The sibling test above uses a
+        // 3-card hand, which sits at the desperation threshold and would pass
+        // either way; this one sits above it.
+        makeHumanHoarder(handSize: 25);
+        bot.hasPickedUpFoot = false;
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          ])!,
+        );
+        bot.hand.addAll([
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+        ]);
+        expect(
+          bot.currentHand.length,
+          greaterThan(BotConfig.wildDiscardDesperationHandSize),
+        );
         gameController.gameState.turnPhase = TurnPhase.discard;
         gameController.gameState.discardPileFrozen = false;
 
