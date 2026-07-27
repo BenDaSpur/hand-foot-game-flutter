@@ -19,9 +19,12 @@ service cloud.firestore {
         || isPlayerJoining(resource.data, request.resource.data)
       );
       
-      // Only host can delete games
-      allow delete: if request.auth != null 
-        && request.auth.uid == resource.data.hostId;
+      // Host can delete their game; any authenticated client may delete stale
+      // games eligible for the startup cleanup sweep (batch-safe across hosts).
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.hostId
+        || isEligibleForClientCleanup(resource.data)
+      );
     }
     
     // User rate limiting collection
@@ -94,5 +97,20 @@ service cloud.firestore {
   
   function getPlayerIds(gameData) {
     return gameData.players.map(player, player.id);
+  }
+
+  // Matches client cleanupExpiredGames / cleanupCompletedGames eligibility so
+  // batch deletes of other hosts' stale docs are authorized.
+  function isEligibleForClientCleanup(data) {
+    let isTerminal = data.status == 'finished' || data.status == 'cancelled';
+    let terminalReady = isTerminal && (
+      ('cleanupAt' in data && data.cleanupAt <= request.time)
+      || ('completedAt' in data
+          && data.completedAt <= request.time - duration.value(1, 'h'))
+    );
+    let waitingExpired = data.status == 'waiting'
+      && ('createdAt' in data)
+      && data.createdAt <= request.time - duration.value(30, 'm');
+    return terminalReady || waitingExpired;
   }
 }
