@@ -6,7 +6,9 @@ import '../models/player.dart';
 import '../models/game_state.dart';
 import '../config/game_config.dart';
 import '../models/multiplayer_errors.dart';
+import '../models/multiplayer_lifecycle.dart';
 import '../services/multiplayer_resume_service.dart';
+import '../services/firebase_constants.dart';
 import '../services/firebase_service.dart';
 import '../utils/debug_logger.dart';
 import 'game_controller.dart';
@@ -34,11 +36,13 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
 
   StreamSubscription<GameState?>? _gameStateSubscription;
   StreamSubscription<bool>? _connectionSubscription;
+  StreamSubscription<Map<String, dynamic>?>? _lobbySubscription;
 
   bool _isUpdating = false; // Prevent sync loops
   final bool _isHost;
   bool _isOnline = true;
   Timer? _reconnectionTimer;
+  bool _lifecycleEnded = false;
 
   // Race condition protection for network operations
   bool _isNetworkOperationInProgress = false;
@@ -48,6 +52,8 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   // Reactive state management
   final StreamController<GameState> _stateStreamController =
       StreamController<GameState>.broadcast();
+  final StreamController<MultiplayerLifecycleEvent> _lifecycleStreamController =
+      StreamController<MultiplayerLifecycleEvent>.broadcast();
   bool _isDisposed = false;
 
   /// Card-revealing log text this device is entitled to see, kept outside
@@ -106,6 +112,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
         gameId: gameId,
         playerName: hostPlayerName,
         isHost: true,
+        playerId: userId,
       );
 
       return controller;
@@ -157,6 +164,7 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
         gameId: gameId,
         playerName: playerName,
         isHost: isHost,
+        playerId: userId,
       );
 
       return controller;
@@ -191,6 +199,28 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     }
   }
 
+  /// Host-only: cancel the game so every client can exit cleanly.
+  @override
+  Future<bool> endGameForEveryone({String endReason = 'host_ended'}) async {
+    if (_isDisposed || !_isHost) {
+      return false;
+    }
+
+    var success = false;
+    try {
+      await _queueNetworkOperation(() async {
+        success = await _networkAdapter.endGameForEveryone(
+          gameId,
+          endReason: endReason,
+        );
+      });
+      return success;
+    } catch (e) {
+      DebugLogger.error('Failed to end game for everyone: $e');
+      return false;
+    }
+  }
+
   Future<void> _startListening() async {
     // Start network listeners
     _gameStateSubscription = _networkAdapter
@@ -208,11 +238,48 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
           },
         );
 
+    _lobbySubscription = _networkAdapter
+        .listenToGameLobby(gameId)
+        .listen(
+          _handleLobbyUpdate,
+          onError: (error) {
+            if (_isOnline) {
+              _scheduleReconnection();
+            }
+          },
+        );
+
     _connectionSubscription = _networkAdapter.connectionStream.listen((
       isConnected,
     ) {
       _handleConnectionChange(isConnected);
     });
+  }
+
+  void _handleLobbyUpdate(Map<String, dynamic>? gameData) {
+    if (_isDisposed || _lifecycleEnded) {
+      return;
+    }
+
+    if (gameData == null) {
+      _emitLifecycleEvent(MultiplayerLifecycleEvent.gameDeleted);
+      return;
+    }
+
+    final status = gameData['status'] as String?;
+    if (status == FirebaseConstants.gameStatusCancelled) {
+      _emitLifecycleEvent(MultiplayerLifecycleEvent.gameCancelled);
+    }
+  }
+
+  void _emitLifecycleEvent(MultiplayerLifecycleEvent event) {
+    if (_lifecycleEnded || _isDisposed) {
+      return;
+    }
+    _lifecycleEnded = true;
+    if (!_lifecycleStreamController.isClosed) {
+      _lifecycleStreamController.add(event);
+    }
   }
 
   void _handleConnectionChange(bool isConnected) {
@@ -1179,6 +1246,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   Stream<bool> get connectionStream => _networkAdapter.connectionStream;
   @override
   Stream<GameState> get gameStateStream => _stateStreamController.stream;
+  @override
+  Stream<MultiplayerLifecycleEvent> get lifecycleStream =>
+      _lifecycleStreamController.stream;
 
   void dispose() {
     print(
@@ -1190,11 +1260,15 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     _isDisposed = true; // Mark as disposed to prevent further operations
 
     _gameStateSubscription?.cancel();
+    _lobbySubscription?.cancel();
     _connectionSubscription?.cancel();
     _reconnectionTimer?.cancel();
 
     if (!_stateStreamController.isClosed) {
       _stateStreamController.close();
+    }
+    if (!_lifecycleStreamController.isClosed) {
+      _lifecycleStreamController.close();
     }
 
     // Clear network operation queue to prevent memory leaks

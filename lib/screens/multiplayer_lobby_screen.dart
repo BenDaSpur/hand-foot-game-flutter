@@ -5,9 +5,12 @@ import '../theme/balatro_theme.dart';
 import '../services/firebase_service.dart';
 import '../services/firebase_constants.dart';
 import '../services/game_code.dart';
+import '../services/multiplayer_resume_service.dart';
 import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../models/game_state.dart';
+import '../models/multiplayer_lifecycle.dart';
+import 'multiplayer_exit_flow.dart';
 import 'multiplayer_game_screen.dart';
 
 enum LobbyMode { create, join }
@@ -15,8 +18,31 @@ enum LobbyMode { create, join }
 class MultiplayerLobbyScreen extends StatefulWidget {
   final LobbyMode mode;
   final String? gameId; // For joining a specific game
+  final EnhancedMultiplayerController? existingController;
+  final String? playerName;
 
-  const MultiplayerLobbyScreen({super.key, required this.mode, this.gameId});
+  const MultiplayerLobbyScreen({
+    super.key,
+    required this.mode,
+    this.gameId,
+    this.existingController,
+    this.playerName,
+  });
+
+  /// Resume into an already-joined lobby after refresh/rejoin.
+  factory MultiplayerLobbyScreen.resume({
+    Key? key,
+    required EnhancedMultiplayerController controller,
+    required String playerName,
+  }) {
+    return MultiplayerLobbyScreen(
+      key: key,
+      mode: controller.isHost ? LobbyMode.create : LobbyMode.join,
+      gameId: controller.gameId,
+      existingController: controller,
+      playerName: playerName,
+    );
+  }
 
   @override
   State<MultiplayerLobbyScreen> createState() => _MultiplayerLobbyScreenState();
@@ -30,6 +56,9 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   int _maxPlayers = 4;
   EnhancedMultiplayerController? _gameController;
   StreamSubscription<Map<String, dynamic>?>? _lobbySubscription;
+  StreamSubscription<MultiplayerLifecycleEvent>? _lifecycleSubscription;
+  bool _isExiting = false;
+  bool _transferringToGame = false;
 
   List<Map<String, dynamic>> _currentPlayers = [];
   String? _currentGameId;
@@ -42,7 +71,25 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     if (widget.gameId != null) {
       _gameIdController.text = widget.gameId!;
     }
+    if (widget.playerName != null) {
+      _playerNameController.text = widget.playerName!;
+    }
     _generateUserId();
+    _resumeExistingControllerIfNeeded();
+  }
+
+  void _resumeExistingControllerIfNeeded() {
+    final existing = widget.existingController;
+    if (existing == null) {
+      return;
+    }
+
+    _gameController = existing;
+    _currentGameId = existing.gameId;
+    _isHost = existing.isHost;
+    _currentUserId = existing.userId;
+    _startListeningToLobby();
+    _listenForLifecycleEvents();
   }
 
   @override
@@ -50,42 +97,68 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     _playerNameController.dispose();
     _gameIdController.dispose();
     _lobbySubscription?.cancel();
+    _lifecycleSubscription?.cancel();
 
-    // DON'T dispose game controller here - it's passed to the game screen
-    // The game screen will take ownership and dispose it when needed
-    // _gameController?.dispose(); // REMOVED - this was causing the bug!
+    // Keep the controller alive when handing off to the game screen.
+    // On leave/cancel/back, dispose here so network listeners stop.
+    if (!_transferringToGame) {
+      try {
+        _gameController?.dispose();
+      } catch (_) {
+        // Ignore disposal races during navigation.
+      }
+    }
 
     super.dispose();
   }
 
   void _generateUserId() async {
-    _currentUserId = await FirebaseService.getMultiplayerUserId();
+    final userId = await FirebaseService.getMultiplayerUserId();
+    if (!mounted || userId == null) {
+      return;
+    }
+    // Do not overwrite identity restored by an already-joined controller.
+    if (_currentUserId != null) {
+      return;
+    }
+    setState(() {
+      _currentUserId = userId;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1a0d2e), Color(0xFF16213e), Color(0xFF0f3460)],
+    return PopScope(
+      canPop: _currentGameId == null,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) {
+          return;
+        }
+        await _leaveLobbyAndExit();
+      },
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1a0d2e), Color(0xFF16213e), Color(0xFF0f3460)],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              _buildHeader(),
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(),
 
-              // Content
-              Expanded(
-                child: _currentGameId == null
-                    ? _buildSetupForm()
-                    : _buildLobbyContent(),
-              ),
-            ],
+                // Content
+                Expanded(
+                  child: _currentGameId == null
+                      ? _buildSetupForm()
+                      : _buildLobbyContent(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -98,7 +171,13 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () async {
+              if (_currentGameId == null) {
+                Navigator.of(context).pop();
+                return;
+              }
+              await _leaveLobbyAndExit();
+            },
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
           const SizedBox(width: 8),
@@ -423,30 +502,56 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
           ),
         ),
 
-        // Start Game Button (Host Only)
+        // Host actions
         if (_isHost)
           Container(
             padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _currentPlayers.length >= 2 ? _startGame : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: BalatroTheme.neonBlue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _currentPlayers.length >= 2 ? _startGame : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: BalatroTheme.neonBlue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'START GAME',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-                child: const Text(
-                  'START GAME',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: _confirmEndGameForEveryone,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.redAccent),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'END GAME FOR EVERYONE',
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
       ],
@@ -495,6 +600,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       _currentGameId = _gameController!.gameId;
       _isHost = true;
       _startListeningToLobby();
+      _listenForLifecycleEvents();
     } else {
       throw Exception(
         FirebaseService.lastOperationError ?? 'Failed to create game',
@@ -517,6 +623,7 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       _currentGameId = _gameController!.gameId;
       _isHost = controller.isHost;
       _startListeningToLobby();
+      _listenForLifecycleEvents();
     } else {
       throw Exception(
         FirebaseService.lastOperationError ?? 'Failed to join game',
@@ -525,24 +632,40 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   }
 
   void _startListeningToLobby() {
-    if (_currentGameId == null) return;
+    if (_currentGameId == null) {
+      return;
+    }
 
+    _lobbySubscription?.cancel();
     _lobbySubscription = FirebaseService.listenToGameLobby(_currentGameId!)
         .listen(
           (gameData) {
-            if (gameData != null && mounted) {
-              setState(() {
-                _currentPlayers = List<Map<String, dynamic>>.from(
-                  gameData['players'] ?? [],
-                );
-                // Sync maxPlayers from Firestore data
-                _maxPlayers = gameData['maxPlayers'] ?? _maxPlayers;
-              });
+            if (!mounted || _isExiting) {
+              return;
+            }
 
-              // Check if game has started
-              if (gameData['status'] == FirebaseConstants.gameStatusPlaying) {
-                _navigateToGame();
-              }
+            if (gameData == null) {
+              _handleRemoteGameEnded('This game was ended by the host.');
+              return;
+            }
+
+            setState(() {
+              _currentPlayers = List<Map<String, dynamic>>.from(
+                gameData['players'] ?? [],
+              );
+              // Sync maxPlayers from Firestore data
+              _maxPlayers = gameData['maxPlayers'] ?? _maxPlayers;
+            });
+
+            final status = gameData['status'] as String?;
+            if (status == FirebaseConstants.gameStatusCancelled) {
+              _handleRemoteGameEnded('The host ended this game.');
+              return;
+            }
+
+            // Check if game has started
+            if (status == FirebaseConstants.gameStatusPlaying) {
+              _navigateToGame();
             }
           },
           onError: (error) {
@@ -551,6 +674,23 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
             }
           },
         );
+  }
+
+  void _listenForLifecycleEvents() {
+    _lifecycleSubscription?.cancel();
+    final controller = _gameController;
+    if (controller == null) {
+      return;
+    }
+
+    _lifecycleSubscription = controller.lifecycleStream.listen((event) {
+      if (!mounted || _isExiting) {
+        return;
+      }
+      _handleRemoteGameEnded(
+        MultiplayerExitFlow.messageForLifecycleEvent(event),
+      );
+    });
   }
 
   void _startGame() async {
@@ -562,6 +702,109 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
     }
   }
 
+  void _confirmEndGameForEveryone() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.cardBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.red.withValues(alpha: 0.3), width: 1),
+        ),
+        title: const Text(
+          'End Game for Everyone?',
+          style: TextStyle(
+            color: Colors.red,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'This will cancel the lobby for all players. They will be returned to the main menu.',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _endGameForEveryoneAndExit();
+            },
+            child: const Text(
+              'End Game',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _endGameForEveryoneAndExit() async {
+    if (_isExiting) {
+      return;
+    }
+    _isExiting = true;
+
+    var success = false;
+    try {
+      success = await _gameController?.endGameForEveryone() ?? false;
+    } catch (e) {
+      debugPrint('Warning: Failed to end multiplayer game: $e');
+      success = false;
+    }
+
+    if (!success) {
+      _isExiting = false;
+      if (mounted) {
+        _showErrorDialog('Failed to end the game. Please try again.');
+      }
+      return;
+    }
+
+    await MultiplayerResumeService.clearActiveGame();
+    if (!mounted) {
+      return;
+    }
+    MultiplayerExitFlow.goToMainMenu(context);
+  }
+
+  Future<void> _leaveLobbyAndExit() async {
+    if (_isExiting) {
+      return;
+    }
+    _isExiting = true;
+
+    try {
+      await _gameController?.leaveGame();
+    } catch (e) {
+      debugPrint('Warning: Failed to leave multiplayer lobby: $e');
+    }
+
+    await MultiplayerResumeService.clearActiveGame();
+    if (!mounted) {
+      return;
+    }
+    MultiplayerExitFlow.goToMainMenu(context);
+  }
+
+  Future<void> _handleRemoteGameEnded(String message) async {
+    await MultiplayerExitFlow.handleRemoteGameEnded(
+      context: context,
+      alreadyExiting: _isExiting,
+      markExiting: () => _isExiting = true,
+      message: message,
+      dialogBackground: BalatroTheme.cardBackground,
+      dialogBorder: BorderSide(
+        color: BalatroTheme.neonPink.withValues(alpha: 0.3),
+        width: 1,
+      ),
+    );
+  }
+
   void _navigateToGame({int retryCount = 0}) {
     const maxRetries = 10; // Prevent infinite loops
 
@@ -569,6 +812,8 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       // Ensure game state has proper player count before navigating
       final gameState = _gameController!.gameState;
       if (gameState.players.isNotEmpty && gameState.phase != GamePhase.setup) {
+        _transferringToGame = true;
+        _lifecycleSubscription?.cancel();
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (context) =>

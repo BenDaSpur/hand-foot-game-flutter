@@ -15,6 +15,7 @@ void main() {
         gameId: 'TEST123',
         playerName: 'TestPlayer',
         isHost: true,
+        playerId: 'auth-uid-123',
       );
 
       // Retrieve active game
@@ -24,6 +25,7 @@ void main() {
       expect(activeGame!['gameId'], 'TEST123');
       expect(activeGame['playerName'], 'TestPlayer');
       expect(activeGame['isHost'], true);
+      expect(activeGame['playerId'], 'auth-uid-123');
       expect(activeGame['timestamp'], isA<int>());
     });
 
@@ -33,6 +35,7 @@ void main() {
         gameId: 'TEST123',
         playerName: 'TestPlayer',
         isHost: false,
+        playerId: 'auth-uid-456',
       );
 
       await MultiplayerResumeService.clearActiveGame();
@@ -53,6 +56,7 @@ void main() {
           "gameId": "EXPIRED123", 
           "playerName": "ExpiredPlayer",
           "isHost": false,
+          "playerId": "auth-uid-old",
           "timestamp": $expiredTimestamp
         }
       ''');
@@ -83,10 +87,29 @@ void main() {
         gameId: 'TEST123',
         playerName: 'StoredPlayer',
         isHost: true,
+        playerId: 'auth-uid-789',
       );
 
       final storedName = await MultiplayerResumeService.getStoredPlayerName();
       expect(storedName, 'StoredPlayer');
+    });
+
+    test('legacy bookmarks without playerId remain readable', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      await prefs.setString('active_multiplayer_game', '''
+        {
+          "gameId": "LEGACY1",
+          "playerName": "LegacyPlayer",
+          "isHost": false,
+          "timestamp": $timestamp
+        }
+      ''');
+
+      final activeGame = await MultiplayerResumeService.getActiveGame();
+      expect(activeGame, isNotNull);
+      expect(activeGame!['gameId'], 'LEGACY1');
+      expect(activeGame['playerId'], isNull);
     });
   });
 }

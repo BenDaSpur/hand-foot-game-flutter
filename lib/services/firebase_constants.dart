@@ -10,6 +10,7 @@ class FirebaseConstants {
   static const String gameStatusPlaying = 'playing';
   static const String gameStatusFinished = 'finished';
   static const String gameStatusCompleted = 'completed';
+  static const String gameStatusCancelled = 'cancelled';
 
   // Rate limiting constants
   static const int maxGamesPerUserPerHour = 50;

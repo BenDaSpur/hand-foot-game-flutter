@@ -19,9 +19,12 @@ service cloud.firestore {
         || isPlayerJoining(resource.data, request.resource.data)
       );
       
-      // Only host can delete games
-      allow delete: if request.auth != null 
-        && request.auth.uid == resource.data.hostId;
+      // Host can delete their game; any authenticated client may delete stale
+      // games eligible for the startup cleanup sweep (batch-safe across hosts).
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.hostId
+        || isEligibleForClientCleanup(resource.data)
+      );
     }
     
     // User rate limiting collection
@@ -44,20 +47,115 @@ service cloud.firestore {
   function isValidGameUpdate(oldData, newData) {
     let allowedStatusTransitions = [
       ['waiting', 'playing'],
-      ['playing', 'finished']
+      ['waiting', 'cancelled'],
+      ['playing', 'finished'],
+      ['playing', 'cancelled']
     ];
     
     // Check if status transition is allowed
-    let statusValid = oldData.status == newData.status 
-      || [oldData.status, newData.status] in allowedStatusTransitions;
+    let statusUnchanged = oldData.status == newData.status;
+    let statusTransitionAllowed =
+      [oldData.status, newData.status] in allowedStatusTransitions;
+    let statusValid = statusUnchanged || statusTransitionAllowed;
+
+    // Start/cancel are host-only; finished remains available to in-game sync.
+    let hostOnlyTransition =
+      (oldData.status == 'waiting' && newData.status == 'playing')
+      || (oldData.status == 'waiting' && newData.status == 'cancelled')
+      || (oldData.status == 'playing' && newData.status == 'cancelled');
+    let hostAuthorizedForStatus = !hostOnlyTransition
+      || request.auth.uid == oldData.hostId;
     
     // Don't allow changing host
     let hostUnchanged = oldData.hostId == newData.hostId;
     
     // Don't allow exceeding max players
     let playerCountValid = newData.players.size() <= newData.maxPlayers;
-    
-    return statusValid && hostUnchanged && playerCountValid;
+
+    // Field-level invariants for lobby/metadata fields.
+    let maxPlayersUnchanged = oldData.maxPlayers == newData.maxPlayers;
+    let createdAtUnchanged = oldData.createdAt == newData.createdAt;
+    let completedAtValid = immutableOrSetOnTerminal(
+      oldData, newData, 'completedAt'
+    );
+    let cleanupAtValid = immutableOrSetOnTerminal(
+      oldData, newData, 'cleanupAt'
+    );
+
+    return statusValid
+      && hostAuthorizedForStatus
+      && hostUnchanged
+      && playerCountValid
+      && maxPlayersUnchanged
+      && createdAtUnchanged
+      && completedAtValid
+      && cleanupAtValid
+      && isApprovedGameStateUpdate(oldData, newData)
+      && isPermittedPlayersUpdate(oldData, newData);
+  }
+
+  // completedAt/cleanupAt may be added when entering a terminal status; once
+  // present they are immutable.
+  function immutableOrSetOnTerminal(oldData, newData, field) {
+    let isTerminal = newData.status == 'finished' || newData.status == 'cancelled';
+    return !(field in oldData)
+      ? (!(field in newData) || isTerminal)
+      : (field in newData && oldData[field] == newData[field]);
+  }
+
+  function playersUnchanged(oldData, newData) {
+    return oldData.players == newData.players;
+  }
+
+  // Supported players mutations: unchanged, self-leave, or same roster IDs
+  // (display-name refresh on rejoin). Blocks arbitrary seat rewrites.
+  function isPermittedPlayersUpdate(oldData, newData) {
+    return playersUnchanged(oldData, newData)
+      || isPlayerLeaving(oldData, newData)
+      || isPlayerRosterIdentityPreserved(oldData, newData);
+  }
+
+  function isPlayerLeaving(oldData, newData) {
+    return request.auth.uid in getPlayerIds(oldData)
+      && !(request.auth.uid in getPlayerIds(newData))
+      && newData.players.size() == oldData.players.size() - 1
+      && getPlayerIds(oldData).hasAll(getPlayerIds(newData));
+  }
+
+  function isPlayerRosterIdentityPreserved(oldData, newData) {
+    return newData.players.size() == oldData.players.size()
+      && getPlayerIds(oldData).hasAll(getPlayerIds(newData))
+      && getPlayerIds(newData).hasAll(getPlayerIds(oldData));
+  }
+
+  // gameState may change only on start, in-game sync/finish, or mid-game leave.
+  function isApprovedGameStateUpdate(oldData, newData) {
+    return gameStateUnchanged(oldData, newData)
+      || isStartGameStateWrite(oldData, newData)
+      || isInGameStateSync(oldData, newData)
+      || isLeaveGameStateWrite(oldData, newData);
+  }
+
+  function isStartGameStateWrite(oldData, newData) {
+    return oldData.status == 'waiting'
+      && newData.status == 'playing'
+      && playersUnchanged(oldData, newData)
+      && newData.gameState != null;
+  }
+
+  function isInGameStateSync(oldData, newData) {
+    return playersUnchanged(oldData, newData)
+      && (
+        (oldData.status == 'playing'
+          && (newData.status == 'playing' || newData.status == 'finished'))
+        || (oldData.status == 'finished' && newData.status == 'finished')
+      );
+  }
+
+  function isLeaveGameStateWrite(oldData, newData) {
+    return isPlayerLeaving(oldData, newData)
+      && oldData.status == 'playing'
+      && newData.status == 'playing';
   }
 
   function isPlayerJoining(oldData, newData) {
@@ -79,5 +177,20 @@ service cloud.firestore {
   
   function getPlayerIds(gameData) {
     return gameData.players.map(player, player.id);
+  }
+
+  // Matches client cleanupExpiredGames / cleanupCompletedGames eligibility so
+  // batch deletes of other hosts' stale docs are authorized.
+  function isEligibleForClientCleanup(data) {
+    let isTerminal = data.status == 'finished' || data.status == 'cancelled';
+    let terminalReady = isTerminal && (
+      ('cleanupAt' in data && data.cleanupAt <= request.time)
+      || ('completedAt' in data
+          && data.completedAt <= request.time - duration.value(1, 'h'))
+    );
+    let waitingExpired = data.status == 'waiting'
+      && ('createdAt' in data)
+      && data.createdAt <= request.time - duration.value(30, 'm');
+    return terminalReady || waitingExpired;
   }
 }

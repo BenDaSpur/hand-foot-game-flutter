@@ -28,6 +28,12 @@ abstract class NetworkAdapter {
   Future<bool> startGame(String gameId);
   Future<bool> leaveGame(String gameId);
 
+  /// Host-only: cancel the game for all players.
+  Future<bool> endGameForEveryone(
+    String gameId, {
+    String endReason = 'host_ended',
+  });
+
   /// Lobby management
   Stream<Map<String, dynamic>?> listenToGameLobby(String gameId);
 
@@ -116,6 +122,14 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
   @override
   Future<bool> leaveGame(String gameId) {
     return FirebaseService.leaveGame(gameId);
+  }
+
+  @override
+  Future<bool> endGameForEveryone(
+    String gameId, {
+    String endReason = 'host_ended',
+  }) {
+    return FirebaseService.endGameForEveryone(gameId, endReason: endReason);
   }
 
   @override
@@ -412,6 +426,22 @@ class MockNetworkAdapter implements NetworkAdapter {
 
   @override
   Future<bool> leaveGame(String gameId) async {
+    return true;
+  }
+
+  @override
+  Future<bool> endGameForEveryone(
+    String gameId, {
+    String endReason = 'host_ended',
+  }) async {
+    if (!_isConnected) {
+      return false;
+    }
+    if (_mockLobbyState != null) {
+      _mockLobbyState!['status'] = 'cancelled';
+      _mockLobbyState!['endReason'] = endReason;
+      _lobbyController.add(_mockLobbyState);
+    }
     return true;
   }
 

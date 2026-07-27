@@ -54,8 +54,9 @@ void main() async {
       },
     );
 
-    // Clean up expired games on app startup
+    // Clean up expired waiting lobbies and finished/cancelled games
     FirebaseService.cleanupExpiredGames();
+    FirebaseService.cleanupCompletedGames();
   } catch (e) {
     // Continue without Firebase - this is normal for local development
     // Only log in debug mode to avoid production noise

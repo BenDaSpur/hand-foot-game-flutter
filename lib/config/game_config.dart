@@ -328,6 +328,9 @@ class GameConfig {
   // PERFORMANCE & TIMING
   // =============================================================================
 
+  /// How long finished/cancelled multiplayer games are kept before cleanup.
+  static const Duration gameCleanupDelay = Duration(hours: 1);
+
   /// Debounce delay for user input to prevent accidental double-actions
   static const Duration debounceDelay = Duration(milliseconds: 300);
 

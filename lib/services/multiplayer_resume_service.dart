@@ -2,8 +2,29 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
+import '../services/firebase_constants.dart';
 import '../services/firebase_service.dart';
 import '../utils/debug_logger.dart';
+
+/// Result of rejoining or auto-resuming a multiplayer session.
+class MultiplayerResumeResult {
+  final EnhancedMultiplayerController controller;
+  final String status;
+  final String gameId;
+  final String playerName;
+  final bool isHost;
+
+  const MultiplayerResumeResult({
+    required this.controller,
+    required this.status,
+    required this.gameId,
+    required this.playerName,
+    required this.isHost,
+  });
+
+  bool get isWaiting => status == FirebaseConstants.gameStatusWaiting;
+  bool get isPlaying => status == FirebaseConstants.gameStatusPlaying;
+}
 
 /// Service to handle multiplayer game resuming after crashes/disconnections
 class MultiplayerResumeService {
@@ -15,14 +36,19 @@ class MultiplayerResumeService {
     required String gameId,
     required String playerName,
     required bool isHost,
+    String? playerId,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      final resolvedPlayerId =
+          playerId ?? await FirebaseService.getMultiplayerUserId();
 
       final gameInfo = {
         'gameId': gameId,
         'playerName': playerName,
         'isHost': isHost,
+        'playerId': resolvedPlayerId,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
 
@@ -41,7 +67,9 @@ class MultiplayerResumeService {
       final prefs = await SharedPreferences.getInstance();
       final gameInfoJson = prefs.getString(_activeGameKey);
 
-      if (gameInfoJson == null) return null;
+      if (gameInfoJson == null) {
+        return null;
+      }
 
       final gameInfo = jsonDecode(gameInfoJson) as Map<String, dynamic>;
 
@@ -80,14 +108,38 @@ class MultiplayerResumeService {
     try {
       // Check if game still exists in Firebase
       final gameDoc = await FirebaseService.getGame(gameId);
-      if (gameDoc == null) return false;
+      if (gameDoc == null) {
+        return false;
+      }
 
       final status = gameDoc['status'] as String?;
-      return status == 'playing' || status == 'waiting';
+      return status == FirebaseConstants.gameStatusPlaying ||
+          status == FirebaseConstants.gameStatusWaiting;
     } catch (e) {
       DebugLogger.error('Failed to check game status: $e');
       return false;
     }
+  }
+
+  /// True when the bookmark's playerId matches the current Auth UID.
+  ///
+  /// Bookmarks without playerId (legacy) are treated as matching so older
+  /// clients can still rejoin via Auth UID on the server.
+  static Future<bool> _bookmarkMatchesCurrentUser(
+    Map<String, dynamic> activeGame,
+  ) async {
+    final storedPlayerId = activeGame['playerId'] as String?;
+    if (storedPlayerId == null || storedPlayerId.isEmpty) {
+      return true;
+    }
+
+    final currentUserId = await FirebaseService.getMultiplayerUserId();
+    if (currentUserId == null) {
+      // Auth unavailable (tests / unconfigured Firebase) — defer to server.
+      return true;
+    }
+
+    return storedPlayerId == currentUserId;
   }
 
   /// Attempt to rejoin a multiplayer game
@@ -95,14 +147,46 @@ class MultiplayerResumeService {
     required String gameId,
     required String playerName,
   }) async {
+    final result = await rejoinGameWithStatus(
+      gameId: gameId,
+      playerName: playerName,
+    );
+    return result?.controller;
+  }
+
+  /// Rejoin and return status so callers can open lobby vs game screen.
+  static Future<MultiplayerResumeResult?> rejoinGameWithStatus({
+    required String gameId,
+    required String playerName,
+  }) async {
     try {
       DebugLogger.debug('Attempting to rejoin game: $gameId as $playerName');
 
+      final activeGame = await getActiveGame();
+      if (activeGame != null &&
+          activeGame['gameId'] == gameId &&
+          !await _bookmarkMatchesCurrentUser(activeGame)) {
+        DebugLogger.warning(
+          'Cannot rejoin game $gameId - stored playerId does not match Auth UID',
+        );
+        await clearActiveGame();
+        return null;
+      }
+
       // Check if game is still active
-      if (!await canRejoinGame(gameId)) {
+      final gameDoc = await FirebaseService.getGame(gameId);
+      if (gameDoc == null) {
         DebugLogger.warning(
           'Cannot rejoin game $gameId - game not found or ended',
         );
+        await clearActiveGame();
+        return null;
+      }
+
+      final status = gameDoc['status'] as String?;
+      if (status != FirebaseConstants.gameStatusPlaying &&
+          status != FirebaseConstants.gameStatusWaiting) {
+        DebugLogger.warning('Cannot rejoin game $gameId - status is $status');
         await clearActiveGame();
         return null;
       }
@@ -113,24 +197,31 @@ class MultiplayerResumeService {
         playerName: playerName,
       );
 
-      if (controller != null) {
-        // Determine if rejoining player was originally host
-        final activeGame = await getActiveGame();
-        final wasHost = activeGame?['isHost'] ?? false;
-
-        // Save the rejoined game info with correct host status
-        await saveActiveGame(
-          gameId: gameId,
-          playerName: playerName,
-          isHost: wasHost, // Preserve original host status
-        );
-
-        DebugLogger.debug(
-          'Successfully rejoined game: $gameId (wasHost: $wasHost)',
-        );
+      if (controller == null) {
+        return null;
       }
 
-      return controller;
+      final isHost = controller.isHost;
+
+      // Save the rejoined game info with authoritative host status + playerId
+      await saveActiveGame(
+        gameId: gameId,
+        playerName: playerName,
+        isHost: isHost,
+        playerId: controller.userId,
+      );
+
+      DebugLogger.debug(
+        'Successfully rejoined game: $gameId (isHost: $isHost, status: $status)',
+      );
+
+      return MultiplayerResumeResult(
+        controller: controller,
+        status: status!,
+        gameId: gameId,
+        playerName: playerName,
+        isHost: isHost,
+      );
     } catch (e) {
       DebugLogger.error('Failed to rejoin game: $e');
       return null;
@@ -151,7 +242,14 @@ class MultiplayerResumeService {
   static Future<Map<String, dynamic>?> checkForRejoinOpportunity() async {
     try {
       final activeGame = await getActiveGame();
-      if (activeGame == null) return null;
+      if (activeGame == null) {
+        return null;
+      }
+
+      if (!await _bookmarkMatchesCurrentUser(activeGame)) {
+        await clearActiveGame();
+        return null;
+      }
 
       final gameId = activeGame['gameId'] as String;
       final canRejoin = await canRejoinGame(gameId);
@@ -165,10 +263,32 @@ class MultiplayerResumeService {
         'gameId': gameId,
         'playerName': activeGame['playerName'],
         'isHost': activeGame['isHost'],
+        'playerId': activeGame['playerId'],
         'canRejoin': true,
       };
     } catch (e) {
       DebugLogger.error('Failed to check rejoin opportunity: $e');
+      return null;
+    }
+  }
+
+  /// Auto-resume into a live game when bookmark + Auth UID still match.
+  ///
+  /// Returns null when there is nothing to resume (caller may still show a
+  /// manual REJOIN button if [checkForRejoinOpportunity] succeeds later).
+  static Future<MultiplayerResumeResult?> attemptAutoResume() async {
+    try {
+      final opportunity = await checkForRejoinOpportunity();
+      if (opportunity == null) {
+        return null;
+      }
+
+      final gameId = opportunity['gameId'] as String;
+      final playerName = opportunity['playerName'] as String;
+
+      return rejoinGameWithStatus(gameId: gameId, playerName: playerName);
+    } catch (e) {
+      DebugLogger.error('Failed to auto-resume multiplayer game: $e');
       return null;
     }
   }

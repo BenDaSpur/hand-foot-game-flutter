@@ -17,11 +17,12 @@ import '../widgets/turn_timer.dart';
 import '../widgets/card_animation_host.dart';
 import '../game/events/game_event_bus.dart';
 import '../services/multiplayer_resume_service.dart';
+import '../models/multiplayer_lifecycle.dart';
 import '../widgets/game_keyboard_shortcuts.dart';
 import '../widgets/keyboard_shortcuts_overlay.dart';
 import '../utils/game_responsive_layout.dart';
 import '../theme/balatro_theme.dart';
-import 'main_menu_screen.dart';
+import 'multiplayer_exit_flow.dart';
 
 /// Multiplayer game screen that reuses single-player components for consistency
 class MultiplayerGameScreen extends StatefulWidget {
@@ -68,7 +69,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   String? _lastCurrentPlayerIdForHighlight;
   bool _showKeyboardHelp = false;
   bool _isCardAnimationActive = false;
+  bool _isExiting = false;
   StreamSubscription<GameState>? _gameStateSubscription;
+  StreamSubscription<MultiplayerLifecycleEvent>? _lifecycleSubscription;
 
   @override
   void initState() {
@@ -79,6 +82,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     _gameStateSubscription = _gameController.gameStateStream.listen(
       _onGameStateStreamUpdate,
     );
+    _lifecycleSubscription = _gameController.lifecycleStream.listen(
+      _onLifecycleEvent,
+    );
+  }
+
+  void _onLifecycleEvent(MultiplayerLifecycleEvent event) {
+    if (!mounted || _isExiting) {
+      return;
+    }
+    _handleRemoteGameEnded(MultiplayerExitFlow.messageForLifecycleEvent(event));
   }
 
   void _onGameStateStreamUpdate(GameState gameState) {
@@ -100,6 +113,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   @override
   void dispose() {
     _gameStateSubscription?.cancel();
+    _lifecycleSubscription?.cancel();
     _handScrollController.dispose();
     try {
       _gameController.dispose();
@@ -707,13 +721,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                   appBar: GameAppBar(
                     gameState: gameState,
                     isMultiplayer: true,
+                    isHost: _gameController.isHost,
                     connectionStream: _gameController.connectionStream,
                     isOnline: _gameController.isOnline,
                     sessionInfo: GameSessionInfo(
                       gameId: _gameController.gameId,
                       playerId: _gameController.userId,
                     ),
-                    onLeaveGame: _cleanupAndExit,
+                    onLeaveGame: _confirmLeaveGame,
+                    onEndGameForEveryone: _gameController.isHost
+                        ? _confirmEndGameForEveryone
+                        : null,
+                    onReturnToMainMenu: _confirmReturnToMainMenu,
                   ),
                   body: CardAnimationHost(
                     eventBus: gameEventBus,
@@ -1090,26 +1109,204 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   /// Clean up multiplayer game and return to main menu
   Future<void> _leaveAndExit() async {
-    await _gameController.leaveGame();
+    if (_isExiting) {
+      return;
+    }
+    _isExiting = true;
+
+    try {
+      await _gameController.leaveGame();
+    } catch (e) {
+      debugPrint('Warning: Failed to leave multiplayer game: $e');
+    }
+
     await MultiplayerResumeService.clearActiveGame();
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-      (route) => false,
-    );
+    MultiplayerExitFlow.goToMainMenu(context);
+  }
+
+  Future<void> _endGameForEveryoneAndExit() async {
+    if (_isExiting) {
+      return;
+    }
+    _isExiting = true;
+
+    var success = false;
+    try {
+      success = await _gameController.endGameForEveryone();
+    } catch (e) {
+      debugPrint('Warning: Failed to end multiplayer game: $e');
+      success = false;
+    }
+
+    if (!success) {
+      _isExiting = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to end the game. Please try again.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+
+    await MultiplayerResumeService.clearActiveGame();
+    if (!mounted) {
+      return;
+    }
+    MultiplayerExitFlow.goToMainMenu(context);
   }
 
   void _cleanupAndExit() {
     _leaveAndExit().catchError((e) {
       debugPrint('Warning: Failed to leave multiplayer game: $e');
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-          (route) => false,
-        );
+        MultiplayerExitFlow.goToMainMenu(context);
       }
     });
+  }
+
+  void _confirmLeaveGame() {
+    final isHost = _gameController.isHost;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: BalatroTheme.neonPink, width: 1),
+        ),
+        title: Text(
+          isHost ? 'Leave & End Game?' : 'Leave Game?',
+          style: const TextStyle(
+            color: BalatroTheme.neonPink,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          isHost
+              ? 'As the host, leaving will end the game for everyone.'
+              : 'You will leave this multiplayer game and give up your seat.',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _cleanupAndExit();
+            },
+            child: Text(
+              isHost ? 'Leave & End' : 'Leave',
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmEndGameForEveryone() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.redAccent, width: 1),
+        ),
+        title: const Text(
+          'End Game for Everyone?',
+          style: TextStyle(
+            color: Colors.redAccent,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'This will cancel the game for all players and return everyone to the main menu.',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _endGameForEveryoneAndExit();
+            },
+            child: const Text(
+              'End Game',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmReturnToMainMenu() {
+    final isHost = _gameController.isHost;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: BalatroTheme.darkPurple,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: BalatroTheme.neonPink, width: 1),
+        ),
+        title: const Text(
+          'Return to Main Menu',
+          style: TextStyle(
+            color: BalatroTheme.neonPink,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          isHost
+              ? 'Returning to the main menu will end the game for everyone.'
+              : 'Are you sure you want to leave this game and return to the main menu?',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _cleanupAndExit();
+            },
+            child: const Text(
+              'Return to Menu',
+              style: TextStyle(color: BalatroTheme.neonBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRemoteGameEnded(String message) async {
+    await MultiplayerExitFlow.handleRemoteGameEnded(
+      context: context,
+      alreadyExiting: _isExiting,
+      markExiting: () => _isExiting = true,
+      message: message,
+      dialogBackground: BalatroTheme.darkPurple,
+      dialogBorder: const BorderSide(color: BalatroTheme.neonPink, width: 1),
+    );
   }
 }
