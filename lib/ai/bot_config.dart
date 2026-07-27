@@ -95,6 +95,11 @@ class BotConfig {
   /// Number of wilds considered excessive (affects strategy)
   static const int excessiveWildsThreshold = 6;
 
+  /// Wilds only become discardable at or below this hand size. Above it a wild
+  /// is worth far more as a book completer than as a discard, and pitching one
+  /// also freezes the pile the bot may still want to unlock.
+  static const int wildDiscardDesperationHandSize = 3;
+
   // ===== RISK TOLERANCE =====
 
   /// Emergency risk tolerance ceiling
@@ -271,9 +276,6 @@ class BotConfig {
   /// Bonus for keeping duplicates
   static const int duplicateBonus = 20;
 
-  /// Protection score to avoid discarding wilds
-  static const int wildProtection = 200;
-
   // ===== HUMAN PLAY PATTERNS (analytics: 87 sessions, 4590 human events) =====
 
   /// Humans accumulate before burst-melding; hold window lower bound
@@ -295,7 +297,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-go-out-race-clean-lane';
+  static const String botAiVersion = '2026.07-wild-discard-guard';
 
   // Prevent instantiation
   BotConfig._();

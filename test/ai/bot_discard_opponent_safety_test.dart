@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_discard_analyzer.dart';
 import 'package:hand_foot_game_flutter/ai/bot_game_analyzer.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
@@ -173,6 +174,173 @@ void main() {
         discard.rank,
         equals(CardRank.four),
         reason: 'When nothing is safe, discard the lowest-value card',
+      );
+    });
+
+    /// Analytics session 17851241195649564 (botAiVersion
+    /// 2026.07-go-out-race-clean-lane): the aggressive bot held
+    /// `8♦ 10♦ A♥ 2x` on a 4-card hand pile for turns 99, 102 and 105 and
+    /// discarded the wild every single time, because the human and the other
+    /// bot had visible melds on eights, tens and aces — so the wild was the
+    /// only card the safety filter considered safe. Each wild also froze the
+    /// discard pile the bot had unlocked on the three preceding turns.
+    void seedTurn99Board() {
+      for (final rank in [CardRank.eight, CardRank.ten, CardRank.ace]) {
+        humanPlayer.melds.add(
+          Meld(
+            rank: rank,
+            cards: [
+              PlayingCard(rank: rank, suit: Suit.spades),
+              PlayingCard(rank: rank, suit: Suit.hearts),
+              PlayingCard(rank: rank, suit: Suit.clubs),
+            ],
+          ),
+        );
+      }
+
+      botPlayer.hasPlayedDown = true;
+      botPlayer.hasPickedUpFoot = false;
+      botPlayer.hand.clear();
+      botPlayer.dealHand([
+        const PlayingCard(rank: CardRank.eight, suit: Suit.diamonds), // 5 pts
+        const PlayingCard(rank: CardRank.ten, suit: Suit.diamonds), // 10 pts
+        const PlayingCard(rank: CardRank.ace, suit: Suit.hearts), // 20 pts
+        const PlayingCard(rank: CardRank.two, suit: Suit.hearts), // wild
+      ]);
+    }
+
+    test('hand-pile discard holds the wild when every natural is melded', () {
+      seedTurn99Board();
+
+      final discard = BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+        botPlayer,
+        controller.gameState,
+      );
+
+      expect(discard.isWild, isFalse);
+      expect(
+        discard.rank,
+        equals(CardRank.eight),
+        reason:
+            'With wilds off the table, the cheapest natural wins even though '
+            'every rank feeds an opponent meld',
+      );
+    });
+
+    test('scored discard also holds the wild on the same board', () {
+      seedTurn99Board();
+
+      final discard = discardAnalyzer.chooseCardToDiscard(
+        botPlayer,
+        controller.gameState,
+      );
+
+      expect(discard.isWild, isFalse);
+    });
+
+    test('wild is spendable at exactly the desperation hand size', () {
+      humanPlayer.melds.add(
+        Meld(
+          rank: CardRank.eight,
+          cards: [
+            const PlayingCard(rank: CardRank.eight, suit: Suit.spades),
+            const PlayingCard(rank: CardRank.eight, suit: Suit.hearts),
+            const PlayingCard(rank: CardRank.eight, suit: Suit.clubs),
+          ],
+        ),
+      );
+
+      botPlayer.hasPlayedDown = true;
+      botPlayer.hand.clear();
+      botPlayer.dealHand([
+        const PlayingCard(rank: CardRank.eight, suit: Suit.diamonds),
+        const PlayingCard(rank: CardRank.eight, suit: Suit.spades),
+        const PlayingCard(rank: CardRank.two, suit: Suit.hearts),
+      ]);
+
+      expect(
+        botPlayer.currentHand.length,
+        equals(BotConfig.wildDiscardDesperationHandSize),
+        reason: 'Pins the boundary this test is exercising',
+      );
+
+      const reason =
+          'At exactly BotConfig.wildDiscardDesperationHandSize the bot may '
+          'burn a wild rather than feed the opponent eights meld';
+
+      expect(
+        BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+          botPlayer,
+          controller.gameState,
+        ).isWild,
+        isTrue,
+        reason: reason,
+      );
+      expect(
+        discardAnalyzer
+            .chooseCardToDiscard(botPlayer, controller.gameState)
+            .isWild,
+        isTrue,
+        reason: reason,
+      );
+    });
+
+    test('foot protection still outranks desperation hand size', () {
+      humanPlayer.melds.add(
+        Meld(
+          rank: CardRank.eight,
+          cards: [
+            const PlayingCard(rank: CardRank.eight, suit: Suit.spades),
+            const PlayingCard(rank: CardRank.eight, suit: Suit.hearts),
+            const PlayingCard(rank: CardRank.eight, suit: Suit.clubs),
+          ],
+        ),
+      );
+
+      botPlayer.hasPlayedDown = true;
+      botPlayer.hasPickedUpFoot = true;
+      botPlayer.dealFoot([
+        const PlayingCard(rank: CardRank.eight, suit: Suit.diamonds),
+        const PlayingCard(rank: CardRank.two, suit: Suit.hearts),
+      ]);
+
+      expect(botPlayer.canGoOutWithBooks, isFalse);
+
+      final discard = BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+        botPlayer,
+        controller.gameState,
+      );
+
+      expect(
+        discard.isWild,
+        isFalse,
+        reason:
+            'In foot without both books the wild is still needed for the '
+            'dirty book, so feed the eights instead',
+      );
+    });
+
+    test('all-wild hand still discards instead of deadlocking', () {
+      botPlayer.hasPlayedDown = true;
+      botPlayer.hand.clear();
+      botPlayer.dealHand([
+        const PlayingCard(rank: CardRank.joker),
+        const PlayingCard(rank: CardRank.two, suit: Suit.hearts),
+        const PlayingCard(rank: CardRank.two, suit: Suit.diamonds),
+        const PlayingCard(rank: CardRank.two, suit: Suit.spades),
+        const PlayingCard(rank: CardRank.two, suit: Suit.clubs),
+      ]);
+
+      final discard = BotDiscardAnalyzer.chooseSafeLowValueDiscard(
+        botPlayer,
+        controller.gameState,
+      );
+
+      expect(
+        discard.rank,
+        equals(CardRank.two),
+        reason:
+            'No non-wild alternative exists, so fall back to the cheapest wild',
       );
     });
 
