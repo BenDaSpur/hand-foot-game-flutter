@@ -6,6 +6,7 @@ import '../game/events/game_event.dart';
 import '../game/events/game_event_bus.dart';
 import '../models/card.dart';
 import '../models/player.dart';
+import '../utils/debug_logger.dart';
 import 'card_draw_animation_overlay.dart';
 
 /// Inherited scope exposing card draw animation state to descendants.
@@ -189,8 +190,8 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
       if (!_isAnimating) {
         return;
       }
-      debugPrint(
-        'Warning: card draw animation exceeded safety timeout; unlocking UI',
+      DebugLogger.warning(
+        'card draw animation exceeded safety timeout; unlocking UI',
       );
       _completeAnimation();
     });

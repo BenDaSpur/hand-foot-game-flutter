@@ -351,6 +351,15 @@ void main() {
   });
 
   group('CardAnimationHost interaction gates', () {
+    /// Upper bound for a 2-card deck-draw overlay (scroll + reveal + fly-in).
+    Duration twoCardDrawDrainWindow() {
+      return GameConfig.cardRevealDuration +
+          (GameConfig.cardFlyDuration * 4) +
+          (GameConfig.cardStaggerDelay * 2) +
+          GameConfig.cardRevealPause +
+          const Duration(milliseconds: 200);
+    }
+
     testWidgets('dispose notifies animation inactive so parent gates clear', (
       tester,
     ) async {
@@ -410,6 +419,12 @@ void main() {
       await tester.pump();
 
       expect(animationStates.last, isFalse);
+
+      // Drain any leftover scroll/fly-in futures from the disposed overlay
+      // before tearing down controllers.
+      await tester.pump(twoCardDrawDrainWindow());
+      await tester.pumpAndSettle();
+
       scrollController.dispose();
       eventBus.dispose();
     });
@@ -469,6 +484,11 @@ void main() {
       await tester.pump();
 
       expect(isAnimating, isFalse);
+
+      // Finish scroll/stagger/pause work so teardown has no pending animation.
+      await tester.pump(twoCardDrawDrainWindow());
+      await tester.pumpAndSettle();
+
       scrollController.dispose();
       eventBus.dispose();
     });

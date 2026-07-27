@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../config/game_config.dart';
 import '../constants/hand_layout_constants.dart';
 import '../models/card.dart';
+import '../utils/debug_logger.dart';
 import '../utils/game_responsive_layout.dart';
 import 'card_back_widget.dart';
 import 'playing_card_widget.dart';
@@ -440,8 +441,9 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
             curve: Curves.easeOut,
           )
           .timeout(GameConfig.cardRevealDuration + const Duration(seconds: 1));
-    } catch (_) {
+    } catch (error) {
       // Scroll is best-effort — never let a hung animateTo freeze discard.
+      DebugLogger.warning('hand scroll during card reveal failed: $error');
     }
   }
 
