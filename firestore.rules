@@ -71,11 +71,91 @@ service cloud.firestore {
     
     // Don't allow exceeding max players
     let playerCountValid = newData.players.size() <= newData.maxPlayers;
-    
+
+    // Field-level invariants for lobby/metadata fields.
+    let maxPlayersUnchanged = oldData.maxPlayers == newData.maxPlayers;
+    let createdAtUnchanged = oldData.createdAt == newData.createdAt;
+    let completedAtValid = immutableOrSetOnTerminal(
+      oldData, newData, 'completedAt'
+    );
+    let cleanupAtValid = immutableOrSetOnTerminal(
+      oldData, newData, 'cleanupAt'
+    );
+
     return statusValid
       && hostAuthorizedForStatus
       && hostUnchanged
-      && playerCountValid;
+      && playerCountValid
+      && maxPlayersUnchanged
+      && createdAtUnchanged
+      && completedAtValid
+      && cleanupAtValid
+      && isApprovedGameStateUpdate(oldData, newData)
+      && isPermittedPlayersUpdate(oldData, newData);
+  }
+
+  // completedAt/cleanupAt may be added when entering a terminal status; once
+  // present they are immutable.
+  function immutableOrSetOnTerminal(oldData, newData, field) {
+    let isTerminal = newData.status == 'finished' || newData.status == 'cancelled';
+    return !(field in oldData)
+      ? (!(field in newData) || isTerminal)
+      : (field in newData && oldData[field] == newData[field]);
+  }
+
+  function playersUnchanged(oldData, newData) {
+    return oldData.players == newData.players;
+  }
+
+  // Supported players mutations: unchanged, self-leave, or same roster IDs
+  // (display-name refresh on rejoin). Blocks arbitrary seat rewrites.
+  function isPermittedPlayersUpdate(oldData, newData) {
+    return playersUnchanged(oldData, newData)
+      || isPlayerLeaving(oldData, newData)
+      || isPlayerRosterIdentityPreserved(oldData, newData);
+  }
+
+  function isPlayerLeaving(oldData, newData) {
+    return request.auth.uid in getPlayerIds(oldData)
+      && !(request.auth.uid in getPlayerIds(newData))
+      && newData.players.size() == oldData.players.size() - 1
+      && getPlayerIds(oldData).hasAll(getPlayerIds(newData));
+  }
+
+  function isPlayerRosterIdentityPreserved(oldData, newData) {
+    return newData.players.size() == oldData.players.size()
+      && getPlayerIds(oldData).hasAll(getPlayerIds(newData))
+      && getPlayerIds(newData).hasAll(getPlayerIds(oldData));
+  }
+
+  // gameState may change only on start, in-game sync/finish, or mid-game leave.
+  function isApprovedGameStateUpdate(oldData, newData) {
+    return gameStateUnchanged(oldData, newData)
+      || isStartGameStateWrite(oldData, newData)
+      || isInGameStateSync(oldData, newData)
+      || isLeaveGameStateWrite(oldData, newData);
+  }
+
+  function isStartGameStateWrite(oldData, newData) {
+    return oldData.status == 'waiting'
+      && newData.status == 'playing'
+      && playersUnchanged(oldData, newData)
+      && newData.gameState != null;
+  }
+
+  function isInGameStateSync(oldData, newData) {
+    return playersUnchanged(oldData, newData)
+      && (
+        (oldData.status == 'playing'
+          && (newData.status == 'playing' || newData.status == 'finished'))
+        || (oldData.status == 'finished' && newData.status == 'finished')
+      );
+  }
+
+  function isLeaveGameStateWrite(oldData, newData) {
+    return isPlayerLeaving(oldData, newData)
+      && oldData.status == 'playing'
+      && newData.status == 'playing';
   }
 
   function isPlayerJoining(oldData, newData) {

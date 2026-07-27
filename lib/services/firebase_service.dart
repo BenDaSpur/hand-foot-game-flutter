@@ -1036,13 +1036,17 @@ class FirebaseService {
           return false;
         }
 
+        final existingStatus = gameDoc.data()!['status'] as String?;
         final updateData = <String, dynamic>{
           'gameState': _gameStateToMap(gameState),
           'lastUpdated': FieldValue.serverTimestamp(),
         };
 
-        // If game has ended, mark for cleanup (must match Firestore rules: playing -> finished)
-        if (gameState.phase == GamePhase.gameEnd) {
+        // Mark finished once; do not rewrite completedAt/cleanupAt on later syncs
+        // (Firestore rules keep those fields immutable once set).
+        if (gameState.phase == GamePhase.gameEnd &&
+            existingStatus != FirebaseConstants.gameStatusFinished &&
+            existingStatus != FirebaseConstants.gameStatusCancelled) {
           updateData['status'] = FirebaseConstants.gameStatusFinished;
           updateData['completedAt'] = FieldValue.serverTimestamp();
           updateData['cleanupAt'] = Timestamp.fromDate(
