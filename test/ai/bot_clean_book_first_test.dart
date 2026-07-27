@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for go-out-race-clean-lane', () {
-      expect(BotConfig.botAiVersion, '2026.07-go-out-race-clean-lane');
+    test('botAiVersion bumped for wild-discard-guard', () {
+      expect(BotConfig.botAiVersion, '2026.07-wild-discard-guard');
     });
 
     test(

@@ -22,6 +22,16 @@ class BotDiscardAnalyzer {
     return bot.hasPickedUpFoot && !bot.canGoOutWithBooks;
   }
 
+  /// Whether wilds are off-limits as discards right now.
+  ///
+  /// Wilds are only spendable once the hand is down to
+  /// [BotConfig.wildDiscardDesperationHandSize], and never while the bot is in
+  /// foot still missing a required go-out book.
+  static bool shouldProtectWilds(Player bot) {
+    return mustProtectWildsInFoot(bot) ||
+        bot.currentHand.length > BotConfig.wildDiscardDesperationHandSize;
+  }
+
   /// Choose the best card to discard considering multiple factors.
   ///
   /// Returns the card that minimizes harm to the bot while avoiding
@@ -35,10 +45,21 @@ class BotDiscardAnalyzer {
       throw StateError('Cannot discard from empty hand');
     }
 
+    // Wild protection has to be an exclusion rather than a score penalty:
+    // opponent-feed penalties stack past -400, so a merely-discouraged wild
+    // still wins the sort whenever every natural matches an opponent meld.
+    var candidates = bot.currentHand;
+    if (shouldProtectWilds(bot)) {
+      final nonWilds = candidates.where((card) => !card.isWild).toList();
+      if (nonWilds.isNotEmpty) {
+        candidates = nonWilds;
+      }
+    }
+
     // Score each card (higher = more likely to discard)
     final scoredCards = <PlayingCard, int>{};
 
-    for (final card in bot.currentHand) {
+    for (final card in candidates) {
       scoredCards[card] = _calculateDiscardScore(
         card,
         bot,
@@ -73,21 +94,12 @@ class BotDiscardAnalyzer {
       return BotConfig.threesPriority + 5; // Black 3 = -5 points
     }
 
-    // 2. NEVER discard wilds in foot while missing required go-out books
-    if (card.isWild && mustProtectWildsInFoot(bot)) {
-      return -BotConfig.wildProtection;
-    }
-
-    // 3. NEVER discard wilds unless desperate (<= 3 cards) once books are met
-    if (card.isWild && bot.currentHand.length > 3) {
-      return -BotConfig.wildProtection;
-    }
-
-    // 4. Base score from inverse point value (low value = good to discard)
-    // Invert: high point cards (aces=20, wilds=50) get negative score
+    // 2. Base score from inverse point value (low value = good to discard)
+    // Invert: high point cards (aces=20, wilds=50) get negative score.
+    // Protected wilds never reach here — [chooseCardToDiscard] drops them.
     score += 50 - card.pointValue;
 
-    // 5. DEFENSIVE: Check if opponents need this card (visible melds are
+    // 3. DEFENSIVE: Check if opponents need this card (visible melds are
     // always scanned; the analyzer only adds tracked-rank intelligence)
     final opponentNeedScore = _calculateOpponentNeedScore(
       card,
@@ -97,7 +109,7 @@ class BotDiscardAnalyzer {
     );
     score -= opponentNeedScore; // Reduce score if opponents need it
 
-    // 6. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
+    // 4. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
     final sameRankCount = bot.currentHand
         .where((c) => c.rank == card.rank && !c.isWild)
         .length;
@@ -130,21 +142,21 @@ class BotDiscardAnalyzer {
       score += BotConfig.humanLowRankDiscardBonus;
     }
 
-    // 7. MELD FIT: Don't discard cards that fit existing melds
+    // 5. MELD FIT: Don't discard cards that fit existing melds
     for (final meld in bot.melds) {
       if (_cardFitsMeld(card, meld)) {
         score -= 30; // Keep cards that can extend melds
       }
     }
 
-    // 8. BOOK COMPLETION: Heavily penalize discarding cards near completing books
+    // 6. BOOK COMPLETION: Heavily penalize discarding cards near completing books
     for (final meld in bot.melds) {
       if (meld.cards.length >= 5 && _cardFitsMeld(card, meld)) {
         score -= 50; // Strong incentive to keep near-book cards
       }
     }
 
-    // 9. UNLOCK KEYS: Keep 2+ matching naturals for an attractive discard pile
+    // 7. UNLOCK KEYS: Keep 2+ matching naturals for an attractive discard pile
     if (bot.hasPlayedDown &&
         !card.isWild &&
         !card.isThree &&
@@ -240,8 +252,9 @@ class BotDiscardAnalyzer {
   }
 
   /// Opponent-aware version of the managers' legacy "threes first, then
-  /// lowest point value" discard. Keeps that ordering, but avoids ranks any
-  /// opponent has visibly melded whenever a safe alternative exists.
+  /// lowest point value" discard. Keeps that ordering, but holds wilds per
+  /// [shouldProtectWilds] and avoids ranks any opponent has visibly melded
+  /// whenever a safe alternative exists.
   static PlayingCard chooseSafeLowValueDiscard(
     Player bot,
     GameState gameState,
@@ -266,16 +279,21 @@ class BotDiscardAnalyzer {
 
     var candidates = List<PlayingCard>.from(hand);
 
-    // Never discard wilds in foot while missing required go-out books
-    if (mustProtectWildsInFoot(bot)) {
+    // Drop wilds before the safety filter runs. Analytics session
+    // 17851241195649564: the aggressive bot pitched three 2s on consecutive
+    // turns from a 4-card hand pile because every natural it held matched an
+    // opponent meld, leaving the wild as the only "safe" candidate — and each
+    // one froze the pile it had been unlocking every turn.
+    if (shouldProtectWilds(bot)) {
       final nonWilds = candidates.where((card) => !card.isWild).toList();
       if (nonWilds.isNotEmpty) {
         candidates = nonWilds;
       }
     }
 
-    // Avoid feeding ranks opponents have visibly melded when possible.
-    // Wilds count as safe: they freeze the pile instead of feeding it.
+    // Avoid feeding ranks opponents have visibly melded when possible. A wild
+    // that survived the guard above counts as safe: it freezes the pile
+    // instead of feeding it.
     final meldedRanks = opponentMeldedRanks(gameState, bot.id);
     final safeCandidates = candidates
         .where((card) => card.isWild || !meldedRanks.contains(card.rank))
