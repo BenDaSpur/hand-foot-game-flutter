@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../config/game_config.dart';
 import '../game/events/game_event.dart';
 import '../game/events/game_event_bus.dart';
 import '../models/card.dart';
 import '../models/player.dart';
+import '../utils/debug_logger.dart';
 import 'card_draw_animation_overlay.dart';
 
 /// Inherited scope exposing card draw animation state to descendants.
@@ -58,6 +60,9 @@ class CardAnimationHost extends StatefulWidget {
   /// coach steps are not blocked by stuck animation gating).
   final bool animationsEnabled;
 
+  /// Override for tests; production uses [GameConfig.cardAnimationSafetyTimeout].
+  final Duration safetyTimeout;
+
   const CardAnimationHost({
     super.key,
     required this.child,
@@ -70,6 +75,7 @@ class CardAnimationHost extends StatefulWidget {
     this.localHumanPlayer,
     this.onAnimationStateChanged,
     this.animationsEnabled = true,
+    this.safetyTimeout = GameConfig.cardAnimationSafetyTimeout,
   });
 
   @override
@@ -79,6 +85,7 @@ class CardAnimationHost extends StatefulWidget {
 class _CardAnimationHostState extends State<CardAnimationHost> {
   StreamSubscription<CardDrawnEvent>? _drawSubscription;
   StreamSubscription<DiscardPileUnlockedEvent>? _unlockSubscription;
+  Timer? _safetyTimer;
 
   bool _isAnimating = false;
   Set<int> _hiddenHandIndices = {};
@@ -97,8 +104,17 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
 
   @override
   void dispose() {
+    _safetyTimer?.cancel();
     _drawSubscription?.cancel();
     _unlockSubscription?.cancel();
+    // Clear parent gates even if we never got an onComplete (e.g. host removed
+    // while a draw fly-in was still running).
+    if (_isAnimating) {
+      _isAnimating = false;
+      _activeRequest = null;
+      _hiddenHandIndices = {};
+      _notifyAnimationState(false);
+    }
     super.dispose();
   }
 
@@ -168,6 +184,19 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
     widget.onAnimationStateChanged?.call(isAnimating);
   }
 
+  void _armSafetyTimer() {
+    _safetyTimer?.cancel();
+    _safetyTimer = Timer(widget.safetyTimeout, () {
+      if (!_isAnimating) {
+        return;
+      }
+      DebugLogger.warning(
+        'card draw animation exceeded safety timeout; unlocking UI',
+      );
+      _completeAnimation();
+    });
+  }
+
   void _startRequest(CardAnimationRequest request) {
     if (_isAnimating) {
       _completeAnimation();
@@ -180,18 +209,24 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
       _requestVersion++;
     });
     _notifyAnimationState(true);
+    _armSafetyTimer();
   }
 
   void _completeAnimation() {
-    if (!mounted) {
-      return;
+    _safetyTimer?.cancel();
+    _safetyTimer = null;
+
+    final wasAnimating = _isAnimating || _activeRequest != null;
+    _isAnimating = false;
+    _hiddenHandIndices = {};
+    _activeRequest = null;
+
+    if (mounted) {
+      setState(() {});
     }
-    setState(() {
-      _isAnimating = false;
-      _hiddenHandIndices = {};
-      _activeRequest = null;
-    });
-    _notifyAnimationState(false);
+    if (wasAnimating) {
+      _notifyAnimationState(false);
+    }
   }
 
   void _skipAnimation() {

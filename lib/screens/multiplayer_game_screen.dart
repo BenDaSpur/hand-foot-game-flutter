@@ -125,9 +125,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   // REUSE: Copy single-player card interaction logic
   void _onCardTap(int cardIndex) {
-    if (_isCardAnimationActive) {
-      return;
-    }
+    // Hand taps are gated by CardAnimationScope in GameHandDisplay. Avoid a
+    // second gate on [_isCardAnimationActive] — it can desync after host
+    // dispose and permanently block selection while action buttons stay live.
 
     if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
       return; // Same pattern as single-player checking PlayerType.human
@@ -150,10 +150,6 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (_isCardAnimationActive) {
-      return;
-    }
-
     if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
       return;
     }

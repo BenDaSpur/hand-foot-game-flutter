@@ -789,9 +789,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _onCardTap(int cardIndex) {
-    if (_isCardAnimationActive) {
-      return;
-    }
+    // Hand taps are gated by CardAnimationScope in GameHandDisplay. Do not also
+    // gate here on [_isCardAnimationActive] — that flag can desync if the host
+    // is disposed mid-animation, leaving cards untappable while Play Cards
+    // stays enabled.
 
     final currentPlayer = ref.read(currentPlayerProvider);
     if (currentPlayer?.type != PlayerType.human) {
@@ -843,10 +844,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (_isCardAnimationActive) {
-      return;
-    }
-
     final currentPlayer = ref.read(currentPlayerProvider);
     if (currentPlayer?.type != PlayerType.human) {
       return;

@@ -352,6 +352,10 @@ class GameConfig {
   /// Duration for meld cards flying during discard unlock
   static const Duration cardMeldFlyDuration = Duration(milliseconds: 400);
 
+  /// Hard cap for draw/unlock overlays so a hung ticker/scroll cannot leave
+  /// hand taps gated forever (Play Cards enabled, cards unresponsive).
+  static const Duration cardAnimationSafetyTimeout = Duration(seconds: 8);
+
   /// Bot decision-making delay for realistic gameplay pacing
   static const Duration botDecisionDelay = Duration(milliseconds: 800);
 
