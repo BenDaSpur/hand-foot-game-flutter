@@ -1024,13 +1024,41 @@ class BotMeldAnalyzer {
   }
 
   /// NEW: Find the maximum number of melds that can be created for hand emptying
-  /// Used for aggressive foot transition - ignores point requirements
+  /// Used for aggressive foot transition - ignores point requirements.
+  /// When [preferCleanBooks] is true, natural 7+ candidate melds are ordered first
+  /// so dumps after large pile takes convert into clean books (human pattern).
   List<List<PlayingCard>> findMaximalMeldCombination(
     Player bot,
-    GameController controller,
-  ) {
-    final possibleMelds = getPossibleMelds(bot, controller);
-    if (possibleMelds.isEmpty) return [];
+    GameController controller, {
+    bool preferCleanBooks = false,
+  }) {
+    var possibleMelds = getPossibleMelds(bot, controller);
+    if (possibleMelds.isEmpty) {
+      return [];
+    }
+
+    if (preferCleanBooks) {
+      possibleMelds = List<List<PlayingCard>>.from(possibleMelds)
+        ..sort((a, b) {
+          final aCleanBook =
+              a.length >= BotConfig.bookSize && !a.any((c) => c.isWild);
+          final bCleanBook =
+              b.length >= BotConfig.bookSize && !b.any((c) => c.isWild);
+          if (aCleanBook != bCleanBook) {
+            return aCleanBook ? -1 : 1;
+          }
+          final aClean = !a.any((c) => c.isWild);
+          final bClean = !b.any((c) => c.isWild);
+          if (aClean != bClean) {
+            return aClean ? -1 : 1;
+          }
+          // Prefer larger naturals toward books (6 > 5 > 3)
+          if (aClean && bClean) {
+            return b.length.compareTo(a.length);
+          }
+          return 0;
+        });
+    }
 
     final handSize = bot.currentHand.length;
 

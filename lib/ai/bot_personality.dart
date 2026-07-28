@@ -96,16 +96,15 @@ class PersonalityConstants {
         return const PersonalityConstants(
           strategicBufferPoints:
               8, // Faster play-down — analytics showed foot-phase stalls
-          minCardsForAggressiveUnlock:
-              3, // Reduced from 4 - more willing to unlock
+          minCardsForAggressiveUnlock: 2, // Contest human pile farming (was 3)
           valuablePileThreshold:
-              90, // Slightly more willing to take piles for book cards
-          largePileThreshold: 6, // Reduced from 8 - lower threshold
+              65, // Was 90 — too timid vs 30–50 card human hauls
+          largePileThreshold: 4, // Was 6 — take moderately large piles
           footPileValueThreshold:
-              40, // More aggressive in foot when books incomplete
-          footPileSizeThreshold: 4, // Take smaller piles to finish book pairs
-          handPileValueThreshold: 45, // More willing to unlock for naturals
-          handPileSizeThreshold: 6, // Lower threshold for hand-phase unlocks
+              35, // More aggressive in foot when books incomplete
+          footPileSizeThreshold: 3, // Take smaller piles to finish book pairs
+          handPileValueThreshold: 40, // More willing to unlock for naturals
+          handPileSizeThreshold: 4, // Lower threshold for hand-phase unlocks
           maxTurnsBeforeForcePlayDown:
               3, // Faster play-down — avoid 13-card hand stalls
           highValuePairBreakChance:
@@ -141,20 +140,15 @@ class PersonalityConstants {
         return const PersonalityConstants(
           strategicBufferPoints:
               15, // Reduced from 25 - less conservative waiting
-          minCardsForAggressiveUnlock: 3, // Keep at 3 - balanced approach
+          minCardsForAggressiveUnlock: 2, // Contest piles for book cards
           valuablePileThreshold:
-              80, // Reduced from 100 - more willing to take piles for books
-          largePileThreshold:
-              5, // Reduced from 6 - lower threshold for book building
-          footPileValueThreshold:
-              40, // Reduced from 50 - more aggressive in foot for books
-          footPileSizeThreshold:
-              4, // Reduced from 5 - take smaller piles for book cards
-          handPileValueThreshold:
-              60, // Reduced from 75 - more aggressive in hand for books
-          handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
-          maxTurnsBeforeForcePlayDown:
-              5, // REDUCED - prevent excessive accumulation even for books
+              60, // Was 80 — take piles that complete books sooner
+          largePileThreshold: 4, // Was 5 — lower size gate for book building
+          footPileValueThreshold: 35, // More aggressive in foot for books
+          footPileSizeThreshold: 3, // Take smaller piles for book cards
+          handPileValueThreshold: 50, // More aggressive in hand for books
+          handPileSizeThreshold: 4, // Lower threshold
+          maxTurnsBeforeForcePlayDown: 4, // Was 5 — less R3+ play-down lag
           highValuePairBreakChance:
               0.4, // Increased from 0.3 - more willing to break for books
           bookCompletionPriority:
@@ -166,18 +160,15 @@ class PersonalityConstants {
         return const PersonalityConstants(
           strategicBufferPoints:
               15, // Reduced from 20 - more competitive baseline
-          minCardsForAggressiveUnlock: 3, // Keep at 3 - good balance
-          valuablePileThreshold:
-              75, // Reduced from 100 - more willing to take piles
-          largePileThreshold: 5, // Reduced from 6 - lower threshold
-          footPileValueThreshold:
-              40, // Reduced from 50 - more aggressive in foot
-          footPileSizeThreshold: 4, // Reduced from 5 - take smaller piles
-          handPileValueThreshold:
-              60, // Reduced from 75 - more aggressive in hand
-          handPileSizeThreshold: 5, // Reduced from 6 - lower threshold
+          minCardsForAggressiveUnlock: 2, // Match pile-farm contest tuning
+          valuablePileThreshold: 55, // Was 75 — contest human unlock rates
+          largePileThreshold: 4, // Was 5 — lower threshold
+          footPileValueThreshold: 35, // More aggressive in foot
+          footPileSizeThreshold: 3, // Take smaller piles
+          handPileValueThreshold: 45, // More aggressive in hand
+          handPileSizeThreshold: 4, // Lower threshold
           maxTurnsBeforeForcePlayDown:
-              4, // MODERATE - situational speed (will be overridden by adaptive logic)
+              3, // Faster baseline (adaptive overrides still apply)
           highValuePairBreakChance:
               0.6, // Increased from 0.5 - more willing to break pairs
           bookCompletionPriority: 150, // Keep balanced priority

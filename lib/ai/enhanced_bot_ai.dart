@@ -567,14 +567,16 @@ class EnhancedBotAI {
         return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
       }
 
-      // Try to create new melds to reduce hand size
+      // Try to create new melds to reduce hand size (never empty foot without go-out)
       final possibleMelds = _getCachedPossibleMelds(bot, context);
       if (possibleMelds.isNotEmpty) {
-        DebugLogger.debug('${bot.name}: Creating new meld to reduce hand size');
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, possibleMelds),
-        );
+        final rushMeld = _selectBestNewMeld(bot, possibleMelds);
+        if (BotEndGameManager.isSafeCreateMeld(bot, rushMeld)) {
+          DebugLogger.debug(
+            '${bot.name}: Creating new meld to reduce hand size',
+          );
+          return BotDecision(action: 'createMeld', data: rushMeld);
+        }
       }
 
       // If no melds possible, proceed to discard phase
@@ -1234,7 +1236,13 @@ class EnhancedBotAI {
     // CRITICAL: Force play-down if hand size is dangerously large (prevents 26-card accumulation)
     final personality = _personalityManager.getPersonality(bot.id);
     final handSize = bot.currentHand.length;
+    final botScoreGap = maxOpponentScore - bot.score;
+    final lateRoundBehind =
+        gameState.round >= 3 &&
+        (handSize >= BotConfig.lateRoundForcePlayDownHandSize ||
+            botScoreGap >= BotConfig.lateRoundForcePlayDownScoreGap);
     final shouldForcePlayDown =
+        lateRoundBehind ||
         (personality == BotPersonality.bookBuilder && handSize >= 22) ||
         (isUnderCompetitivePressure && handSize >= 18) ||
         (isUnderSeverePressure && handSize >= 15) ||
@@ -1248,12 +1256,30 @@ class EnhancedBotAI {
 
     // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
     final controller = context.controller as GameController?;
-    if (controller == null) return BotDecision(action: 'noMeld');
-    final bestCombination = _meldAnalyzer.findBestPlayDownCombination(
+    if (controller == null) {
+      return BotDecision(action: 'noMeld');
+    }
+    var bestCombination = _meldAnalyzer.findBestPlayDownCombination(
       bot,
       controller,
       playDownRequirement,
     );
+
+    // Prefer a play-down that keeps 2 naturals matching discard top when the
+    // pile is fat — unlock on a later draw after playing down.
+    if (bestCombination.isNotEmpty &&
+        gameState.discardPile.length >= BotConfig.preserveUnlockKeysPileSize) {
+      final unlockPreserving = _preferPlayDownPreservingUnlockKeys(
+        bot,
+        gameState,
+        bestCombination,
+        playDownRequirement,
+        controller,
+      );
+      if (unlockPreserving.isNotEmpty) {
+        bestCombination = unlockPreserving;
+      }
+    }
 
     DebugLogger.botDebug(
       bot.id,
@@ -1551,15 +1577,28 @@ class EnhancedBotAI {
       (sum, card) => sum + card.pointValue,
     );
     final pileSize = discardPile.length;
+    final isInFoot = bot.hasPickedUpFoot;
+    final handSize = bot.currentHand.length;
 
     // Enhanced strategic analysis
     final bookStatus = _analyzeBookRequirements(bot);
     final opponentThreat = _assessOpponentThreat(gameState, bot);
 
+    // Wire personality hand/foot pile thresholds (previously unused).
+    final phaseValueBase = isInFoot
+        ? constants.footPileValueThreshold
+        : constants.handPileValueThreshold;
+    final phaseSizeBase = isInFoot
+        ? constants.footPileSizeThreshold
+        : constants.handPileSizeThreshold;
+    final blendedValueBase =
+        (constants.valuablePileThreshold + phaseValueBase) / 2.0;
+    final blendedSizeBase =
+        (constants.largePileThreshold + phaseSizeBase) / 2.0;
+
     // Dynamic thresholds based on multiple factors
-    var adjustedValueThreshold =
-        constants.valuablePileThreshold / riskTolerance;
-    var adjustedSizeThreshold = constants.largePileThreshold / riskTolerance;
+    var adjustedValueThreshold = blendedValueBase / riskTolerance;
+    var adjustedSizeThreshold = blendedSizeBase / riskTolerance;
 
     // Book completion urgency - take piles if they help complete books
     if (bookStatus['needsBookBalance'] == true) {
@@ -1584,21 +1623,15 @@ class EnhancedBotAI {
       adjustedSizeThreshold *= 0.7; // Lower threshold in high rounds (was 0.9)
     }
 
-    // NEW: Human exploitation - humans avoid discard pile, so we should take it more
-    final humanPlayers = gameState.players.where(
-      (p) => p.type == PlayerType.human,
-    );
-    if (humanPlayers.any(
-      (h) => h.currentHand.length > 15 && !h.hasPlayedDown,
-    )) {
-      // If human is accumulating and avoiding discard pile, we should take it
-      adjustedValueThreshold *=
-          0.5; // MUCH more willing to take piles humans ignore (was 0.7)
-      adjustedSizeThreshold *=
-          0.6; // Take smaller piles to deny human resources (was 0.8)
+    // Contest human pile farming (analytics: humans unlock ~15% of draws and
+    // repeatedly take 30–50 card piles). Prior "human avoids pile" branch was
+    // inverted for skilled players who attack the discard.
+    if (_humanIsFarmingDiscardPile(gameState, pileSize)) {
+      adjustedValueThreshold *= 0.4;
+      adjustedSizeThreshold *= 0.5;
     }
 
-    // NEW: Exploit large discard piles (45+ cards observed, but bots ignore them)
+    // Exploit large discard piles (45+ cards observed, but bots ignore them)
     if (pileSize >= GameConfig.largeDiscardPileThreshold) {
       adjustedValueThreshold *=
           0.2; // Take huge piles very aggressively (was 0.3)
@@ -1610,7 +1643,7 @@ class EnhancedBotAI {
           0.5; // Lower threshold for medium piles (was 0.7)
     }
 
-    // NEW: Competitive pile denial - take piles that would benefit opponents
+    // Competitive pile denial - take piles that would benefit opponents
     if (pileSize >= 5 &&
         _pileWouldBenefitOpponents(discardPile, gameState, bot)) {
       adjustedValueThreshold *= BotConfig
@@ -1638,11 +1671,7 @@ class EnhancedBotAI {
                   .minimumDiscardPileSize; // Take any pile with minimum cards if not played down
     }
 
-    // Enhanced post-play-down logic - consider hand management and foot transition
-    final isInFoot = bot.hasPickedUpFoot;
-    final handSize = bot.currentHand.length;
-
-    // NEW: FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
+    // FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
     if (isInFoot && handSize <= BotConfig.footPhaseUrgencyThreshold) {
       // Check if we should be rushing to go out instead of taking discard pile
       if (handSize <= 2 && bot.canGoOutWithBooks) {
@@ -1654,6 +1683,21 @@ class EnhancedBotAI {
                   .aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
     }
 
+    // Hard-take rules after play-down (analytics: bots at 1% unlock vs humans 15%)
+    if (pileSize >= BotConfig.postPlayDownAlmostAlwaysTakePileSize) {
+      return true;
+    }
+    if (pileSize >= BotConfig.postPlayDownHardTakePileSize) {
+      return true;
+    }
+
+    // Personality min-cards gate for aggressive unlock willingness
+    if (pileSize >= constants.minCardsForAggressiveUnlock &&
+        pileValue >= phaseValueBase * 0.5) {
+      adjustedValueThreshold *= 0.7;
+      adjustedSizeThreshold *= 0.75;
+    }
+
     // If hand is getting large, prioritize pile taking to prevent getting stuck
     if (handSize >= 15) {
       adjustedValueThreshold *= 0.6; // Very aggressive with large hands
@@ -1661,7 +1705,6 @@ class EnhancedBotAI {
     }
 
     // Human-rate nudge: after play-down, take moderately large piles more often
-    // (analytics: humans ~10% unlock-of-draws vs bots ~1.3%).
     if (pileSize >= 8) {
       adjustedValueThreshold *= 0.55;
       adjustedSizeThreshold *= 0.65;
@@ -1677,11 +1720,36 @@ class EnhancedBotAI {
             ); // Even lower size threshold
   }
 
+  /// Detect humans who farm the discard pile (played down with a fat pile or
+  /// a large post-play-down hand that implies prior unlocks).
+  bool _humanIsFarmingDiscardPile(GameState gameState, int pileSize) {
+    final humans = gameState.players.where((p) => p.type == PlayerType.human);
+    for (final human in humans) {
+      if (!human.hasPlayedDown) {
+        continue;
+      }
+      if (pileSize >= GameConfig.mediumDiscardPileThreshold) {
+        return true;
+      }
+      if (human.currentHand.length >= BotConfig.humanBurstMeldHandThreshold) {
+        return true;
+      }
+      if (human.hasPickedUpFoot && human.currentHand.length >= 10) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Check if bot could unlock discard pile if they had already played down
   bool _couldUnlockDiscardPileIfPlayedDown(Player bot, GameState gameState) {
-    if (gameState.discardPile.isEmpty) return false;
+    if (gameState.discardPile.isEmpty) {
+      return false;
+    }
     final topCard = gameState.topDiscard;
-    if (topCard == null || topCard.isWild || topCard.isThree) return false;
+    if (topCard == null || topCard.isWild || topCard.isThree) {
+      return false;
+    }
 
     // Check if player has at least 2 matching natural cards
     final matchingCards = bot.currentHand
@@ -1689,6 +1757,109 @@ class EnhancedBotAI {
         .toList();
 
     return matchingCards.length >= 2;
+  }
+
+  /// Prefer a play-down combination that leaves ≥2 naturals matching the
+  /// discard top so the bot can unlock a fat pile on a subsequent turn.
+  List<List<PlayingCard>> _preferPlayDownPreservingUnlockKeys(
+    Player bot,
+    GameState gameState,
+    List<List<PlayingCard>> currentCombination,
+    int playDownRequirement,
+    GameController controller,
+  ) {
+    final topCard = gameState.topDiscard;
+    if (topCard == null || topCard.isWild || topCard.isThree) {
+      return currentCombination;
+    }
+
+    if (_playDownLeavesUnlockKeys(bot, currentCombination, topCard.rank)) {
+      return currentCombination;
+    }
+
+    final alternatives = _meldAnalyzer.findBestPlayDownCombination(
+      bot,
+      controller,
+      playDownRequirement,
+    );
+    if (alternatives.isEmpty) {
+      return currentCombination;
+    }
+
+    // findBestPlayDownCombination returns one best set; also try natural-first
+    // candidates that meet the requirement while preserving keys.
+    final naturalMelds = _meldAnalyzer.findNaturalMeldOpportunities(
+      bot,
+      controller,
+    );
+    final adjustedRequirement = gameState.round >= 3
+        ? (playDownRequirement * 0.8).round()
+        : playDownRequirement;
+
+    for (int size = 1; size <= naturalMelds.length && size <= 4; size++) {
+      final combos = _generatePlayDownSizeCombos(naturalMelds, size);
+      for (final combo in combos) {
+        final value = combo.fold<int>(
+          0,
+          (sum, cards) =>
+              sum +
+              cards.fold<int>(0, (cardSum, card) => cardSum + card.pointValue),
+        );
+        if (value < adjustedRequirement) {
+          continue;
+        }
+        if (_playDownLeavesUnlockKeys(bot, combo, topCard.rank)) {
+          return combo;
+        }
+      }
+    }
+
+    if (_playDownLeavesUnlockKeys(bot, alternatives, topCard.rank)) {
+      return alternatives;
+    }
+    return currentCombination;
+  }
+
+  bool _playDownLeavesUnlockKeys(
+    Player bot,
+    List<List<PlayingCard>> combination,
+    CardRank unlockRank,
+  ) {
+    final usedOfRank = combination
+        .expand((meld) => meld)
+        .where((card) => !card.isWild && card.rank == unlockRank)
+        .length;
+    final handOfRank = bot.currentHand
+        .where((card) => !card.isWild && card.rank == unlockRank)
+        .length;
+    return handOfRank - usedOfRank >= 2;
+  }
+
+  List<List<List<PlayingCard>>> _generatePlayDownSizeCombos(
+    List<List<PlayingCard>> melds,
+    int size,
+  ) {
+    if (size <= 0 || melds.isEmpty || size > melds.length) {
+      return const [];
+    }
+    final results = <List<List<PlayingCard>>>[];
+    void recurse(int start, List<List<PlayingCard>> current) {
+      if (current.length == size) {
+        results.add(List<List<PlayingCard>>.from(current));
+        return;
+      }
+      if (results.length >= 20) {
+        return;
+      }
+      for (int i = start; i < melds.length; i++) {
+        current.add(melds[i]);
+        recurse(i + 1, current);
+        current.removeLast();
+      }
+    }
+
+    recurse(0, <List<PlayingCard>>[]);
+    return results;
   }
 
   /// Find best natural meld combination for play-down
@@ -1987,6 +2158,12 @@ class EnhancedBotAI {
       return false;
     }
 
+    // Missing go-out books with a tiny hand — never "hold strategically"
+    // (analytics: bots sat on 1–3 cards with incomplete book pairs)
+    if (!bot.canGoOutWithBooks && handSize <= 3) {
+      return false;
+    }
+
     // On foot with both book types and a tiny hand — finish, don't strategic-hold
     if (bot.hasPickedUpFoot && bot.canGoOutWithBooks && handSize <= 3) {
       return false;
@@ -2108,6 +2285,14 @@ class EnhancedBotAI {
       if (handSize >= BotConfig.humanBurstMeldHandThreshold + 2) {
         return true;
       }
+    }
+
+    // After unlocking discard this turn with a large hand, dump immediately
+    // (human pattern: take 30–50 cards then explode into clean books).
+    if (bot.hasPlayedDown &&
+        _unlockedDiscardThisTurn(bot, context) &&
+        handSize >= BotConfig.postUnlockBurstHandSize) {
+      return true;
     }
 
     // ENHANCED: Under competitive pressure, dump much more aggressively
@@ -2234,22 +2419,31 @@ class EnhancedBotAI {
 
     // Priority 2: Create new melds with enhanced book balance strategy
     final handSize = bot.currentHand.length;
+    final unlockedThisTurn = _unlockedDiscardThisTurn(bot, context);
 
-    // Human-style burst: multi-meld when hand is large enough
-    if (handSize >= BotConfig.humanBurstMeldHandThreshold &&
-        bot.hasPlayedDown) {
+    // After a large pile take (or huge hand), dump maximally with clean-book bias
+    final shouldBurstDump =
+        bot.hasPlayedDown &&
+        (handSize >= BotConfig.humanBurstMeldHandThreshold ||
+            (unlockedThisTurn &&
+                handSize >= BotConfig.postUnlockBurstHandSize));
+    if (shouldBurstDump) {
       final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
         bot,
         controller,
+        preferCleanBooks: needsCleanBook,
       );
       if (maximalMelds.isNotEmpty && maximalMelds.length >= 2) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'DUMP STRATEGY: Using maximal meld combination (${maximalMelds.length} melds) for hand size $handSize',
-        );
-
-        return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
+        if (BotEndGameManager.isSafeCreateMultipleMelds(bot, maximalMelds)) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'DUMP STRATEGY: Using maximal meld combination (${maximalMelds.length} melds) for hand size $handSize'
+            '${unlockedThisTurn ? ' after unlock' : ''}'
+            '${needsCleanBook ? ' (clean bias)' : ''}',
+          );
+          return BotDecision(action: 'createMultipleMelds', data: maximalMelds);
+        }
       }
     }
 
@@ -2293,6 +2487,14 @@ class EnhancedBotAI {
     }
 
     return BotDecision(action: 'noMeld');
+  }
+
+  /// Unlock leaves the turn in meld without setting [GameState.hasDrawnFromDeck].
+  bool _unlockedDiscardThisTurn(Player bot, BotGameContext context) {
+    final gameState = context.gameState;
+    return bot.hasPlayedDown &&
+        gameState.turnPhase == TurnPhase.meld &&
+        !gameState.hasDrawnFromDeck;
   }
 
   /// Calculate potential for unlocking discard pile based on hand composition
@@ -3421,6 +3623,14 @@ class EnhancedBotAI {
       return false;
     }
 
+    // Never hold when missing go-out books — meld/add toward the missing type
+    if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+      return false;
+    }
+    if (!bot.canGoOutWithBooks && bot.currentHand.length <= 3) {
+      return false;
+    }
+
     // Start considering book completion earlier (round 2+) for competitiveness
     if (gameState.round < 2) return false;
 
@@ -3898,14 +4108,14 @@ class EnhancedBotAI {
       }
     }
 
-    // Large foot hand: any meld beats drawing again
+    // Large foot hand: any safe meld beats drawing again
     if (handSize >= BotConfig.footPhaseAggressiveMeldingThreshold) {
       final anyMelds = _getCachedPossibleMelds(bot, context);
       if (anyMelds.isNotEmpty) {
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, anyMelds),
-        );
+        final meld = _selectBestNewMeld(bot, anyMelds);
+        if (BotEndGameManager.isSafeCreateMeld(bot, meld)) {
+          return BotDecision(action: 'createMeld', data: meld);
+        }
       }
     }
 
@@ -3979,21 +4189,21 @@ class EnhancedBotAI {
         context,
       ).where((meld) => !meld.any((card) => card.isWild)).toList();
       if (cleanMelds.isNotEmpty) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'FOOT: creating clean meld — have dirty books but need clean book',
-        );
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, cleanMelds),
-        );
+        final cleanMeld = _selectBestNewMeld(bot, cleanMelds);
+        if (BotEndGameManager.isSafeCreateMeld(bot, cleanMeld)) {
+          DebugLogger.botDebug(
+            bot.id,
+            bot.name,
+            'FOOT: creating clean meld — have dirty books but need clean book',
+          );
+          return BotDecision(action: 'createMeld', data: cleanMeld);
+        }
       }
 
       final naturalAdditions = _filterCleanBookPriorityAdditions(
         bot,
         filteredAdditions,
-      );
+      ).where((a) => BotEndGameManager.isSafeAddToMeld(bot, a)).toList();
       if (naturalAdditions.isNotEmpty) {
         return BotDecision(action: 'addToMeld', data: naturalAdditions.first);
       }
@@ -4006,16 +4216,19 @@ class EnhancedBotAI {
         context,
       ).where((meld) => meld.any((card) => card.isWild)).toList();
       if (dirtyMelds.isNotEmpty) {
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, dirtyMelds),
-        );
+        final dirtyMeld = _selectBestNewMeld(bot, dirtyMelds);
+        if (BotEndGameManager.isSafeCreateMeld(bot, dirtyMeld)) {
+          return BotDecision(action: 'createMeld', data: dirtyMeld);
+        }
       }
     }
 
     var cardsToAdd = shouldPreferCleanOverDirty
         ? _filterCleanBookPriorityAdditions(bot, filteredAdditions)
         : filteredAdditions;
+    cardsToAdd = cardsToAdd
+        .where((a) => BotEndGameManager.isSafeAddToMeld(bot, a))
+        .toList();
 
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
@@ -4032,10 +4245,10 @@ class EnhancedBotAI {
     }
 
     if (possibleMelds.isNotEmpty) {
-      return BotDecision(
-        action: 'createMeld',
-        data: _selectBestNewMeld(bot, possibleMelds),
-      );
+      final meld = _selectBestNewMeld(bot, possibleMelds);
+      if (BotEndGameManager.isSafeCreateMeld(bot, meld)) {
+        return BotDecision(action: 'createMeld', data: meld);
+      }
     }
 
     return null;
