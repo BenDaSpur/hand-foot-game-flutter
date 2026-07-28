@@ -173,7 +173,7 @@ void main() {
     });
 
     test('botAiVersion bumped for this analytics fix', () {
-      expect(BotConfig.botAiVersion, '2026.07-wild-discard-guard');
+      expect(BotConfig.botAiVersion, '2026.07-pile-farm-contest');
     });
   });
 }

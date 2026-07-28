@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for wild-discard-guard', () {
-      expect(BotConfig.botAiVersion, '2026.07-wild-discard-guard');
+    test('botAiVersion bumped for pile-farm contest', () {
+      expect(BotConfig.botAiVersion, '2026.07-pile-farm-contest');
     });
 
     test(

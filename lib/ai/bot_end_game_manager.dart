@@ -523,6 +523,8 @@ class BotEndGameManager {
 
   /// Handle decisions when bot is in winning position
   BotDecision _handleWinningPosition(Player bot, GameController controller) {
+    final turnPhase = controller.gameState.turnPhase;
+
     // With 1 card: try to go out
     if (bot.currentHand.length == 1) {
       final lastCard = bot.currentHand.first;
@@ -534,14 +536,21 @@ class BotEndGameManager {
         }
       }
 
-      // If can't add last card to meld, must discard
-      return BotDecision(action: 'discard', data: lastCard);
+      // Discard only in discard phase — meld phase must return noMeld
+      if (turnPhase == TurnPhase.discard) {
+        return BotDecision(action: 'discard', data: lastCard);
+      }
+      return BotDecision(action: 'noMeld');
     }
 
     // With 2-4 cards: reduce hand strategically
     final cardsToAdd = _findGoOutSafeAdditions(bot, controller);
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
+    }
+
+    if (turnPhase == TurnPhase.meld) {
+      return BotDecision(action: 'noMeld');
     }
 
     // No useful additions - discard to reduce hand size
@@ -562,7 +571,7 @@ class BotEndGameManager {
     final cardsToAdd = _findCardsToAddToExistingMelds(bot, controller);
     if (cardsToAdd.isNotEmpty) {
       final bestAddition = _findBestBookProgressAddition(bot, cardsToAdd);
-      if (bestAddition != null) {
+      if (bestAddition != null && isSafeAddToMeld(bot, bestAddition)) {
         return BotDecision(action: 'addToMeld', data: bestAddition);
       }
       // No clean-book-safe addition — fall through to create a new meld
@@ -582,7 +591,11 @@ class BotEndGameManager {
       }
     }
 
-    // No good options - discard conservatively
+    // No safe meld — never emit discard during meld phase (empty-foot trap)
+    if (controller.gameState.turnPhase == TurnPhase.meld) {
+      return BotDecision(action: 'noMeld');
+    }
+
     final cardToDiscard = _chooseCardToDiscard(bot, controller);
     return BotDecision(action: 'discard', data: cardToDiscard);
   }
@@ -1072,7 +1085,11 @@ class BotEndGameManager {
         .length;
 
     if (cleanBooks > 0 && dirtyBooks > 0) {
-      // Have required books — discard last card(s) to go out (hand must be empty)
+      // Discard only in discard phase. In meld, return null so handleEndGame
+      // can continue into winning-position / book-completion paths.
+      if (controller.gameState.turnPhase != TurnPhase.discard) {
+        return null;
+      }
       final possibleDiscards = bot.currentHand
           .where((card) => !card.isThree)
           .toList();

@@ -1042,6 +1042,8 @@ class BotTurnManager {
               handSize <=
                   ai_bot_config.BotConfig.handPileFootCompletionMaxHand) {
             return '$personality bot completing hand pile for foot (no meld available, $handSize cards)';
+          } else if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+            return '$personality bot seeking missing go-out book ($handSize cards, $hasBooks books)';
           } else {
             return '$personality bot holding cards strategically ($handSize cards, $hasBooks books)';
           }

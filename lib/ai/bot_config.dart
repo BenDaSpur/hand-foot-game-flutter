@@ -75,6 +75,25 @@ class BotConfig {
   /// Minimum cards in discard pile to consider taking
   static const int minimumDiscardPileSize = 2;
 
+  /// After play-down, piles at or above this size are almost always worth taking
+  /// (analytics: humans unlock ~15% of draws vs bots ~1–3%).
+  static const int postPlayDownHardTakePileSize = 12;
+
+  /// Huge piles — take unless go-out race forbids it (humans routinely take 30–50).
+  static const int postPlayDownAlmostAlwaysTakePileSize = 25;
+
+  /// Late-round hand size that forces play-down when still not down
+  static const int lateRoundForcePlayDownHandSize = 18;
+
+  /// Score gap vs best opponent that forces late-round play-down
+  static const int lateRoundForcePlayDownScoreGap = 2000;
+
+  /// Prefer play-downs that keep unlock keys when discard pile is at least this large
+  static const int preserveUnlockKeysPileSize = 8;
+
+  /// After unlocking discard this turn, burst-dump at this hand size
+  static const int postUnlockBurstHandSize = 18;
+
   /// In foot phase, become urgent about discards at this threshold
   static const int footPhaseUrgencyThreshold = 5;
 
@@ -297,7 +316,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-wild-discard-guard';
+  static const String botAiVersion = '2026.07-pile-farm-contest';
 
   // Prevent instantiation
   BotConfig._();
