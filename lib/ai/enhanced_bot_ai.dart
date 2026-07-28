@@ -1683,8 +1683,17 @@ class EnhancedBotAI {
                   .aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
     }
 
-    // Hard-take rules after play-down (analytics: bots at 1% unlock vs humans 15%)
+    // Hard-take rules after play-down (analytics: bots at 1% unlock vs humans 15%).
+    // ≥25: take unless a go-out race forbids it; ≥12: unconditional hard-take.
     if (pileSize >= BotConfig.postPlayDownAlmostAlwaysTakePileSize) {
+      final goOutRaceForbids =
+          bot.hasPickedUpFoot &&
+          bot.canGoOutWithBooks &&
+          (_shouldRushToGoOut(bot, gameState) ||
+              BotEndGameManager.shouldGoOutAggressively(bot, gameState));
+      if (goOutRaceForbids) {
+        return false;
+      }
       return true;
     }
     if (pileSize >= BotConfig.postPlayDownHardTakePileSize) {
@@ -1777,17 +1786,8 @@ class EnhancedBotAI {
       return currentCombination;
     }
 
-    final alternatives = _meldAnalyzer.findBestPlayDownCombination(
-      bot,
-      controller,
-      playDownRequirement,
-    );
-    if (alternatives.isEmpty) {
-      return currentCombination;
-    }
-
-    // findBestPlayDownCombination returns one best set; also try natural-first
-    // candidates that meet the requirement while preserving keys.
+    // Seek a natural-first play-down that meets the requirement while keeping
+    // unlock keys. Fall back to the existing combination if none found.
     final naturalMelds = _meldAnalyzer.findNaturalMeldOpportunities(
       bot,
       controller,
@@ -1814,9 +1814,6 @@ class EnhancedBotAI {
       }
     }
 
-    if (_playDownLeavesUnlockKeys(bot, alternatives, topCard.rank)) {
-      return alternatives;
-    }
     return currentCombination;
   }
 

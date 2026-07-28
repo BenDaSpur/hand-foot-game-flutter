@@ -1085,9 +1085,10 @@ class BotEndGameManager {
         .length;
 
     if (cleanBooks > 0 && dirtyBooks > 0) {
-      // Have required books — discard only in discard phase (empty hand to go out)
+      // Discard only in discard phase. In meld, return null so handleEndGame
+      // can continue into winning-position / book-completion paths.
       if (controller.gameState.turnPhase != TurnPhase.discard) {
-        return BotDecision(action: 'noMeld');
+        return null;
       }
       final possibleDiscards = bot.currentHand
           .where((card) => !card.isThree)
