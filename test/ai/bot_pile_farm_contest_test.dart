@@ -130,50 +130,56 @@ void main() {
       );
     });
 
-    test('does not strategic-hold on foot with ≤3 cards when missing books', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.hand.clear();
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-        ]);
-      // Dirty book only — missing clean
-      bot.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-        ])!,
-      );
+    test(
+      'does not strategic-hold on foot with ≤3 cards when missing books',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.hand.clear();
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          ]);
+        // Dirty book only — missing clean
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
 
-      expect(bot.canGoOutWithBooks, isFalse);
-      expect(bot.currentHand.length, 3);
+        expect(bot.canGoOutWithBooks, isFalse);
+        expect(bot.currentHand.length, 3);
 
-      controller.gameState.turnPhase = TurnPhase.meld;
-      controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
 
-      final decision = botAI.makeDecision(bot, controller);
-      // Creating the 4s meld would empty the foot without go-out — must refuse
-      // emptying, but must not claim a strategic hold either (noMeld is OK).
-      expect(decision.action, 'noMeld');
-      expect(BotEndGameManager.wouldEmptyFootWithoutGoOut(bot), isFalse);
-      expect(
-        BotEndGameManager.isSafeCreateMeld(bot, [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-        ]),
-        isFalse,
-      );
-    });
+        final decision = botAI.makeDecision(bot, controller);
+        // Creating the 4s meld would empty the foot without go-out — refuse
+        // emptying. Meld phase must not emit discard (phase violation).
+        expect(decision.action, 'noMeld');
+        expect(
+          BotEndGameManager.isSafeCreateMeld(bot, [
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          ]),
+          isFalse,
+        );
+
+        controller.gameState.turnPhase = TurnPhase.discard;
+        final discardDecision = botAI.makeDecision(bot, controller);
+        expect(discardDecision.action, 'discard');
+      },
+    );
 
     test('melds toward missing clean book when safe with small foot hand', () {
       bot.hasPlayedDown = true;

@@ -4582,6 +4582,10 @@ class EnhancedBotAI {
               !bot.hasHandCard(decision.data as PlayingCard)) {
             return false;
           }
+          // Discard is only legal in the discard phase.
+          if (context.gameState.turnPhase != TurnPhase.discard) {
+            return false;
+          }
           // Never discard the last foot card without go-out books.
           return finalTurnActive ||
               !BotEndGameManager.wouldEmptyFootWithoutGoOut(bot);

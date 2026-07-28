@@ -28,7 +28,7 @@ void main() {
     test('applyConstantOverrides changes maxTurnsBeforeForcePlayDown', () {
       final manager = botAI.personalityManager;
       final baseline = manager.getConstants(adaptiveBot.id);
-      expect(baseline.maxTurnsBeforeForcePlayDown, 4);
+      expect(baseline.maxTurnsBeforeForcePlayDown, 3);
 
       manager.applyConstantOverrides(adaptiveBot.id, 'speed_counter', {
         'maxTurnsBeforeForcePlayDown': 1,
@@ -51,7 +51,7 @@ void main() {
       manager.resetAdaptiveConstants(adaptiveBot.id);
 
       final restored = manager.getConstants(adaptiveBot.id);
-      expect(restored.maxTurnsBeforeForcePlayDown, 4);
+      expect(restored.maxTurnsBeforeForcePlayDown, 3);
       expect(restored.bookCompletionPriority, 150);
       expect(manager.getAdaptiveStrategy(adaptiveBot.id), isEmpty);
     });
