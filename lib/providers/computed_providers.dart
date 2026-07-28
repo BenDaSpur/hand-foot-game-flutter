@@ -3,31 +3,32 @@ import '../models/player.dart';
 import '../models/game_state.dart';
 import 'game_providers.dart';
 
-/// Computed provider for current game state
-/// Automatically updates when controller state changes (via event notifications)
-final currentGameStateProvider = Provider<GameState?>((ref) {
-  // Watch the controller state - when version changes, this will rebuild
-  final controllerState = ref.watch(gameControllerProvider);
-  // Force dependency on version by accessing it - this ensures rebuilds
-  if (controllerState != null) {
-    // Access version to create dependency - Riverpod will track this
-    // The version change will cause this provider to rebuild
-    controllerState.version; // Access to create dependency
-    // Return game state - the version dependency ensures this rebuilds
-    return controllerState.controller.gameState;
-  }
-  return null;
-});
+/// Reads the live [GameState] off the controller held by
+/// [gameControllerProvider].
+///
+/// Every computed provider below must derive from [gameControllerProvider]
+/// through this helper rather than from [currentGameStateProvider]. The
+/// controller mutates one long-lived [GameState] instance, so a provider that
+/// returns that instance emits an unchanged value on every turn; Riverpod's
+/// equality check then suppresses the update and anything watching it keeps
+/// serving whatever it computed the first time. [GameControllerState] carries a
+/// version counter that changes on each turn/round event, so depending on it
+/// directly keeps derived values honest.
+GameState? _liveGameState(Ref ref) {
+  return ref.watch(gameControllerProvider)?.controller.gameState;
+}
+
+/// Computed provider for current game state.
+final currentGameStateProvider = Provider<GameState?>(_liveGameState);
 
 /// Computed provider for current player (reactive)
 final currentPlayerProvider = Provider<Player?>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
-  return gameState?.currentPlayer;
+  return _liveGameState(ref)?.currentPlayer;
 });
 
 /// Computed provider for leaderboard (sorted by score) - reactive
 final leaderboardProvider = Provider<List<Player>>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
+  final gameState = _liveGameState(ref);
   if (gameState == null) return [];
 
   final sortedPlayers = List<Player>.from(gameState.players);
@@ -37,7 +38,7 @@ final leaderboardProvider = Provider<List<Player>>((ref) {
 
 /// Computed provider for game status summary
 final gameStatusProvider = Provider<Map<String, dynamic>>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
+  final gameState = _liveGameState(ref);
   if (gameState == null) {
     return {
       'phase': 'setup',
@@ -76,25 +77,22 @@ final isBotTurnProvider = Provider<bool>((ref) {
 
 /// Computed provider for whether the game has ended
 final isGameEndedProvider = Provider<bool>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
-  return gameState?.phase == GamePhase.gameEnd;
+  return _liveGameState(ref)?.phase == GamePhase.gameEnd;
 });
 
 /// Computed provider for whether the round has ended
 final isRoundEndedProvider = Provider<bool>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
-  return gameState?.phase == GamePhase.roundEnd;
+  return _liveGameState(ref)?.phase == GamePhase.roundEnd;
 });
 
 /// Computed provider for game winner
 final gameWinnerProvider = Provider<Player?>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
-  return gameState?.winner;
+  return _liveGameState(ref)?.winner;
 });
 
 /// Computed provider for human player
 final humanPlayerProvider = Provider<Player?>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
+  final gameState = _liveGameState(ref);
   if (gameState == null) return null;
 
   try {
@@ -106,7 +104,7 @@ final humanPlayerProvider = Provider<Player?>((ref) {
 
 /// Computed provider for bot players
 final botPlayersProvider = Provider<List<Player>>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
+  final gameState = _liveGameState(ref);
   if (gameState == null) return [];
 
   return gameState.players.where((p) => p.type == PlayerType.bot).toList();
@@ -114,6 +112,5 @@ final botPlayersProvider = Provider<List<Player>>((ref) {
 
 /// Computed provider for play-down requirement for current round
 final playDownRequirementProvider = Provider<int>((ref) {
-  final gameState = ref.watch(currentGameStateProvider);
-  return gameState?.playDownRequirement ?? 0;
+  return _liveGameState(ref)?.playDownRequirement ?? 0;
 });

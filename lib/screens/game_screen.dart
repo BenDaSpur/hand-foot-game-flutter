@@ -78,6 +78,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       ref.read(gameControllerProvider)?.controller;
   EnhancedBotAI get _botAI => ref.read(botAIProvider);
 
+  /// Turn owner read straight off the controller, which is the same source
+  /// [build] uses to decide whether the hand is tappable. Turn-ownership gates
+  /// must not disagree with what the player can see on screen.
+  Player? get _liveCurrentPlayer => _gameController?.gameState.currentPlayer;
+
   final List<int> _selectedCardIndices =
       []; // Track card indices instead of card objects
   bool _isInitialized = false;
@@ -794,8 +799,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     // is disposed mid-animation, leaving cards untappable while Play Cards
     // stays enabled.
 
-    final currentPlayer = ref.read(currentPlayerProvider);
-    if (currentPlayer?.type != PlayerType.human) {
+    if (_liveCurrentPlayer?.type != PlayerType.human) {
       return;
     }
 
@@ -844,8 +848,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    final currentPlayer = ref.read(currentPlayerProvider);
-    if (currentPlayer?.type != PlayerType.human) {
+    if (_liveCurrentPlayer?.type != PlayerType.human) {
       return;
     }
 
@@ -941,8 +944,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   Set<int> _playableCardIndices(Player humanPlayer) {
-    final currentPlayer = ref.read(currentPlayerProvider);
-    if (currentPlayer?.type != PlayerType.human) {
+    if (_liveCurrentPlayer?.type != PlayerType.human) {
       return {};
     }
 
@@ -977,7 +979,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   bool _isGameStuck() {
     final humanPlayer = ref.read(humanPlayerProvider);
-    final currentPlayer = ref.read(currentPlayerProvider);
+    final currentPlayer = _liveCurrentPlayer;
     final gameState = ref.read(currentGameStateProvider);
 
     if (humanPlayer == null || currentPlayer == null || gameState == null) {
@@ -1504,7 +1506,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             // Schedule bot processing for next frame to avoid immediate execution during human turn
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
-                final nextPlayer = ref.read(currentPlayerProvider);
+                final nextPlayer = _liveCurrentPlayer;
                 if (nextPlayer?.type != PlayerType.human) {
                   processCurrentPlayerTurn();
                 }
@@ -1546,7 +1548,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         // Schedule bot processing for next frame to avoid immediate execution during human turn
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            final nextPlayer = ref.read(currentPlayerProvider);
+            final nextPlayer = _liveCurrentPlayer;
             if (nextPlayer?.type != PlayerType.human) {
               processCurrentPlayerTurn();
             }
