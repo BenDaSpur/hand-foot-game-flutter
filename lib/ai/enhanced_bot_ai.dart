@@ -1156,14 +1156,14 @@ class EnhancedBotAI {
       return createMeld;
     }
 
-    // Try adding to existing melds
+    // Try adding to existing melds (same unlock-key / wild filters as normal meld)
     final controller = context.controller as GameController?;
     if (controller == null) {
       return BotDecision(action: 'noMeld');
     }
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+    final cardsToAdd = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
       bot,
-      controller,
     );
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
@@ -1233,22 +1233,23 @@ class EnhancedBotAI {
         gameState.round >= 3 &&
         (handSize >= BotConfig.lateRoundForcePlayDownHandSize ||
             botScoreGap >= BotConfig.lateRoundForcePlayDownScoreGap);
-    // Humans farm fat piles while bots wait — play down early when the pile is
-    // contestable and we hold unlock keys (or hand is already large).
-    final pileFarmForcePlayDown =
+    // Humans farm fat piles while bots wait. This is only a *legal* play-down
+    // accelerator (gated on meetsRequirement below) — pile size / unlock keys
+    // alone must not force a sub-threshold combination.
+    final pileFarmPressure =
         gameState.discardPile.length >=
             BotConfig.pileFarmForcePlayDownPileSize &&
         (_couldUnlockDiscardPileIfPlayedDown(bot, gameState) ||
             handSize >= BotConfig.pileFarmForcePlayDownHandSize);
+    // Emergency forces may play short of requirement; pile-farm is excluded.
     final shouldForcePlayDown =
         lateRoundBehind ||
-        pileFarmForcePlayDown ||
         (personality == BotPersonality.bookBuilder && handSize >= 18) ||
         (isUnderCompetitivePressure && handSize >= 18) ||
         (isUnderSeverePressure && handSize >= 15) ||
         (handSize >= 25); // Universal emergency threshold
 
-    if (shouldForcePlayDown) {
+    if (shouldForcePlayDown || pileFarmPressure) {
       DebugLogger.debug(
         '${bot.name}: FORCING play-down due to large hand size ($handSize) or competitive pressure',
       );
@@ -1307,15 +1308,17 @@ class EnhancedBotAI {
           combinationValue >= (adjustedRequirement + 10); // Reasonable excess
       final hasWaitedEnough = turnCount >= urgentTurnLimit;
       final lateRoundUrgency = gameState.round >= 3;
+      // Pile-farm force only after the combination clears the legal threshold.
+      final pileFarmForcePlayDown = pileFarmPressure && meetsRequirement;
 
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency',
+        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown',
       );
 
-      // AGGRESSIVE FIX: Play down immediately if we meet basic requirement OR under pressure
-      // No need to wait for excess points - this was causing bots to accumulate cards
+      // Play down immediately if we meet requirement (incl. pile-farm) OR under
+      // emergency force. Pile-farm alone never bypasses point validation.
       if (meetsRequirement || shouldForcePlayDown) {
         if (shouldForcePlayDown && !meetsRequirement) {
           DebugLogger.debug(
@@ -1329,6 +1332,7 @@ class EnhancedBotAI {
     }
 
     // FALLBACK: If forced to play-down but no valid combinations found, create any meld possible
+    // (emergency forces only — not pile-farm pressure).
     if (shouldForcePlayDown && bestCombination.isEmpty) {
       DebugLogger.debug(
         '${bot.name}: Forced play-down but no valid combinations - attempting any meld',
@@ -4818,9 +4822,23 @@ class EnhancedBotAI {
 
   // Getters for testing and debugging
 
+  /// Run [action] with [_activeContext] set so unlock-key filters match makeDecision.
+  T _withDecisionContext<T>(BotGameContext context, T Function() action) {
+    final previous = _activeContext;
+    _activeContext = context;
+    try {
+      return action();
+    } finally {
+      _activeContext = previous;
+    }
+  }
+
   @visibleForTesting
   bool shouldCompleteHandPileForFoot(Player bot, BotGameContext context) {
-    return _shouldCompleteHandPileForFoot(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _shouldCompleteHandPileForFoot(bot, context),
+    );
   }
 
   @visibleForTesting
@@ -4828,22 +4846,34 @@ class EnhancedBotAI {
     Player bot,
     BotGameContext context,
   ) {
-    return _makeCompleteHandPileForFootDecision(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _makeCompleteHandPileForFootDecision(bot, context),
+    );
   }
 
   @visibleForTesting
   BotDecision makeFinalTurnScoringDecision(Player bot, BotGameContext context) {
-    return _makeFinalTurnScoringDecision(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _makeFinalTurnScoringDecision(bot, context),
+    );
   }
 
   @visibleForTesting
   bool shouldRushHandToFoot(Player bot, BotGameContext context) {
-    return _shouldRushHandToFoot(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _shouldRushHandToFoot(bot, context),
+    );
   }
 
   @visibleForTesting
   BotDecision? makeHandToFootRushDecision(Player bot, BotGameContext context) {
-    return _makeHandToFootRushDecision(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _makeHandToFootRushDecision(bot, context),
+    );
   }
 
   Map<String, OpponentAnalysis> get opponentAnalysis =>
