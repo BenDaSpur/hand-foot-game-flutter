@@ -1255,7 +1255,7 @@ class EnhancedBotAI {
       );
     }
 
-    // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
+    // PRIORITY 1: Evaluate play-down combinations (patience / pile-farm / force below)
     final controller = context.controller as GameController?;
     if (controller == null) {
       return BotDecision(action: 'noMeld');
@@ -1308,8 +1308,10 @@ class EnhancedBotAI {
           combinationValue >= (adjustedRequirement + 10); // Reasonable excess
       final hasWaitedEnough = turnCount >= urgentTurnLimit;
       final lateRoundUrgency = gameState.round >= 3;
-      // Pile-farm force only after the combination clears the legal threshold.
+      // Legal pile-farm override: meets points AND fat/unlockable pile pressure.
       final pileFarmForcePlayDown = pileFarmPressure && meetsRequirement;
+      final readyByPatience =
+          hasWaitedEnough || hasModerateExcess || lateRoundUrgency;
 
       DebugLogger.botDebug(
         bot.id,
@@ -1317,9 +1319,11 @@ class EnhancedBotAI {
         'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown',
       );
 
-      // Play down immediately if we meet requirement (incl. pile-farm) OR under
-      // emergency force. Pile-farm alone never bypasses point validation.
-      if (meetsRequirement || shouldForcePlayDown) {
+      // Patience-gated legal play-down; pile-farm and emergency force override
+      // patience. Pile-farm never skips point validation (requires meetsRequirement).
+      if (shouldForcePlayDown ||
+          pileFarmForcePlayDown ||
+          (meetsRequirement && readyByPatience)) {
         if (shouldForcePlayDown && !meetsRequirement) {
           DebugLogger.debug(
             '${bot.name}: EMERGENCY play-down despite not meeting full requirement ($combinationValue/$adjustedRequirement)',
@@ -1327,8 +1331,6 @@ class EnhancedBotAI {
         }
         return _executePlayDown(bestCombination);
       }
-
-      // Redundant aggressive bot logic removed - all bots now play down immediately when meeting requirements
     }
 
     // FALLBACK: If forced to play-down but no valid combinations found, create any meld possible
