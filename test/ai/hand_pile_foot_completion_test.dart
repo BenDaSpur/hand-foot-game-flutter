@@ -107,6 +107,18 @@ void main() {
       'uses createMultipleMelds to clear hand with two melds plus discard',
       () {
         human.hasPickedUpFoot = true;
+        // Soft / opponent-pressure completion requires a book or clear-all path
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
         bot.hand
           ..clear()
           ..addAll([

@@ -1,6 +1,7 @@
 import '../models/player.dart';
 import '../models/card.dart';
 import '../models/meld.dart';
+import '../models/game_state.dart';
 import '../game/game_controller.dart';
 import '../config/game_config.dart';
 import 'bot_config.dart';
@@ -75,6 +76,92 @@ class BotMeldAnalyzer {
         .where((meld) => !meld.any((card) => card.isWild))
         .toList();
     return wildFree.isNotEmpty ? wildFree : candidates;
+  }
+
+  /// Prefer melds that leave ≥2 naturals matching the discard top so the bot
+  /// can unlock a contestable pile. Returns an empty list when every candidate
+  /// would burn unlock keys (callers should noMeld unless emergency).
+  ///
+  /// Book-sized melds (≥7) are allowed even when they spend keys — completing
+  /// a book outweighs a future unlock.
+  static List<List<PlayingCard>> filterUnlockKeyMeldCandidates(
+    Player bot,
+    GameState gameState,
+    List<List<PlayingCard>> possibleMelds,
+  ) {
+    if (!bot.hasPlayedDown || possibleMelds.isEmpty) {
+      return possibleMelds;
+    }
+    if (gameState.discardPile.length <
+        BotConfig.preserveUnlockKeysMeldPileSize) {
+      return possibleMelds;
+    }
+
+    final top = gameState.topDiscard;
+    if (top == null || top.isWild || top.isThree) {
+      return possibleMelds;
+    }
+
+    final matchingInHand = bot.currentHand
+        .where((card) => !card.isWild && card.rank == top.rank)
+        .length;
+    if (matchingInHand < GameConfig.minNaturalCardsForMeld) {
+      return possibleMelds;
+    }
+
+    bool leavesUnlockKeys(List<PlayingCard> meld) {
+      final used = meld
+          .where((card) => !card.isWild && card.rank == top.rank)
+          .length;
+      return matchingInHand - used >= GameConfig.minNaturalCardsForMeld;
+    }
+
+    final preserving = possibleMelds.where(leavesUnlockKeys).toList();
+    if (preserving.isNotEmpty) {
+      return preserving;
+    }
+
+    final bookMelds = possibleMelds
+        .where((meld) => meld.length >= GameConfig.bookSize)
+        .toList();
+    if (bookMelds.isNotEmpty) {
+      return bookMelds;
+    }
+
+    // Hold for unlock — do not burn the last keys on a small meld.
+    return const <List<PlayingCard>>[];
+  }
+
+  /// Whether adding [card] to [meld] would leave fewer than 2 unlock naturals
+  /// for the current discard top. Book completion is always allowed.
+  static bool additionBurnsUnlockKeys(
+    Player bot,
+    GameState gameState,
+    PlayingCard card,
+    Meld meld,
+  ) {
+    if (!bot.hasPlayedDown) {
+      return false;
+    }
+    if (gameState.discardPile.length <
+        BotConfig.preserveUnlockKeysMeldPileSize) {
+      return false;
+    }
+    final top = gameState.topDiscard;
+    if (top == null || top.isWild || top.isThree) {
+      return false;
+    }
+    if (card.isWild || card.rank != top.rank) {
+      return false;
+    }
+    // Completing a book with this add is worth spending a key.
+    if (meld.cards.length + 1 >= GameConfig.bookSize) {
+      return false;
+    }
+    final matchingInHand = bot.currentHand
+        .where((c) => !c.isWild && c.rank == top.rank)
+        .length;
+    return matchingInHand - 1 < GameConfig.minNaturalCardsForMeld;
   }
 
   // Cached results for performance

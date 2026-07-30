@@ -157,17 +157,18 @@ class BotDiscardAnalyzer {
     }
 
     // 7. UNLOCK KEYS: Keep 2+ matching naturals for an attractive discard pile
-    if (bot.hasPlayedDown &&
-        !card.isWild &&
-        !card.isThree &&
-        gameState.discardPile.isNotEmpty) {
+    // (also before play-down — keys are needed immediately after playing down).
+    if (!card.isWild && !card.isThree && gameState.discardPile.isNotEmpty) {
       final top = gameState.topDiscard;
       if (top != null && !top.isWild && !top.isThree && card.rank == top.rank) {
         final matchingNaturals = bot.currentHand
             .where((c) => c.rank == top.rank && !c.isWild)
             .length;
         final pileSize = gameState.discardPile.length;
-        if (matchingNaturals >= 2 && pileSize >= 5) {
+        final minPile = bot.hasPlayedDown
+            ? BotConfig.preserveUnlockKeysMeldPileSize
+            : BotConfig.preserveUnlockKeysPileSize;
+        if (matchingNaturals >= 2 && pileSize >= minPile) {
           // Preserve unlock ability — humans take ~10% of draws from pile
           score -= 80;
           if (pileSize >= 10) {

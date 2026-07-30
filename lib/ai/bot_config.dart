@@ -91,6 +91,17 @@ class BotConfig {
   /// Prefer play-downs that keep unlock keys when discard pile is at least this large
   static const int preserveUnlockKeysPileSize = 8;
 
+  /// Hold unlock natural pairs through meld/add when pile is at least this large
+  /// (analytics: bots burned keys then could not contest human 10–40 card farms).
+  static const int preserveUnlockKeysMeldPileSize = 5;
+
+  /// Force play-down when discard pile reaches this size and bot can meet
+  /// requirement / hold unlock keys — stop 20–28 card hoards while humans farm.
+  static const int pileFarmForcePlayDownPileSize = 12;
+
+  /// Hand size that, with a farmable pile, forces play-down even mid-patience
+  static const int pileFarmForcePlayDownHandSize = 14;
+
   /// After unlocking discard this turn, burst-dump at this hand size
   static const int postUnlockBurstHandSize = 18;
 
@@ -316,7 +327,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-pile-farm-contest';
+  static const String botAiVersion = '2026.07-unlock-key-hold';
 
   // Prevent instantiation
   BotConfig._();

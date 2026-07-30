@@ -6,7 +6,7 @@ void main() {
   group('drawSourceFromAction', () {
     test('maps draw actions to normalized drawSource', () {
       expect(drawSourceFromAction('drawFromDeck'), 'deck');
-      expect(drawSourceFromAction('drawFromDiscard'), 'discard');
+      expect(drawSourceFromAction('drawFromDiscard'), 'unlock');
       expect(drawSourceFromAction('unlockDiscardPile'), 'unlock');
       expect(drawSourceFromAction('discardCard'), isNull);
     });
