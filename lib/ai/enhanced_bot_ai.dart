@@ -1149,16 +1149,18 @@ class EnhancedBotAI {
 
   /// Handle competitive threat by switching to aggressive mode
   BotDecision _handleCompetitiveThreat(Player bot, BotGameContext context) {
-    // Force meld creation if possible
+    // Force meld creation if possible (respect unlock-key / clean-lane filters)
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      final urgentMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: urgentMeld);
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
     // Try adding to existing melds
     final controller = context.controller as GameController?;
-    if (controller == null) return BotDecision(action: 'noMeld');
+    if (controller == null) {
+      return BotDecision(action: 'noMeld');
+    }
     final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
       bot,
       controller,
@@ -2797,15 +2799,9 @@ class EnhancedBotAI {
     }
 
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      return BotDecision(
-        action: 'createMeld',
-        data: _meldAnalyzer.findBestMeld(
-          possibleMelds,
-          bot: bot,
-          preferLarger: true,
-        ),
-      );
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
     final footTransition = _footTransitionManager.handleFootTransition(
@@ -2904,15 +2900,9 @@ class EnhancedBotAI {
     }
 
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      return BotDecision(
-        action: 'createMeld',
-        data: _meldAnalyzer.findBestMeld(
-          possibleMelds,
-          bot: bot,
-          preferLarger: true,
-        ),
-      );
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
     final footTransition = _footTransitionManager.handleFootTransition(
