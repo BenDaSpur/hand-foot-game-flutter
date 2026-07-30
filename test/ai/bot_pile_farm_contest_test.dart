@@ -14,7 +14,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
-  group('Pile-farm contest AI (2026.07-pile-farm-contest)', () {
+  group('Pile-farm contest AI (2026.07-unlock-key-hold)', () {
     late EnhancedBotAI botAI;
     late GameController controller;
     late Player human;
@@ -30,8 +30,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for pile-farm contest', () {
-      expect(BotConfig.botAiVersion, '2026.07-pile-farm-contest');
+    test('botAiVersion bumped for unlock-key-hold', () {
+      expect(BotConfig.botAiVersion, '2026.07-unlock-key-hold');
     });
 
     test(

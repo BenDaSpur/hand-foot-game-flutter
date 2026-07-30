@@ -48,6 +48,12 @@ class EnhancedBotAI {
   Map<String, List<List<PlayingCard>>>? _cachedPossibleMelds;
   String? _lastMeldCacheKey;
 
+  /// Active decision context — used by meld helpers to preserve unlock keys.
+  BotGameContext? _activeContext;
+
+  /// When true, meld helpers may spend unlock natural pairs (emergency dump).
+  bool _forceSpendUnlockKeys = false;
+
   // All strategic constants now centralized in BotConfig
 
   factory EnhancedBotAI({int? seed}) {
@@ -95,16 +101,23 @@ class EnhancedBotAI {
   /// path can meld/discard a foot hand down to 0 cards without go-out books
   /// (analytics: session 17849474674147414 `error` states).
   BotDecision _makeDecisionWithContext(Player bot, BotGameContext context) {
-    final decision = _computeDecisionWithContext(bot, context);
-    if (_isValidDecision(decision, bot, context)) {
-      return decision;
+    _activeContext = context;
+    _forceSpendUnlockKeys = false;
+    try {
+      final decision = _computeDecisionWithContext(bot, context);
+      if (_isValidDecision(decision, bot, context)) {
+        return decision;
+      }
+      DebugLogger.botDebug(
+        bot.id,
+        bot.name,
+        'Unsafe decision ${decision.action} from priority path - using safe fallback',
+      );
+      return _getSafeDecision(context.gameState.turnPhase, bot, context);
+    } finally {
+      _activeContext = null;
+      _forceSpendUnlockKeys = false;
     }
-    DebugLogger.botDebug(
-      bot.id,
-      bot.name,
-      'Unsafe decision ${decision.action} from priority path - using safe fallback',
-    );
-    return _getSafeDecision(context.gameState.turnPhase, bot, context);
   }
 
   /// Computes the raw decision; callers must validate via [_isValidDecision].
@@ -205,6 +218,7 @@ class EnhancedBotAI {
           shouldBypassEarlyGame) {
         // PANIC MODE: But still try conservative play-down first if not played down yet
         if (gameState.turnPhase == TurnPhase.meld) {
+          _forceSpendUnlockKeys = true;
           List<List<PlayingCard>> emergencyMelds;
 
           // If not played down, try conservative play-down even in emergency
@@ -268,6 +282,7 @@ class EnhancedBotAI {
           shouldBypassEarlyGame) {
         // EMERGENCY MODE: Use maximal meld combination for aggressive melding
         if (gameState.turnPhase == TurnPhase.meld) {
+          _forceSpendUnlockKeys = true;
           // If not played down, force emergency play-down with enhanced combination
           if (!bot.hasPlayedDown) {
             return _handleEmergencyPlayDown(bot, context);
@@ -302,14 +317,15 @@ class EnhancedBotAI {
             }
           }
         }
-        // In draw phase with emergency hand size - still draw to get to meld phase
+        // Draw phase: still evaluate the discard pile — emergency must not
+        // skip unlockable fat piles (analytics: bots deck-looped after large hands).
         if (gameState.turnPhase == TurnPhase.draw) {
           DebugLogger.botDebug(
             bot.id,
             bot.name,
-            'EMERGENCY (turn $botTurnCount): Hand size $handSize - forcing quick draw to reach meld phase',
+            'EMERGENCY (turn $botTurnCount): Hand size $handSize - evaluating draw with pile contest',
           );
-          return BotDecision(action: 'drawFromDeck');
+          return _makeDrawDecision(bot, context);
         }
       }
 
@@ -438,18 +454,17 @@ class EnhancedBotAI {
           );
           return BotDecision(action: 'drawFromDiscard');
         }
-        // Pre-play-down: play down first so we can unlock the pile on a future turn
+        // Pre-play-down: never return createMeld during draw phase (turn manager
+        // falls back to deck). Draw from deck so the next meld phase can force
+        // play-down while keys / pile are still available.
         if (shouldTake && !canUnlock && !bot.hasPlayedDown) {
           if (_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
             DebugLogger.botDebug(
               bot.id,
               bot.name,
-              'Valuable discard pile blocked - prioritizing play-down first',
+              'Valuable discard pile blocked - drawing deck then play-down next meld',
             );
-            final playDownDecision = _handlePlayDownDecision(bot, context);
-            if (playDownDecision.action != 'noMeld') {
-              return playDownDecision;
-            }
+            return BotDecision(action: 'drawFromDeck');
           }
         }
       } catch (e) {
@@ -470,31 +485,6 @@ class EnhancedBotAI {
         'Accumulation phase - drawing from deck (human pattern)',
       );
       return BotDecision(action: 'drawFromDeck');
-    }
-
-    // NEW: Even more aggressive - check discard pile before playing down if pile is huge
-    if (gameState.discardPile.length >= 8 && !bot.hasPlayedDown) {
-      try {
-        final riskTolerance = _personalityManager.calculateRiskTolerance(
-          gameState,
-          bot,
-        );
-        if (_shouldTakeDiscardPile(
-              bot,
-              context,
-              riskTolerance * 2.0,
-            ) && // 2x risk tolerance for huge piles
-            context.canUnlockDiscard()) {
-          DebugLogger.botDebug(
-            bot.id,
-            bot.name,
-            'Returning drawFromDiscard (huge pile, pre-play-down)',
-          );
-          return BotDecision(action: 'drawFromDiscard');
-        }
-      } catch (e) {
-        // Continue to default if error
-      }
     }
 
     // NEW: FOOT PHASE URGENCY - Avoid drawing from deck if in foot with few cards
@@ -631,17 +621,18 @@ class EnhancedBotAI {
     if (handSize >= BotConfig.criticalHandSizeThreshold &&
         shouldBypassEarlyGame) {
       // PANIC MODE: Any meld is better than none
+      _forceSpendUnlockKeys = true;
       final anyPossibleMelds = _getCachedPossibleMelds(bot, context);
-      if (anyPossibleMelds.isNotEmpty) {
-        final panicMeld = _selectBestNewMeld(bot, anyPossibleMelds);
+      final panicCreate = _tryCreateBestNewMeld(bot, anyPossibleMelds);
+      if (panicCreate != null) {
         DebugLogger.botDebug(
           bot.id,
           bot.name,
           'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $BotConfig.criticalHandSizeThreshold - forcing meld creation',
         );
         return BotDecision(
-          action: 'createMeld',
-          data: panicMeld,
+          action: panicCreate.action,
+          data: panicCreate.data,
           skipPlayDownCheck:
               true, // Force creation regardless of play-down requirements
         );
@@ -655,12 +646,13 @@ class EnhancedBotAI {
         !isEarlyGame &&
         botTurnCount >= BotConfig.minTurnsForEmergency) {
       // EMERGENCY MODE: Force aggressive meld creation
+      _forceSpendUnlockKeys = true;
       if (bot.hasPlayedDown) {
         // Already played down - meld anything possible
         final emergencyMelds = _getCachedPossibleMelds(bot, context);
-        if (emergencyMelds.isNotEmpty) {
-          final urgentMeld = _selectBestNewMeld(bot, emergencyMelds);
-          return BotDecision(action: 'createMeld', data: urgentMeld);
+        final urgentCreate = _tryCreateBestNewMeld(bot, emergencyMelds);
+        if (urgentCreate != null) {
+          return urgentCreate;
         }
       } else {
         // Force play-down even with suboptimal points
@@ -768,11 +760,9 @@ class EnhancedBotAI {
       }
 
       final rushMelds = _getCachedPossibleMelds(bot, context);
-      if (rushMelds.isNotEmpty) {
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, rushMelds),
-        );
+      final rushCreate = _tryCreateBestNewMeld(bot, rushMelds);
+      if (rushCreate != null) {
+        return rushCreate;
       }
     }
 
@@ -796,11 +786,11 @@ class EnhancedBotAI {
     }
 
     // Try to create new melds with book balance consideration
-    // (clean-lane filter applied via _selectBestNewMeld)
+    // (clean-lane + unlock-key filters applied via _selectBestNewMeld)
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      final bestMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: bestMeld);
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
     // No meld opportunities
@@ -1159,19 +1149,21 @@ class EnhancedBotAI {
 
   /// Handle competitive threat by switching to aggressive mode
   BotDecision _handleCompetitiveThreat(Player bot, BotGameContext context) {
-    // Force meld creation if possible
+    // Force meld creation if possible (respect unlock-key / clean-lane filters)
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      final urgentMeld = _selectBestNewMeld(bot, possibleMelds);
-      return BotDecision(action: 'createMeld', data: urgentMeld);
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
-    // Try adding to existing melds
+    // Try adding to existing melds (same unlock-key / wild filters as normal meld)
     final controller = context.controller as GameController?;
-    if (controller == null) return BotDecision(action: 'noMeld');
-    final cardsToAdd = _meldAnalyzer.findCardsToAddToExistingMelds(
+    if (controller == null) {
+      return BotDecision(action: 'noMeld');
+    }
+    final cardsToAdd = _filterWildCardAdditions(
+      _meldAnalyzer.findCardsToAddToExistingMelds(bot, controller),
       bot,
-      controller,
     );
     if (cardsToAdd.isNotEmpty) {
       return BotDecision(action: 'addToMeld', data: cardsToAdd.first);
@@ -1241,20 +1233,29 @@ class EnhancedBotAI {
         gameState.round >= 3 &&
         (handSize >= BotConfig.lateRoundForcePlayDownHandSize ||
             botScoreGap >= BotConfig.lateRoundForcePlayDownScoreGap);
+    // Humans farm fat piles while bots wait. This is only a *legal* play-down
+    // accelerator (gated on meetsRequirement below) — pile size / unlock keys
+    // alone must not force a sub-threshold combination.
+    final pileFarmPressure =
+        gameState.discardPile.length >=
+            BotConfig.pileFarmForcePlayDownPileSize &&
+        (_couldUnlockDiscardPileIfPlayedDown(bot, gameState) ||
+            handSize >= BotConfig.pileFarmForcePlayDownHandSize);
+    // Emergency forces may play short of requirement; pile-farm is excluded.
     final shouldForcePlayDown =
         lateRoundBehind ||
-        (personality == BotPersonality.bookBuilder && handSize >= 22) ||
+        (personality == BotPersonality.bookBuilder && handSize >= 18) ||
         (isUnderCompetitivePressure && handSize >= 18) ||
         (isUnderSeverePressure && handSize >= 15) ||
         (handSize >= 25); // Universal emergency threshold
 
-    if (shouldForcePlayDown) {
+    if (shouldForcePlayDown || pileFarmPressure) {
       DebugLogger.debug(
         '${bot.name}: FORCING play-down due to large hand size ($handSize) or competitive pressure',
       );
     }
 
-    // PRIORITY 1: Always play down if we can meet requirements (regardless of patience)
+    // PRIORITY 1: Evaluate play-down combinations (patience / pile-farm / force below)
     final controller = context.controller as GameController?;
     if (controller == null) {
       return BotDecision(action: 'noMeld');
@@ -1303,20 +1304,30 @@ class EnhancedBotAI {
           : playDownRequirement;
 
       final meetsRequirement = combinationValue >= adjustedRequirement;
+      // Full threshold (not the R3+ 80% relaxation) for pile-farm acceleration.
+      final meetsFullPlayDownRequirement =
+          combinationValue >= playDownRequirement;
       final hasModerateExcess =
           combinationValue >= (adjustedRequirement + 10); // Reasonable excess
       final hasWaitedEnough = turnCount >= urgentTurnLimit;
       final lateRoundUrgency = gameState.round >= 3;
+      // Legal pile-farm override: full points AND fat/unlockable pile pressure.
+      final pileFarmForcePlayDown =
+          pileFarmPressure && meetsFullPlayDownRequirement;
+      final readyByPatience =
+          hasWaitedEnough || hasModerateExcess || lateRoundUrgency;
 
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency',
+        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), full=$meetsFullPlayDownRequirement, excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown',
       );
 
-      // AGGRESSIVE FIX: Play down immediately if we meet basic requirement OR under pressure
-      // No need to wait for excess points - this was causing bots to accumulate cards
-      if (meetsRequirement || shouldForcePlayDown) {
+      // Patience-gated legal play-down; pile-farm (full threshold) and emergency
+      // force override patience. Pile-farm never uses the R3+ 80% relaxation.
+      if (shouldForcePlayDown ||
+          pileFarmForcePlayDown ||
+          (meetsRequirement && readyByPatience)) {
         if (shouldForcePlayDown && !meetsRequirement) {
           DebugLogger.debug(
             '${bot.name}: EMERGENCY play-down despite not meeting full requirement ($combinationValue/$adjustedRequirement)',
@@ -1324,11 +1335,10 @@ class EnhancedBotAI {
         }
         return _executePlayDown(bestCombination);
       }
-
-      // Redundant aggressive bot logic removed - all bots now play down immediately when meeting requirements
     }
 
     // FALLBACK: If forced to play-down but no valid combinations found, create any meld possible
+    // (emergency forces only — not pile-farm pressure).
     if (shouldForcePlayDown && bestCombination.isEmpty) {
       DebugLogger.debug(
         '${bot.name}: Forced play-down but no valid combinations - attempting any meld',
@@ -1437,10 +1447,11 @@ class EnhancedBotAI {
           )
           .toList();
       if (qualifyingEmergency.isNotEmpty) {
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, qualifyingEmergency),
-        );
+        _forceSpendUnlockKeys = true;
+        final emergencyCreate = _tryCreateBestNewMeld(bot, qualifyingEmergency);
+        if (emergencyCreate != null) {
+          return emergencyCreate;
+        }
       }
       return BotDecision(action: 'noMeld');
     }
@@ -1465,10 +1476,11 @@ class EnhancedBotAI {
 
     switch (gameState.turnPhase) {
       case TurnPhase.draw:
-        // In panic mode, always draw from deck (fastest)
-        return BotDecision(action: 'drawFromDeck');
+        // Panic still contests unlockable piles (same eligibility gate as normal).
+        return _makeDrawDecision(bot, context);
 
       case TurnPhase.meld:
+        _forceSpendUnlockKeys = true;
         // Pre-play-down: only legal full play-down combinations or melds meeting requirement.
         if (possibleMelds.isNotEmpty) {
           final controllerPanic = context.controller as GameController?;
@@ -1490,11 +1502,9 @@ class EnhancedBotAI {
                       playDownRequirement,
                 )
                 .toList();
-            if (qualifyingPanic.isNotEmpty) {
-              return BotDecision(
-                action: 'createMeld',
-                data: _selectBestNewMeld(bot, qualifyingPanic),
-              );
+            final panicCreate = _tryCreateBestNewMeld(bot, qualifyingPanic);
+            if (panicCreate != null) {
+              return panicCreate;
             }
             return BotDecision(action: 'noMeld');
           }
@@ -1505,10 +1515,13 @@ class EnhancedBotAI {
                     (playDownRequirement * 0.7).round(),
               )
               .toList();
-          final desperateMeld = qualifyingPanic.isNotEmpty
-              ? _selectBestNewMeld(bot, qualifyingPanic)
-              : _selectBestNewMeld(bot, possibleMelds);
-          return BotDecision(action: 'createMeld', data: desperateMeld);
+          final desperateCreate = _tryCreateBestNewMeld(
+            bot,
+            qualifyingPanic.isNotEmpty ? qualifyingPanic : possibleMelds,
+          );
+          if (desperateCreate != null) {
+            return desperateCreate;
+          }
         }
         return BotDecision(action: 'noMeld');
 
@@ -2449,13 +2462,13 @@ class EnhancedBotAI {
       // NEW: If bot has sufficient books (4+), create any meld to reduce hand size
       final totalBooks = bot.melds.where((m) => m.isBook).length;
       if (hasRequiredBooks && totalBooks >= 4) {
-        DebugLogger.debug(
-          '${bot.name}: Has $totalBooks books - creating any meld to reduce hand size',
-        );
-        return BotDecision(
-          action: 'createMeld',
-          data: _selectBestNewMeld(bot, possibleMelds),
-        );
+        final anyMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+        if (anyMeld != null) {
+          DebugLogger.debug(
+            '${bot.name}: Has $totalBooks books - creating any meld to reduce hand size',
+          );
+          return anyMeld;
+        }
       }
 
       // Select meld type based on book requirements for competitive advantage
@@ -2467,6 +2480,9 @@ class EnhancedBotAI {
             .toList();
         if (cleanCandidates.isNotEmpty) {
           strategicMeld = _selectBestNewMeld(bot, cleanCandidates);
+          if (strategicMeld.isEmpty) {
+            strategicMeld = null;
+          }
         }
       } else if (needsDirtyBook) {
         final dirtyCandidates = possibleMelds
@@ -2474,13 +2490,17 @@ class EnhancedBotAI {
             .toList();
         if (dirtyCandidates.isNotEmpty) {
           strategicMeld = _selectBestNewMeld(bot, dirtyCandidates);
+          if (strategicMeld.isEmpty) {
+            strategicMeld = null;
+          }
         }
       }
 
       final selectedMeld =
           strategicMeld ?? _selectBestNewMeld(bot, possibleMelds);
-
-      return BotDecision(action: 'createMeld', data: selectedMeld);
+      if (selectedMeld.isNotEmpty) {
+        return BotDecision(action: 'createMeld', data: selectedMeld);
+      }
     }
 
     return BotDecision(action: 'noMeld');
@@ -2713,22 +2733,26 @@ class EnhancedBotAI {
     }
 
     if (_opponentOnFootPressure(context, bot) &&
-        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold &&
+        _hasBookOrClearAllPath(bot, context)) {
       return true;
     }
 
     final personality = _personalityManager.getPersonality(bot.id);
     if (personality == BotPersonality.aggressive) {
       // Soft aggressive rush (5–6): require book progress or clear-all so we
-      // do not noMeld-loop with 0 books (analytics hand-pile stall).
+      // do not noMeld-loop with 0 books (analytics hand-pile stall / FOOT_NO_BOOKS).
       if (handSize <= BotConfig.handToFootRushAggressiveThreshold &&
           _hasBookOrClearAllPath(bot, context)) {
         return true;
       }
+      // Opponent on foot: still require a book/clear path — rushing empty-handed
+      // into foot with 0 books loses the go-out race permanently.
       if (_opponentOnFootPressure(context, bot) &&
           handSize <=
               BotConfig.handToFootRushOpponentOnFootThreshold +
-                  BotConfig.handToFootRushAggressiveOpponentPressureMargin) {
+                  BotConfig.handToFootRushAggressiveOpponentPressureMargin &&
+          _hasBookOrClearAllPath(bot, context)) {
         return true;
       }
     }
@@ -2785,15 +2809,9 @@ class EnhancedBotAI {
     }
 
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      return BotDecision(
-        action: 'createMeld',
-        data: _meldAnalyzer.findBestMeld(
-          possibleMelds,
-          bot: bot,
-          preferLarger: true,
-        ),
-      );
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
     final footTransition = _footTransitionManager.handleFootTransition(
@@ -2826,13 +2844,15 @@ class EnhancedBotAI {
       return true;
     }
 
-    if (_opponentOnFootPressure(context, bot) &&
-        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+    // Soft / opponent-pressure completion: require books or a clear-all path so
+    // bots do not enter foot with 0 books (analytics FOOT_NO_BOOKS).
+    if (handSize <= BotConfig.handPileFootCompletionMaxHand &&
+        _hasBookOrClearAllPath(bot, context)) {
       return true;
     }
 
-    // Soft completion window: only when books exist or hand can be cleared.
-    if (handSize <= BotConfig.handPileFootCompletionMaxHand &&
+    if (_opponentOnFootPressure(context, bot) &&
+        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold &&
         _hasBookOrClearAllPath(bot, context)) {
       return true;
     }
@@ -2890,15 +2910,9 @@ class EnhancedBotAI {
     }
 
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
-      return BotDecision(
-        action: 'createMeld',
-        data: _meldAnalyzer.findBestMeld(
-          possibleMelds,
-          bot: bot,
-          preferLarger: true,
-        ),
-      );
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
+      return createMeld;
     }
 
     final footTransition = _footTransitionManager.handleFootTransition(
@@ -3443,7 +3457,10 @@ class EnhancedBotAI {
     // on piles that are already dirty (building the dirty book lane).
     if (bot.hasPlayedDown && !bot.hasCleanBook) {
       if (bot.hasPickedUpFoot && bot.hasDirtyBook) {
-        return _filterCleanBookPriorityAdditions(bot, result);
+        return _filterUnlockKeyAdditions(
+          bot,
+          _filterCleanBookPriorityAdditions(bot, result),
+        );
       }
       result = result.where((addition) {
         final card = addition['card'] as PlayingCard;
@@ -3456,7 +3473,32 @@ class EnhancedBotAI {
       }).toList();
     }
 
-    return result;
+    return _filterUnlockKeyAdditions(bot, result);
+  }
+
+  /// Drop adds that would burn the last unlock natural pair for a fat pile.
+  List<Map<String, dynamic>> _filterUnlockKeyAdditions(
+    Player bot,
+    List<Map<String, dynamic>> additions,
+  ) {
+    if (_forceSpendUnlockKeys || additions.isEmpty) {
+      return additions;
+    }
+    final gameState = _activeContext?.gameState;
+    if (gameState == null) {
+      return additions;
+    }
+
+    return additions.where((addition) {
+      final card = addition['card'] as PlayingCard;
+      final meld = addition['meld'] as Meld;
+      return !BotMeldAnalyzer.additionBurnsUnlockKeys(
+        bot,
+        gameState,
+        card,
+        meld,
+      );
+    }).toList();
   }
 
   /// When dirty books exist but a clean book is still required, only add naturals
@@ -4143,16 +4185,14 @@ class EnhancedBotAI {
     }
 
     final possibleMelds = _getCachedPossibleMelds(bot, context);
-    if (possibleMelds.isNotEmpty) {
+    final createMeld = _tryCreateBestNewMeld(bot, possibleMelds);
+    if (createMeld != null) {
       DebugLogger.botDebug(
         bot.id,
         bot.name,
         'Draw-loop guard: creating meld with ${bot.currentHand.length} cards',
       );
-      return BotDecision(
-        action: 'createMeld',
-        data: _selectBestNewMeld(bot, possibleMelds),
-      );
+      return createMeld;
     }
 
     return null;
@@ -4695,20 +4735,57 @@ class EnhancedBotAI {
   /// Highest-scoring new meld via analyzer (clean/dirty balance); never uses raw list order from [findPossibleMelds].
   /// Applies the clean-lane filter: while no clean book exists, wild-free
   /// candidates win over wild-containing ones (route wilds into dirty piles).
+  /// Also holds unlock natural pairs when the discard pile is contestable.
   List<PlayingCard> _selectBestNewMeld(
     Player bot,
     List<List<PlayingCard>> possibleMelds,
   ) {
-    assert(possibleMelds.isNotEmpty);
-    final laneFiltered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(
+    if (possibleMelds.isEmpty) {
+      return const <PlayingCard>[];
+    }
+    var candidates = BotMeldAnalyzer.filterCleanLaneMeldCandidates(
       bot,
       possibleMelds,
     );
-    return _meldAnalyzer.findBestMeld(
-      laneFiltered.isNotEmpty ? laneFiltered : possibleMelds,
-      bot: bot,
-      preferLarger: true,
-    );
+    if (candidates.isEmpty) {
+      candidates = possibleMelds;
+    }
+
+    final gameState = _activeContext?.gameState;
+    if (!_forceSpendUnlockKeys && gameState != null) {
+      final keyFiltered = BotMeldAnalyzer.filterUnlockKeyMeldCandidates(
+        bot,
+        gameState,
+        candidates,
+      );
+      if (keyFiltered.isEmpty) {
+        // Hold keys for unlock — no safe meld this turn.
+        return const <PlayingCard>[];
+      }
+      candidates = keyFiltered;
+    }
+
+    return _meldAnalyzer.findBestMeld(candidates, bot: bot, preferLarger: true);
+  }
+
+  /// Create-meld decision from [_selectBestNewMeld], or null when key-hold
+  /// / clean-lane filtering leaves no candidate.
+  BotDecision? _tryCreateBestNewMeld(
+    Player bot,
+    List<List<PlayingCard>> possibleMelds, {
+    bool requireSafe = false,
+  }) {
+    if (possibleMelds.isEmpty) {
+      return null;
+    }
+    final meld = _selectBestNewMeld(bot, possibleMelds);
+    if (meld.isEmpty) {
+      return null;
+    }
+    if (requireSafe && !BotEndGameManager.isSafeCreateMeld(bot, meld)) {
+      return null;
+    }
+    return BotDecision(action: 'createMeld', data: meld);
   }
 
   /// Delay rushing go-out when opponents would barely be penalized (thin hands / foot already empty).
@@ -4751,9 +4828,23 @@ class EnhancedBotAI {
 
   // Getters for testing and debugging
 
+  /// Run [action] with [_activeContext] set so unlock-key filters match makeDecision.
+  T _withDecisionContext<T>(BotGameContext context, T Function() action) {
+    final previous = _activeContext;
+    _activeContext = context;
+    try {
+      return action();
+    } finally {
+      _activeContext = previous;
+    }
+  }
+
   @visibleForTesting
   bool shouldCompleteHandPileForFoot(Player bot, BotGameContext context) {
-    return _shouldCompleteHandPileForFoot(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _shouldCompleteHandPileForFoot(bot, context),
+    );
   }
 
   @visibleForTesting
@@ -4761,22 +4852,34 @@ class EnhancedBotAI {
     Player bot,
     BotGameContext context,
   ) {
-    return _makeCompleteHandPileForFootDecision(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _makeCompleteHandPileForFootDecision(bot, context),
+    );
   }
 
   @visibleForTesting
   BotDecision makeFinalTurnScoringDecision(Player bot, BotGameContext context) {
-    return _makeFinalTurnScoringDecision(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _makeFinalTurnScoringDecision(bot, context),
+    );
   }
 
   @visibleForTesting
   bool shouldRushHandToFoot(Player bot, BotGameContext context) {
-    return _shouldRushHandToFoot(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _shouldRushHandToFoot(bot, context),
+    );
   }
 
   @visibleForTesting
   BotDecision? makeHandToFootRushDecision(Player bot, BotGameContext context) {
-    return _makeHandToFootRushDecision(bot, context);
+    return _withDecisionContext(
+      context,
+      () => _makeHandToFootRushDecision(bot, context),
+    );
   }
 
   Map<String, OpponentAnalysis> get opponentAnalysis =>

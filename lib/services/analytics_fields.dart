@@ -6,10 +6,9 @@ String? drawSourceFromAction(String action) {
       {
         return 'deck';
       }
+    // Bot AI emits drawFromDiscard for the same unlock path humans label
+    // unlockDiscardPile — normalize both to unlock for analytics parity.
     case 'drawFromDiscard':
-      {
-        return 'discard';
-      }
     case 'unlockDiscardPile':
     case 'discard_pile_unlocked':
       {

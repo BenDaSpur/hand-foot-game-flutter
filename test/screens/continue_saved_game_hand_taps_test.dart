@@ -73,6 +73,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
+    // Bot recovery must not steal the turn after ownership returns to human.
+    expect(
+      controller.gameState.currentPlayer.type,
+      PlayerType.human,
+      reason: 'force-complete must not advance past the restored human turn',
+    );
+
     final cards = find.descendant(
       of: find.byType(GameHandDisplay),
       matching: find.byType(PlayingCardWidget),

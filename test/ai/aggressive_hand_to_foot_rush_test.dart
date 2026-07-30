@@ -55,11 +55,26 @@ void main() {
       human.dealFoot(unmeldedHand(footCardCount));
     }
 
+    void addDirtyBook() {
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
+    }
+
     void configureBot({
       required BotPersonality personality,
       required int handSize,
       bool opponentOnFoot = false,
       int opponentFootCards = 7,
+      bool withBook = false,
     }) {
       botAI.assignPersonality(bot.id, personality);
       bot.hand.clear();
@@ -71,6 +86,9 @@ void main() {
       human.foot.clear();
       if (opponentOnFoot) {
         setOpponentOnFoot(footCardCount: opponentFootCards);
+      }
+      if (withBook) {
+        addDirtyBook();
       }
       gameController.gameState.currentPlayerIndex = 1;
       gameController.gameState.turnPhase = TurnPhase.meld;
@@ -128,7 +146,20 @@ void main() {
         );
       });
 
-      test('opponent-on-foot pressure rushes at 8 but not 9', () {
+      test('opponent-on-foot pressure rushes at 8 but not 9 when books exist', () {
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
+          opponentOnFoot: true,
+          withBook: true,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
+          isTrue,
+          reason:
+              'opponent foot pressure should rush at ${BotConfig.handToFootRushOpponentOnFootThreshold} with books',
+        );
+
         configureBot(
           personality: BotPersonality.conservative,
           handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
@@ -136,15 +167,15 @@ void main() {
         );
         expect(
           botAI.shouldRushHandToFoot(bot, context()),
-          isTrue,
-          reason:
-              'opponent foot pressure should rush at ${BotConfig.handToFootRushOpponentOnFootThreshold}',
+          isFalse,
+          reason: 'opponent foot pressure without books must not rush',
         );
 
         configureBot(
           personality: BotPersonality.conservative,
           handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
           opponentOnFoot: true,
+          withBook: true,
         );
         expect(
           botAI.shouldRushHandToFoot(bot, context()),
@@ -213,18 +244,31 @@ void main() {
             personality: BotPersonality.aggressive,
             handSize: rushAtMargin,
             opponentOnFoot: true,
+            withBook: true,
           );
           expect(
             botAI.shouldRushHandToFoot(bot, context()),
             isTrue,
             reason:
-                'aggressive bots should rush at opponent margin $rushAtMargin',
+                'aggressive bots should rush at opponent margin $rushAtMargin with books',
+          );
+
+          configureBot(
+            personality: BotPersonality.aggressive,
+            handSize: rushAtMargin,
+            opponentOnFoot: true,
+          );
+          expect(
+            botAI.shouldRushHandToFoot(bot, context()),
+            isFalse,
+            reason: 'aggressive margin rush without books must not fire',
           );
 
           configureBot(
             personality: BotPersonality.aggressive,
             handSize: rushAtMargin + 1,
             opponentOnFoot: true,
+            withBook: true,
           );
           expect(
             botAI.shouldRushHandToFoot(bot, context()),
@@ -263,6 +307,7 @@ void main() {
             personality: BotPersonality.conservative,
             handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
             opponentOnFoot: true,
+            withBook: true,
           );
 
           final rushAtThreshold = botAI.makeHandToFootRushDecision(
@@ -276,6 +321,7 @@ void main() {
             personality: BotPersonality.conservative,
             handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
             opponentOnFoot: true,
+            withBook: true,
           );
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
         },
@@ -332,6 +378,7 @@ void main() {
             personality: BotPersonality.aggressive,
             handSize: rushAtMargin,
             opponentOnFoot: true,
+            withBook: true,
           );
 
           final rushAtThreshold = botAI.makeHandToFootRushDecision(
@@ -345,6 +392,7 @@ void main() {
             personality: BotPersonality.aggressive,
             handSize: rushAtMargin + 1,
             opponentOnFoot: true,
+            withBook: true,
           );
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
         },
@@ -357,6 +405,7 @@ void main() {
           personality: BotPersonality.conservative,
           handSize: BotConfig.handToFootRushOpponentOnFootThreshold,
           opponentOnFoot: true,
+          withBook: true,
         );
 
         expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
@@ -369,6 +418,7 @@ void main() {
           personality: BotPersonality.conservative,
           handSize: BotConfig.handToFootRushOpponentOnFootThreshold + 1,
           opponentOnFoot: true,
+          withBook: true,
         );
 
         final aboveThresholdDecision = botAI.makeDecision(bot, gameController);
