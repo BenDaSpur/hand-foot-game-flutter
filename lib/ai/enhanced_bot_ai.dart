@@ -1304,23 +1304,27 @@ class EnhancedBotAI {
           : playDownRequirement;
 
       final meetsRequirement = combinationValue >= adjustedRequirement;
+      // Full threshold (not the R3+ 80% relaxation) for pile-farm acceleration.
+      final meetsFullPlayDownRequirement =
+          combinationValue >= playDownRequirement;
       final hasModerateExcess =
           combinationValue >= (adjustedRequirement + 10); // Reasonable excess
       final hasWaitedEnough = turnCount >= urgentTurnLimit;
       final lateRoundUrgency = gameState.round >= 3;
-      // Legal pile-farm override: meets points AND fat/unlockable pile pressure.
-      final pileFarmForcePlayDown = pileFarmPressure && meetsRequirement;
+      // Legal pile-farm override: full points AND fat/unlockable pile pressure.
+      final pileFarmForcePlayDown =
+          pileFarmPressure && meetsFullPlayDownRequirement;
       final readyByPatience =
           hasWaitedEnough || hasModerateExcess || lateRoundUrgency;
 
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown',
+        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), full=$meetsFullPlayDownRequirement, excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown',
       );
 
-      // Patience-gated legal play-down; pile-farm and emergency force override
-      // patience. Pile-farm never skips point validation (requires meetsRequirement).
+      // Patience-gated legal play-down; pile-farm (full threshold) and emergency
+      // force override patience. Pile-farm never uses the R3+ 80% relaxation.
       if (shouldForcePlayDown ||
           pileFarmForcePlayDown ||
           (meetsRequirement && readyByPatience)) {
