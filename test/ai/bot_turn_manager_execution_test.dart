@@ -207,6 +207,29 @@ void main() {
       expect(gameController.gameState.phase, GamePhase.roundEnd);
       expect(gameController.gameState.round, 2);
     });
+
+    test(
+      'forceCompleteBotTurn is a no-op when the bot is no longer current player',
+      () {
+        gameController.gameState.turnPhase = TurnPhase.meld;
+        botPlayer.dealHand([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+        ]);
+        final handBefore = botPlayer.currentHand.length;
+        final discardBefore = gameController.gameState.discardPile.length;
+
+        // Simulate continue-game / UI handoff back to the human mid-recovery.
+        gameController.gameState.currentPlayerIndex = 0;
+
+        turnManager.forceCompleteBotTurn(botPlayer);
+
+        expect(botPlayer.currentHand.length, handBefore);
+        expect(gameController.gameState.discardPile.length, discardBefore);
+        expect(gameController.gameState.currentPlayerIndex, 0);
+        expect(gameController.gameState.turnPhase, TurnPhase.meld);
+      },
+    );
   });
 
   group('EnhancedBotAI error propagation', () {

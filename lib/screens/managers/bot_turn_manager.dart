@@ -243,7 +243,16 @@ class BotTurnManager {
         }
 
         if (!actionSucceeded) {
-          // All attempts failed - force completion and exit loop
+          // Attempts often fail because the turn already moved on (e.g. UI
+          // restored ownership to the human). Never force-complete in that
+          // case — doing so discards/advances from the wrong player.
+          final stillCurrentBot = _isStillCurrentBot(botPlayer);
+          if (!stillCurrentBot) {
+            DebugLogger.debug(
+              'Bot ${botPlayer.name} attempts failed after player changed - skipping force completion',
+            );
+            break;
+          }
           DebugLogger.error(
             'Bot ${botPlayer.name} failed all attempts - forcing completion',
           );
@@ -282,7 +291,7 @@ class BotTurnManager {
         }
       }
 
-      if (iteration >= maxIterations) {
+      if (iteration >= maxIterations && _isStillCurrentBot(botPlayer)) {
         DebugLogger.error(
           'Bot ${botPlayer.name} exceeded max iterations - forcing completion',
         );
@@ -291,6 +300,12 @@ class BotTurnManager {
     } finally {
       _isProcessingBotTurn = false;
     }
+  }
+
+  bool _isStillCurrentBot(Player botPlayer) {
+    final currentPlayer = gameController.gameState.currentPlayer;
+    return currentPlayer.id == botPlayer.id &&
+        currentPlayer.type == PlayerType.bot;
   }
 
   /// Execute bot decision with comprehensive validation and state management
@@ -630,6 +645,14 @@ class BotTurnManager {
   /// Force bot to complete their turn using fallback actions that follow game rules
   void forceCompleteBotTurn(Player botPlayer) {
     final gameState = gameController.gameState;
+
+    // Abort if ownership already moved (common after continue-game handoff).
+    if (!_isStillCurrentBot(botPlayer)) {
+      DebugLogger.debug(
+        'Skipping force completion for ${botPlayer.name} - no longer current bot',
+      );
+      return;
+    }
 
     DebugLogger.debug(
       'Force completing bot turn for ${botPlayer.name} in phase ${gameState.turnPhase}',
