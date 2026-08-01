@@ -120,6 +120,13 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
 ```
 
 ### turn_summaries
+
+> **Not currently written by the client.** Production sessions since mid-2026
+> have empty `turn_summaries` / `decision_outcomes`. Prefer `bot_decisions` +
+> `game_events` for turn-level analysis. Unlock events include
+> `pileSizeBefore`, `cardsActuallyTaken`, and `unlockTopCard` (pre-mutation);
+> legacy `cardsTaken` remains as pile size before unlock for old queries.
+
 ```firestore
 {
   sessionId: "session_1640995200000",

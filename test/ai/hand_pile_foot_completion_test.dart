@@ -37,7 +37,7 @@ void main() {
         BotGameContext(gameController.gameState, gameController);
 
     test(
-      'shouldCompleteHandPileForFoot at critical 4 but not soft 5 without books',
+      'shouldCompleteHandPileForFoot at critical 4 or soft 5 without books is false',
       () {
         bot.hand
           ..clear()
@@ -48,7 +48,8 @@ void main() {
             const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
           ]);
 
-        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
+        // Critical window also requires books or clear-all (unlock-churn).
+        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
 
         bot.hand.add(
           const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
@@ -160,6 +161,18 @@ void main() {
             const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
           ])!,
         );
+        // Book required for critical hand-pile completion (unlock-churn).
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
+        );
 
         expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
 
@@ -181,9 +194,20 @@ void main() {
           ]);
         bot.melds.add(
           Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          ])!,
+        );
+        bot.melds.add(
+          Meld.createMeld([
             const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
             const PlayingCard(suit: Suit.spades, rank: CardRank.king),
             const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
           ])!,
         );
 

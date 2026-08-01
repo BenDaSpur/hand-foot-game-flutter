@@ -176,6 +176,13 @@ class EnhancedBotAI {
       _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
       _gameAnalyzer.incrementTurnCount(bot.id);
 
+      // Meld/discard: do not freeze on unlock keys when holding is useless or
+      // we would decline the pile anyway (analytics: key-hold → noMeld stalls).
+      if (gameState.turnPhase == TurnPhase.meld ||
+          gameState.turnPhase == TurnPhase.discard) {
+        _updateForceSpendUnlockKeys(bot, context);
+      }
+
       // Calculate early game status to prevent emergency panic on normal starting hands
       final handSize = bot.currentHand.length;
       final isEarlyGame = _isEarlyGamePhase(bot);
@@ -1241,6 +1248,12 @@ class EnhancedBotAI {
             BotConfig.pileFarmForcePlayDownPileSize &&
         (_couldUnlockDiscardPileIfPlayedDown(bot, gameState) ||
             handSize >= BotConfig.pileFarmForcePlayDownHandSize);
+    // Contestable mid-pile with unlock keys: play down same turn (full points)
+    // so R1 human unlock streaks cannot start uncontested.
+    final contestablePilePressure =
+        gameState.discardPile.length >=
+            BotConfig.preserveUnlockKeysMeldPileSize &&
+        _couldUnlockDiscardPileIfPlayedDown(bot, gameState);
     // Emergency forces may play short of requirement; pile-farm is excluded.
     final shouldForcePlayDown =
         lateRoundBehind ||
@@ -1311,22 +1324,26 @@ class EnhancedBotAI {
           combinationValue >= (adjustedRequirement + 10); // Reasonable excess
       final hasWaitedEnough = turnCount >= urgentTurnLimit;
       final lateRoundUrgency = gameState.round >= 3;
-      // Legal pile-farm override: full points AND fat/unlockable pile pressure.
+      // Legal pile-farm / contestable-pile override: full points only (never
+      // the R3+ 80% relaxation) so bots enter the unlock churn same turn.
       final pileFarmForcePlayDown =
           pileFarmPressure && meetsFullPlayDownRequirement;
+      final contestablePileForcePlayDown =
+          contestablePilePressure && meetsFullPlayDownRequirement;
       final readyByPatience =
           hasWaitedEnough || hasModerateExcess || lateRoundUrgency;
 
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), full=$meetsFullPlayDownRequirement, excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown',
+        'PlayDown decision: meets=$meetsRequirement ($combinationValue >= $adjustedRequirement), full=$meetsFullPlayDownRequirement, excess=$hasModerateExcess, waited=$hasWaitedEnough, late=$lateRoundUrgency, pileFarm=$pileFarmForcePlayDown, contestable=$contestablePileForcePlayDown',
       );
 
-      // Patience-gated legal play-down; pile-farm (full threshold) and emergency
-      // force override patience. Pile-farm never uses the R3+ 80% relaxation.
+      // Patience-gated legal play-down; pile-farm / contestable (full threshold)
+      // and emergency force override patience.
       if (shouldForcePlayDown ||
           pileFarmForcePlayDown ||
+          contestablePileForcePlayDown ||
           (meetsRequirement && readyByPatience)) {
         if (shouldForcePlayDown && !meetsRequirement) {
           DebugLogger.debug(
@@ -1696,12 +1713,14 @@ class EnhancedBotAI {
                   .aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
     }
 
-    // Hard-take rules after play-down (analytics: bots at 1% unlock vs humans 15%).
-    // ≥25: take unless a go-out race forbids it; ≥12: unconditional hard-take.
+    // Hard-take rules after play-down (analytics: bots ~1.5% unlock vs humans ~12%).
+    // ≥25: take unless a *tight* go-out race forbids it; ≥6: unconditional hard-take.
+    // Holding unlock keys + pile ≥5: hard-take when currently eligible.
     if (pileSize >= BotConfig.postPlayDownAlmostAlwaysTakePileSize) {
       final goOutRaceForbids =
           bot.hasPickedUpFoot &&
           bot.canGoOutWithBooks &&
+          handSize <= 3 &&
           (_shouldRushToGoOut(bot, gameState) ||
               BotEndGameManager.shouldGoOutAggressively(bot, gameState));
       if (goOutRaceForbids) {
@@ -1710,6 +1729,11 @@ class EnhancedBotAI {
       return true;
     }
     if (pileSize >= BotConfig.postPlayDownHardTakePileSize) {
+      return true;
+    }
+    if (pileSize >= BotConfig.preserveUnlockKeysMeldPileSize &&
+        context.canUnlockDiscard() &&
+        _couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
       return true;
     }
 
@@ -1779,6 +1803,50 @@ class EnhancedBotAI {
         .toList();
 
     return matchingCards.length >= 2;
+  }
+
+  /// Force-spend unlock keys when holding them cannot help this/next contest.
+  ///
+  /// Holding is useless when the pile is frozen / topped with a 3 or wild, or
+  /// when willingness would decline the pile even if eligible — otherwise
+  /// key-hold returns empty meld candidates and stalls into `noMeld`.
+  void _updateForceSpendUnlockKeys(Player bot, BotGameContext context) {
+    if (_forceSpendUnlockKeys || !bot.hasPlayedDown) {
+      return;
+    }
+    final gameState = context.gameState;
+    if (gameState.discardPile.length <
+        BotConfig.preserveUnlockKeysMeldPileSize) {
+      return;
+    }
+
+    final top = gameState.topDiscard;
+    if (top == null ||
+        top.isWild ||
+        top.isThree ||
+        gameState.discardPileFrozen) {
+      _forceSpendUnlockKeys = true;
+      return;
+    }
+
+    if (!_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
+      return;
+    }
+
+    try {
+      final riskTolerance = _personalityManager.calculateRiskTolerance(
+        gameState,
+        bot,
+      );
+      final wouldTake = _shouldTakeDiscardPile(bot, context, riskTolerance);
+      if (!wouldTake) {
+        _forceSpendUnlockKeys = true;
+      }
+    } catch (e) {
+      DebugLogger.warning(
+        'Unlock-key spend check failed for bot ${bot.id}: $e',
+      );
+    }
   }
 
   /// Prefer a play-down combination that leaves ≥2 naturals matching the
@@ -1940,6 +2008,7 @@ class EnhancedBotAI {
         bot,
         gameState,
         analyzer: _gameAnalyzer,
+        preserveUnlockKeys: !_forceSpendUnlockKeys,
       );
       // Log defensive discard decisions in debug mode
       DebugLogger.botDebug(
@@ -2727,8 +2796,10 @@ class EnhancedBotAI {
       return false;
     }
 
-    // Always rush at critical hand size (avoid 1–card traps).
-    if (handSize <= BotConfig.handToFootCriticalHandSize) {
+    // Critical hand size: still require book progress or clear-all (analytics:
+    // rush_to_foot with 0 books was the dominant noMeld stall).
+    if (handSize <= BotConfig.handToFootCriticalHandSize &&
+        _hasBookOrClearAllPath(bot, context)) {
       return true;
     }
 
@@ -2839,13 +2910,13 @@ class EnhancedBotAI {
       return false;
     }
 
-    // Always complete at critical hand size.
-    if (handSize <= BotConfig.handToFootCriticalHandSize) {
+    // Critical / soft completion: require books or a clear-all path so bots do
+    // not enter foot with 0 books (analytics FOOT_NO_BOOKS / rush_to_foot).
+    if (handSize <= BotConfig.handToFootCriticalHandSize &&
+        _hasBookOrClearAllPath(bot, context)) {
       return true;
     }
 
-    // Soft / opponent-pressure completion: require books or a clear-all path so
-    // bots do not enter foot with 0 books (analytics FOOT_NO_BOOKS).
     if (handSize <= BotConfig.handPileFootCompletionMaxHand &&
         _hasBookOrClearAllPath(bot, context)) {
       return true;

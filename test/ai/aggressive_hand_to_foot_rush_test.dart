@@ -122,21 +122,33 @@ void main() {
     });
 
     group('shouldRushHandToFoot boundaries', () {
-      test('critical hand size rushes at 4 but not 5', () {
+      test('critical hand size rushes at 4 only with books or clear-all', () {
         configureBot(
           personality: BotPersonality.conservative,
           handSize: BotConfig.handToFootCriticalHandSize,
         );
         expect(
           botAI.shouldRushHandToFoot(bot, context()),
+          isFalse,
+          reason: 'critical rush without books/clear-all must not fire',
+        );
+
+        configureBot(
+          personality: BotPersonality.conservative,
+          handSize: BotConfig.handToFootCriticalHandSize,
+          withBook: true,
+        );
+        expect(
+          botAI.shouldRushHandToFoot(bot, context()),
           isTrue,
           reason:
-              'critical threshold should rush at ${BotConfig.handToFootCriticalHandSize}',
+              'critical threshold should rush at ${BotConfig.handToFootCriticalHandSize} with books',
         );
 
         configureBot(
           personality: BotPersonality.conservative,
           handSize: BotConfig.handToFootCriticalHandSize + 1,
+          withBook: true,
         );
         expect(
           botAI.shouldRushHandToFoot(bot, context()),
@@ -281,11 +293,18 @@ void main() {
 
     group('makeHandToFootRushDecision', () {
       test(
-        'returns meld-phase noMeld rush action below threshold, null above',
+        'returns meld-phase noMeld rush action below threshold with books',
         () {
           configureBot(
             personality: BotPersonality.conservative,
             handSize: BotConfig.handToFootCriticalHandSize,
+          );
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootCriticalHandSize,
+            withBook: true,
           );
 
           final rushDecision = botAI.makeHandToFootRushDecision(bot, context());
@@ -295,6 +314,7 @@ void main() {
           configureBot(
             personality: BotPersonality.conservative,
             handSize: BotConfig.handToFootCriticalHandSize + 1,
+            withBook: true,
           );
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
         },
@@ -494,11 +514,18 @@ void main() {
       );
 
       test(
-        'critical hand rushes via makeDecision at 4 but rush hook is null at 5',
+        'critical hand rushes via makeDecision at 4 with books; null without',
         () {
           configureBot(
             personality: BotPersonality.conservative,
             handSize: BotConfig.handToFootCriticalHandSize,
+          );
+          expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);
+
+          configureBot(
+            personality: BotPersonality.conservative,
+            handSize: BotConfig.handToFootCriticalHandSize,
+            withBook: true,
           );
 
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNotNull);
@@ -509,6 +536,7 @@ void main() {
           configureBot(
             personality: BotPersonality.conservative,
             handSize: BotConfig.handToFootCriticalHandSize + 1,
+            withBook: true,
           );
 
           expect(botAI.makeHandToFootRushDecision(bot, context()), isNull);

@@ -13,6 +13,7 @@ import '../game/game_controller_factory.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
 import '../config/bot_configurations.dart';
+import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../services/firebase_service.dart';
 import '../widgets/melds_section.dart';
@@ -1158,7 +1159,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
-    final cardsBeforeUnlock = gameState.discardPile.length;
+    final pileSizeBefore = gameState.discardPile.length;
+    final unlockTopCard = gameState.topDiscard?.compactName;
+    // Family rules: meld the top card + pick up up to additionalDiscardPickup more.
+    final cardsActuallyTaken = pileSizeBefore <= 0
+        ? 0
+        : 1 + (pileSizeBefore - 1).clamp(0, GameConfig.additionalDiscardPickup);
     if (controller.unlockDiscardPile()) {
       _hasPlayerInteractedSinceDraw = false;
       _clearHandHighlightState();
@@ -1168,7 +1174,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _logHumanAction(
         action: 'unlockDiscardPile',
         reasoning: 'Human unlocked discard pile',
-        context: {'cardsTaken': cardsBeforeUnlock},
+        context: {
+          'pileSizeBefore': pileSizeBefore,
+          'cardsActuallyTaken': cardsActuallyTaken,
+          'unlockTopCard': unlockTopCard,
+          // Legacy field — was pile size, not cards received; keep for old queries.
+          'cardsTaken': pileSizeBefore,
+        },
       );
     } else {
       debugPrint('DEBUG: unlockDiscardPile returned false unexpectedly');

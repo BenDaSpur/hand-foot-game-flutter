@@ -158,7 +158,7 @@ void main() {
       expect(botAI.makeCompleteHandPileForFootDecision(bot, context()), isNull);
     });
 
-    test('hand size 4 still rushes to foot without books', () {
+    test('hand size 4 does not rush to foot without books or clear-all', () {
       bot.hand
         ..clear()
         ..addAll([
@@ -168,12 +168,12 @@ void main() {
           const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
         ]);
 
-      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isTrue);
-      expect(botAI.shouldRushHandToFoot(bot, context()), isTrue);
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+      expect(botAI.shouldRushHandToFoot(bot, context()), isFalse);
     });
 
     test('botAiVersion bumped for this analytics fix', () {
-      expect(BotConfig.botAiVersion, '2026.07-unlock-key-hold');
+      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
     });
   });
 }

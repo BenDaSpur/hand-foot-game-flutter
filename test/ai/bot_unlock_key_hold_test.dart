@@ -13,7 +13,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
-  group('Unlock-key hold AI (2026.07-unlock-key-hold)', () {
+  group('Unlock-key hold AI (2026.08-unlock-churn)', () {
     late EnhancedBotAI botAI;
     late GameController controller;
     late Player human;
@@ -29,8 +29,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for unlock-key-hold', () {
-      expect(BotConfig.botAiVersion, '2026.07-unlock-key-hold');
+    test('botAiVersion bumped for unlock-churn', () {
+      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
     });
 
     test('emergency hand size still hard-takes unlockable fat pile in draw', () {
@@ -87,47 +87,51 @@ void main() {
         decision.action,
         'drawFromDiscard',
         reason:
-            'hand ≥15 must still contest unlockable pile ≥12 (not force deck)',
+            'hand ≥15 must still contest unlockable hard-take pile (not force deck)',
       );
     });
 
-    test('missing unlock keys forces deck even when pile ≥12', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = false;
-      bot.hand
-        ..clear()
-        ..addAll([
-          // Only one king — cannot unlock
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-        ]);
+    test(
+      'missing unlock keys forces deck even when pile at hard-take size',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            // Only one king — cannot unlock
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          ]);
 
-      controller.gameState.discardPile
-        ..clear()
-        ..addAll(
-          List.generate(
-            BotConfig.postPlayDownHardTakePileSize - 1,
-            (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.ace),
-          ),
-        )
-        ..add(const PlayingCard(suit: Suit.clubs, rank: CardRank.king));
+        controller.gameState.discardPile
+          ..clear()
+          ..addAll(
+            List.generate(
+              BotConfig.postPlayDownHardTakePileSize - 1,
+              (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.ace),
+            ),
+          )
+          ..add(const PlayingCard(suit: Suit.clubs, rank: CardRank.king));
 
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
 
-      expect(controller.gameState.canUnlockDiscard(), isFalse);
+        expect(controller.gameState.canUnlockDiscard(), isFalse);
 
-      final decision = botAI.makeDecision(bot, controller);
-      expect(
-        decision.action,
-        'drawFromDeck',
-        reason: 'hard-take willingness must not override canUnlock eligibility',
-      );
-    });
+        final decision = botAI.makeDecision(bot, controller);
+        expect(
+          decision.action,
+          'drawFromDeck',
+          reason:
+              'hard-take willingness must not override canUnlock eligibility',
+        );
+      },
+    );
 
     test('meld phase holds unlock keys when pile is contestable', () {
       bot.hasPlayedDown = true;
