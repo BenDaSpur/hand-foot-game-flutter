@@ -1280,9 +1280,12 @@ class EnhancedBotAI {
     );
 
     // Prefer a play-down that keeps 2 naturals matching discard top when the
-    // pile is fat — unlock on a later draw after playing down.
+    // pile is fat or contestable with keys — unlock on a later draw after
+    // playing down.
     if (bestCombination.isNotEmpty &&
-        gameState.discardPile.length >= BotConfig.preserveUnlockKeysPileSize) {
+        (contestablePilePressure ||
+            gameState.discardPile.length >=
+                BotConfig.preserveUnlockKeysPileSize)) {
       final unlockPreserving = _preferPlayDownPreservingUnlockKeys(
         bot,
         gameState,

@@ -123,9 +123,13 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
 
 > **Not currently written by the client.** Production sessions since mid-2026
 > have empty `turn_summaries` / `decision_outcomes`. Prefer `bot_decisions` +
-> `game_events` for turn-level analysis. Unlock events include
-> `pileSizeBefore`, `cardsActuallyTaken`, and `unlockTopCard` (pre-mutation);
-> legacy `cardsTaken` remains as pile size before unlock for old queries.
+> `game_events` for turn-level analysis.
+>
+> Human `game_events` with `eventType: unlockDiscardPile` nest unlock fields
+> under `eventData.context`: `pileSizeBefore`, `cardsActuallyTaken`, and
+> `unlockTopCard` (pre-mutation top). Legacy `cardsTaken` is the **pre-unlock
+> pile size** (not cards received). Equivalent structured fields are not on
+> `bot_decisions` — use bot decision/`drawSource` there instead.
 
 ```firestore
 {

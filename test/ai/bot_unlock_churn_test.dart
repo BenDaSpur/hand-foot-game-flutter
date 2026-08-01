@@ -186,6 +186,18 @@ void main() {
           reason:
               'keys + pile ≥5 + full points must skip patience for play-down',
         );
+        // Contestable pressure also prefers key-preserving play-down combos.
+        final played = decision.action == 'createMultipleMelds'
+            ? (decision.data as List<List<PlayingCard>>).expand((m) => m)
+            : (decision.data as List<PlayingCard>);
+        final kingsUsed = played
+            .where((c) => !c.isWild && c.rank == CardRank.king)
+            .length;
+        expect(
+          kingsUsed,
+          lessThan(2),
+          reason: 'contestable play-down should preserve king unlock keys',
+        );
       },
     );
 
