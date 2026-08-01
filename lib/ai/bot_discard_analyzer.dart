@@ -40,6 +40,7 @@ class BotDiscardAnalyzer {
     Player bot,
     GameState gameState, {
     BotGameAnalyzer? analyzer,
+    bool preserveUnlockKeys = true,
   }) {
     if (bot.currentHand.isEmpty) {
       throw StateError('Cannot discard from empty hand');
@@ -65,6 +66,7 @@ class BotDiscardAnalyzer {
         bot,
         gameState,
         analyzer,
+        preserveUnlockKeys: preserveUnlockKeys,
       );
     }
 
@@ -81,8 +83,9 @@ class BotDiscardAnalyzer {
     PlayingCard card,
     Player bot,
     GameState gameState,
-    BotGameAnalyzer? analyzer,
-  ) {
+    BotGameAnalyzer? analyzer, {
+    bool preserveUnlockKeys = true,
+  }) {
     int score = 0;
 
     // 1. PRIORITY: 3s should always be discarded (penalty cards)
@@ -158,7 +161,12 @@ class BotDiscardAnalyzer {
 
     // 7. UNLOCK KEYS: Keep 2+ matching naturals for an attractive discard pile
     // (also before play-down — keys are needed immediately after playing down).
-    if (!card.isWild && !card.isThree && gameState.discardPile.isNotEmpty) {
+    // Skip when caller force-spends keys (pile frozen / declined / useless top).
+    if (preserveUnlockKeys &&
+        !gameState.discardPileFrozen &&
+        !card.isWild &&
+        !card.isThree &&
+        gameState.discardPile.isNotEmpty) {
       final top = gameState.topDiscard;
       if (top != null && !top.isWild && !top.isThree && card.rank == top.rank) {
         final matchingNaturals = bot.currentHand
@@ -169,7 +177,7 @@ class BotDiscardAnalyzer {
             ? BotConfig.preserveUnlockKeysMeldPileSize
             : BotConfig.preserveUnlockKeysPileSize;
         if (matchingNaturals >= 2 && pileSize >= minPile) {
-          // Preserve unlock ability — humans take ~10% of draws from pile
+          // Preserve unlock ability — humans unlock ~12% of draws
           score -= 80;
           if (pileSize >= 10) {
             score -= 40;

@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for unlock-key-hold', () {
-      expect(BotConfig.botAiVersion, '2026.07-unlock-key-hold');
+    test('botAiVersion bumped for unlock-churn', () {
+      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
     });
 
     test(

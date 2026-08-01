@@ -130,9 +130,9 @@ class PersonalityConstants {
           maxTurnsBeforeForcePlayDown:
               1, // SUPER AGGRESSIVE - counter human accumulation with speed strikes
           highValuePairBreakChance:
-              0.8, // Increased from 0.7 - almost always break pairs
+              0.5, // Keep pairs longer until books form (was 0.8)
           bookCompletionPriority:
-              80, // Reduced from 100 - prioritize speed over books
+              160, // Analytics: aggressive finished ~0.5 books / 0 unlocks
           aggressivenessMultiplier:
               1.6, // Increased from 1.4 - much more aggressive
         );

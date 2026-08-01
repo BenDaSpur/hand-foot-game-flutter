@@ -76,10 +76,12 @@ class BotConfig {
   static const int minimumDiscardPileSize = 2;
 
   /// After play-down, piles at or above this size are almost always worth taking
-  /// (analytics: humans unlock ~15% of draws vs bots ~1–3%).
-  static const int postPlayDownHardTakePileSize = 12;
+  /// (analytics: humans unlock ~12% of draws vs bots ~1.5%; churn mid-size piles).
+  static const int postPlayDownHardTakePileSize = 6;
 
-  /// Huge piles — take unless go-out race forbids it (humans routinely take 30–50).
+  /// Huge piles — take unless a tight go-out race forbids it.
+  /// Note: unlock pickup is top + [GameConfig.additionalDiscardPickup] (~6 cards),
+  /// not the whole pile — optimize for unlock rate/denial, not haul size.
   static const int postPlayDownAlmostAlwaysTakePileSize = 25;
 
   /// Late-round hand size that forces play-down when still not down
@@ -327,7 +329,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.07-unlock-key-hold';
+  static const String botAiVersion = '2026.08-unlock-churn';
 
   // Prevent instantiation
   BotConfig._();

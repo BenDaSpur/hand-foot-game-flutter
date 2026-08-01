@@ -14,7 +14,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
-  group('Pile-farm contest AI (2026.07-unlock-key-hold)', () {
+  group('Pile-farm contest AI (2026.08-unlock-churn)', () {
     late EnhancedBotAI botAI;
     late GameController controller;
     late Player human;
@@ -30,8 +30,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for unlock-key-hold', () {
-      expect(BotConfig.botAiVersion, '2026.07-unlock-key-hold');
+    test('botAiVersion bumped for unlock-churn', () {
+      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
     });
 
     test(
@@ -50,7 +50,7 @@ void main() {
             const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
           ]);
 
-        // 12-card unlockable pile topped with King
+        // Hard-take-sized unlockable pile topped with King
         controller.gameState.discardPile
           ..clear()
           ..addAll(
@@ -75,7 +75,8 @@ void main() {
         expect(
           decision.action,
           'drawFromDiscard',
-          reason: 'post-play-down pile >= 12 must hard-take when unlockable',
+          reason:
+              'post-play-down pile >= hard-take size must unlock when eligible',
         );
       },
     );
