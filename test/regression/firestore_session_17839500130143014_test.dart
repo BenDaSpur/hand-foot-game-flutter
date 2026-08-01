@@ -125,9 +125,22 @@ void main() {
           ..clear()
           ..add(
             Meld.createMeld([
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            ])!,
+          )
+          // Critical hand-pile completion requires a book or clear-all path
+          // (2026.08-unlock-churn).
+          ..add(
+            Meld.createMeld([
               const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
               const PlayingCard(suit: Suit.spades, rank: CardRank.king),
               const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+              const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+              const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+              const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+              const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
             ])!,
           );
         carl.hand

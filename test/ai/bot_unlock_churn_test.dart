@@ -32,6 +32,7 @@ void main() {
     test('botAiVersion is unlock-churn', () {
       expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
+      expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });
 
     test('hard-takes unlockable pile at size 6 after play-down', () {
@@ -254,12 +255,17 @@ void main() {
       );
 
       final decision = botAI.makeDecision(bot, controller);
-      expect(decision.action, anyOf('createMeld', 'addToMeld', 'noMeld'));
-      // Prefer creating the king meld rather than stalling
-      if (decision.action == 'createMeld') {
-        final meld = decision.data as List<PlayingCard>;
-        expect(meld.every((c) => c.rank == CardRank.king), isTrue);
-      }
+      expect(
+        decision.action,
+        'createMeld',
+        reason: 'three-top must force-spend keys via king meld, not stall',
+      );
+      final meld = decision.data as List<PlayingCard>;
+      expect(
+        meld.every((c) => c.rank == CardRank.king),
+        isTrue,
+        reason: 'forced spend should meld the king unlock keys',
+      );
     });
 
     test('aggressive personality raises book completion priority', () {
