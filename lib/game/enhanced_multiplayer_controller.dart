@@ -12,6 +12,7 @@ import '../services/firebase_constants.dart';
 import '../services/firebase_service.dart';
 import '../utils/debug_logger.dart';
 import 'game_controller.dart';
+import 'go_out_guards.dart';
 import 'network_adapter.dart';
 import 'game_interface.dart';
 
@@ -1059,6 +1060,19 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   /// Emergency recovery when the local human cannot discard or go out.
   bool skipTurnEmergency() {
     if (!isMyTurn) {
+      return false;
+    }
+
+    final humanPlayer = getCurrentUserPlayer();
+    if (humanPlayer == null) {
+      return false;
+    }
+
+    if (!GoOutGuards.isHumanStuckWithoutGoOut(
+      gameState: gameState,
+      humanPlayer: humanPlayer,
+      currentPlayer: gameState.currentPlayer,
+    )) {
       return false;
     }
 

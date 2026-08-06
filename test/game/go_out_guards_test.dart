@@ -1,3 +1,6 @@
+@Tags(['game-logic', 'go-out'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/game/game_action_feedback.dart';
 import 'package:hand_foot_game_flutter/game/go_out_guards.dart';

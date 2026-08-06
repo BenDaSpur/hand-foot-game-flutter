@@ -463,7 +463,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     // Safety check: Validate all indices are valid
     for (final indices in meldIndices) {
       if (indices.any(
-        (index) => index >= currentUserPlayer.currentHand.length,
+        (index) => index < 0 || index >= currentUserPlayer.currentHand.length,
       )) {
         _showErrorDialog(
           'Advanced Meld Error',
@@ -612,18 +612,16 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
     if (cardsToAdd.isEmpty) return;
 
-    for (final card in cardsToAdd) {
-      if (GoOutGuards.wouldAddToMeldLeaveUnfinishable(
-        currentUserPlayer,
-        meldIndex,
-        card,
-      )) {
-        _showErrorDialog(
-          'Cannot Add Card',
-          GameActionFeedback.unfinishableMeldBlockerMessage(currentUserPlayer),
-        );
-        return;
-      }
+    if (GoOutGuards.wouldAddCardsToMeldLeaveUnfinishable(
+      currentUserPlayer,
+      meldIndex,
+      cardsToAdd,
+    )) {
+      _showErrorDialog(
+        'Cannot Add Card',
+        GameActionFeedback.unfinishableMeldBlockerMessage(currentUserPlayer),
+      );
+      return;
     }
 
     for (final card in cardsToAdd) {
@@ -662,8 +660,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         gameState.phase != GamePhase.gameEnd) {
       return StuckGoOutRecoveryBanner(
         humanPlayer: humanPlayer,
-        canUndo: _gameController.canUndoMeld,
-        onUndo: _onUndoMeld,
+        onUndo: _gameController.canUndoMeld ? _onUndoMeld : null,
         onSkipTurn: _forceSkipTurn,
       );
     }

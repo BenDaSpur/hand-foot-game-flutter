@@ -6,15 +6,13 @@ import '../models/player.dart';
 /// without both books. Offers undo (when available) and skip-turn recovery.
 class StuckGoOutRecoveryBanner extends StatelessWidget {
   final Player humanPlayer;
-  final bool canUndo;
   final VoidCallback? onUndo;
   final VoidCallback onSkipTurn;
 
   const StuckGoOutRecoveryBanner({
     super.key,
     required this.humanPlayer,
-    required this.canUndo,
-    required this.onUndo,
+    this.onUndo,
     required this.onSkipTurn,
   });
 
@@ -45,7 +43,7 @@ class StuckGoOutRecoveryBanner extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (canUndo && onUndo != null)
+              if (onUndo != null)
                 ElevatedButton(
                   onPressed: onUndo,
                   style: ElevatedButton.styleFrom(

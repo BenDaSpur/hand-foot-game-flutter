@@ -1417,6 +1417,17 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     if (controller == null) return;
 
     final human = controller.gameState.currentPlayer;
+    for (final indices in meldIndices) {
+      if (indices.any(
+        (index) => index < 0 || index >= human.currentHand.length,
+      )) {
+        _dialogManager.showErrorDialog(
+          'Invalid card selection. Please try again.',
+        );
+        return;
+      }
+    }
+
     final allMeldCards = <List<PlayingCard>>[];
     for (final indices in meldIndices) {
       allMeldCards.add(
@@ -1819,17 +1830,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     if (controller == null) return;
 
     final humanPlayer = controller.gameState.currentPlayer;
-    for (final card in cardsToAdd) {
-      if (GoOutGuards.wouldAddToMeldLeaveUnfinishable(
-        humanPlayer,
-        meldIndex,
-        card,
-      )) {
-        _dialogManager.showErrorDialog(
-          GameActionFeedback.unfinishableMeldBlockerMessage(humanPlayer),
-        );
-        return;
-      }
+    if (GoOutGuards.wouldAddCardsToMeldLeaveUnfinishable(
+      humanPlayer,
+      meldIndex,
+      cardsToAdd,
+    )) {
+      _dialogManager.showErrorDialog(
+        GameActionFeedback.unfinishableMeldBlockerMessage(humanPlayer),
+      );
+      return;
     }
 
     int addedCount = 0;
@@ -2270,8 +2279,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
       return StuckGoOutRecoveryBanner(
         humanPlayer: humanPlayer,
-        canUndo: _gameController?.canUndoMeld ?? false,
-        onUndo: _onUndoMeld,
+        onUndo: (_gameController?.canUndoMeld ?? false) ? _onUndoMeld : null,
         onSkipTurn: _forceNextTurn,
       );
     }

@@ -130,5 +130,48 @@ void main() {
       expect(controller.discardCard(human.foot.first), isTrue);
       expect(controller.canUndoMeld, isFalse);
     });
+
+    test(
+      'multi-meld undo restores hand and clears foot pickup in one step',
+      () {
+        final human = Player(id: 'h', name: 'Alice', type: PlayerType.human);
+        human.hasPlayedDown = false;
+        human.hasPickedUpFoot = false;
+        human.dealHand(const [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+          PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        ]);
+        human.dealFoot(const [
+          PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        ]);
+
+        final controller = buildController(human);
+        expect(
+          controller.createMultipleMeldsFromIndices([
+            [0, 1, 2],
+            [3, 4, 5],
+          ], skipPlayDownCheck: true),
+          isTrue,
+        );
+        expect(human.melds, hasLength(2));
+        expect(human.hasPlayedDown, isTrue);
+        expect(human.hasPickedUpFoot, isTrue);
+        expect(human.hand, isEmpty);
+        expect(controller.canUndoMeld, isTrue);
+
+        expect(controller.undoLastMeld(), isTrue);
+        expect(human.melds, isEmpty);
+        expect(human.hasPlayedDown, isFalse);
+        expect(human.hasPickedUpFoot, isFalse);
+        expect(human.hand, hasLength(6));
+        expect(human.foot, hasLength(2));
+        expect(controller.canUndoMeld, isFalse);
+      },
+    );
   });
 }

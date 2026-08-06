@@ -51,15 +51,9 @@ class BotEndGameManager {
     }
 
     final willHaveClean =
-        bot.hasCleanBook ||
-        (projectedMeld != null &&
-            projectedMeld.cards.length >= GameConfig.bookSize &&
-            projectedMeld.isClean);
+        bot.hasCleanBook || (projectedMeld != null && projectedMeld.isClean);
     final willHaveDirty =
-        bot.hasDirtyBook ||
-        (projectedMeld != null &&
-            projectedMeld.cards.length >= GameConfig.bookSize &&
-            projectedMeld.isDirty);
+        bot.hasDirtyBook || (projectedMeld != null && projectedMeld.isDirty);
 
     return !(willHaveClean && willHaveDirty);
   }

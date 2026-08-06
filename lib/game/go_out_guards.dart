@@ -85,7 +85,17 @@ class GoOutGuards {
     int meldIndex,
     PlayingCard card,
   ) {
-    if (!player.hasPickedUpFoot) {
+    return wouldAddCardsToMeldLeaveUnfinishable(player, meldIndex, [card]);
+  }
+
+  /// True when adding all of [cards] to [meldIndex] in one selection would
+  /// leave the foot unfinishable. Projects the full selection before any add.
+  static bool wouldAddCardsToMeldLeaveUnfinishable(
+    Player player,
+    int meldIndex,
+    List<PlayingCard> cards,
+  ) {
+    if (!player.hasPickedUpFoot || cards.isEmpty) {
       return false;
     }
     if (meldIndex < 0 || meldIndex >= player.melds.length) {
@@ -93,14 +103,10 @@ class GoOutGuards {
     }
 
     final meld = player.melds[meldIndex];
-    if (!meld.canAddCard(card)) {
-      return false;
-    }
-
-    final projected = Meld.createMeld([...meld.cards, card]);
+    final projected = Meld.createMeld([...meld.cards, ...cards]);
     return wouldLeaveUnfinishableAfterMeld(
       player: player,
-      cardsRemoved: 1,
+      cardsRemoved: cards.length,
       modifiedMeldIndex: meldIndex,
       projectedModifiedMeld: projected,
     );

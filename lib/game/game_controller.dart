@@ -547,6 +547,14 @@ class GameController implements GameInterface {
     bool skipPlayDownCheck = false,
   }) {
     final player = _gameState.currentPlayer;
+    for (final indices in allMeldIndices) {
+      for (final index in indices) {
+        if (index < 0 || index >= player.currentHand.length) {
+          return false;
+        }
+      }
+    }
+
     final hadPlayedDown = player.hasPlayedDown;
     final hadPickedUpFoot = player.hasPickedUpFoot;
     final meldsSnapshot = _snapshotMelds(player);
@@ -638,13 +646,22 @@ class GameController implements GameInterface {
       return false;
     }
 
+    if (_gameState.phase == GamePhase.roundEnd ||
+        _gameState.phase == GamePhase.gameEnd) {
+      return false;
+    }
+
     final player = _gameState.currentPlayer;
     if (player.type != PlayerType.human) {
       return false;
     }
 
     final record = _meldUndoStack.removeLast();
-    return _applyMeldUndo(player, record);
+    final success = _applyMeldUndo(player, record);
+    if (!success) {
+      _meldUndoStack.add(record);
+    }
+    return success;
   }
 
   /// Clears turn-local meld undo history (discard, turn advance, round end).
