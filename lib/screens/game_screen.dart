@@ -24,7 +24,9 @@ import '../widgets/game_app_bar.dart';
 import '../widgets/game_session_info_menu.dart';
 import '../widgets/card_animation_host.dart';
 import '../widgets/final_turn_banner.dart';
+import '../widgets/stuck_go_out_recovery_banner.dart';
 import '../widgets/round_start_mini_game.dart';
+import '../game/go_out_guards.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
 import '../services/analytics/bot_decision_analytics_snapshot.dart';
@@ -987,16 +989,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return false;
     }
 
-    // Only consider it stuck if:
-    // 1. It's the human player's turn
-    // 2. They have an empty foot (not just empty hand - that's normal transition)
-    // 3. They've already picked up their foot
-    // 4. They don't meet the requirements to go out
-    return currentPlayer.type == PlayerType.human &&
-        humanPlayer.hasPickedUpFoot &&
-        humanPlayer.foot.isEmpty &&
-        !humanPlayer.canGoOutWithBooks &&
-        gameState.turnPhase == TurnPhase.meld;
+    return GoOutGuards.isHumanStuckWithoutGoOut(
+      gameState: gameState,
+      humanPlayer: humanPlayer,
+      currentPlayer: currentPlayer,
+    );
   }
 
   void _forceNextTurn() {
@@ -1006,6 +1003,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       controller.advanceTurnAfterAction(previousPlayer);
       // UI will update automatically via provider reactivity
       processCurrentPlayerTurn();
+    }
+  }
+
+  void _onUndoMeld() {
+    final controller = _gameController;
+    if (controller == null || !controller.canUndoMeld) {
+      return;
+    }
+    if (controller.undoLastMeld()) {
+      setState(() {
+        _selectedCardIndices.clear();
+      });
     }
   }
 
@@ -1407,6 +1416,32 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final controller = _gameController;
     if (controller == null) return;
 
+    final human = controller.gameState.currentPlayer;
+    for (final indices in meldIndices) {
+      if (indices.any(
+        (index) => index < 0 || index >= human.currentHand.length,
+      )) {
+        _dialogManager.showErrorDialog(
+          'Invalid card selection. Please try again.',
+        );
+        return;
+      }
+    }
+
+    final allMeldCards = <List<PlayingCard>>[];
+    for (final indices in meldIndices) {
+      allMeldCards.add(
+        indices.map((index) => human.currentHand[index]).toList(),
+      );
+    }
+
+    if (GoOutGuards.wouldMultiMeldLeaveUnfinishable(human, allMeldCards)) {
+      _dialogManager.showErrorDialog(
+        GameActionFeedback.unfinishableMeldBlockerMessage(human),
+      );
+      return;
+    }
+
     final success = controller.createMultipleMeldsFromIndices(
       meldIndices,
       skipPlayDownCheck: true,
@@ -1794,6 +1829,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final controller = _gameController;
     if (controller == null) return;
 
+    final humanPlayer = controller.gameState.currentPlayer;
+    if (GoOutGuards.wouldAddCardsToMeldLeaveUnfinishable(
+      humanPlayer,
+      meldIndex,
+      cardsToAdd,
+    )) {
+      _dialogManager.showErrorDialog(
+        GameActionFeedback.unfinishableMeldBlockerMessage(humanPlayer),
+      );
+      return;
+    }
+
     int addedCount = 0;
     for (final card in cardsToAdd) {
       if (controller.addCardToMeld(meldIndex, card)) {
@@ -2043,6 +2090,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                                 ? _onDiscard
                                 : null;
                           }(),
+                          onUndoMeld: (_gameController?.canUndoMeld ?? false)
+                              ? _onUndoMeld
+                              : null,
+                          canUndoMeld: _gameController?.canUndoMeld ?? false,
                           onClearSelection: () =>
                               setState(() => _selectedCardIndices.clear()),
                         ),
@@ -2225,33 +2276,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     if (_isGameStuck() &&
         currentPlayer.type == PlayerType.human &&
         gameState.phase != GamePhase.gameEnd) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.red),
-        ),
-        child: Column(
-          children: [
-            const Text(
-              'Game is stuck! You went out without meeting book requirements.',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: _forceNextTurn,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Skip Turn (Emergency Recovery)'),
-            ),
-          ],
-        ),
+      final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
+      return StuckGoOutRecoveryBanner(
+        humanPlayer: humanPlayer,
+        onUndo: (_gameController?.canUndoMeld ?? false) ? _onUndoMeld : null,
+        onSkipTurn: _forceNextTurn,
       );
     }
 

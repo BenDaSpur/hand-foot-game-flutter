@@ -186,9 +186,11 @@ class GameActionButtons extends StatelessWidget {
   final VoidCallback? onUnlockDiscard;
   final VoidCallback? onShowAdvancedMeldSelector;
   final VoidCallback? onDiscard;
+  final VoidCallback? onUndoMeld;
   final VoidCallback onClearSelection;
   final String? currentUserId; // For multiplayer turn detection
   final bool showKeyboardHints;
+  final bool canUndoMeld;
 
   const GameActionButtons({
     super.key,
@@ -200,8 +202,10 @@ class GameActionButtons extends StatelessWidget {
     required this.onShowAdvancedMeldSelector,
     required this.onDiscard,
     required this.onClearSelection,
+    this.onUndoMeld,
     this.currentUserId, // Optional - for multiplayer
     this.showKeyboardHints = false,
+    this.canUndoMeld = false,
   });
 
   bool get _hasSelectedCard => selectedCardIndices.length == 1;
@@ -398,6 +402,16 @@ class GameActionButtons extends StatelessWidget {
           ), // Neon green for meld action
         ),
       );
+      if (canUndoMeld && onUndoMeld != null) {
+        buttons.add(
+          _buildCompactButton(
+            onPressed: isAnimating ? null : onUndoMeld,
+            text: 'Undo',
+            isPhone: isPhone,
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       buttons.add(
         _buildCompactButton(
           onPressed: isAnimating ? null : (_hasSelectedCard ? onDiscard : null),

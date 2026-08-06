@@ -3,6 +3,7 @@ import '../models/card.dart';
 import '../models/meld.dart';
 import '../models/game_state.dart';
 import '../game/game_controller.dart';
+import '../game/go_out_guards.dart';
 import '../config/game_config.dart';
 import '../utils/debug_logger.dart';
 import 'bot_decision.dart';
@@ -32,6 +33,9 @@ class BotEndGameManager {
   }
 
   /// True when a meld would leave 0–1 cards while the bot still cannot go out.
+  ///
+  /// [projectedMeld] is OR'd with the bot's current books (legacy callers pass
+  /// either a brand-new meld or a post-add projection).
   static bool leavesUnfinishableSingleCard(
     Player bot, {
     required int cardsRemoved,
@@ -47,17 +51,19 @@ class BotEndGameManager {
     }
 
     final willHaveClean =
-        bot.hasCleanBook ||
-        (projectedMeld != null &&
-            projectedMeld.cards.length >= BotConfig.bookSize &&
-            projectedMeld.isClean);
+        bot.hasCleanBook || (projectedMeld != null && projectedMeld.isClean);
     final willHaveDirty =
-        bot.hasDirtyBook ||
-        (projectedMeld != null &&
-            projectedMeld.cards.length >= BotConfig.bookSize &&
-            !projectedMeld.isClean);
+        bot.hasDirtyBook || (projectedMeld != null && projectedMeld.isDirty);
 
     return !(willHaveClean && willHaveDirty);
+  }
+
+  /// Shared human/bot guard for creating a meld from cards.
+  static bool wouldCreateLeaveUnfinishable(
+    Player player,
+    List<PlayingCard> cards,
+  ) {
+    return GoOutGuards.wouldCreateMeldLeaveUnfinishable(player, cards);
   }
 
   /// True when adding [card] to [meld] would destroy the bot's only clean

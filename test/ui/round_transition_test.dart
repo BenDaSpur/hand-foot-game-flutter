@@ -458,7 +458,7 @@ void main() {
     });
 
     test(
-      'should not end round if books requirement not met when melding last cards',
+      'should refuse melding the last card when books requirement is not met',
       () {
         // Set up human player without proper book requirements
         humanPlayer.hasPlayedDown = true;
@@ -502,22 +502,15 @@ void main() {
         expect(humanPlayer.hasDirtyBook, isFalse); // Missing dirty book
         expect(gameController.gameState.phase, equals(GamePhase.playing));
 
-        // Add the last card to existing meld - should work but not end round
+        // Adding the last card without both books is refused (prevents soft-lock)
         final lastCard = humanPlayer.foot.first;
         final meldIndex = 1; // The ace meld
         final success = gameController.addCardToMeld(meldIndex, lastCard);
 
-        expect(success, isTrue);
-        expect(
-          gameController.gameState.phase,
-          equals(GamePhase.playing),
-        ); // Round should NOT end
-        expect(humanPlayer.foot.isEmpty, isTrue);
-        expect(humanPlayer.hand.isEmpty, isTrue);
-        expect(
-          humanPlayer.canGoOut,
-          isFalse,
-        ); // Can't go out without dirty book
+        expect(success, isFalse);
+        expect(gameController.gameState.phase, equals(GamePhase.playing));
+        expect(humanPlayer.foot.length, equals(1));
+        expect(humanPlayer.canGoOut, isFalse);
       },
     );
   });

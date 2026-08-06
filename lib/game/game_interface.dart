@@ -30,6 +30,12 @@ abstract class GameInterface {
   bool addCardToMeld(int meldIndex, PlayingCard card);
   bool discardCard(PlayingCard card);
 
+  /// Whether the current human player can undo the last meld this turn.
+  bool get canUndoMeld;
+
+  /// Reverse the most recent meld action from this turn. Returns false if none.
+  bool undoLastMeld();
+
   // Game queries
   bool canUnlockDiscard();
   bool canPlayerGoOut();

@@ -165,39 +165,38 @@ void main() {
       expect(testPlayer.hasPickedUpFoot, isFalse);
     });
 
-    test('should not pick up foot if already picked up', () {
-      // Player already using foot and has played down
-      testPlayer.hasPickedUpFoot = true;
-      testPlayer.hasPlayedDown = true;
-      testPlayer.hand.clear(); // Empty original hand
-      testPlayer.foot.clear();
-      testPlayer.foot.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-      ]);
+    test(
+      'should refuse emptying the foot without books once already picked up',
+      () {
+        // Player already using foot and has played down
+        testPlayer.hasPickedUpFoot = true;
+        testPlayer.hasPlayedDown = true;
+        testPlayer.hand.clear(); // Empty original hand
+        testPlayer.foot.clear();
+        testPlayer.foot.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        ]);
 
-      // Create meld that empties the foot (current hand)
-      final success = gameState.playMeld([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-      ]);
+        // Attempting to empty the foot without both books is refused so the
+        // player is not soft-locked unable to discard.
+        final success = gameState.playMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        ]);
 
-      // Verify meld was successful
-      expect(success, isTrue);
+        expect(success, isFalse);
+        expect(testPlayer.foot.length, equals(3));
+        expect(testPlayer.melds, isEmpty);
+        expect(testPlayer.hasPickedUpFoot, isTrue);
 
-      // Verify foot is empty (they used all foot cards)
-      expect(testPlayer.foot.isEmpty, isTrue);
-
-      // Verify state remains consistent
-      expect(testPlayer.hasPickedUpFoot, isTrue);
-
-      // Should not have any additional "picked up foot" messages
-      final footPickupActions = gameState.recentActions
-          .where((action) => action.message.contains('picked up foot pile'))
-          .toList();
-      expect(footPickupActions.length, equals(0));
-    });
+        final footPickupActions = gameState.recentActions
+            .where((action) => action.message.contains('picked up foot pile'))
+            .toList();
+        expect(footPickupActions.length, equals(0));
+      },
+    );
   });
 }
