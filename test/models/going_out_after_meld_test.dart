@@ -182,48 +182,43 @@ void main() {
       ); // Round should have ended
     });
 
-    test(
-      'should NOT end round when player has cards but requirements not met',
-      () {
-        // Set up player who has played down but doesn't meet going out requirements
-        player.hasPlayedDown = true;
-        player.hasPickedUpFoot = true;
+    test('should refuse emptying the foot when go-out books are missing', () {
+      // Set up player who has played down but doesn't meet going out requirements
+      player.hasPlayedDown = true;
+      player.hasPickedUpFoot = true;
 
-        // Create only a clean book (missing dirty book requirement)
-        final cleanBook = Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        ])!;
+      // Create only a clean book (missing dirty book requirement)
+      final cleanBook = Meld.createMeld([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ])!;
 
-        player.melds.add(cleanBook);
+      player.melds.add(cleanBook);
 
-        // Player has last 3 cards but can't go out yet (no dirty book)
-        final lastCards = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        ];
-        player.foot.addAll(lastCards);
+      // Player has last 3 cards but can't go out yet (no dirty book)
+      final lastCards = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ];
+      player.foot.addAll(lastCards);
 
-        expect(player.canGoOutWithBooks, isFalse); // Missing dirty book
-        expect(gameState.phase, equals(GamePhase.playing));
+      expect(player.canGoOutWithBooks, isFalse); // Missing dirty book
+      expect(gameState.phase, equals(GamePhase.playing));
 
-        // Play the last meld - should succeed but NOT end the round
-        final success = gameState.playMeld(lastCards);
+      // Emptying the foot without both books is refused (prevents soft-lock)
+      final success = gameState.playMeld(lastCards);
 
-        expect(success, isTrue);
-        expect(player.foot.isEmpty, isTrue);
-        expect(
-          gameState.phase,
-          equals(GamePhase.playing),
-        ); // Round should NOT have ended
-      },
-    );
+      expect(success, isFalse);
+      expect(player.foot.length, equals(3));
+      expect(player.melds.length, equals(1));
+      expect(gameState.phase, equals(GamePhase.playing));
+    });
 
     test('should NOT end round when player still has cards left', () {
       // Set up player who meets book requirements but still has cards
