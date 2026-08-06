@@ -1039,7 +1039,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   @override
-  bool get canUndoMeld => isMyTurn && _gameController.canUndoMeld;
+  bool get canUndoMeld =>
+      isMyTurn &&
+      gameState.phase != GamePhase.roundEnd &&
+      gameState.phase != GamePhase.gameEnd &&
+      _gameController.canUndoMeld;
 
   @override
   bool undoLastMeld() {
