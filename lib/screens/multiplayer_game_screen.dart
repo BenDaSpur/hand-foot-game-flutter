@@ -13,7 +13,9 @@ import '../widgets/game_hand_display.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/game_board_layout.dart';
 import '../widgets/final_turn_banner.dart';
+import '../widgets/stuck_go_out_recovery_banner.dart';
 import '../widgets/turn_timer.dart';
+import '../game/go_out_guards.dart';
 import '../widgets/card_animation_host.dart';
 import '../game/events/game_event_bus.dart';
 import '../services/multiplayer_resume_service.dart';
@@ -471,6 +473,24 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       }
     }
 
+    final allMeldCards = <List<PlayingCard>>[];
+    for (final indices in meldIndices) {
+      allMeldCards.add(
+        indices.map((index) => currentUserPlayer.currentHand[index]).toList(),
+      );
+    }
+
+    if (GoOutGuards.wouldMultiMeldLeaveUnfinishable(
+      currentUserPlayer,
+      allMeldCards,
+    )) {
+      _showErrorDialog(
+        'Cannot Meld',
+        GameActionFeedback.unfinishableMeldBlockerMessage(currentUserPlayer),
+      );
+      return;
+    }
+
     // Use the multiplayer controller's multi-meld creation
     try {
       final success = _gameController.createMultipleMeldsFromIndices(
@@ -593,6 +613,20 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     if (cardsToAdd.isEmpty) return;
 
     for (final card in cardsToAdd) {
+      if (GoOutGuards.wouldAddToMeldLeaveUnfinishable(
+        currentUserPlayer,
+        meldIndex,
+        card,
+      )) {
+        _showErrorDialog(
+          'Cannot Add Card',
+          GameActionFeedback.unfinishableMeldBlockerMessage(currentUserPlayer),
+        );
+        return;
+      }
+    }
+
+    for (final card in cardsToAdd) {
       try {
         _gameController.addCardToMeld(meldIndex, card);
       } catch (e) {
@@ -601,6 +635,47 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     }
 
     setState(() => _selectedCardIndices.clear());
+  }
+
+  void _onUndoMeld() {
+    if (_gameController.undoLastMeld()) {
+      setState(() => _selectedCardIndices.clear());
+    }
+  }
+
+  void _forceSkipTurn() {
+    if (_gameController.skipTurnEmergency()) {
+      setState(() => _selectedCardIndices.clear());
+    }
+  }
+
+  Widget? _buildAboveMeldsBanner(GameState gameState, Player humanPlayer) {
+    final currentPlayer = gameState.currentPlayer;
+    final isStuck = GoOutGuards.isHumanStuckWithoutGoOut(
+      gameState: gameState,
+      humanPlayer: humanPlayer,
+      currentPlayer: currentPlayer,
+    );
+
+    if (isStuck &&
+        _gameController.isMyTurn &&
+        gameState.phase != GamePhase.gameEnd) {
+      return StuckGoOutRecoveryBanner(
+        humanPlayer: humanPlayer,
+        canUndo: _gameController.canUndoMeld,
+        onUndo: _onUndoMeld,
+        onSkipTurn: _forceSkipTurn,
+      );
+    }
+
+    if (gameState.finalTurnPhaseActive) {
+      return FinalTurnBanner(
+        gameState: gameState,
+        localPlayerId: _gameController.userId,
+      );
+    }
+
+    return null;
   }
 
   void _selectAllCardsForMeld(int meldIndex) {
@@ -838,12 +913,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                           ),
                         ],
                       ],
-                      aboveMelds: gameState.finalTurnPhaseActive
-                          ? FinalTurnBanner(
-                              gameState: gameState,
-                              localPlayerId: _gameController.userId,
-                            )
-                          : null,
+                      aboveMelds: _buildAboveMeldsBanner(
+                        gameState,
+                        humanPlayer,
+                      ),
                       meldsSection: MeldsSection(
                         gameState: gameState,
                         humanPlayer: humanPlayer,
@@ -872,6 +945,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                         onDiscard: _selectedCards.length == 1
                             ? _onDiscard
                             : null,
+                        onUndoMeld: _gameController.canUndoMeld
+                            ? _onUndoMeld
+                            : null,
+                        canUndoMeld: _gameController.canUndoMeld,
                         onClearSelection: () =>
                             setState(() => _selectedCardIndices.clear()),
                         currentUserId: _gameController.userId,

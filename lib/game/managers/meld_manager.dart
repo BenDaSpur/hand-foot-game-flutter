@@ -3,6 +3,7 @@ import '../../models/card.dart';
 import '../../models/player.dart';
 import '../../models/meld.dart';
 import '../../models/game_state.dart';
+import '../go_out_guards.dart';
 
 /// Manages all meld-related operations for the game.
 ///
@@ -53,6 +54,16 @@ class MeldManager {
         _debugLog('Failed to create meld ${i + 1}: $cardNames');
         return false;
       }
+    }
+
+    if (GoOutGuards.wouldMultiMeldLeaveUnfinishable(
+      currentPlayer,
+      allMeldCards,
+    )) {
+      _debugLog(
+        'Refused multi-meld: would leave too few foot cards without books',
+      );
+      return false;
     }
 
     // Check play-down requirement if applicable
@@ -120,6 +131,13 @@ class MeldManager {
     final cards = cardIndices
         .map((index) => currentPlayer.currentHand[index])
         .toList();
+
+    if (GoOutGuards.wouldCreateMeldLeaveUnfinishable(currentPlayer, cards)) {
+      _debugLog(
+        'Refused meld by indices: would leave too few foot cards without books',
+      );
+      return false;
+    }
 
     // Check play-down requirement if needed
     if (!skipPlayDownCheck && !currentPlayer.hasPlayedDown) {

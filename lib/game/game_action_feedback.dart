@@ -132,4 +132,27 @@ class GameActionFeedback {
 
     return 'Discarding your last card would go out. $missingBooks';
   }
+
+  /// Explains why a meld that would empty (or nearly empty) the foot without
+  /// both books is refused.
+  static String unfinishableMeldBlockerMessage(Player player) {
+    final String missingBooks;
+    if (!player.hasCleanBook && !player.hasDirtyBook) {
+      missingBooks =
+          'You need both a clean book (no wild cards) and a dirty book '
+          '(with wild cards) to go out.';
+    } else if (!player.hasCleanBook) {
+      missingBooks = 'You need a clean book (no wild cards) to go out.';
+    } else {
+      missingBooks = 'You need a dirty book (with wild cards) to go out.';
+    }
+
+    return '$missingBooks Keep at least two cards so you can discard.';
+  }
+
+  /// Copy for the emergency stuck banner when the player cannot finish the turn.
+  static String stuckWithoutBooksMessage(Player player) {
+    return '${goOutBlockerMessage(player).replaceFirst('Discarding your last card would go out. ', '')} '
+        'Undo a meld or skip your turn to continue.';
+  }
 }

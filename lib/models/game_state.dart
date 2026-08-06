@@ -5,6 +5,7 @@ import 'player.dart';
 import 'meld.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
+import '../game/go_out_guards.dart';
 import '../game/managers/game_rules_engine.dart';
 import '../utils/debug_logger.dart';
 
@@ -634,6 +635,13 @@ class GameState {
   bool playMeld(List<PlayingCard> cards) {
     if (turnPhase != TurnPhase.meld) return false;
 
+    if (GoOutGuards.wouldCreateMeldLeaveUnfinishable(currentPlayer, cards)) {
+      _logAction(
+        'Cannot meld — would leave too few cards without both books to go out',
+      );
+      return false;
+    }
+
     final wasFirstMeld = !currentPlayer.hasPlayedDown;
 
     // Check if this would add to existing meld
@@ -687,6 +695,13 @@ class GameState {
   bool playMeldBypass(List<PlayingCard> cards) {
     if (turnPhase != TurnPhase.meld) return false;
 
+    if (GoOutGuards.wouldCreateMeldLeaveUnfinishable(currentPlayer, cards)) {
+      _logAction(
+        'Cannot meld — would leave too few cards without both books to go out',
+      );
+      return false;
+    }
+
     final wasFirstMeld = !currentPlayer.hasPlayedDown;
 
     // Check if this would add to existing meld
@@ -739,6 +754,18 @@ class GameState {
 
   bool addToMeld(int meldIndex, PlayingCard card) {
     if (!_canAddToMeld()) return false;
+
+    if (GoOutGuards.wouldAddToMeldLeaveUnfinishable(
+      currentPlayer,
+      meldIndex,
+      card,
+    )) {
+      _logAction(
+        'Cannot add to meld — would leave too few cards without both books '
+        'to go out',
+      );
+      return false;
+    }
 
     final preOpState = _capturePlayerState();
     if (!_performAddToMeld(meldIndex, card)) return false;

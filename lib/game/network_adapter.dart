@@ -165,6 +165,7 @@ class FirebaseNetworkAdapter implements NetworkAdapter {
       'drawFromDiscard',
       'createMeld',
       'addToMeld',
+      'undoMeld',
       'discardCard',
       'unlockDiscard',
       'startGame',

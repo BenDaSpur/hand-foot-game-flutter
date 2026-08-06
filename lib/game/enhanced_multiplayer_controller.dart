@@ -1038,6 +1038,40 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
   }
 
   @override
+  bool get canUndoMeld => isMyTurn && _gameController.canUndoMeld;
+
+  @override
+  bool undoLastMeld() {
+    if (!isMyTurn || !_gameController.canUndoMeld) {
+      return false;
+    }
+
+    final success = _gameController.undoLastMeld();
+    if (success) {
+      emitStateUpdate();
+      if (_isOnline) {
+        _syncGameState();
+      }
+    }
+    return success;
+  }
+
+  /// Emergency recovery when the local human cannot discard or go out.
+  bool skipTurnEmergency() {
+    if (!isMyTurn) {
+      return false;
+    }
+
+    final previousPlayer = _gameController.gameState.currentPlayer;
+    _gameController.advanceTurnAfterAction(previousPlayer);
+    emitStateUpdate();
+    if (_isOnline) {
+      _syncGameState();
+    }
+    return true;
+  }
+
+  @override
   bool discardCard(PlayingCard card) {
     if (!canPerformAction('discardCard')) return false;
 
@@ -1179,6 +1213,10 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
       case TurnPhase.meld:
         // Always allow discarding during meld phase
         actions.add('discardCard');
+
+        if (_gameController.canUndoMeld) {
+          actions.add('undoMeld');
+        }
 
         // Add melding options if player has cards
         if (currentPlayer.currentHand.isNotEmpty) {

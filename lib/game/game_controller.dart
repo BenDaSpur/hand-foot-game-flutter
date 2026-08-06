@@ -10,6 +10,7 @@ import '../services/game_save_service.dart';
 import '../utils/debug_logger.dart';
 import '../config/solo_game_settings.dart';
 import 'game_interface.dart';
+import 'meld_undo_record.dart';
 import 'managers/meld_manager.dart';
 import 'managers/game_serializer.dart';
 import 'events/game_event.dart';
@@ -36,6 +37,7 @@ class GameController implements GameInterface {
   final GameState _gameState;
   late final MeldManager _meldManager;
   final GameEventBus _eventBus;
+  final List<MeldUndoRecord> _meldUndoStack = [];
 
   @override
   final int? gameSeed;
@@ -337,6 +339,7 @@ class GameController implements GameInterface {
     _gameState.validateGameState();
 
     if (result) {
+      clearMeldUndoStack();
       _eventBus.publish(CardDiscardedEvent(card: card, player: player));
 
       _publishPostActionEvents(
@@ -393,6 +396,7 @@ class GameController implements GameInterface {
     final roundBefore = _gameState.round;
     final roundEndingPlayer = _captureRoundEndingPlayer(previousPlayer);
     final roundEnded = _gameState.completeTurn();
+    clearMeldUndoStack();
 
     if (_gameState.phase != phaseBefore) {
       _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
@@ -408,6 +412,7 @@ class GameController implements GameInterface {
 
   @override
   void nextRound({bool dealCards = true}) {
+    clearMeldUndoStack();
     if (_gameState.phase == GamePhase.roundEnd) {
       _gameState.resetForNewRound(dealCardsAfterReset: dealCards);
       if (dealCards) {
@@ -424,6 +429,7 @@ class GameController implements GameInterface {
     final player = _gameState.currentPlayer;
     final hadPlayedDown = player.hasPlayedDown;
     final hadPickedUpFoot = player.hasPickedUpFoot;
+    final meldCountBefore = player.melds.length;
     final roundBefore = _gameState.round;
     final phaseBefore = _gameState.phase;
     final roundEndingPlayer = _captureRoundEndingPlayer(player);
@@ -433,6 +439,14 @@ class GameController implements GameInterface {
     _gameState.validateGameState();
 
     if (result && player.melds.isNotEmpty) {
+      _recordHumanMeldUndo(
+        player: player,
+        cards: cards,
+        meldCountBefore: meldCountBefore,
+        hadPlayedDown: hadPlayedDown,
+        hadPickedUpFoot: hadPickedUpFoot,
+      );
+
       final newMeld = player.melds.last;
       _eventBus.publish(
         MeldCreatedEvent(meld: newMeld, cards: cards, player: player),
@@ -469,8 +483,24 @@ class GameController implements GameInterface {
 
   @override
   bool createMeldBypass(List<PlayingCard> cards) {
+    final player = _gameState.currentPlayer;
+    final hadPlayedDown = player.hasPlayedDown;
+    final hadPickedUpFoot = player.hasPickedUpFoot;
+    final meldCountBefore = player.melds.length;
+
     final result = _gameState.playMeldBypass(cards);
     _gameState.validateGameState();
+
+    if (result) {
+      _recordHumanMeldUndo(
+        player: player,
+        cards: cards,
+        meldCountBefore: meldCountBefore,
+        hadPlayedDown: hadPlayedDown,
+        hadPickedUpFoot: hadPickedUpFoot,
+      );
+    }
+
     return result;
   }
 
@@ -479,10 +509,36 @@ class GameController implements GameInterface {
     List<int> cardIndices, {
     bool skipPlayDownCheck = false,
   }) {
-    return _meldManager.createMeldByIndices(
+    final player = _gameState.currentPlayer;
+    for (final index in cardIndices) {
+      if (index < 0 || index >= player.currentHand.length) {
+        return false;
+      }
+    }
+
+    final hadPlayedDown = player.hasPlayedDown;
+    final hadPickedUpFoot = player.hasPickedUpFoot;
+    final meldCountBefore = player.melds.length;
+    final cards = cardIndices
+        .map((index) => player.currentHand[index])
+        .toList();
+
+    final result = _meldManager.createMeldByIndices(
       cardIndices,
       skipPlayDownCheck: skipPlayDownCheck,
     );
+
+    if (result) {
+      _recordHumanMeldUndo(
+        player: player,
+        cards: cards,
+        meldCountBefore: meldCountBefore,
+        hadPlayedDown: hadPlayedDown,
+        hadPickedUpFoot: hadPickedUpFoot,
+      );
+    }
+
+    return result;
   }
 
   @override
@@ -490,16 +546,41 @@ class GameController implements GameInterface {
     List<List<int>> allMeldIndices, {
     bool skipPlayDownCheck = false,
   }) {
-    return _meldManager.createMultipleMeldsFromIndices(
+    final player = _gameState.currentPlayer;
+    final hadPlayedDown = player.hasPlayedDown;
+    final hadPickedUpFoot = player.hasPickedUpFoot;
+    final meldsSnapshot = _snapshotMelds(player);
+    final cards = <PlayingCard>[];
+    for (final indices in allMeldIndices) {
+      for (final index in indices) {
+        cards.add(player.currentHand[index]);
+      }
+    }
+
+    final result = _meldManager.createMultipleMeldsFromIndices(
       allMeldIndices,
       skipPlayDownCheck: skipPlayDownCheck,
     );
+
+    if (result && player.type == PlayerType.human) {
+      _meldUndoStack.add(
+        MeldUndoRecord(
+          cardsReturnedToHand: cards,
+          meldsSnapshotBefore: meldsSnapshot,
+          unsetPlayedDown: !hadPlayedDown && player.hasPlayedDown,
+          unsetPickedUpFoot: !hadPickedUpFoot && player.hasPickedUpFoot,
+        ),
+      );
+    }
+
+    return result;
   }
 
   @override
   bool addCardToMeld(int meldIndex, PlayingCard card) {
     final player = _gameState.currentPlayer;
     final hadPickedUpFoot = player.hasPickedUpFoot;
+    final hadPlayedDown = player.hasPlayedDown;
     final roundBefore = _gameState.round;
     final phaseBefore = _gameState.phase;
     final roundEndingPlayer = _captureRoundEndingPlayer(player);
@@ -509,6 +590,18 @@ class GameController implements GameInterface {
     _gameState.validateGameState();
 
     if (result) {
+      if (player.type == PlayerType.human) {
+        _meldUndoStack.add(
+          MeldUndoRecord(
+            cardsReturnedToHand: [card],
+            meldIndex: meldIndex,
+            wasNewMeld: false,
+            unsetPlayedDown: !hadPlayedDown && player.hasPlayedDown,
+            unsetPickedUpFoot: !hadPickedUpFoot && player.hasPickedUpFoot,
+          ),
+        );
+      }
+
       _eventBus.publish(
         CardAddedToMeldEvent(
           meldIndex: meldIndex,
@@ -534,6 +627,123 @@ class GameController implements GameInterface {
     }
 
     return result;
+  }
+
+  @override
+  bool get canUndoMeld => _meldUndoStack.isNotEmpty;
+
+  @override
+  bool undoLastMeld() {
+    if (_meldUndoStack.isEmpty) {
+      return false;
+    }
+
+    final player = _gameState.currentPlayer;
+    if (player.type != PlayerType.human) {
+      return false;
+    }
+
+    final record = _meldUndoStack.removeLast();
+    return _applyMeldUndo(player, record);
+  }
+
+  /// Clears turn-local meld undo history (discard, turn advance, round end).
+  void clearMeldUndoStack() {
+    _meldUndoStack.clear();
+  }
+
+  void _recordHumanMeldUndo({
+    required Player player,
+    required List<PlayingCard> cards,
+    required int meldCountBefore,
+    required bool hadPlayedDown,
+    required bool hadPickedUpFoot,
+  }) {
+    if (player.type != PlayerType.human) {
+      return;
+    }
+
+    final wasNewMeld = player.melds.length > meldCountBefore;
+    var meldIndex = -1;
+    if (wasNewMeld) {
+      meldIndex = player.melds.length - 1;
+    } else {
+      final naturalCards = cards.where((card) => !card.isWild).toList();
+      if (naturalCards.isNotEmpty) {
+        meldIndex = player.findMeldByRank(naturalCards.first.rank);
+      }
+    }
+
+    if (meldIndex < 0) {
+      return;
+    }
+
+    _meldUndoStack.add(
+      MeldUndoRecord(
+        cardsReturnedToHand: List<PlayingCard>.from(cards),
+        meldIndex: meldIndex,
+        wasNewMeld: wasNewMeld,
+        unsetPlayedDown: !hadPlayedDown && player.hasPlayedDown,
+        unsetPickedUpFoot: !hadPickedUpFoot && player.hasPickedUpFoot,
+      ),
+    );
+  }
+
+  List<Meld> _snapshotMelds(Player player) {
+    return player.melds
+        .map((meld) => Meld(rank: meld.rank, cards: List.from(meld.cards)))
+        .toList();
+  }
+
+  bool _applyMeldUndo(Player player, MeldUndoRecord record) {
+    if (record.meldsSnapshotBefore != null) {
+      player.melds
+        ..clear()
+        ..addAll(record.meldsSnapshotBefore!);
+    } else {
+      final meldIndex = record.meldIndex;
+      if (meldIndex == null ||
+          meldIndex < 0 ||
+          meldIndex >= player.melds.length) {
+        return false;
+      }
+
+      if (record.wasNewMeld) {
+        player.melds.removeAt(meldIndex);
+      } else {
+        final meld = player.melds[meldIndex];
+        for (final card in record.cardsReturnedToHand) {
+          final cardIndex = meld.cards.lastIndexWhere(
+            (meldCard) =>
+                meldCard.rank == card.rank && meldCard.suit == card.suit,
+          );
+          if (cardIndex >= 0) {
+            meld.cards.removeAt(cardIndex);
+          }
+        }
+        if (meld.cards.length < GameConfig.minTotalCardsForMeld) {
+          player.melds.removeAt(meldIndex);
+        }
+      }
+    }
+
+    if (record.unsetPickedUpFoot) {
+      player.hasPickedUpFoot = false;
+      player.hand.addAll(record.cardsReturnedToHand);
+    } else {
+      player.currentHand.addAll(record.cardsReturnedToHand);
+    }
+
+    if (record.unsetPlayedDown) {
+      player.hasPlayedDown = player.melds.isNotEmpty;
+    }
+
+    if (_meldUndoStack.isEmpty) {
+      _gameState.hasMelded = false;
+    }
+
+    _gameState.logAction('undid last meld action');
+    return true;
   }
 
   @override
