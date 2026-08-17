@@ -481,11 +481,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   Widget _buildInfoButton() {
     return TextButton(
       onPressed: _showGameInfo,
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.info_outline, color: BalatroTheme.glowColor, size: 16),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Text(
             'How to Play',
             style: TextStyle(
