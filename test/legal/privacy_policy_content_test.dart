@@ -56,14 +56,14 @@ void main() {
     }
 
     expect(html, contains('Do not open a public GitHub issue'));
-    expect(html, contains('SECURITY.md'));
+    expect(html, contains(ProjectLinks.securityPolicy));
     expect(
       html.toLowerCase(),
       isNot(contains('open a github issue on the project')),
     );
   });
 
-  test('vercel.json no-stores both privacy URL forms', () {
+  test('vercel.json sets no-cache headers for both privacy URL forms', () {
     final config =
         jsonDecode(File('vercel.json').readAsStringSync())
             as Map<String, dynamic>;
@@ -88,6 +88,15 @@ void main() {
     const expected = 'no-cache, no-store, must-revalidate';
     expect(cacheControl('/privacy.html'), expected);
     expect(cacheControl('/privacy'), expected);
+
+    final rewrites = (config['rewrites'] as List).cast<Map<String, dynamic>>();
+    expect(
+      rewrites.any((rewrite) {
+        return rewrite['source'] == '/privacy' &&
+            rewrite['destination'] == '/privacy.html';
+      }),
+      isTrue,
+    );
   });
 
   test('project links point at the public privacy policy URL', () {
