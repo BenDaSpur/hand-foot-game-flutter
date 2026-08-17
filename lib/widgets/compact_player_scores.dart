@@ -4,6 +4,7 @@ import '../models/game_state.dart';
 import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
 import '../ai/bot_personality.dart';
+import '../utils/game_responsive_layout.dart';
 
 class PersonalityIcons {
   static const IconData defaultBot = Icons.smart_toy;
@@ -20,6 +21,9 @@ class CompactPlayerScores extends StatelessWidget {
   final String? currentUserId;
   final BotPersonalityManager? botPersonalityManager;
 
+  /// When true, chips stack vertically for the wide-board left rail.
+  final bool vertical;
+
   const CompactPlayerScores({
     super.key,
     required this.gameState,
@@ -27,36 +31,75 @@ class CompactPlayerScores extends StatelessWidget {
     required this.onPlayerTap,
     this.currentUserId,
     this.botPersonalityManager,
+    this.vertical = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isTablet = GameResponsiveLayout.isTabletOrLarger(width);
+
+    final chips = gameState.players.map((player) {
+      final isViewing = viewingPlayerMelds == player;
+      final isCurrent = player == gameState.currentPlayer;
+      final isCurrentUser = currentUserId != null
+          ? player.id == currentUserId
+          : player.type == PlayerType.human;
+
+      final chip = _PlayerChip(
+        gameState: gameState,
+        player: player,
+        isViewing: isViewing,
+        isCurrent: isCurrent,
+        isCurrentUser: isCurrentUser,
+        isMultiplayer: currentUserId != null,
+        onTap: () => onPlayerTap(player),
+        botPersonalityManager: botPersonalityManager,
+      );
+
+      if (vertical) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          child: chip,
+        );
+      }
+
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: chip,
+        ),
+      );
+    }).toList();
+
+    if (vertical) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: chips,
+        ),
+      );
+    }
+
+    final row = Row(children: chips);
+
+    if (!isTablet) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: row,
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      child: Row(
-        children: gameState.players.map((player) {
-          final isViewing = viewingPlayerMelds == player;
-          final isCurrent = player == gameState.currentPlayer;
-          final isCurrentUser = currentUserId != null
-              ? player.id == currentUserId
-              : player.type == PlayerType.human;
-
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: _PlayerChip(
-                gameState: gameState,
-                player: player,
-                isViewing: isViewing,
-                isCurrent: isCurrent,
-                isCurrentUser: isCurrentUser,
-                isMultiplayer: currentUserId != null,
-                onTap: () => onPlayerTap(player),
-                botPersonalityManager: botPersonalityManager,
-              ),
-            ),
-          );
-        }).toList(),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: GameResponsiveLayout.playerScoresMaxWidth,
+          ),
+          child: row,
+        ),
       ),
     );
   }

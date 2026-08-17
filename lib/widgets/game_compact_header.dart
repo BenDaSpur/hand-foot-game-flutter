@@ -14,6 +14,9 @@ class GameCompactHeader extends StatelessWidget {
   final GlobalKey discardKey;
   final bool isExpanded;
   final VoidCallback onToggleExpand;
+
+  /// When false, hides the expand/collapse control (e.g. wide board always expanded).
+  final bool showExpandToggle;
   final VoidCallback? onRecentActionsTap;
   final List<Widget> headerExtras;
   final List<Widget> expandedExtras;
@@ -25,6 +28,7 @@ class GameCompactHeader extends StatelessWidget {
     required this.discardKey,
     required this.isExpanded,
     required this.onToggleExpand,
+    this.showExpandToggle = true,
     this.onRecentActionsTap,
     this.headerExtras = const [],
     this.expandedExtras = const [],
@@ -55,6 +59,9 @@ class GameCompactHeader extends StatelessWidget {
   /// Scale factor for mini piles when the header is collapsed.
   static const double _collapsedPileScale = 0.55;
 
+  /// Milder collapse on tablet so piles stay readable.
+  static const double _tabletCollapsedPileScale = 0.75;
+
   /// Even tighter piles on short viewports (landscape phones, SE, etc.).
   static const double _shortCollapsedPileScale = 0.45;
   static const double _shortHeightBreakpoint = 700;
@@ -68,9 +75,14 @@ class GameCompactHeader extends StatelessWidget {
     final deckLow = gameState.deck.size <= 20;
     final deckColor = deckLow ? Colors.red : BalatroTheme.neonYellow;
     final topDiscard = gameState.topDiscard;
-    final collapsedScale = isShortHeight
-        ? _shortCollapsedPileScale
-        : _collapsedPileScale;
+    final double collapsedScale;
+    if (isPhone && isShortHeight) {
+      collapsedScale = _shortCollapsedPileScale;
+    } else if (isPhone) {
+      collapsedScale = _collapsedPileScale;
+    } else {
+      collapsedScale = _tabletCollapsedPileScale;
+    }
 
     return Container(
       margin: EdgeInsets.fromLTRB(
@@ -121,22 +133,23 @@ class GameCompactHeader extends StatelessWidget {
                     count: gameState.recentActions.length,
                     onTap: onRecentActionsTap!,
                   ),
-                IconButton(
-                  onPressed: onToggleExpand,
-                  icon: Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: BalatroTheme.glowColor,
-                    size: 22,
+                if (showExpandToggle)
+                  IconButton(
+                    onPressed: onToggleExpand,
+                    icon: Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: BalatroTheme.glowColor,
+                      size: 22,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    tooltip: isExpanded
+                        ? 'Hide deck & details'
+                        : 'Show deck & details',
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  tooltip: isExpanded
-                      ? 'Hide deck & details'
-                      : 'Show deck & details',
-                ),
               ],
             ),
           ),

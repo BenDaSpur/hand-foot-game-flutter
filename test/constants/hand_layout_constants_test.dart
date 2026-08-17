@@ -56,6 +56,7 @@ void main() {
       final stackTopLeft = stackBox.localToGlobal(Offset.zero);
       final sizes = GameResponsiveLayout.handSizes(
         handStackKey.currentContext!,
+        cardCount: player.currentHand.length,
       );
       final animationCenter =
           stackTopLeft +
