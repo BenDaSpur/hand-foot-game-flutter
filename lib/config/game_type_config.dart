@@ -75,8 +75,8 @@ class GameTypeConfig {
   /// Factory method to create configuration for Classic mode (current rules).
   static const GameTypeConfig classic = GameTypeConfig(
     deckMultiplier: 1, // players + 1 deck
-    handSize: 13,
-    footSize: 13,
+    handSize: 11,
+    footSize: 11,
     maxRounds: 0, // Unlimited
     basePlayDownRequirement: 60,
     playDownIncrement: 30,
@@ -100,8 +100,8 @@ class GameTypeConfig {
   /// Factory method for Strict mode (traditional rules).
   static const GameTypeConfig strict = GameTypeConfig(
     deckMultiplier: 1,
-    handSize: 13,
-    footSize: 13,
+    handSize: 11,
+    footSize: 11,
     maxRounds: 0,
     basePlayDownRequirement: 60,
     playDownIncrement: 30,
@@ -176,8 +176,8 @@ class GameTypeConfig {
   /// Factory method for High Stakes mode (dramatic scoring).
   static const GameTypeConfig highStakes = GameTypeConfig(
     deckMultiplier: 1,
-    handSize: 13,
-    footSize: 13,
+    handSize: 11,
+    footSize: 11,
     maxRounds: 4, // Shorter but intense
     basePlayDownRequirement: 80, // Slightly higher than classic
     playDownIncrement: 40, // Steeper progression (80, 120, 160, 200)

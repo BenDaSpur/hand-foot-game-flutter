@@ -52,17 +52,33 @@ class GameCompactHeader extends StatelessWidget {
     }
   }
 
+  /// Scale factor for mini piles when the header is collapsed.
+  static const double _collapsedPileScale = 0.55;
+
+  /// Even tighter piles on short viewports (landscape phones, SE, etc.).
+  static const double _shortCollapsedPileScale = 0.45;
+  static const double _shortHeightBreakpoint = 700;
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isPhone = GameResponsiveLayout.isPhone(screenWidth);
+    final mediaSize = MediaQuery.sizeOf(context);
+    final isPhone = GameResponsiveLayout.isPhone(mediaSize.width);
+    final isShortHeight = mediaSize.height < _shortHeightBreakpoint;
     final sizes = GameResponsiveLayout.cardSizes(context);
     final deckLow = gameState.deck.size <= 20;
     final deckColor = deckLow ? Colors.red : BalatroTheme.neonYellow;
     final topDiscard = gameState.topDiscard;
+    final collapsedScale = isShortHeight
+        ? _shortCollapsedPileScale
+        : _collapsedPileScale;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      margin: EdgeInsets.fromLTRB(
+        8,
+        isShortHeight ? 2 : 4,
+        8,
+        isShortHeight ? 2 : 4,
+      ),
       decoration: BalatroTheme.glowDecoration(
         backgroundColor: BalatroTheme.darkPurple.withValues(alpha: 0.92),
         glowColor: BalatroTheme.glowColor.withValues(alpha: 0.35),
@@ -71,7 +87,7 @@ class GameCompactHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 4, 4),
+            padding: EdgeInsets.fromLTRB(10, isShortHeight ? 4 : 8, 4, 4),
             child: Row(
               children: [
                 _RoundBadge(round: gameState.round),
@@ -117,77 +133,260 @@ class GameCompactHeader extends StatelessWidget {
                     minWidth: 36,
                     minHeight: 36,
                   ),
-                  tooltip: isExpanded ? 'Hide details' : 'Show details',
+                  tooltip: isExpanded
+                      ? 'Hide deck & details'
+                      : 'Show deck & details',
                 ),
               ],
             ),
+          ),
+          if (isExpanded)
+            _ExpandedPilesSection(
+              isPhone: isPhone,
+              sizes: sizes,
+              deckKey: deckKey,
+              discardKey: discardKey,
+              deckSize: gameState.deck.size,
+              discardCount: gameState.discardPile.length,
+              deckColor: deckColor,
+              topDiscard: topDiscard,
+              showExtras: true,
+              isPhoneExtras: isPhone,
+              headerExtras: headerExtras,
+              expandedExtras: expandedExtras,
+              playDownRequirement: gameState.playDownRequirement,
+              deckLow: deckLow,
+            )
+          else
+            _CollapsedPilesStrip(
+              deckKey: deckKey,
+              discardKey: discardKey,
+              deckSize: gameState.deck.size,
+              discardCount: gameState.discardPile.length,
+              deckColor: deckColor,
+              topDiscard: topDiscard,
+              pileWidth: sizes.pileWidth * collapsedScale,
+              pileHeight: sizes.pileHeight * collapsedScale,
+              tight: isShortHeight,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full deck/discard piles plus optional detail chips (expanded header).
+class _ExpandedPilesSection extends StatelessWidget {
+  final bool isPhone;
+  final GameCardSizes sizes;
+  final GlobalKey deckKey;
+  final GlobalKey discardKey;
+  final int deckSize;
+  final int discardCount;
+  final Color deckColor;
+  final PlayingCard? topDiscard;
+  final bool showExtras;
+  final bool isPhoneExtras;
+  final List<Widget> headerExtras;
+  final List<Widget> expandedExtras;
+  final int playDownRequirement;
+  final bool deckLow;
+
+  const _ExpandedPilesSection({
+    required this.isPhone,
+    required this.sizes,
+    required this.deckKey,
+    required this.discardKey,
+    required this.deckSize,
+    required this.discardCount,
+    required this.deckColor,
+    required this.topDiscard,
+    required this.showExtras,
+    required this.isPhoneExtras,
+    required this.headerExtras,
+    required this.expandedExtras,
+    required this.playDownRequirement,
+    required this.deckLow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _LabeledPile(
+                label: 'Deck',
+                count: deckSize,
+                countColor: deckColor,
+                child: _DeckPileAnchor(
+                  key: deckKey,
+                  width: sizes.pileWidth,
+                  height: sizes.pileHeight,
+                  deckSize: deckSize,
+                ),
+              ),
+              SizedBox(width: isPhone ? 32 : 48),
+              _LabeledPile(
+                label: 'Discard',
+                count: discardCount,
+                countColor: BalatroTheme.glowColor,
+                child: _DiscardPileAnchor(
+                  key: discardKey,
+                  width: sizes.pileWidth,
+                  height: sizes.pileHeight,
+                  topDiscard: topDiscard,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (showExtras) ...[
+          Divider(
+            color: BalatroTheme.glowColor.withValues(alpha: 0.25),
+            height: 1,
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
               children: [
-                _LabeledPile(
-                  label: 'Deck',
-                  count: gameState.deck.size,
-                  countColor: deckColor,
-                  child: _DeckPileAnchor(
-                    key: deckKey,
-                    width: sizes.pileWidth,
-                    height: sizes.pileHeight,
-                    deckSize: gameState.deck.size,
-                  ),
+                if (isPhoneExtras) ...expandedExtras,
+                if (isPhoneExtras) ...headerExtras,
+                _InfoChip(
+                  label: 'Play down $playDownRequirement',
+                  color: BalatroTheme.neonOrange,
+                  icon: Icons.casino,
                 ),
-                SizedBox(width: isPhone ? 32 : 48),
-                _LabeledPile(
-                  label: 'Discard',
-                  count: gameState.discardPile.length,
-                  countColor: BalatroTheme.glowColor,
-                  child: _DiscardPileAnchor(
-                    key: discardKey,
-                    width: sizes.pileWidth,
-                    height: sizes.pileHeight,
-                    topDiscard: topDiscard,
-                  ),
+                _InfoChip(
+                  label: 'Deck $deckSize${deckLow ? ' ⚠' : ''}',
+                  color: deckColor,
+                  icon: Icons.style,
                 ),
+                if (topDiscard != null)
+                  _InfoChip(
+                    label: 'Top ${topDiscard!.displayName}',
+                    color: BalatroTheme.neonGreen,
+                    icon: Icons.visibility,
+                  ),
               ],
             ),
           ),
-          if (isExpanded) ...[
-            Divider(
-              color: BalatroTheme.glowColor.withValues(alpha: 0.25),
-              height: 1,
+        ],
+      ],
+    );
+  }
+}
+
+/// Slim deck/discard strip for collapsed header (saves vertical space).
+class _CollapsedPilesStrip extends StatelessWidget {
+  final GlobalKey deckKey;
+  final GlobalKey discardKey;
+  final int deckSize;
+  final int discardCount;
+  final Color deckColor;
+  final PlayingCard? topDiscard;
+  final double pileWidth;
+  final double pileHeight;
+  final bool tight;
+
+  const _CollapsedPilesStrip({
+    required this.deckKey,
+    required this.discardKey,
+    required this.deckSize,
+    required this.discardCount,
+    required this.deckColor,
+    required this.topDiscard,
+    required this.pileWidth,
+    required this.pileHeight,
+    required this.tight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 0, 12, tight ? 4 : 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _InlineMiniPile(
+            label: 'Deck',
+            count: deckSize,
+            countColor: deckColor,
+            child: _DeckPileAnchor(
+              key: deckKey,
+              width: pileWidth,
+              height: pileHeight,
+              deckSize: deckSize,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  if (isPhone) ...expandedExtras,
-                  if (isPhone) ...headerExtras,
-                  _InfoChip(
-                    label: 'Play down ${gameState.playDownRequirement}',
-                    color: BalatroTheme.neonOrange,
-                    icon: Icons.casino,
-                  ),
-                  _InfoChip(
-                    label: 'Deck ${gameState.deck.size}${deckLow ? ' ⚠' : ''}',
-                    color: deckColor,
-                    icon: Icons.style,
-                  ),
-                  if (topDiscard != null)
-                    _InfoChip(
-                      label: 'Top ${topDiscard.displayName}',
-                      color: BalatroTheme.neonGreen,
-                      icon: Icons.visibility,
-                    ),
-                ],
+          ),
+          SizedBox(width: tight ? 20 : 28),
+          _InlineMiniPile(
+            label: 'Discard',
+            count: discardCount,
+            countColor: BalatroTheme.glowColor,
+            child: _DiscardPileAnchor(
+              key: discardKey,
+              width: pileWidth,
+              height: pileHeight,
+              topDiscard: topDiscard,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineMiniPile extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color countColor;
+  final Widget child;
+
+  const _InlineMiniPile({
+    required this.label,
+    required this.count,
+    required this.countColor,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        child,
+        const SizedBox(width: 6),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
+              ),
+            ),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: countColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

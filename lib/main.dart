@@ -105,6 +105,7 @@ class _HandAndFootAppState extends State<HandAndFootApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Hand & Foot Card Game',
+      debugShowCheckedModeBanner: false,
       theme: BalatroTheme.darkTheme,
       builder: (context, child) {
         if (!_updateAvailable || child == null) {

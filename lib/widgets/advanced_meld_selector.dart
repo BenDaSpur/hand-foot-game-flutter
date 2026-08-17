@@ -447,6 +447,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
             height: cardHeight,
             isSelected: false,
             isInMeld: true,
+            showShadow: false,
           ),
           Positioned(
             top: -4,
@@ -1105,49 +1106,33 @@ class _MobileCardWidget extends StatelessWidget {
       child: InkWell(
         onTap: isDisabled ? null : onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: isSelected
-              ? BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.5),
-                      spreadRadius: 2,
-                      blurRadius: 8,
-                      offset: const Offset(0, 0),
-                    ),
-                  ],
-                )
-              : null,
-          child: Stack(
-            children: [
-              Center(
-                child: PlayingCardWidget(
-                  // Parent widget already has a unique key, so we don't need one here
-                  card: card,
-                  width: GameResponsiveLayout.getModalCardWidth(context),
-                  height: GameResponsiveLayout.getModalCardHeight(context),
-                  isSelected: isSelected,
-                ),
+        child: Stack(
+          children: [
+            Center(
+              child: PlayingCardWidget(
+                // Parent widget already has a unique key, so we don't need one here
+                card: card,
+                width: GameResponsiveLayout.getModalCardWidth(context),
+                height: GameResponsiveLayout.getModalCardHeight(context),
+                isSelected: isSelected,
+                showShadow: false,
               ),
-              if (isDisabled)
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.black.withValues(alpha: 0.6),
-                    ),
-                    child: Icon(
-                      Icons.block,
-                      color: Colors.red.withValues(alpha: 0.8),
-                      size: 32,
-                    ),
+            ),
+            if (isDisabled)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.black.withValues(alpha: 0.6),
+                  ),
+                  child: Icon(
+                    Icons.block,
+                    color: Colors.red.withValues(alpha: 0.8),
+                    size: 32,
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

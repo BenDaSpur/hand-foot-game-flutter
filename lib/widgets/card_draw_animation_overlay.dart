@@ -240,8 +240,11 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     final source = request.type == CardDrawAnimationType.deckDraw
         ? _anchorCenter(widget.deckKey)
         : _anchorCenter(widget.discardKey);
-    final screenSize = MediaQuery.sizeOf(context);
-    final revealCenter = Offset(screenSize.width / 2, screenSize.height * 0.42);
+    final overlaySize = context.size ?? MediaQuery.sizeOf(context);
+    final revealCenter = Offset(
+      overlaySize.width / 2,
+      overlaySize.height * 0.42,
+    );
 
     if (source == null) {
       return;
@@ -461,13 +464,12 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     if (stackBox == null || !stackBox.hasSize) {
       return null;
     }
-    final topLeft = stackBox.localToGlobal(Offset.zero);
-    return topLeft +
-        HandLayoutConstants.handCardCenterInStack(
-          index,
-          handSizes,
-          stackBox.size.height,
-        );
+    final centerInStack = HandLayoutConstants.handCardCenterInStack(
+      index,
+      handSizes,
+      stackBox.size.height,
+    );
+    return _globalToOverlay(stackBox.localToGlobal(centerInStack));
   }
 
   Offset? _meldTargetCenter(int meldIndex) {
@@ -476,13 +478,12 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     if (meldBox == null || !meldBox.hasSize) {
       return _anchorCenter(widget.discardKey);
     }
-    final topLeft = meldBox.localToGlobal(Offset.zero);
     final verticalOffset = 48.0 + (meldIndex.clamp(0, 4) * 72.0);
-    return topLeft +
-        Offset(
-          meldBox.size.width / 2,
-          verticalOffset.clamp(24, meldBox.size.height - 24),
-        );
+    final centerInMeld = Offset(
+      meldBox.size.width / 2,
+      verticalOffset.clamp(24, meldBox.size.height - 24),
+    );
+    return _globalToOverlay(meldBox.localToGlobal(centerInMeld));
   }
 
   Offset? _widgetCenter(GlobalKey key) {
@@ -490,9 +491,20 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     if (renderBox == null || !renderBox.hasSize) {
       return null;
     }
-    final topLeft = renderBox.localToGlobal(Offset.zero);
-    return topLeft +
-        Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+    final globalCenter = renderBox.localToGlobal(
+      Offset(renderBox.size.width / 2, renderBox.size.height / 2),
+    );
+    return _globalToOverlay(globalCenter);
+  }
+
+  /// Overlay [Positioned] coords are relative to this widget, not the screen.
+  /// Anchors live under the Scaffold body/AppBar, so convert globals first.
+  Offset? _globalToOverlay(Offset global) {
+    final overlayBox = context.findRenderObject() as RenderBox?;
+    if (overlayBox == null || !overlayBox.hasSize) {
+      return null;
+    }
+    return overlayBox.globalToLocal(global);
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../models/meld.dart';
 import '../theme/balatro_theme.dart';
@@ -17,6 +18,11 @@ class _MeldLayout {
   static const double badgeFontSize = 11;
   static const double bookBadgeFontSize = 9;
   static const double addButtonFontSize = 9;
+  static const double addButtonFontSizeTouch = 13;
+  static const double addButtonMinHeightTouch = 36;
+  static const double addButtonMinWidthTouch = 44;
+  static const double addButtonPaddingHTouch = 10;
+  static const double addButtonPaddingVTouch = 6;
   static const double headerSpacing = 6;
   static const double bookSpacing = 4;
   static const double cardsTopSpacing = 6;
@@ -165,32 +171,13 @@ class MeldWidget extends StatelessWidget {
                 ],
                 if (canAddCards && compatibleCardsInHand > 0) ...[
                   SizedBox(width: _MeldLayout.headerSpacing),
-                  GestureDetector(
+                  _CompatibleCardsAddButton(
+                    count: compatibleCardsInHand,
+                    areWilds: compatibleCardsAreWilds,
+                    useTouchTarget: _preferTouchSizedAddButton(context),
                     onTap: onSelectAllCards != null
                         ? () => onSelectAllCards!(meldIndex)
                         : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: _MeldLayout.headerSpacing,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: BalatroTheme.neonBlue,
-                        borderRadius: BorderRadius.circular(
-                          _MeldLayout.badgeBorderRadius,
-                        ),
-                      ),
-                      child: Text(
-                        compatibleCardsAreWilds
-                            ? '+$compatibleCardsInHand wilds'
-                            : '+$compatibleCardsInHand',
-                        style: const TextStyle(
-                          fontSize: _MeldLayout.addButtonFontSize,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ],
@@ -232,5 +219,89 @@ class MeldWidget extends StatelessWidget {
       case MeldType.mixed:
         return BalatroTheme.neonOrange;
     }
+  }
+}
+
+/// Compact on desktop/web mouse; larger min size for native / phone / touch.
+bool _preferTouchSizedAddButton(BuildContext context) {
+  // Native iOS/Android: always use a finger-sized target.
+  if (!kIsWeb) {
+    return true;
+  }
+  // Web: enlarge on phone-width (mobile browsers); keep compact on desktop.
+  return GameResponsiveLayout.isPhone(MediaQuery.sizeOf(context).width);
+}
+
+class _CompatibleCardsAddButton extends StatelessWidget {
+  final int count;
+  final bool areWilds;
+  final bool useTouchTarget;
+  final VoidCallback? onTap;
+
+  const _CompatibleCardsAddButton({
+    required this.count,
+    required this.areWilds,
+    required this.useTouchTarget,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = areWilds ? '+$count wilds' : '+$count';
+
+    if (!useTouchTarget) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: _MeldLayout.headerSpacing,
+            vertical: 2,
+          ),
+          decoration: BoxDecoration(
+            color: BalatroTheme.neonBlue,
+            borderRadius: BorderRadius.circular(_MeldLayout.badgeBorderRadius),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: _MeldLayout.addButtonFontSize,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: BalatroTheme.neonBlue,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: _MeldLayout.addButtonMinWidthTouch,
+            minHeight: _MeldLayout.addButtonMinHeightTouch,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _MeldLayout.addButtonPaddingHTouch,
+              vertical: _MeldLayout.addButtonPaddingVTouch,
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: _MeldLayout.addButtonFontSizeTouch,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

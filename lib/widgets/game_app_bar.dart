@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
 import '../models/game_state.dart';
 import '../screens/main_menu_screen.dart';
+import '../utils/game_responsive_layout.dart';
 import 'game_session_info_menu.dart';
 
 class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -45,15 +46,20 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPhone = GameResponsiveLayout.isPhone(
+      MediaQuery.sizeOf(context).width,
+    );
+    final title = isPhone ? 'H&F' : 'HAND & FOOT';
+
     return AppBar(
       title: ShaderMask(
         shaderCallback: (bounds) => const LinearGradient(
           colors: [BalatroTheme.neonPink, BalatroTheme.glowColor],
         ).createShader(bounds),
-        child: const Text(
-          'HAND & FOOT',
+        child: Text(
+          title,
           style: TextStyle(
-            fontSize: 24,
+            fontSize: isPhone ? 22 : 24,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
