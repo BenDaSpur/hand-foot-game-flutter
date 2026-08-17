@@ -33,27 +33,29 @@ void main() {
       expect(large.pileWidth, greaterThan(tablet.pileWidth));
     });
 
-    test('scaledHandSizes grows with strip width and stays clamped', () {
+    test('scaledHandSizes shrinks when available height is tight', () {
       final base = GameCardSizes.tablet;
-      final narrow = GameResponsiveLayout.scaledHandSizes(
+      final unconstrained = GameResponsiveLayout.scaledHandSizes(
         base: base,
-        screenWidth: 768,
+        screenWidth: 800,
         cardCount: 11,
-        availableWidth: 400,
+        availableWidth: 800,
       );
-      final wide = GameResponsiveLayout.scaledHandSizes(
+      final fitted = GameResponsiveLayout.scaledHandSizes(
         base: base,
-        screenWidth: 768,
+        screenWidth: 800,
         cardCount: 11,
-        availableWidth: 700,
+        availableWidth: 800,
+        availableHeight: 200,
       );
 
-      expect(narrow.handWidth, greaterThanOrEqualTo(base.handWidth));
-      expect(wide.handWidth, greaterThanOrEqualTo(narrow.handWidth));
-      expect(wide.handWidth, lessThanOrEqualTo(GameConfig.maxCardWidth * 0.92));
+      expect(fitted.handHeight, lessThan(unconstrained.handHeight));
       expect(
-        wide.handHeight,
-        closeTo(wide.handWidth / GameConfig.cardAspectRatio, 0.01),
+        fitted.handHeight +
+            fitted.selectionLift +
+            GameResponsiveLayout.handDisplayChromeHeight +
+            4,
+        lessThanOrEqualTo(200),
       );
     });
 

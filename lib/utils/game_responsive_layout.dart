@@ -167,20 +167,27 @@ class GameResponsiveLayout {
     return cardSizesForWidth(MediaQuery.of(context).size.width);
   }
 
+  /// Approximate vertical chrome around the hand stack (label + padding).
+  static const double handDisplayChromeHeight = 48;
+
   /// Hand cards on phone prioritize readability (horizontal scroll is expected).
   /// On tablet+, scales toward filling [handStripFillRatio] of the hand strip.
   static GameCardSizes handSizes(
     BuildContext context, {
     int cardCount = 11,
     double? availableWidth,
+    double? availableHeight,
   }) {
     final width = MediaQuery.of(context).size.width;
     final base = cardSizesForWidth(width);
     if (isPhone(width)) {
-      return base.copyWithHand(
-        handWidth: base.handWidth,
-        handHeight: base.handWidth / GameConfig.cardAspectRatio,
-        handOffset: base.handOffset,
+      return _fitHandToHeight(
+        base.copyWithHand(
+          handWidth: base.handWidth,
+          handHeight: base.handWidth / GameConfig.cardAspectRatio,
+          handOffset: base.handOffset,
+        ),
+        availableHeight: availableHeight,
       );
     }
 
@@ -189,6 +196,7 @@ class GameResponsiveLayout {
       screenWidth: width,
       cardCount: cardCount,
       availableWidth: availableWidth,
+      availableHeight: availableHeight,
     );
   }
 
@@ -198,6 +206,7 @@ class GameResponsiveLayout {
     required double screenWidth,
     int cardCount = 11,
     double? availableWidth,
+    double? availableHeight,
   }) {
     final stripWidth =
         availableWidth ??
@@ -213,10 +222,41 @@ class GameResponsiveLayout {
         : GameConfig.maxCardWidth * 0.92;
     final handWidth = computedWidth.clamp(base.handWidth, maxHandWidth);
     final handOffset = handWidth * offsetRatio;
-    return base.copyWithHand(
+    return _fitHandToHeight(
+      base.copyWithHand(
+        handWidth: handWidth,
+        handHeight: handWidth / GameConfig.cardAspectRatio,
+        handOffset: handOffset,
+      ),
+      availableHeight: availableHeight,
+    );
+  }
+
+  /// Shrinks hand cards when the dock height cannot fit the scaled size.
+  static GameCardSizes _fitHandToHeight(
+    GameCardSizes sizes, {
+    double? availableHeight,
+  }) {
+    if (availableHeight == null || !availableHeight.isFinite) {
+      return sizes;
+    }
+    final maxStackHeight = (availableHeight - handDisplayChromeHeight).clamp(
+      40.0,
+      availableHeight,
+    );
+    final maxHandHeight = (maxStackHeight - sizes.selectionLift - 4).clamp(
+      36.0,
+      sizes.handHeight,
+    );
+    if (maxHandHeight >= sizes.handHeight - 0.5) {
+      return sizes;
+    }
+    final handWidth = maxHandHeight * GameConfig.cardAspectRatio;
+    final offsetRatio = sizes.handOffset / sizes.handWidth;
+    return sizes.copyWithHand(
       handWidth: handWidth,
-      handHeight: handWidth / GameConfig.cardAspectRatio,
-      handOffset: handOffset,
+      handHeight: maxHandHeight,
+      handOffset: handWidth * offsetRatio,
     );
   }
 

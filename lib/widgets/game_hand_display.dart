@@ -53,6 +53,9 @@ class GameHandDisplay extends StatelessWidget {
           availableWidth: constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : null,
+          availableHeight: constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : null,
         );
         return _buildHandContent(context, sizes);
       },
