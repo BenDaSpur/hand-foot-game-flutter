@@ -41,64 +41,67 @@ class PrivacyPolicyScreen extends StatelessWidget {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 720),
-                child: ListView(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 48),
-                  children: [
-                    Text(
-                      PrivacyPolicyContent.title,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: BalatroTheme.neonBlue,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Last updated: ${PrivacyPolicyContent.lastUpdated}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      PrivacyPolicyContent.website,
-                      style: const TextStyle(
-                        color: BalatroTheme.neonPink,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      PrivacyPolicyContent.intro,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        height: 1.45,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    for (final section in PrivacyPolicyContent.sections) ...[
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        section.title,
-                        style: const TextStyle(
-                          color: BalatroTheme.neonPink,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                        PrivacyPolicyContent.title,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              color: BalatroTheme.neonBlue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Last updated: ${PrivacyPolicyContent.lastUpdated}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 14,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        section.body,
+                        PrivacyPolicyContent.website,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: BalatroTheme.neonPink,
                           fontSize: 14,
-                          height: 1.45,
                         ),
                       ),
                       const SizedBox(height: 24),
+                      Text(
+                        PrivacyPolicyContent.intro,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      for (final section in PrivacyPolicyContent.sections) ...[
+                        Text(
+                          section.title,
+                          style: const TextStyle(
+                            color: BalatroTheme.neonPink,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          section.body,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

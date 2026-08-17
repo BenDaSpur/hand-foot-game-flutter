@@ -24,11 +24,6 @@ void main() {
     expect(find.text(PrivacyPolicyContent.intro), findsOneWidget);
 
     for (final section in PrivacyPolicyContent.sections) {
-      await tester.scrollUntilVisible(
-        find.text(section.title),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
       expect(find.text(section.title), findsOneWidget);
     }
   });
