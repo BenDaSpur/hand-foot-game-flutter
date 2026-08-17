@@ -361,9 +361,9 @@ class GameActionButtons extends StatelessWidget {
     final buttons = <Widget>[];
     final isAnimating =
         CardAnimationScope.maybeOf(context)?.isAnimating ?? false;
-    final isPhone = GameResponsiveLayout.isPhone(
-      MediaQuery.of(context).size.width,
-    );
+    final width = MediaQuery.of(context).size.width;
+    final isPhone = GameResponsiveLayout.isPhone(width);
+    final stackInRail = GameResponsiveLayout.useWideBoardLayout(width);
 
     if (gameState.turnPhase == TurnPhase.draw) {
       buttons.add(
@@ -434,6 +434,22 @@ class GameActionButtons extends StatelessWidget {
           ),
         );
       }
+    }
+
+    if (stackInRail) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              SizedBox(height: 44, child: buttons[i]),
+            ],
+          ],
+        ),
+      );
     }
 
     return Container(
