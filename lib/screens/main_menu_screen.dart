@@ -9,6 +9,7 @@ import '../utils/debug_logger.dart';
 import 'game_screen.dart';
 import 'learn_to_play_screen.dart';
 import 'multiplayer_lobby_screen.dart';
+import 'privacy_policy_screen.dart';
 import 'solo_game_setup_screen.dart';
 import 'multiplayer_game_screen.dart';
 import '../services/firebase_service.dart';
@@ -289,6 +290,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           const SizedBox(height: 16),
                           _buildInstallButton(),
                         ],
+                        const SizedBox(height: 16),
+                        _buildPrivacyButton(),
                       ],
                     ),
                 ],
@@ -520,6 +523,36 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPrivacyButton() {
+    return TextButton(
+      onPressed: _openPrivacyPolicy,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.privacy_tip_outlined,
+            color: Colors.white.withValues(alpha: 0.55),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Privacy Policy',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openPrivacyPolicy() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()),
     );
   }
 

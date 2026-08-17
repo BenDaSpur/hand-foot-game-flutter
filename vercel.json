@@ -85,6 +85,30 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/privacy.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/privacy",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
     }
   ]
 }

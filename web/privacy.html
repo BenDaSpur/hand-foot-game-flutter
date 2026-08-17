@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — Hand &amp; Foot Card Game</title>
+    <meta
+      name="description"
+      content="Privacy Policy for the Hand &amp; Foot card game at playhandfoot.com. How we collect, use, and share information."
+    />
+    <link rel="canonical" href="https://playhandfoot.com/privacy.html" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <meta name="theme-color" content="#8b5cf6" />
+    <style>
+      :root {
+        --bg-start: #1a0d2e;
+        --bg-mid: #16213e;
+        --bg-end: #0f3460;
+        --text: #ffffff;
+        --muted: rgba(255, 255, 255, 0.72);
+        --pink: #e94560;
+        --blue: #64b5f6;
+        --link: #16c79a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        color: var(--text);
+        background: linear-gradient(
+          135deg,
+          var(--bg-start) 0%,
+          var(--bg-mid) 50%,
+          var(--bg-end) 100%
+        );
+        line-height: 1.5;
+      }
+      header {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 28px 24px 0;
+      }
+      a.back {
+        color: var(--link);
+        text-decoration: none;
+        font-size: 14px;
+      }
+      a.back:hover,
+      a.back:focus {
+        text-decoration: underline;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 16px 24px 64px;
+      }
+      h1 {
+        color: var(--blue);
+        font-size: 2rem;
+        margin: 16px 0 8px;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      .site {
+        color: var(--pink);
+        font-size: 14px;
+        margin: 0 0 24px;
+      }
+      h2 {
+        color: var(--pink);
+        font-size: 1.2rem;
+        margin: 28px 0 8px;
+      }
+      p,
+      li {
+        font-size: 15px;
+        color: var(--text);
+      }
+      ul {
+        padding-left: 1.25rem;
+      }
+      li {
+        margin-bottom: 0.4rem;
+      }
+      a {
+        color: var(--link);
+      }
+      footer {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 0 24px 48px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="back" href="/">← Back to Hand &amp; Foot</a>
+    </header>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="meta">Last updated: August 17, 2026</p>
+      <p class="site">https://playhandfoot.com</p>
+      <p>
+        This Privacy Policy describes how the Hand &amp; Foot card game at
+        playhandfoot.com (the "Game", "we", "us") collects, uses, and shares
+        information when you play in a browser, install the progressive web app,
+        or use a downloaded build. Solo play works without creating an account.
+      </p>
+
+      <h2>Who we are</h2>
+      <p>
+        The Game is an open-source Flutter project hosted at playhandfoot.com.
+        Source code is published on GitHub. We are not a large commercial
+        platform, but we still collect some technical and gameplay data so the
+        Game can run, stay available, and improve — especially bot AI.
+      </p>
+
+      <h2>Information you provide</h2>
+      <p>
+        Multiplayer: you choose a display name when you create or join a game.
+        That name is stored with the game and shown to other players in the same
+        match. We do not ask for an email address, phone number, or password.
+      </p>
+      <p>
+        You may also save game settings (for example bot count or sound
+        preferences) on your device.
+      </p>
+
+      <h2>Information collected automatically</h2>
+      <p>
+        When Firebase is configured (as it is on playhandfoot.com), the Game
+        collects:
+      </p>
+      <ul>
+        <li>
+          A locally generated device identifier (a random ID stored on your
+          device, not your advertising ID or phone serial number).
+        </li>
+        <li>
+          An anonymous Firebase Authentication ID used for multiplayer security
+          rules. This is not tied to your name, email, or Google account.
+        </li>
+        <li>
+          Gameplay analytics: session duration, player counts, scores, rounds,
+          app version, bot AI version, game seed, bot personalities, and whether
+          bots reached their foot pile.
+        </li>
+        <li>
+          Detailed bot-decision logs used to improve AI (turn context, chosen
+          moves, and related game-state details). These logs may include in-game
+          display names such as "You" or a multiplayer name you chose.
+        </li>
+        <li>
+          Firebase Analytics events (for example app start, game created, game
+          joined). Google may process device and network metadata such as
+          approximate location derived from IP address, browser type, and
+          similar technical data as described in Google’s privacy policy.
+        </li>
+      </ul>
+      <p>
+        If Firebase is not configured (typical for a local development build),
+        these network analytics are not sent.
+      </p>
+
+      <h2>Information stored on your device</h2>
+      <p>
+        The Game stores data locally in your browser or app storage, including
+        saved solo games, settings, a device identifier, your last multiplayer
+        display name, and resume information for an in-progress online match.
+        Clearing site data or uninstalling the app removes this local copy.
+        Server-side analytics and multiplayer records are not deleted just
+        because you cleared local storage.
+      </p>
+
+      <h2>How we use information</h2>
+      <p>We use this information to:</p>
+      <ul>
+        <li>
+          Operate solo and multiplayer play, including reconnecting you to a
+          match.
+        </li>
+        <li>
+          Enforce rate limits and security rules so lobbies are not abused.
+        </li>
+        <li>
+          Understand how games unfold and how bots behave, so we can fix bugs
+          and improve AI.
+        </li>
+        <li>
+          Measure basic usage (for example that the site loaded) and keep the
+          service reliable.
+        </li>
+      </ul>
+      <p>
+        We do not use this data to show third-party advertising, and we do not
+        sell personal information.
+      </p>
+
+      <h2>Cookies, local storage, and similar technologies</h2>
+      <p>
+        The Game is a web app. It uses browser local storage and similar
+        technologies for settings and saved games. Firebase Authentication and
+        Firebase Analytics (Google) may set cookies or equivalent storage on
+        playhandfoot.com. We do not use a separate advertising cookie or a
+        marketing pixel.
+      </p>
+      <p>
+        You can block cookies or clear site data in your browser. Doing so may
+        sign you out of anonymous multiplayer, forget local settings, or limit
+        analytics. The Game will still offer solo play.
+      </p>
+
+      <h2>Third-party services</h2>
+      <p>
+        We rely on these processors to run the website and Game:
+      </p>
+      <ul>
+        <li>
+          Google Firebase (Authentication, Cloud Firestore, and Analytics) —
+          game state, anonymous auth, and analytics. See Google’s privacy
+          policy.
+        </li>
+        <li>
+          Vercel — website hosting. Vercel may process request logs such as IP
+          address, user agent, and timestamps. See Vercel’s privacy policy.
+        </li>
+        <li>
+          Google Fonts — the Game may load fonts from Google, which can receive
+          your IP address and user agent.
+        </li>
+      </ul>
+      <p>
+        These providers act on our behalf to host and operate the Game. They
+        have their own privacy policies that govern how they process data.
+      </p>
+
+      <h2>When we share information</h2>
+      <p>
+        Other players in your multiplayer match can see your display name and
+        public game actions (melds, discards, scores). Hidden cards in your hand
+        are not shown to opponents.
+      </p>
+      <p>
+        We share data with the processors listed above to operate the Game. We
+        may also disclose information if required by law, or if needed to
+        protect the Game, players, or the public.
+      </p>
+      <p>
+        Gameplay analytics from completed games may be reviewed by maintainers
+        to improve bot AI. We do not sell or rent your information.
+      </p>
+
+      <h2>How long we keep information</h2>
+      <p>
+        Local device data stays until you clear it or uninstall the app.
+      </p>
+      <p>
+        Multiplayer games in a waiting lobby are removed if they expire without
+        starting (about 30 minutes). Finished or cancelled matches are cleaned
+        up after a short delay (about one hour).
+      </p>
+      <p>
+        Anonymous Firebase Auth IDs persist in your browser until you clear site
+        data.
+      </p>
+      <p>
+        Gameplay analytics (session summaries, bot decisions, turn summaries)
+        are kept so we can improve the Game and AI. We do not currently offer an
+        automatic timed purge of those analytics collections. You can ask us to
+        delete analytics associated with a device ID or session as described
+        below.
+      </p>
+
+      <h2>Your choices and rights</h2>
+      <p>
+        You can play solo without joining multiplayer and without choosing a
+        display name.
+      </p>
+      <p>
+        You can clear cookies and site data in your browser, or uninstall a
+        downloaded build, to remove local identifiers and saves.
+      </p>
+      <p>
+        Depending on where you live (for example the EEA, UK, or California),
+        you may have rights to request access, correction, deletion, or a copy
+        of personal information, or to object to certain processing. We do not
+        currently provide an in-app analytics opt-out. To make a request,
+        contact us privately using the email address or GitHub Security
+        Advisories form listed in the project Security Policy. Do not open a
+        public GitHub issue or post identifiers in public discussion. Include
+        any device ID, display name, or approximate play time you can share so
+        we can find matching records. We may not be able to identify you if you
+        only played solo and never set a unique name.
+      </p>
+      <p>
+        We do not sell personal information or share it for cross-context
+        behavioral advertising.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        The Game is a general-audience card game. It is not directed at children
+        under 13, and we do not knowingly collect personal information from
+        children under 13. If you believe a child provided information, contact
+        us privately using the methods in the project Security Policy and we
+        will delete it when we can identify the records.
+      </p>
+
+      <h2>International processing</h2>
+      <p>
+        playhandfoot.com is hosted on infrastructure that may process data in
+        the United States and other countries (including Google Firebase and
+        Vercel). If you play from outside the United States, your information
+        may be transferred to and stored in those locations.
+      </p>
+
+      <h2>Security</h2>
+      <p>
+        We transmit data over HTTPS. Multiplayer access is limited by Firebase
+        security rules and anonymous authentication. No method of transmission
+        or storage is 100% secure. Do not put secrets, real names you want kept
+        private, or sensitive data in a multiplayer display name.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        We may update this Privacy Policy when the Game or our practices change.
+        The "Last updated" date at the top will change when we do. The current
+        version is always available in the Game and at
+        <a href="https://playhandfoot.com/privacy.html"
+          >https://playhandfoot.com/privacy.html</a
+        >.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions or privacy requests: contact us privately using the email
+        address or GitHub Security Advisories form listed in the
+        <a href="https://github.com/BenDaSpur/hand-foot-game-flutter/blob/main/SECURITY.md">project Security Policy</a><!-- pragma: allowlist secret -->.
+        Do not open a public GitHub issue or post identifiers in public
+        discussion.
+      </p>
+    </main>
+    <footer>
+      <a href="/">Play Hand &amp; Foot</a>
+      ·
+      <a href="https://playhandfoot.com/privacy.html">Privacy Policy</a>
+    </footer>
+  </body>
+</html>
