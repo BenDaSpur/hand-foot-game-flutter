@@ -78,6 +78,22 @@ void main() {
 
       expect(find.textContaining('Play down'), findsOneWidget);
       expect(find.textContaining('Deck '), findsWidgets);
+      expect(deckKey.currentContext, isNotNull);
+      expect(discardKey.currentContext, isNotNull);
+    });
+
+    testWidgets('expanded shows detail chips on short height', (tester) async {
+      await pumpHeader(
+        tester,
+        size: const Size(390, 640),
+        expanded: true,
+        onToggle: () {},
+      );
+
+      expect(find.textContaining('Play down'), findsOneWidget);
+      expect(find.textContaining('Deck '), findsWidgets);
+      expect(deckKey.currentContext, isNotNull);
+      expect(discardKey.currentContext, isNotNull);
     });
 
     testWidgets('collapsed keeps pile anchors on short height', (tester) async {
