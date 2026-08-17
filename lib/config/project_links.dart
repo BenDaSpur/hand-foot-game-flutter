@@ -10,4 +10,7 @@ abstract final class ProjectLinks {
   static const String playOnline = 'https://playhandfoot.com';
 
   static const String privacyPolicy = '$playOnline/privacy.html';
+
+  static const String securityPolicy =
+      '$githubRepository/blob/main/SECURITY.md';
 }

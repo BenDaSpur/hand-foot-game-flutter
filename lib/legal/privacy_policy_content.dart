@@ -1,3 +1,5 @@
+import '../config/project_links.dart';
+
 /// Canonical privacy policy copy shown in-app and mirrored at
 /// https://playhandfoot.com/privacy.html
 abstract final class PrivacyPolicyContent {
@@ -138,11 +140,13 @@ abstract final class PrivacyPolicyContent {
           'Depending on where you live (for example the EEA, UK, or California), '
           'you may have rights to request access, correction, deletion, or a copy '
           'of personal information, or to object to certain processing. We do not '
-          'currently provide an in-app analytics opt-out. To make a request, open '
-          'a GitHub issue on the project repository and describe what you want us '
-          'to do. Include any device ID, display name, or approximate play time '
-          'you can share so we can find matching records. We may not be able to '
-          'identify you if you only played solo and never set a unique name.\n\n'
+          'currently provide an in-app analytics opt-out. To make a request, '
+          'contact us privately using the email address or GitHub Security '
+          'Advisories form listed in the project Security Policy. Do not open a '
+          'public GitHub issue or post identifiers in public discussion. Include '
+          'any device ID, display name, or approximate play time you can share so '
+          'we can find matching records. We may not be able to identify you if '
+          'you only played solo and never set a unique name.\n\n'
           'We do not sell personal information or share it for cross-context '
           'behavioral advertising.',
     ),
@@ -152,8 +156,8 @@ abstract final class PrivacyPolicyContent {
           'The Game is a general-audience card game. It is not directed at '
           'children under 13, and we do not knowingly collect personal information '
           'from children under 13. If you believe a child provided information, '
-          'contact us via GitHub issues and we will delete it when we can identify '
-          'the records.',
+          'contact us privately using the methods in the project Security Policy '
+          'and we will delete it when we can identify the records.',
     ),
     PrivacyPolicySection(
       title: 'International processing',
@@ -182,10 +186,10 @@ abstract final class PrivacyPolicyContent {
     PrivacyPolicySection(
       title: 'Contact',
       body:
-          'Questions or privacy requests: open an issue on the Game’s GitHub '
-          'repository (View on GitHub from the main menu, then Issues). We do not '
-          'require an email address to play, so GitHub is the supported contact '
-          'channel.',
+          'Questions or privacy requests: contact us privately using the email '
+          'address or GitHub Security Advisories form listed in the project '
+          'Security Policy at ${ProjectLinks.securityPolicy}. Do not open a '
+          'public GitHub issue or post identifiers in public discussion.',
     ),
   ];
 }

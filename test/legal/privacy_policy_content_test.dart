@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,13 @@ void main() {
     expect(fullText, contains('Vercel'));
     expect(fullText, contains('GitHub'));
     expect(fullText, contains('do not sell'));
+    expect(fullText, contains('Security Policy'));
+    expect(fullText, contains(ProjectLinks.securityPolicy));
+    expect(fullText, contains('Do not open a public GitHub issue'));
+    expect(
+      fullText.toLowerCase(),
+      isNot(contains('open a github issue on the project')),
+    );
   });
 
   test('static privacy.html mirrors in-app section titles', () {
@@ -46,9 +54,44 @@ void main() {
         reason: 'privacy.html missing section "${section.title}"',
       );
     }
+
+    expect(html, contains('Do not open a public GitHub issue'));
+    expect(html, contains('SECURITY.md'));
+    expect(
+      html.toLowerCase(),
+      isNot(contains('open a github issue on the project')),
+    );
+  });
+
+  test('vercel.json no-stores both privacy URL forms', () {
+    final config =
+        jsonDecode(File('vercel.json').readAsStringSync())
+            as Map<String, dynamic>;
+    final headers = (config['headers'] as List).cast<Map<String, dynamic>>();
+
+    String? cacheControl(String source) {
+      for (final rule in headers) {
+        if (rule['source'] != source) {
+          continue;
+        }
+        final ruleHeaders = (rule['headers'] as List)
+            .cast<Map<String, dynamic>>();
+        for (final header in ruleHeaders) {
+          if (header['key'] == 'Cache-Control') {
+            return header['value'] as String?;
+          }
+        }
+      }
+      return null;
+    }
+
+    const expected = 'no-cache, no-store, must-revalidate';
+    expect(cacheControl('/privacy.html'), expected);
+    expect(cacheControl('/privacy'), expected);
   });
 
   test('project links point at the public privacy policy URL', () {
     expect(ProjectLinks.privacyPolicy, 'https://playhandfoot.com/privacy.html');
+    expect(ProjectLinks.securityPolicy, endsWith('/blob/main/SECURITY.md'));
   });
 }
