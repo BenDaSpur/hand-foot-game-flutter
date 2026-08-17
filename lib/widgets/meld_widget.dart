@@ -223,13 +223,24 @@ class MeldWidget extends StatelessWidget {
 }
 
 /// Compact on desktop/web mouse; larger min size for native / phone / touch.
-bool _preferTouchSizedAddButton(BuildContext context) {
+@visibleForTesting
+bool preferTouchSizedMeldAddButton({
+  required bool isWeb,
+  required double width,
+}) {
   // Native iOS/Android: always use a finger-sized target.
-  if (!kIsWeb) {
+  if (!isWeb) {
     return true;
   }
   // Web: enlarge on phone-width (mobile browsers); keep compact on desktop.
-  return GameResponsiveLayout.isPhone(MediaQuery.sizeOf(context).width);
+  return GameResponsiveLayout.isPhone(width);
+}
+
+bool _preferTouchSizedAddButton(BuildContext context) {
+  return preferTouchSizedMeldAddButton(
+    isWeb: kIsWeb,
+    width: MediaQuery.sizeOf(context).width,
+  );
 }
 
 class _CompatibleCardsAddButton extends StatelessWidget {
