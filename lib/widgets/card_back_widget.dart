@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/balatro_theme.dart';
+import 'playing_card_widget.dart';
 
 /// Face-down playing card used for deck draw animations.
 class CardBackWidget extends StatelessWidget {
@@ -10,6 +11,12 @@ class CardBackWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cornerRadius = PlayingCardWidget.cornerRadiusForWidth(width);
+    final innerRadius = (cornerRadius - 2).clamp(
+      PlayingCardWidget.minCornerRadius,
+      cornerRadius,
+    );
+
     return Container(
       width: width,
       height: height,
@@ -20,7 +27,7 @@ class CardBackWidget extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [Color(0xFF3A1F5C), Color(0xFF1A0F2E)],
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(cornerRadius),
         border: Border.all(color: BalatroTheme.glowColor, width: 2),
         boxShadow: [
           BoxShadow(
@@ -42,7 +49,7 @@ class CardBackWidget extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(innerRadius),
                 border: Border.all(
                   color: BalatroTheme.neonBlue.withValues(alpha: 0.25),
                   width: 1,

@@ -539,7 +539,9 @@ class _DiscardPileAnchor extends StatelessWidget {
         height: height,
         decoration: BoxDecoration(
           color: BalatroTheme.darkPurple.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(
+            PlayingCardWidget.cornerRadiusForWidth(width),
+          ),
           border: Border.all(
             color: BalatroTheme.cardBorder.withValues(alpha: 0.4),
           ),

@@ -148,6 +148,18 @@ void main() {
       expect(container.constraints?.maxHeight, equals(140));
     });
 
+    test('scales corner radius down for mini pile widths', () {
+      expect(
+        PlayingCardWidget.cornerRadiusForWidth(60),
+        PlayingCardWidget.cardCornerRadius,
+      );
+      expect(PlayingCardWidget.cornerRadiusForWidth(26), closeTo(5.2, 0.01));
+      expect(
+        PlayingCardWidget.cornerRadiusForWidth(10),
+        PlayingCardWidget.minCornerRadius,
+      );
+    });
+
     testWidgets('should apply gradient and fallback color', (
       WidgetTester tester,
     ) async {

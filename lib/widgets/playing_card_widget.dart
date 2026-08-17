@@ -17,7 +17,18 @@ class PlayingCardWidget extends StatelessWidget {
   final bool showShadow;
 
   static const double cardMargin = 2.0;
+
+  /// Corner radius at [cornerRadiusReferenceWidth]; smaller cards scale down.
   static const double cardCornerRadius = 12.0;
+  static const double cornerRadiusReferenceWidth = 60.0;
+  static const double minCornerRadius = 4.0;
+
+  /// Scales corner radius with card width so mini deck/discard piles stay
+  /// rectangular instead of pill-shaped.
+  static double cornerRadiusForWidth(double width) {
+    final scaled = cardCornerRadius * (width / cornerRadiusReferenceWidth);
+    return scaled.clamp(minCornerRadius, cardCornerRadius);
+  }
 
   /// Shared playable-treatment values (subtle green highlight).
   static const double playableBorderWidth = 1.5;
@@ -83,6 +94,8 @@ class PlayingCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cornerRadius = cornerRadiusForWidth(width);
+
     // Force a full repaint to ensure styling is applied
     return RepaintBoundary(
       child: GestureDetector(
@@ -96,7 +109,7 @@ class PlayingCardWidget extends StatelessWidget {
             height: height,
             margin: const EdgeInsets.all(cardMargin),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(cardCornerRadius),
+              borderRadius: BorderRadius.circular(cornerRadius),
               boxShadow: showShadow ? _cardBoxShadows() : const [],
             ),
             child: Container(
@@ -124,7 +137,7 @@ class PlayingCardWidget extends StatelessWidget {
                       ? playableBorderWidth
                       : 1,
                 ),
-                borderRadius: BorderRadius.circular(cardCornerRadius),
+                borderRadius: BorderRadius.circular(cornerRadius),
               ),
               child: Stack(
                 clipBehavior: Clip.hardEdge,
@@ -143,9 +156,9 @@ class PlayingCardWidget extends StatelessWidget {
                           color: BalatroTheme.neonGreen.withValues(
                             alpha: playableFaceStripeAlpha,
                           ),
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(cardCornerRadius),
-                            bottomLeft: Radius.circular(cardCornerRadius),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(cornerRadius),
+                            bottomLeft: Radius.circular(cornerRadius),
                           ),
                         ),
                       ),
@@ -154,7 +167,7 @@ class PlayingCardWidget extends StatelessWidget {
                   if (card.isWild)
                     Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(cardCornerRadius),
+                        borderRadius: BorderRadius.circular(cornerRadius),
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,

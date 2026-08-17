@@ -126,7 +126,9 @@ class _EmptyDiscardPile extends StatelessWidget {
       margin: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: BalatroTheme.darkPurple.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(
+          PlayingCardWidget.cornerRadiusForWidth(width),
+        ),
         border: Border.all(
           color: BalatroTheme.cardBorder.withValues(alpha: 0.5),
           width: 1,
