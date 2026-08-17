@@ -21,6 +21,19 @@ class BalatroTheme {
   static const Color secondaryText = Color(0xFFb0bec5);
   static const Color accentText = Color(0xFF64ffda);
 
+  /// Snackbar content on dark bars (e.g. [neonBlue]). White ≥ 4.5:1 on those.
+  static const Color snackBarContentOnDark = primaryText;
+
+  /// Snackbar content on bright bars ([neonPink]/[neonOrange]/[neonGreen]).
+  /// [deepPurple] meets ≥ 4.5:1 on each; white does not.
+  static const Color snackBarContentOnBright = deepPurple;
+
+  /// Action label on dark snackbars.
+  static const Color snackBarActionOnDark = glowColor;
+
+  /// Action label on bright snackbars.
+  static const Color snackBarActionOnBright = deepPurple;
+
   // Card suit colors - bright and visible on dark backgrounds
   static const Color heartsColor = Color(0xFFe91e63); // Bright pink/red
   static const Color diamondsColor = Color(0xFFff5722); // Bright orange
@@ -90,6 +103,17 @@ class BalatroTheme {
           fontWeight: FontWeight.bold,
         ),
         contentTextStyle: const TextStyle(color: secondaryText, fontSize: 14),
+      ),
+      // Default assumes dark snackbar backgrounds (e.g. neonBlue). Callers using
+      // neonPink / neonOrange / neonGreen must set snackBarContentOnBright.
+      snackBarTheme: const SnackBarThemeData(
+        contentTextStyle: TextStyle(
+          color: snackBarContentOnDark,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        actionTextColor: snackBarActionOnDark,
+        behavior: SnackBarBehavior.floating,
       ),
       textTheme:
           (useGoogleFonts ? GoogleFonts.arimoTextTheme() : const TextTheme())

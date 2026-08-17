@@ -159,18 +159,22 @@ void main() {
         ),
       );
 
-      // Find the container with decoration
-      final container = tester.widget<Container>(
-        find.descendant(
-          of: find.byType(PlayingCardWidget),
-          matching: find.byType(Container).first,
-        ),
-      );
+      // Face container is nested inside the outer shadow wrapper.
+      final containers = tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byType(PlayingCardWidget),
+              matching: find.byType(Container),
+            ),
+          )
+          .where((c) => c.decoration is BoxDecoration)
+          .toList();
+      final faceDecoration = containers
+          .map((c) => c.decoration! as BoxDecoration)
+          .firstWhere((d) => d.gradient != null);
 
-      final decoration = container.decoration as BoxDecoration?;
-      expect(decoration, isNotNull);
-      expect(decoration!.gradient, equals(BalatroTheme.cardGradient));
-      expect(decoration.color, equals(BalatroTheme.cardBackground));
+      expect(faceDecoration.gradient, equals(BalatroTheme.cardGradient));
+      expect(faceDecoration.color, equals(BalatroTheme.cardBackground));
     });
 
     group('Card suit colors', () {

@@ -53,12 +53,9 @@ void main() {
       );
 
       expect(
-        await E2ETestUtils.waitForElement(
-          tester,
-          find.text('Multi-Meld Play-Down'),
-        ),
+        await E2ETestUtils.waitForElement(tester, find.text('Play-Down')),
         isTrue,
-        reason: 'Phone Play Cards should open Multi-Meld Play-Down',
+        reason: 'Phone Play Cards should open Play-Down modal',
       );
 
       await E2ETestUtils.safeTap(
@@ -68,7 +65,7 @@ void main() {
       );
       await E2ETestUtils.stabilize(tester);
 
-      expect(find.text('Multi-Meld Play-Down'), findsNothing);
+      expect(find.text('Play-Down'), findsNothing);
       print('✅ Phone action dock draw/play verified');
     });
   });

@@ -68,7 +68,10 @@ class PersistenceManager {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Compact game save copied to clipboard'),
+        content: const Text(
+          'Compact game save copied to clipboard',
+          style: TextStyle(color: BalatroTheme.snackBarContentOnDark),
+        ),
         backgroundColor: BalatroTheme.neonBlue,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -84,7 +87,10 @@ class PersistenceManager {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Game seed copied: $seed'),
+        content: Text(
+          'Game seed copied: $seed',
+          style: const TextStyle(color: BalatroTheme.snackBarContentOnBright),
+        ),
         backgroundColor: BalatroTheme.neonOrange,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -120,6 +126,7 @@ class PersistenceManager {
         SnackBar(
           content: Text(
             'Game loaded successfully! Seed: ${importResult.controller.gameSeed ?? "No seed"}',
+            style: const TextStyle(color: BalatroTheme.snackBarContentOnBright),
           ),
           backgroundColor: BalatroTheme.neonGreen,
           behavior: SnackBarBehavior.floating,

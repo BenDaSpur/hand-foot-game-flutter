@@ -128,48 +128,47 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           ],
         ),
         padding: GameResponsiveLayout.getModalPadding(context),
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: SizedBox(
-            height:
-                MediaQuery.of(context).size.height * modalHeightRatio -
-                (isMobile ? 24 : 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header with point info
-                _buildHeader(totalPoints, meetsRequirement),
-                const SizedBox(height: 20),
-
-                // Proposed melds section
-                _buildProposedMeldsSection(),
-                const SizedBox(height: 20),
-
-                // Available cards section
-                _buildAvailableCardsSection(),
-                const SizedBox(height: 20),
-
-                // Action buttons
-                _buildActionButtons(meetsRequirement),
-              ],
-            ),
-          ),
+        // Fixed-height column (not scroll+Expanded) so Confirm/Cancel stay
+        // fully visible above the modal bottom edge on phones.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(totalPoints, meetsRequirement),
+            SizedBox(height: isMobile ? 12 : 20),
+            _buildProposedMeldsSection(),
+            SizedBox(height: isMobile ? 12 : 20),
+            _buildAvailableCardsSection(),
+            SizedBox(height: isMobile ? 12 : 20),
+            _buildActionButtons(meetsRequirement),
+          ],
         ),
       ),
     );
   }
 
+  String _modalTitle({required bool isPhone}) {
+    if (widget.player.hasPlayedDown) {
+      return isPhone ? 'Manage Melds' : 'Multi-Meld Manager';
+    }
+    return isPhone ? 'Play-Down' : 'Multi-Meld Play-Down';
+  }
+
   Widget _buildHeader(int totalPoints, bool meetsRequirement) {
+    final isPhone = GameResponsiveLayout.isPhone(
+      MediaQuery.sizeOf(context).width,
+    );
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
           child: Text(
-            widget.player.hasPlayedDown
-                ? 'Multi-Meld Manager'
-                : 'Multi-Meld Play-Down',
+            _modalTitle(isPhone: isPhone),
             style: TextStyle(
-              fontSize: GameResponsiveLayout.getFontSize(context, 22),
+              fontSize: GameResponsiveLayout.getFontSize(
+                context,
+                isPhone ? 20 : 22,
+              ),
               fontWeight: FontWeight.bold,
               color: Colors.white,
               shadows: [
@@ -180,6 +179,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                 ),
               ],
             ),
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -548,10 +548,11 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     if (isMobile) {
       // Stack buttons vertically on mobile for better touch targets
       return Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            height: isSmallMobile ? 44 : 48,
+            height: isSmallMobile ? 48 : 52,
             child: ElevatedButton(
               onPressed: meetsRequirement ? _confirmMelds : null,
               style: ElevatedButton.styleFrom(
@@ -565,6 +566,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                             ? const Color(0xFF10B981)
                             : const Color(0xFF6B7280))
                         .withValues(alpha: 0.4),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -582,6 +584,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
                   style: TextStyle(
                     fontSize: GameResponsiveLayout.getFontSize(context, 16),
                     fontWeight: FontWeight.bold,
+                    height: 1.1,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -590,7 +593,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: isSmallMobile ? 40 : 44,
+            height: isSmallMobile ? 44 : 48,
             child: TextButton(
               onPressed: widget.onCancel,
               style: TextButton.styleFrom(

@@ -314,7 +314,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
             },
             child: const Text(
               'Return to Menu',
-              style: TextStyle(color: BalatroTheme.neonBlue),
+              style: TextStyle(color: BalatroTheme.glowColor),
             ),
           ),
         ],

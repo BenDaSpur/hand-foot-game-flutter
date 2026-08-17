@@ -17,6 +17,7 @@ class PlayingCardWidget extends StatelessWidget {
   final bool showShadow;
 
   static const double cardMargin = 2.0;
+  static const double cardCornerRadius = 12.0;
 
   /// Shared playable-treatment values (subtle green highlight).
   static const double playableBorderWidth = 1.5;
@@ -88,135 +89,138 @@ class PlayingCardWidget extends StatelessWidget {
         onTap: onTap,
         child: Transform.translate(
           offset: Offset(0, isSelected ? -12 : 0),
+          // Shadow layer stays unclipped so selection/playable glows don't
+          // composite as a dark smear on the card face (esp. on iOS).
           child: Container(
             width: width,
             height: height,
             margin: const EdgeInsets.all(cardMargin),
-            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: BalatroTheme.cardBackground, // Fallback color
-              gradient: BalatroTheme.cardGradient,
-              border: Border.all(
-                color: isSelected
-                    ? BalatroTheme.glowColor
-                    : isKeyboardFocused
-                    ? BalatroTheme.neonBlue
-                    : isNewlyDrawn
-                    ? BalatroTheme.neonYellow
-                    : isPlayable
-                    ? BalatroTheme.neonGreen
-                    : BalatroTheme.cardBorder,
-                width: isSelected
-                    ? 3
-                    : isKeyboardFocused
-                    ? 2
-                    : isNewlyDrawn
-                    ? 2
-                    : isPlayable
-                    ? playableBorderWidth
-                    : 1,
-              ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(cardCornerRadius),
               boxShadow: showShadow ? _cardBoxShadows() : const [],
             ),
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                // In-face cue: survives fan overlap burying outer/side glow
-                // (visible on the peeking left strip of mid-hand cards).
-                if (isPlayable && !isSelected && !isNewlyDrawn)
-                  Positioned(
-                    key: playableFaceStripeKey,
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: playableFaceStripeWidth,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: BalatroTheme.neonGreen.withValues(
-                          alpha: playableFaceStripeAlpha,
-                        ),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          bottomLeft: Radius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                // Holographic shimmer effect
-                if (card.isWild)
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          BalatroTheme.neonPink.withValues(alpha: 0.1),
-                          BalatroTheme.neonBlue.withValues(alpha: 0.1),
-                          BalatroTheme.glowColor.withValues(alpha: 0.1),
-                        ],
-                      ),
-                    ),
-                  ),
-                // Card content with absolute positioning for corners
-                Stack(
-                  children: [
-                    // Center suit symbol - use custom widget to avoid font color issues
-                    Center(child: _buildSuitSymbol(height)),
-                    // Top-left rank
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: BalatroTheme.cardBackground,
+                gradient: BalatroTheme.cardGradient,
+                border: Border.all(
+                  color: isSelected
+                      ? BalatroTheme.glowColor
+                      : isKeyboardFocused
+                      ? BalatroTheme.neonBlue
+                      : isNewlyDrawn
+                      ? BalatroTheme.neonYellow
+                      : isPlayable
+                      ? BalatroTheme.neonGreen
+                      : BalatroTheme.cardBorder,
+                  width: isSelected
+                      ? 3
+                      : isKeyboardFocused
+                      ? 2
+                      : isNewlyDrawn
+                      ? 2
+                      : isPlayable
+                      ? playableBorderWidth
+                      : 1,
+                ),
+                borderRadius: BorderRadius.circular(cardCornerRadius),
+              ),
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  // In-face cue: survives fan overlap burying outer/side glow
+                  // (visible on the peeking left strip of mid-hand cards).
+                  if (isPlayable && !isSelected && !isNewlyDrawn)
                     Positioned(
-                      top: _cornerInset(height),
-                      left: _cornerInset(height),
-                      child: Text(
-                        _getCardDisplay(),
-                        style: _getCardTextStyle(
-                          fontSize: _rankFontSize(height),
-                          fontWeight: FontWeight.bold,
-                          color: _getCardColor(),
-                          shadows: [
-                            // Dark outline for visibility on dark background
-                            const Shadow(
-                              color: Colors.black,
-                              offset: Offset(1, 1),
-                              blurRadius: 2,
-                            ),
-                            if (isSelected)
-                              Shadow(color: _getCardColor(), blurRadius: 4),
+                      key: playableFaceStripeKey,
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: playableFaceStripeWidth,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: BalatroTheme.neonGreen.withValues(
+                            alpha: playableFaceStripeAlpha,
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(cardCornerRadius),
+                            bottomLeft: Radius.circular(cardCornerRadius),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Holographic shimmer effect
+                  if (card.isWild)
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(cardCornerRadius),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            BalatroTheme.neonPink.withValues(alpha: 0.1),
+                            BalatroTheme.neonBlue.withValues(alpha: 0.1),
+                            BalatroTheme.glowColor.withValues(alpha: 0.1),
                           ],
                         ),
                       ),
                     ),
-                    // Bottom-right rank (rotated). RotatedBox keeps layout bounds
-                    // correct so the index stays inside small pile cards.
-                    Positioned(
-                      bottom: _cornerInset(height),
-                      right: _cornerInset(height),
-                      child: RotatedBox(
-                        quarterTurns: 2,
+                  // Card content with absolute positioning for corners
+                  Stack(
+                    children: [
+                      // Center suit symbol - use custom widget to avoid font color issues
+                      Center(child: _buildSuitSymbol(height)),
+                      // Top-left rank
+                      Positioned(
+                        top: _cornerInset(height),
+                        left: _cornerInset(height),
                         child: Text(
                           _getCardDisplay(),
                           style: _getCardTextStyle(
                             fontSize: _rankFontSize(height),
                             fontWeight: FontWeight.bold,
                             color: _getCardColor(),
-                            shadows: [
+                            shadows: const [
                               // Dark outline for visibility on dark background
-                              const Shadow(
+                              Shadow(
                                 color: Colors.black,
                                 offset: Offset(1, 1),
                                 blurRadius: 2,
                               ),
-                              if (isSelected)
-                                Shadow(color: _getCardColor(), blurRadius: 4),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      // Bottom-right rank (rotated). RotatedBox keeps layout bounds
+                      // correct so the index stays inside small pile cards.
+                      Positioned(
+                        bottom: _cornerInset(height),
+                        right: _cornerInset(height),
+                        child: RotatedBox(
+                          quarterTurns: 2,
+                          child: Text(
+                            _getCardDisplay(),
+                            style: _getCardTextStyle(
+                              fontSize: _rankFontSize(height),
+                              fontWeight: FontWeight.bold,
+                              color: _getCardColor(),
+                              shadows: const [
+                                // Dark outline for visibility on dark background
+                                Shadow(
+                                  color: Colors.black,
+                                  offset: Offset(1, 1),
+                                  blurRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -440,24 +444,8 @@ class PlayingCardWidget extends StatelessWidget {
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     );
 
-    // Add glow effect for selected or wild cards
-    if (showShadow && (isSelected || card.isWild)) {
-      return Container(
-        width: size + 10,
-        height: size + 10,
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.6),
-              blurRadius: 8,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Center(child: suitWidget),
-      );
-    }
-
+    // No BoxShadow on the suit — a transparent container's shadow composites
+    // as a dark oval on the card face when selected (especially on iOS).
     return SizedBox(
       width: size + 10,
       height: size + 10,

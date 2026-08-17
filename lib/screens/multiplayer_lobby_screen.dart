@@ -842,7 +842,10 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
       Clipboard.setData(ClipboardData(text: _currentGameId!));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Game ID copied to clipboard'),
+          content: const Text(
+            'Game ID copied to clipboard',
+            style: TextStyle(color: BalatroTheme.snackBarContentOnDark),
+          ),
           backgroundColor: BalatroTheme.neonBlue,
           duration: const Duration(seconds: 2),
         ),

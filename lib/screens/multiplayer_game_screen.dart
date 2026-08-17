@@ -1361,7 +1361,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
             },
             child: const Text(
               'Return to Menu',
-              style: TextStyle(color: BalatroTheme.neonBlue),
+              style: TextStyle(color: BalatroTheme.glowColor),
             ),
           ),
         ],

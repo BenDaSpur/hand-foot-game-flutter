@@ -546,7 +546,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Could not open GitHub. Try again later.'),
+        content: const Text(
+          'Could not open GitHub. Try again later.',
+          style: TextStyle(color: BalatroTheme.snackBarContentOnBright),
+        ),
         backgroundColor: BalatroTheme.neonPink,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
