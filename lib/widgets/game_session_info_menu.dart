@@ -98,7 +98,7 @@ class GameSessionInfoMenu {
       SnackBar(
         content: const Text(
           'Session info copied to clipboard',
-          style: TextStyle(color: BalatroTheme.primaryText),
+          style: TextStyle(color: BalatroTheme.snackBarContentOnDark),
         ),
         backgroundColor: BalatroTheme.neonBlue,
         behavior: SnackBarBehavior.floating,

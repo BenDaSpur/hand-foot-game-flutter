@@ -548,7 +548,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       SnackBar(
         content: const Text(
           'Could not open GitHub. Try again later.',
-          style: TextStyle(color: BalatroTheme.primaryText),
+          style: TextStyle(color: BalatroTheme.snackBarContentOnBright),
         ),
         backgroundColor: BalatroTheme.neonPink,
         behavior: SnackBarBehavior.floating,

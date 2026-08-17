@@ -17,6 +17,7 @@ class PlayingCardWidget extends StatelessWidget {
   final bool showShadow;
 
   static const double cardMargin = 2.0;
+  static const double cardCornerRadius = 12.0;
 
   /// Shared playable-treatment values (subtle green highlight).
   static const double playableBorderWidth = 1.5;
@@ -95,7 +96,7 @@ class PlayingCardWidget extends StatelessWidget {
             height: height,
             margin: const EdgeInsets.all(cardMargin),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(cardCornerRadius),
               boxShadow: showShadow ? _cardBoxShadows() : const [],
             ),
             child: Container(
@@ -123,7 +124,7 @@ class PlayingCardWidget extends StatelessWidget {
                       ? playableBorderWidth
                       : 1,
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(cardCornerRadius),
               ),
               child: Stack(
                 clipBehavior: Clip.hardEdge,
@@ -143,8 +144,8 @@ class PlayingCardWidget extends StatelessWidget {
                             alpha: playableFaceStripeAlpha,
                           ),
                           borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            bottomLeft: Radius.circular(12),
+                            topLeft: Radius.circular(cardCornerRadius),
+                            bottomLeft: Radius.circular(cardCornerRadius),
                           ),
                         ),
                       ),
@@ -153,7 +154,7 @@ class PlayingCardWidget extends StatelessWidget {
                   if (card.isWild)
                     Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(cardCornerRadius),
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
