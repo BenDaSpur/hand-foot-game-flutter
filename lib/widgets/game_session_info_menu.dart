@@ -96,7 +96,10 @@ class GameSessionInfoMenu {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Session info copied to clipboard'),
+        content: const Text(
+          'Session info copied to clipboard',
+          style: TextStyle(color: BalatroTheme.primaryText),
+        ),
         backgroundColor: BalatroTheme.neonBlue,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

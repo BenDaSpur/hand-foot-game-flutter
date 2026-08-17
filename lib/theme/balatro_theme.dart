@@ -91,6 +91,17 @@ class BalatroTheme {
         ),
         contentTextStyle: const TextStyle(color: secondaryText, fontSize: 14),
       ),
+      // M3 defaults use onInverseSurface (dark text for a light bar). Our snackbars
+      // use dark neon backgrounds, so force light content text for contrast.
+      snackBarTheme: const SnackBarThemeData(
+        contentTextStyle: TextStyle(
+          color: primaryText,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        actionTextColor: glowColor,
+        behavior: SnackBarBehavior.floating,
+      ),
       textTheme:
           (useGoogleFonts ? GoogleFonts.arimoTextTheme() : const TextTheme())
               .copyWith(

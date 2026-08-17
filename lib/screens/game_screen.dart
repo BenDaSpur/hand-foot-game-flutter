@@ -2390,7 +2390,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             },
             child: const Text(
               'Return to Menu',
-              style: TextStyle(color: BalatroTheme.neonBlue),
+              style: TextStyle(color: BalatroTheme.glowColor),
             ),
           ),
         ],
