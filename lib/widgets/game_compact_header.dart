@@ -14,6 +14,9 @@ class GameCompactHeader extends StatelessWidget {
   final GlobalKey discardKey;
   final bool isExpanded;
   final VoidCallback onToggleExpand;
+
+  /// When false, hides the expand/collapse control (e.g. wide board always expanded).
+  final bool showExpandToggle;
   final VoidCallback? onRecentActionsTap;
   final List<Widget> headerExtras;
   final List<Widget> expandedExtras;
@@ -25,6 +28,7 @@ class GameCompactHeader extends StatelessWidget {
     required this.discardKey,
     required this.isExpanded,
     required this.onToggleExpand,
+    this.showExpandToggle = true,
     this.onRecentActionsTap,
     this.headerExtras = const [],
     this.expandedExtras = const [],
@@ -129,22 +133,23 @@ class GameCompactHeader extends StatelessWidget {
                     count: gameState.recentActions.length,
                     onTap: onRecentActionsTap!,
                   ),
-                IconButton(
-                  onPressed: onToggleExpand,
-                  icon: Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: BalatroTheme.glowColor,
-                    size: 22,
+                if (showExpandToggle)
+                  IconButton(
+                    onPressed: onToggleExpand,
+                    icon: Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: BalatroTheme.glowColor,
+                      size: 22,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    tooltip: isExpanded
+                        ? 'Hide deck & details'
+                        : 'Show deck & details',
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  tooltip: isExpanded
-                      ? 'Hide deck & details'
-                      : 'Show deck & details',
-                ),
               ],
             ),
           ),

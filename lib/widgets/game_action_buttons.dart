@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../constants/keyboard_shortcuts.dart';
+import '../theme/balatro_theme.dart';
 import '../utils/game_responsive_layout.dart';
 import 'card_animation_host.dart';
 
@@ -292,9 +293,76 @@ class GameActionButtons extends StatelessWidget {
         bot,
         gameState,
       );
-      final isPhone = GameResponsiveLayout.isPhone(
-        MediaQuery.of(context).size.width,
+      final width = MediaQuery.of(context).size.width;
+      final isPhone = GameResponsiveLayout.isPhone(width);
+      final inWideRail = GameResponsiveLayout.useWideBoardLayout(width);
+
+      final phaseChip = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: _getPhaseColor().withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _getPhaseColor(), width: 1),
+        ),
+        child: Text(
+          _getPhaseLabel(),
+          style: TextStyle(
+            color: _getPhaseColor(),
+            fontSize: inWideRail ? 12 : 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       );
+
+      if (inWideRail) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.amber),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${bot.name}\'s Turn',
+                      style: const TextStyle(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  phaseChip,
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '"$thinkingMessage"',
+                style: const TextStyle(
+                  color: BalatroTheme.primaryText,
+                  fontStyle: FontStyle.italic,
+                  fontSize: 13,
+                  height: 1.25,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        );
+      }
 
       return Container(
         padding: EdgeInsets.symmetric(
@@ -321,22 +389,7 @@ class GameActionButtons extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getPhaseColor().withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: _getPhaseColor(), width: 1),
-              ),
-              child: Text(
-                _getPhaseLabel(),
-                style: TextStyle(
-                  color: _getPhaseColor(),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
+            phaseChip,
             if (!isPhone) ...[
               const SizedBox(width: 8),
               Flexible(

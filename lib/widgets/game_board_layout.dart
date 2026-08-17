@@ -134,6 +134,7 @@ class GameBoardLayout extends StatelessWidget {
                 deckKey: deckKey,
                 discardKey: discardKey,
                 isExpanded: true,
+                showExpandToggle: false,
                 onToggleExpand: onHeaderToggle,
                 onRecentActionsTap: null,
                 headerExtras: headerExtras,
