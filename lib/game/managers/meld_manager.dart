@@ -177,6 +177,9 @@ class MeldManager {
         final cardNames = cards.map((c) => c.compactName).join(', ');
         _gameState.logAction('added to existing meld: $cardNames');
         currentPlayer.hasPlayedDown = true;
+        if (currentPlayer.canGoOut) {
+          _gameState.handlePlayerWentOut();
+        }
         return true;
       }
     }
@@ -198,6 +201,9 @@ class MeldManager {
       }
 
       currentPlayer.hasPlayedDown = true;
+      if (currentPlayer.canGoOut) {
+        _gameState.handlePlayerWentOut();
+      }
       return true;
     }
 
@@ -405,11 +411,9 @@ class MeldManager {
       _gameState.logAction('created melds: ${cardNamesCreated.join('; ')}');
     }
 
-    // CRITICAL FIX: Check if player has gone out after melding (same logic as GameState.playMeld)
+    // Same go-out path as GameState.playMeld — must use handlePlayerWentOut so
+    // final-turn-after-going-out is respected (do not call endRound() directly).
     if (player.canGoOut) {
-      _gameState.logAction('went out and ended the round!');
-
-      // Debug logging to match GameState.playMeld behavior
       if (kDebugMode) {
         _gameState.logAction(
           'GOING OUT DEBUG (MeldManager): footSize=${player.foot.length}, '
@@ -418,7 +422,7 @@ class MeldManager {
         );
       }
 
-      _gameState.endRound();
+      _gameState.handlePlayerWentOut();
     }
   }
 
