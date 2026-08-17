@@ -441,17 +441,28 @@ class GameActionButtons extends StatelessWidget {
         horizontal: isPhone ? 10 : 16,
         vertical: isPhone ? 8 : 12,
       ),
-      child: Row(
-        children: buttons
-            .map(
-              (button) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: button,
-                ),
-              ),
-            )
-            .toList(),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isPhone
+                ? double.infinity
+                : (buttons.length <= 1
+                      ? GameResponsiveLayout.actionDockMaxWidthSingle
+                      : GameResponsiveLayout.actionDockMaxWidthMulti),
+          ),
+          child: Row(
+            children: buttons
+                .map(
+                  (button) => Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: button,
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
       ),
     );
   }

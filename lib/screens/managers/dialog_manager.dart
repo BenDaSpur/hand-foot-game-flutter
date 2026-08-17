@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/player.dart';
 import '../../models/card.dart';
 import '../../game/game_controller.dart';
@@ -7,6 +8,7 @@ import '../../widgets/emergency_round_end_dialog.dart';
 import '../../widgets/scoreboard_modal.dart';
 import '../../constants/keyboard_shortcuts.dart';
 import '../../theme/balatro_theme.dart';
+import '../../utils/game_responsive_layout.dart';
 
 /// Manages all dialogs and modals for the game screen.
 ///
@@ -560,113 +562,17 @@ class DialogManager {
 
   /// Show load game dialog
   void showLoadGameDialog(Function(String) onLoadJson) {
-    final TextEditingController textController = TextEditingController();
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: BalatroTheme.darkPurple,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: BalatroTheme.glowColor, width: 2),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.upload, color: BalatroTheme.neonBlue, size: 28),
-            const SizedBox(width: 12),
-            Text(
-              'Load Game Save',
-              style: TextStyle(
-                color: BalatroTheme.neonBlue,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    color: BalatroTheme.neonBlue.withValues(alpha: 0.6),
-                    blurRadius: 4,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Paste your game save (supports all formats: ultra-compact, base64, or JSON):',
-                style: TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: TextField(
-                  controller: textController,
-                  maxLines: null,
-                  expands: true,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Colors.white,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Paste your game save here...',
-                    hintStyle: const TextStyle(color: Colors.white38),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: BalatroTheme.glowColor,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: BalatroTheme.glowColor.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: BalatroTheme.neonBlue,
-                        width: 2,
-                      ),
-                    ),
-                    filled: true,
-                    fillColor: BalatroTheme.deepPurple.withValues(alpha: 0.3),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: BalatroTheme.heartsColor),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              final inputText = textController.text.trim();
-              if (inputText.isNotEmpty) {
-                Navigator.of(context).pop();
-                onLoadJson(inputText);
-              } else {
-                showErrorDialog(
-                  'Please paste a valid game save (Base64 or JSON).',
-                );
-              }
-            },
-            child: const Text(
-              'Load Game',
-              style: TextStyle(color: BalatroTheme.neonGreen),
-            ),
-          ),
-        ],
+      builder: (dialogContext) => _LoadGameSaveDialog(
+        onLoadJson: (inputText) {
+          Navigator.of(dialogContext).pop();
+          onLoadJson(inputText);
+        },
+        onCancel: () => Navigator.of(dialogContext).pop(),
+        onEmptyLoad: () {
+          showErrorDialog('Please paste a valid game save (Base64 or JSON).');
+        },
       ),
     );
   }
@@ -919,6 +825,191 @@ class DialogManager {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Owns the save-text controller so it is disposed with the dialog route,
+/// not via a racing [Future.then] (hot reload / rebuild safe).
+class _LoadGameSaveDialog extends StatefulWidget {
+  final ValueChanged<String> onLoadJson;
+  final VoidCallback onCancel;
+  final VoidCallback onEmptyLoad;
+
+  const _LoadGameSaveDialog({
+    required this.onLoadJson,
+    required this.onCancel,
+    required this.onEmptyLoad,
+  });
+
+  @override
+  State<_LoadGameSaveDialog> createState() => _LoadGameSaveDialogState();
+}
+
+class _LoadGameSaveDialogState extends State<_LoadGameSaveDialog> {
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final pasted = data?.text?.trim() ?? '';
+    if (!mounted) {
+      return;
+    }
+    if (pasted.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Clipboard is empty',
+            style: TextStyle(color: BalatroTheme.snackBarContentOnDark),
+          ),
+          backgroundColor: BalatroTheme.neonBlue,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    _textController
+      ..text = pasted
+      ..selection = TextSelection.collapsed(offset: pasted.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final isPhone = GameResponsiveLayout.isPhone(screenSize.width);
+    final contentHeight = (screenSize.height * (isPhone ? 0.28 : 0.35)).clamp(
+      180.0,
+      isPhone ? 240.0 : 300.0,
+    );
+
+    return AlertDialog(
+      backgroundColor: BalatroTheme.darkPurple,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: BalatroTheme.glowColor, width: 2),
+      ),
+      titlePadding: EdgeInsets.fromLTRB(24, isPhone ? 16 : 24, 8, 8),
+      contentPadding: EdgeInsets.fromLTRB(24, 8, 24, isPhone ? 8 : 16),
+      actionsPadding: EdgeInsets.fromLTRB(16, 0, 16, isPhone ? 12 : 16),
+      title: Row(
+        children: [
+          const Icon(Icons.upload, color: BalatroTheme.glowColor, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              isPhone ? 'Load Save' : 'Load Game Save',
+              style: TextStyle(
+                color: BalatroTheme.glowColor,
+                fontSize: isPhone ? 18 : 20,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    color: BalatroTheme.glowColor.withValues(alpha: 0.6),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Paste from clipboard',
+            onPressed: _pasteFromClipboard,
+            icon: const Icon(
+              Icons.content_paste,
+              color: BalatroTheme.glowColor,
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: contentHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isPhone
+                  ? 'Paste your game save (compact, base64, or JSON):'
+                  : 'Paste your game save (supports all formats: ultra-compact, base64, or JSON):',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: TextField(
+                controller: _textController,
+                maxLines: null,
+                expands: true,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: Colors.white,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Paste your game save here...',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: BalatroTheme.glowColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: BalatroTheme.glowColor.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: BalatroTheme.glowColor,
+                      width: 2,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: BalatroTheme.deepPurple.withValues(alpha: 0.3),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: widget.onCancel,
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: BalatroTheme.heartsColor),
+          ),
+        ),
+        TextButton(
+          onPressed: () {
+            final inputText = _textController.text.trim();
+            if (inputText.isNotEmpty) {
+              widget.onLoadJson(inputText);
+            } else {
+              widget.onEmptyLoad();
+            }
+          },
+          child: const Text(
+            'Load Game',
+            style: TextStyle(color: BalatroTheme.neonGreen),
+          ),
+        ),
+      ],
     );
   }
 }

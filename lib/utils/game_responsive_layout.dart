@@ -45,16 +45,30 @@ class GameCardSizes {
     pileHeight: 73,
   );
 
-  /// Tablet and desktop (>430px)
-  static const tabletPlus = GameCardSizes(
-    handWidth: 70,
-    handHeight: 98,
-    handOffset: 50,
-    meldWidth: 40,
-    meldHeight: 56,
-    pileWidth: 56,
-    pileHeight: 78,
+  /// Tablet / iPad portrait (430–900px)
+  static const tablet = GameCardSizes(
+    handWidth: 88,
+    handHeight: 126,
+    handOffset: 42,
+    meldWidth: 48,
+    meldHeight: 69,
+    pileWidth: 64,
+    pileHeight: 91,
   );
+
+  /// Large tablet / macOS / iPad landscape (>900px)
+  static const largeTablet = GameCardSizes(
+    handWidth: 104,
+    handHeight: 149,
+    handOffset: 48,
+    meldWidth: 56,
+    meldHeight: 80,
+    pileWidth: 72,
+    pileHeight: 103,
+  );
+
+  /// Legacy alias for callers that still reference tablet+.
+  static const tabletPlus = tablet;
 
   double handStackWidth(int cardCount) {
     if (cardCount <= 0) {
@@ -93,12 +107,38 @@ class GameResponsiveLayout {
   static const double compactPhoneBreakpoint = 400;
   static const double normalPhoneBreakpoint = 430;
 
+  /// Max width for the action button row on tablet+.
+  static const double actionDockMaxWidthSingle = 520;
+  static const double actionDockMaxWidthMulti = 640;
+
+  /// Max width for centered player score chips on tablet+.
+  static const double playerScoresMaxWidth = 720;
+
+  /// Left rail width in the two-pane wide board layout.
+  static const double wideBoardRailWidth = 320;
+
+  /// Target fill of the hand strip for dynamic tablet hand sizing.
+  static const double handStripFillRatio = 0.80;
+
   static bool isPhone(double width) {
     return width <= normalPhoneBreakpoint;
   }
 
   static bool isSmallPhone(double width) {
     return width <= smallPhoneBreakpoint;
+  }
+
+  static bool isTabletOrLarger(double width) {
+    return width > normalPhoneBreakpoint;
+  }
+
+  static bool isLargeTablet(double width) {
+    return width > GameConfig.tabletLandscapeBreakpoint;
+  }
+
+  /// Two-pane board (rail + main) for iPad landscape / macOS.
+  static bool useWideBoardLayout(double width) {
+    return width >= GameConfig.tabletLandscapeBreakpoint;
   }
 
   static bool isMobile(BuildContext context) {
@@ -117,7 +157,10 @@ class GameResponsiveLayout {
     if (width <= normalPhoneBreakpoint) {
       return GameCardSizes.normalPhone;
     }
-    return GameCardSizes.tabletPlus;
+    if (width <= GameConfig.tabletLandscapeBreakpoint) {
+      return GameCardSizes.tablet;
+    }
+    return GameCardSizes.largeTablet;
   }
 
   static GameCardSizes cardSizes(BuildContext context) {
@@ -125,17 +168,55 @@ class GameResponsiveLayout {
   }
 
   /// Hand cards on phone prioritize readability (horizontal scroll is expected).
-  static GameCardSizes handSizes(BuildContext context) {
+  /// On tablet+, scales toward filling [handStripFillRatio] of the hand strip.
+  static GameCardSizes handSizes(
+    BuildContext context, {
+    int cardCount = 11,
+    double? availableWidth,
+  }) {
     final width = MediaQuery.of(context).size.width;
     final base = cardSizesForWidth(width);
-    if (!isPhone(width)) {
-      return base;
+    if (isPhone(width)) {
+      return base.copyWithHand(
+        handWidth: base.handWidth,
+        handHeight: base.handWidth / GameConfig.cardAspectRatio,
+        handOffset: base.handOffset,
+      );
     }
 
+    return scaledHandSizes(
+      base: base,
+      screenWidth: width,
+      cardCount: cardCount,
+      availableWidth: availableWidth,
+    );
+  }
+
+  /// Pure helper for tests and callers that already know strip width.
+  static GameCardSizes scaledHandSizes({
+    required GameCardSizes base,
+    required double screenWidth,
+    int cardCount = 11,
+    double? availableWidth,
+  }) {
+    final stripWidth =
+        availableWidth ??
+        (useWideBoardLayout(screenWidth)
+            ? screenWidth - wideBoardRailWidth - 24
+            : screenWidth * 0.92);
+    final targetFill = stripWidth * handStripFillRatio;
+    final count = cardCount <= 0 ? 1 : cardCount;
+    final offsetRatio = base.handOffset / base.handWidth;
+    final computedWidth = targetFill / ((count - 1) * offsetRatio + 1);
+    final maxHandWidth = isLargeTablet(screenWidth)
+        ? GameConfig.maxCardWidth
+        : GameConfig.maxCardWidth * 0.92;
+    final handWidth = computedWidth.clamp(base.handWidth, maxHandWidth);
+    final handOffset = handWidth * offsetRatio;
     return base.copyWithHand(
-      handWidth: base.handWidth,
-      handHeight: base.handWidth / GameConfig.cardAspectRatio,
-      handOffset: base.handOffset,
+      handWidth: handWidth,
+      handHeight: handWidth / GameConfig.cardAspectRatio,
+      handOffset: handOffset,
     );
   }
 
