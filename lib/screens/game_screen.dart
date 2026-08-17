@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -353,7 +354,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     // Configured solo start from setup screen takes priority over saved game.
     if (widget.settings != null) {
-      _startFreshGame();
+      await _startFreshGame();
       return;
     }
 
@@ -392,7 +393,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
-    _startFreshGame();
+    await _startFreshGame();
   }
 
   void _navigateToSoloSetup() {
@@ -401,7 +402,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  void _startFreshGame() {
+  Future<void> _startFreshGame() async {
+    // Defer provider mutations out of initState/build (Riverpod requirement).
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted || _disposed) {
+      return;
+    }
+
     final settings = widget.settings ?? SoloGameSettings.defaults;
     final launch = widget.launchOptions ?? const SoloGameLaunchOptions();
 
@@ -465,7 +472,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     // Initialize managers after game setup
     _initializeManagers();
 
-    _runPerfectGrabAndStartRound(newController, roundNumber: 1);
+    await _runPerfectGrabAndStartRound(newController, roundNumber: 1);
   }
 
   Future<void> _runPerfectGrabAndStartRound(
@@ -1045,13 +1052,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _dialogManager.showErrorDialog(
           'Failed to load saved game. Starting new game.',
         );
-        _startFreshGame();
+        unawaited(_startFreshGame());
       }
     } catch (e) {
       _dialogManager.showErrorDialog(
         'Error loading saved game: ${e.toString()}',
       );
-      _startFreshGame();
+      unawaited(_startFreshGame());
     }
   }
 
@@ -1882,7 +1889,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final _ = controllerState?.version;
     final gameState = controllerState?.controller.gameState;
     if (!_isInitialized || gameState == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: BalatroTheme.primaryGradient,
+          ),
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
 
     final currentPlayer = gameState.currentPlayer;

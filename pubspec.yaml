@@ -1,10 +1,10 @@
 name: hand_foot_game_flutter
 description: "A beautiful Hand & Foot card game with Balatro-inspired visuals and intelligent AI opponents."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+2
 homepage: https://playhandfoot.com
-repository: https://github.com/BenDaSpur/hand-foot-game-flutter  # pragma: allowlist secret
-issue_tracker: https://github.com/BenDaSpur/hand-foot-game-flutter/issues  # pragma: allowlist secret
+repository: https://github.com/BenDaSpur/hand-foot-game-flutter # pragma: allowlist secret
+issue_tracker: https://github.com/BenDaSpur/hand-foot-game-flutter/issues # pragma: allowlist secret
 
 environment:
   sdk: ^3.12.0
@@ -42,6 +42,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # CocoaPods: Flutter 3.44 SPM cannot resolve firebase-ios-sdk 12.15.0
+  # required by the pinned firebase_core 4.11.0.
+  config:
+    enable-swift-package-manager: false
   assets:
     - assets/images/
 
@@ -50,6 +54,8 @@ flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "logo.png"
+  image_path_ios: "logo_ios.png"
+  remove_alpha_ios: true
   min_sdk_android: 21 # Android minimum SDK version
   web:
     generate: true

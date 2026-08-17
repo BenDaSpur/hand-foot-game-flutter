@@ -533,5 +533,106 @@ void main() {
 
       expect(tapCount, 1);
     });
+
+    testWidgets('draw animation hand target accounts for AppBar offset', (
+      tester,
+    ) async {
+      final deckKey = GlobalKey();
+      final discardKey = GlobalKey();
+      final handStackKey = GlobalKey();
+      final meldAreaKey = GlobalKey();
+      final scrollController = ScrollController();
+      final player = Player(id: '1', name: 'You', type: PlayerType.human)
+        ..currentHand.add(
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+        );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(title: const Text('HAND')),
+            body: SizedBox.expand(
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: SizedBox(key: deckKey, width: 56, height: 78),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: GameHandDisplay(
+                      player: player,
+                      selectedCardIndices: const [],
+                      handStackKey: handStackKey,
+                      handScrollController: scrollController,
+                    ),
+                  ),
+                  CardDrawAnimationOverlay(
+                    request: const CardAnimationRequest(
+                      type: CardDrawAnimationType.deckDraw,
+                      handCards: [
+                        PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+                      ],
+                      handTargetIndices: [0],
+                    ),
+                    deckKey: deckKey,
+                    discardKey: discardKey,
+                    handStackKey: handStackKey,
+                    meldAreaKey: meldAreaKey,
+                    handScrollController: scrollController,
+                    onComplete: () {},
+                    onSkip: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Drive the async animation timeline to near the end of fly-to-hand.
+      await tester.pump(); // schedule post-frame start
+      await tester.pump(); // start animation / possible hand scroll
+      await tester.pump(GameConfig.cardRevealDuration);
+      await tester.pump(GameConfig.cardFlyDuration); // pile -> reveal
+      await tester.pump(GameConfig.cardRevealPause);
+      await tester.pump(
+        GameConfig.cardFlyDuration - const Duration(milliseconds: 40),
+      );
+
+      final overlayFinder = find.byType(CardDrawAnimationOverlay);
+      final overlayBox = tester.renderObject<RenderBox>(overlayFinder);
+
+      final handCardBox = tester.renderObject<RenderBox>(
+        find.descendant(
+          of: find.byType(GameHandDisplay),
+          matching: find.byType(PlayingCardWidget),
+        ),
+      );
+      final handCenterGlobal =
+          handCardBox.localToGlobal(Offset.zero) +
+          handCardBox.size.center(Offset.zero);
+      final handCenterLocal = overlayBox.globalToLocal(handCenterGlobal);
+
+      final flyingCards = find.descendant(
+        of: overlayFinder,
+        matching: find.byType(PlayingCardWidget),
+      );
+      expect(flyingCards, findsWidgets);
+
+      final flyingBox = tester.renderObject<RenderBox>(flyingCards.last);
+      final flyingCenterGlobal =
+          flyingBox.localToGlobal(Offset.zero) +
+          flyingBox.size.center(Offset.zero);
+      final flyingCenterLocal = overlayBox.globalToLocal(flyingCenterGlobal);
+
+      // Before the fix, AppBar offset left this ~56–100px too low.
+      expect(flyingCenterLocal.dy, closeTo(handCenterLocal.dy, 20));
+
+      scrollController.dispose();
+    });
   });
 }

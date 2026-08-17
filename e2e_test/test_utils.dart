@@ -110,8 +110,10 @@ class E2ETestUtils {
 
     for (var i = 0; i < maxIterations; i++) {
       await tester.pump(step);
-      if (find.text('HAND & FOOT').evaluate().isNotEmpty &&
-          find.text('ROUND 1').evaluate().isNotEmpty) {
+      final hasTitle =
+          find.text('HAND & FOOT').evaluate().isNotEmpty ||
+          find.text('H&F').evaluate().isNotEmpty;
+      if (hasTitle && find.text('ROUND 1').evaluate().isNotEmpty) {
         // Extra settle frames for hand/actions
         await tester.pump(const Duration(milliseconds: 200));
         return;
@@ -122,7 +124,7 @@ class E2ETestUtils {
 
     throw TestFailure(
       'Timed out after ${timeout.inSeconds}s waiting for game chrome '
-      '(HAND & FOOT / ROUND 1)',
+      '(HAND & FOOT or H&F / ROUND 1)',
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/game_config.dart';
 import '../config/project_links.dart';
 import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
@@ -480,20 +481,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   Widget _buildInfoButton() {
     return TextButton(
       onPressed: _showGameInfo,
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.info_outline,
-            color: BalatroTheme.neonBlue.withValues(alpha: 0.7),
-            size: 16,
-          ),
-          const SizedBox(width: 8),
+          Icon(Icons.info_outline, color: BalatroTheme.glowColor, size: 16),
+          SizedBox(width: 8),
           Text(
             'How to Play',
             style: TextStyle(
-              color: BalatroTheme.neonBlue.withValues(alpha: 0.7),
+              color: BalatroTheme.glowColor,
               fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -920,7 +918,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                 ),
                 _buildRuleSection(
                   'SETUP',
-                  'Each player gets 13 cards in hand and 13 in foot pile. Draw 2 cards each turn.',
+                  'Each player gets ${GameConfig.handSize} cards in hand and '
+                      '${GameConfig.footSize} in the foot pile. Draw '
+                      '${GameConfig.requiredDrawCount} cards each turn. The deal '
+                      'mini-game is the only time you might pick up a different '
+                      'number of cards.',
                 ),
                 _buildRuleSection(
                   'MELDS',

@@ -19,7 +19,7 @@ void main() {
       );
       addTearDown(() => E2ETestUtils.cleanShutdown(tester));
 
-      expect(find.text('HAND & FOOT'), findsOneWidget);
+      expect(find.text('H&F'), findsOneWidget);
       expect(find.text('ROUND 1'), findsOneWidget);
       expect(find.text('Your Hand (11)'), findsOneWidget);
       expect(find.text('Draw from deck'), findsOneWidget);

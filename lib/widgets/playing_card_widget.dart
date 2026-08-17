@@ -13,6 +13,8 @@ class PlayingCardWidget extends StatelessWidget {
   final double width;
   final double height;
   final bool isInMeld; // Lighter shadows for meld display
+  /// When false, skips outer glows/depth shadows (dense grids/modals).
+  final bool showShadow;
 
   static const double cardMargin = 2.0;
 
@@ -57,6 +59,7 @@ class PlayingCardWidget extends StatelessWidget {
     this.width = 60,
     this.height = 84,
     this.isInMeld = false,
+    this.showShadow = true,
   });
 
   /// Get TextStyle for card text
@@ -89,6 +92,7 @@ class PlayingCardWidget extends StatelessWidget {
             width: width,
             height: height,
             margin: const EdgeInsets.all(cardMargin),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: BalatroTheme.cardBackground, // Fallback color
               gradient: BalatroTheme.cardGradient,
@@ -113,104 +117,10 @@ class PlayingCardWidget extends StatelessWidget {
                     : 1,
               ),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                if (isSelected) ...[
-                  // Bright inner glow
-                  BoxShadow(
-                    color: BalatroTheme.glowColor.withValues(alpha: 0.7),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                  // Outer glow for selection
-                  BoxShadow(
-                    color: BalatroTheme.glowColor.withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    spreadRadius: 3,
-                  ),
-                  // Far glow for extra effect
-                  BoxShadow(
-                    color: BalatroTheme.glowColor.withValues(alpha: 0.2),
-                    blurRadius: 24,
-                    spreadRadius: 6,
-                  ),
-                ] else if (isNewlyDrawn) ...[
-                  // Newly drawn cards get yellow glow
-                  BoxShadow(
-                    color: BalatroTheme.neonYellow.withValues(alpha: 0.6),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonYellow.withValues(alpha: 0.3),
-                    blurRadius: 14,
-                    spreadRadius: 3,
-                  ),
-                ] else if (isPlayable) ...[
-                  // Depth so playable cards don't look flatter than neighbors.
-                  handDepthShadow,
-                  // Upward glow: sibling cards cover side/bottom shadows; glow
-                  // above the fan remains readable on mid-hand peeks.
-                  BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(
-                      alpha: playableUpwardGlowAlpha,
-                    ),
-                    blurRadius: playableUpwardGlowBlur,
-                    spreadRadius: playableUpwardGlowSpread,
-                    offset: playableUpwardGlowOffset,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(
-                      alpha: playableInnerGlowAlpha,
-                    ),
-                    blurRadius: playableInnerGlowBlur,
-                    spreadRadius: playableInnerGlowSpread,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.neonGreen.withValues(
-                      alpha: playableOuterGlowAlpha,
-                    ),
-                    blurRadius: playableOuterGlowBlur,
-                    spreadRadius: playableOuterGlowSpread,
-                  ),
-                ] else if (card.isWild) ...[
-                  // Wild cards always have subtle rainbow glow
-                  BoxShadow(
-                    color: BalatroTheme.neonPink.withValues(alpha: 0.3),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.glowColor.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ] else if (isInMeld) ...[
-                  // Subtle shadows for meld display
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    offset: const Offset(1, 2),
-                    blurRadius: 4,
-                    spreadRadius: 0,
-                  ),
-                  BoxShadow(
-                    color: BalatroTheme.cardBorder.withValues(alpha: 0.2),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                ] else ...[
-                  // Depth only — large cyan/pink outer glows used to be mostly
-                  // invisible (clipped by Opacity) and look noisy once fixed.
-                  handDepthShadow,
-                  BoxShadow(
-                    color: BalatroTheme.cardBorder.withValues(alpha: 0.45),
-                    blurRadius: 4,
-                    spreadRadius: 0,
-                  ),
-                ],
-              ],
+              boxShadow: showShadow ? _cardBoxShadows() : const [],
             ),
             child: Stack(
-              clipBehavior: Clip.none,
+              clipBehavior: Clip.hardEdge,
               children: [
                 // In-face cue: survives fan overlap burying outer/side glow
                 // (visible on the peeking left strip of mid-hand cards).
@@ -256,12 +166,12 @@ class PlayingCardWidget extends StatelessWidget {
                     Center(child: _buildSuitSymbol(height)),
                     // Top-left rank
                     Positioned(
-                      top: height > 60 ? 4 : 2,
-                      left: height > 60 ? 4 : 2,
+                      top: _cornerInset(height),
+                      left: _cornerInset(height),
                       child: Text(
                         _getCardDisplay(),
                         style: _getCardTextStyle(
-                          fontSize: height > 60 ? 18 : 14,
+                          fontSize: _rankFontSize(height),
                           fontWeight: FontWeight.bold,
                           color: _getCardColor(),
                           shadows: [
@@ -277,16 +187,17 @@ class PlayingCardWidget extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Bottom-right rank (rotated)
+                    // Bottom-right rank (rotated). RotatedBox keeps layout bounds
+                    // correct so the index stays inside small pile cards.
                     Positioned(
-                      bottom: height > 60 ? 4 : 2,
-                      right: height > 60 ? 4 : 2,
-                      child: Transform.rotate(
-                        angle: 3.14159,
+                      bottom: _cornerInset(height),
+                      right: _cornerInset(height),
+                      child: RotatedBox(
+                        quarterTurns: 2,
                         child: Text(
                           _getCardDisplay(),
                           style: _getCardTextStyle(
-                            fontSize: height > 60 ? 18 : 14,
+                            fontSize: _rankFontSize(height),
                             fontWeight: FontWeight.bold,
                             color: _getCardColor(),
                             shadows: [
@@ -311,6 +222,127 @@ class PlayingCardWidget extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<BoxShadow> _cardBoxShadows() {
+    if (isSelected) {
+      return [
+        BoxShadow(
+          color: BalatroTheme.glowColor.withValues(alpha: 0.7),
+          blurRadius: 8,
+          spreadRadius: 1,
+        ),
+        BoxShadow(
+          color: BalatroTheme.glowColor.withValues(alpha: 0.4),
+          blurRadius: 16,
+          spreadRadius: 3,
+        ),
+        BoxShadow(
+          color: BalatroTheme.glowColor.withValues(alpha: 0.2),
+          blurRadius: 24,
+          spreadRadius: 6,
+        ),
+      ];
+    }
+    if (isNewlyDrawn) {
+      return [
+        BoxShadow(
+          color: BalatroTheme.neonYellow.withValues(alpha: 0.6),
+          blurRadius: 8,
+          spreadRadius: 1,
+        ),
+        BoxShadow(
+          color: BalatroTheme.neonYellow.withValues(alpha: 0.3),
+          blurRadius: 14,
+          spreadRadius: 3,
+        ),
+      ];
+    }
+    if (isPlayable) {
+      return [
+        handDepthShadow,
+        BoxShadow(
+          color: BalatroTheme.neonGreen.withValues(
+            alpha: playableUpwardGlowAlpha,
+          ),
+          blurRadius: playableUpwardGlowBlur,
+          spreadRadius: playableUpwardGlowSpread,
+          offset: playableUpwardGlowOffset,
+        ),
+        BoxShadow(
+          color: BalatroTheme.neonGreen.withValues(
+            alpha: playableInnerGlowAlpha,
+          ),
+          blurRadius: playableInnerGlowBlur,
+          spreadRadius: playableInnerGlowSpread,
+        ),
+        BoxShadow(
+          color: BalatroTheme.neonGreen.withValues(
+            alpha: playableOuterGlowAlpha,
+          ),
+          blurRadius: playableOuterGlowBlur,
+          spreadRadius: playableOuterGlowSpread,
+        ),
+      ];
+    }
+    if (card.isWild) {
+      return [
+        BoxShadow(
+          color: BalatroTheme.neonPink.withValues(alpha: 0.3),
+          blurRadius: 6,
+          spreadRadius: 1,
+        ),
+        BoxShadow(
+          color: BalatroTheme.glowColor.withValues(alpha: 0.2),
+          blurRadius: 10,
+          spreadRadius: 2,
+        ),
+      ];
+    }
+    if (isInMeld) {
+      return [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.3),
+          offset: const Offset(1, 2),
+          blurRadius: 4,
+          spreadRadius: 0,
+        ),
+        BoxShadow(
+          color: BalatroTheme.cardBorder.withValues(alpha: 0.2),
+          blurRadius: 6,
+          spreadRadius: 1,
+        ),
+      ];
+    }
+    return [
+      handDepthShadow,
+      BoxShadow(
+        color: BalatroTheme.cardBorder.withValues(alpha: 0.45),
+        blurRadius: 4,
+        spreadRadius: 0,
+      ),
+    ];
+  }
+
+  /// Corner rank size scales with card height so pile/meld cards don't collide.
+  static double _rankFontSize(double height) {
+    if (height >= 90) {
+      return 18;
+    }
+    if (height >= 75) {
+      return 14;
+    }
+    if (height >= 60) {
+      return 12;
+    }
+    return 10;
+  }
+
+  static double _cornerInset(double height) {
+    if (height >= 75) {
+      return 4;
+    }
+    return 2;
   }
 
   String _getCardDisplay() {
@@ -368,7 +400,13 @@ class PlayingCardWidget extends StatelessWidget {
 
   Widget _buildSuitSymbol(double height) {
     final color = _getCardColor();
-    final size = height > 60 ? 30.0 : 18.0;
+    final size = height >= 90
+        ? 30.0
+        : height >= 75
+        ? 22.0
+        : height >= 60
+        ? 16.0
+        : 12.0;
 
     if (card.isJoker) {
       // Use text for joker
@@ -403,7 +441,7 @@ class PlayingCardWidget extends StatelessWidget {
     );
 
     // Add glow effect for selected or wild cards
-    if (isSelected || card.isWild) {
+    if (showShadow && (isSelected || card.isWild)) {
       return Container(
         width: size + 10,
         height: size + 10,
