@@ -639,12 +639,18 @@ class BotTurnManager {
         }
         if (gameState.turnPhase == TurnPhase.meld) {
           tryForceMeld(botPlayer);
+          if (!_isStillCurrentBot(botPlayer)) {
+            return;
+          }
         }
         gameState.turnPhase = TurnPhase.discard;
         absolutelyGuaranteedDiscard(botPlayer);
         break;
       case TurnPhase.meld:
         tryForceMeld(botPlayer);
+        if (!_isStillCurrentBot(botPlayer)) {
+          return;
+        }
         gameState.turnPhase = TurnPhase.discard;
         absolutelyGuaranteedDiscard(botPlayer);
         break;
@@ -691,6 +697,10 @@ class BotTurnManager {
           }
           if (gameState.turnPhase == TurnPhase.meld) {
             tryForceMeld(botPlayer);
+            // Forced meld go-out starts final-turn phase and advances ownership.
+            if (!_isStillCurrentBot(botPlayer)) {
+              return;
+            }
           }
           // Force to discard phase to complete turn
           gameState.turnPhase = TurnPhase.discard;
@@ -700,6 +710,10 @@ class BotTurnManager {
         case TurnPhase.meld:
           // Try melding before force-discarding to shrink hand toward foot
           tryForceMeld(botPlayer);
+          // Forced meld go-out starts final-turn phase and advances ownership.
+          if (!_isStillCurrentBot(botPlayer)) {
+            return;
+          }
           // Bot can skip melding - force to discard phase and GUARANTEE completion
           gameState.turnPhase = TurnPhase.discard;
           absolutelyGuaranteedDiscard(botPlayer);

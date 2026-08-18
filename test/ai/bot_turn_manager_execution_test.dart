@@ -289,6 +289,69 @@ void main() {
       );
     });
 
+    test('forceCompleteBotTurn stops after forced meld go-out '
+        '(keeps human final turn)', () {
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final alex = Player(id: '2', name: 'Alex', type: PlayerType.bot);
+      final ben = Player(id: '3', name: 'Ben', type: PlayerType.bot);
+      final controller = GameController(
+        players: [human, alex, ben],
+        seed: 700168,
+        soloSettings: SoloGameSettings(
+          botCount: 2,
+          botPersonalities: [
+            BotPersonality.adaptive,
+            BotPersonality.bookBuilder,
+          ],
+          enableGoingOutBonus: true,
+          enableFinalTurnAfterGoingOut: true,
+        ),
+      );
+      controller.initializeGame();
+
+      _setupBotToGoOut(ben);
+      ben.hand.clear();
+      ben.foot.clear();
+      final lastKing = const PlayingCard(
+        suit: Suit.diamonds,
+        rank: CardRank.king,
+      );
+      ben.foot.add(lastKing);
+
+      controller.gameState.currentPlayerIndex = 2;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+
+      final manager = BotTurnManager(
+        gameController: controller,
+        botAI: EnhancedBotAI(seed: 700168),
+        onStateChanged: () {},
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+            }) {},
+      );
+
+      manager.forceCompleteBotTurn(ben);
+
+      expect(ben.canGoOut, isTrue);
+      expect(controller.gameState.phase, GamePhase.playing);
+      expect(controller.gameState.finalTurnPhaseActive, isTrue);
+      expect(controller.gameState.playerWhoWentOutIndex, 2);
+      expect(
+        controller.gameState.playersAwaitingFinalTurn.contains(0) ||
+            controller.gameState.currentPlayerIndex == 0,
+        isTrue,
+        reason: 'Human must keep final turn after forced meld go-out',
+      );
+      expect(controller.gameState.currentPlayerIndex, isNot(2));
+    });
+
     test(
       'forceCompleteBotTurn is a no-op when the bot is no longer current player',
       () {
