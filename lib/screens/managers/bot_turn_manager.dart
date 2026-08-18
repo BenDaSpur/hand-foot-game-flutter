@@ -505,6 +505,8 @@ class BotTurnManager {
 
   /// Validate game state after meld creation
   void validateGameStateAfterMeld(Player player) {
+    final gameState = gameController.gameState;
+
     // Check if player went out by melding their last cards
     if (player.currentHand.isEmpty) {
       if (!player.hasPickedUpFoot && player.foot.isNotEmpty) {
@@ -512,7 +514,17 @@ class BotTurnManager {
         player.pickUpFoot();
         DebugLogger.debug('Bot ${player.name} picked up foot after melding');
       } else if (player.hasPickedUpFoot && player.canGoOut) {
-        // Player went out
+        // GameState.addToMeld / playMeld already call handlePlayerWentOut().
+        // Calling endRoundForBot again while final-turn phase is active would
+        // remove the *current* awaiting player (often the human) from the
+        // queue — skipping their final turn (session_17870056010721072 / Ben).
+        if (gameState.phase == GamePhase.roundEnd ||
+            gameState.phase == GamePhase.gameEnd ||
+            gameState.finalTurnPhaseActive ||
+            gameState.currentPlayer.id != player.id) {
+          return;
+        }
+
         endRoundForBot(player);
         DebugLogger.debug('Bot ${player.name} went out by melding');
       }
@@ -627,12 +639,18 @@ class BotTurnManager {
         }
         if (gameState.turnPhase == TurnPhase.meld) {
           tryForceMeld(botPlayer);
+          if (!_isStillCurrentBot(botPlayer)) {
+            return;
+          }
         }
         gameState.turnPhase = TurnPhase.discard;
         absolutelyGuaranteedDiscard(botPlayer);
         break;
       case TurnPhase.meld:
         tryForceMeld(botPlayer);
+        if (!_isStillCurrentBot(botPlayer)) {
+          return;
+        }
         gameState.turnPhase = TurnPhase.discard;
         absolutelyGuaranteedDiscard(botPlayer);
         break;
@@ -679,6 +697,10 @@ class BotTurnManager {
           }
           if (gameState.turnPhase == TurnPhase.meld) {
             tryForceMeld(botPlayer);
+            // Forced meld go-out starts final-turn phase and advances ownership.
+            if (!_isStillCurrentBot(botPlayer)) {
+              return;
+            }
           }
           // Force to discard phase to complete turn
           gameState.turnPhase = TurnPhase.discard;
@@ -688,6 +710,10 @@ class BotTurnManager {
         case TurnPhase.meld:
           // Try melding before force-discarding to shrink hand toward foot
           tryForceMeld(botPlayer);
+          // Forced meld go-out starts final-turn phase and advances ownership.
+          if (!_isStillCurrentBot(botPlayer)) {
+            return;
+          }
           // Bot can skip melding - force to discard phase and GUARANTEE completion
           gameState.turnPhase = TurnPhase.discard;
           absolutelyGuaranteedDiscard(botPlayer);
