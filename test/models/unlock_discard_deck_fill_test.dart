@@ -123,4 +123,73 @@ void main() {
       expect(gameState.phase, isNot(GamePhase.roundEnd));
     });
   });
+
+  group('immediateUnlock uses discard-first pickup fill', () {
+    late List<Player> players;
+    late GameState gameState;
+    late Player otherPlayer;
+
+    setUp(() {
+      players = [
+        Player(id: '1', name: 'Player 1', type: PlayerType.human),
+        Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+      ];
+      gameState = GameState(players: players, deck: Deck(seed: 12345));
+      otherPlayer = players[1];
+      otherPlayer.dealHand(const [
+        PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ]);
+    });
+
+    test('takes leftover discard cards then fills from the draw pile', () {
+      gameState.discardPile
+        ..clear()
+        ..addAll(const [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        ]);
+
+      final initialHandSize = otherPlayer.currentHand.length;
+      final initialDeckSize = gameState.deck.size;
+      const fromDiscard = 2;
+      const fromDeck = GameConfig.additionalDiscardPickup - fromDiscard;
+
+      expect(gameState.immediateUnlock(1), isTrue);
+      expect(otherPlayer.melds, hasLength(1));
+      expect(otherPlayer.melds.first.cards, hasLength(3));
+      expect(otherPlayer.currentHand.length, equals(initialHandSize - 2 + 5));
+      expect(gameState.deck.size, equals(initialDeckSize - fromDeck));
+      expect(gameState.discardPile, isEmpty);
+      expect(
+        otherPlayer.currentHand,
+        containsAll(const [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          PlayingCard(suit: Suit.spades, rank: CardRank.five),
+        ]),
+      );
+    });
+
+    test('fills from the draw pile when only the unlock card remains', () {
+      gameState.discardPile
+        ..clear()
+        ..add(const PlayingCard(suit: Suit.diamonds, rank: CardRank.king));
+
+      final initialHandSize = otherPlayer.currentHand.length;
+      final initialDeckSize = gameState.deck.size;
+
+      expect(gameState.immediateUnlock(1), isTrue);
+      expect(
+        otherPlayer.currentHand.length,
+        equals(initialHandSize - 2 + GameConfig.additionalDiscardPickup),
+      );
+      expect(
+        gameState.deck.size,
+        equals(initialDeckSize - GameConfig.additionalDiscardPickup),
+      );
+      expect(gameState.discardPile, isEmpty);
+    });
+  });
 }

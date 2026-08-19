@@ -254,6 +254,7 @@ class GameState {
   static const List<String> _cardDetailMarkers = [
     'drew:',
     'from discard pile:',
+    'from draw pile to complete unlock:',
   ];
 
   /// Strips card details from a log message that must not reveal them.
@@ -598,24 +599,12 @@ class GameState {
 
     currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
 
-    // Take up to 5 additional cards from the discard pile. If the pile is
-    // short, fill the remainder from the draw pile so the unlock pickup
-    // still totals [GameConfig.additionalDiscardPickup] when cards remain.
-    final additionalCards = <PlayingCard>[];
-    for (
-      int i = 0;
-      i < GameConfig.additionalDiscardPickup && discardPile.isNotEmpty;
-      i++
-    ) {
-      additionalCards.add(discardPile.removeLast());
-    }
-
-    final fromDiscardCount = additionalCards.length;
-    final neededFromDeck =
-        GameConfig.additionalDiscardPickup - fromDiscardCount;
-    if (neededFromDeck > 0) {
-      additionalCards.addAll(_drawUnlockFillFromDeck(neededFromDeck));
-    }
+    // Take leftover discard cards first, then fill from the draw pile so
+    // the unlock pickup still totals [GameConfig.additionalDiscardPickup]
+    // when cards remain.
+    final pickup = _collectUnlockPickupCards();
+    final additionalCards = pickup.cards;
+    final fromDiscardCount = pickup.fromDiscardCount;
 
     if (additionalCards.isNotEmpty) {
       currentPlayer.addNewlyDrawnCards(additionalCards);
@@ -1064,11 +1053,35 @@ class GameState {
       player.melds.add(meld);
     }
 
-    // Draw 5 cards from deck
-    final additionalCards = deck.drawCards(5);
-    player.addCardsToHand(additionalCards);
+    final pickup = _collectUnlockPickupCards();
+    if (pickup.cards.isNotEmpty) {
+      player.addCardsToHand(pickup.cards);
+    }
 
     return true;
+  }
+
+  /// Takes leftover discard cards first, then fills from the draw pile so
+  /// the unlock pickup totals [GameConfig.additionalDiscardPickup] when
+  /// cards remain.
+  ({List<PlayingCard> cards, int fromDiscardCount})
+  _collectUnlockPickupCards() {
+    final additionalCards = <PlayingCard>[];
+    for (
+      int i = 0;
+      i < GameConfig.additionalDiscardPickup && discardPile.isNotEmpty;
+      i++
+    ) {
+      additionalCards.add(discardPile.removeLast());
+    }
+
+    final fromDiscardCount = additionalCards.length;
+    final neededFromDeck =
+        GameConfig.additionalDiscardPickup - fromDiscardCount;
+    if (neededFromDeck > 0) {
+      additionalCards.addAll(_drawUnlockFillFromDeck(neededFromDeck));
+    }
+    return (cards: additionalCards, fromDiscardCount: fromDiscardCount);
   }
 
   void endRound() {

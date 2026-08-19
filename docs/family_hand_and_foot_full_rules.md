@@ -72,8 +72,8 @@
   1. If the previous player discards a card you have at least **two matching natural cards** of in your hand:
      - Immediately play your matching natural cards down (no wilds allowed for this unlock).
      - Take the top discarded card.
-     - Take up to 5 additional cards from the discard pile. If fewer than 5 extras remain there, draw the remainder from the **draw pile**.
-  2. If fewer than 5 cards remain in the draw pile after taking leftover discards, take what’s left.
+     - Take up to 5 additional cards from the discard pile. If fewer extras remain there than that pickup count, keep those discard cards and draw only the outstanding number from the **draw pile**.
+  2. Exhaust the draw pile only when it contains fewer cards than the remaining pickup count; take what’s left.
 
 ---
 

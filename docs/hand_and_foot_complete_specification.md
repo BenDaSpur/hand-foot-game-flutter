@@ -1131,7 +1131,7 @@ function validateMeldWithFeedback(cards, player, playDownRequirement) {
 - [ ] Cannot unlock with 3 on top
 - [ ] Cannot unlock with only 1 matching natural
 - [ ] Takes up to 5 cards from discard, then fills any shortfall from the draw pile
-- [ ] Unlocking with 2 cards in discard takes those 2 plus 3 from the draw pile
+- [ ] Unlocking with 2 cards in discard takes the leftover 1 discard card plus 4 from the draw pile after melding the top
 
 **Scoring**:
 - [ ] Clean book awards 500 bonus
