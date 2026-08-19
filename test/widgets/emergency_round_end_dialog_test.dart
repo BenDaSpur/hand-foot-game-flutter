@@ -32,7 +32,7 @@ void main() {
     expect(find.textContaining('could only discard 3s'), findsOneWidget);
     expect(find.textContaining('went out'), findsNothing);
     expect(find.textContaining('insufficient cards'), findsNothing);
-  });
+  }, tags: ['widget']);
 
   testWidgets('empty-deck copy is distinct from a 3s stalemate', (
     tester,
@@ -62,5 +62,5 @@ void main() {
     expect(find.textContaining('insufficient cards'), findsOneWidget);
     expect(find.textContaining('could only discard 3s'), findsNothing);
     expect(find.textContaining('went out'), findsNothing);
-  });
+  }, tags: ['widget']);
 }

@@ -16,6 +16,29 @@ enum TurnPhase { draw, meld, discard }
 /// Why the engine ended a round without a real go-out.
 enum EmergencyRoundEndReason { insufficientCards, stalemate }
 
+/// Parses a saved emergency-end reason. Missing or invalid values are null.
+EmergencyRoundEndReason? parseEmergencyRoundEndReason(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is EmergencyRoundEndReason) {
+    return value;
+  }
+  if (value is int) {
+    if (value >= 0 && value < EmergencyRoundEndReason.values.length) {
+      return EmergencyRoundEndReason.values[value];
+    }
+    return null;
+  }
+  final name = value.toString();
+  for (final reason in EmergencyRoundEndReason.values) {
+    if (reason.name == name) {
+      return reason;
+    }
+  }
+  return null;
+}
+
 /// Exception thrown when game state becomes inconsistent
 class GameStateException implements Exception {
   final String message;
@@ -374,6 +397,10 @@ class GameState {
   ///
   /// Returns true if the round ended immediately; false if final-turn phase started.
   bool handlePlayerWentOut() {
+    if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
+      return true;
+    }
+
     if (finalTurnPhaseActive) {
       _logAction('🏆 went out!');
       playersAwaitingFinalTurn.remove(currentPlayerIndex);
@@ -881,14 +908,13 @@ class GameState {
         _logAction('👠 picked up foot pile');
       }
 
-      if (currentPlayer.canGoOut) {
-        handlePlayerWentOut();
+      // Emergency ends (stalemate / empty deck) must not credit a go-out.
+      if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
         return true;
       }
 
-      // A 3s stalemate or other emergency end already finished the round —
-      // do not advance the turn or credit a go-out.
-      if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
+      if (currentPlayer.canGoOut) {
+        handlePlayerWentOut();
         return true;
       }
 
@@ -924,6 +950,7 @@ class GameState {
     // Scanning the whole recentActions buffer (older 3s + any reshuffle)
     // produced false stalemates (session_17870997145344534).
     if (deck.size >= GameConfig.stalemateDeckThreshold) {
+      _resetStalemateTracking();
       return;
     }
 
@@ -935,6 +962,7 @@ class GameState {
     final onlyThreesInPile =
         cardsToCheck.isNotEmpty && cardsToCheck.every((card) => card.isThree);
     if (!onlyThreesInPile) {
+      _resetStalemateTracking();
       return;
     }
 

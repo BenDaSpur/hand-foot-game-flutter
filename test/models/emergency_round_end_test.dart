@@ -161,5 +161,40 @@ void main() {
         equals(TurnPhase.meld),
       ); // Advanced to meld phase
     });
+
+    test(
+      'handlePlayerWentOut after emergency end does not credit a go-out',
+      () {
+        final players = [
+          Player(id: '1', name: 'Player 1', type: PlayerType.human),
+          Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+        ];
+        final gameState = GameState(players: players, deck: Deck.fromCards([]));
+        gameState.startRound();
+        gameState.phase = GamePhase.playing;
+        gameState.turnPhase = TurnPhase.draw;
+
+        expect(gameState.drawFromDeck(), isFalse);
+        expect(gameState.phase, GamePhase.roundEnd);
+        expect(
+          gameState.emergencyRoundEndReason,
+          EmergencyRoundEndReason.insufficientCards,
+        );
+
+        gameState.recentActions.clear();
+        expect(gameState.playerWhoWentOutIndex, isNull);
+        final ended = gameState.handlePlayerWentOut();
+
+        expect(ended, isTrue);
+        expect(gameState.phase, GamePhase.roundEnd);
+        expect(gameState.playerWhoWentOutIndex, isNull);
+        expect(
+          gameState.recentActions.any(
+            (action) => action.message.contains('went out'),
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }

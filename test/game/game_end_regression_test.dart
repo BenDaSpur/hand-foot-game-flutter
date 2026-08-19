@@ -1,10 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event_bus.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
-import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
+import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/services/game_save_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Regression tests for game end logic issues.
 ///
@@ -344,6 +348,83 @@ void main() {
         expect(controller.gameState.round, roundAfterWin);
         expect(players[0].score, scoreAfterWin);
         expect(players[0].hand, isEmpty);
+      },
+      tags: ['regression'],
+    );
+
+    test(
+      'recoverGameEndIfNeeded promotes leftover roundEnd, publishes, and persists',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final eventBus = GameEventBus();
+        GameEndedEvent? ended;
+        final subscription = eventBus.subscribeToType<GameEndedEvent>((event) {
+          ended = event;
+        });
+        addTearDown(subscription.cancel);
+        addTearDown(eventBus.dispose);
+
+        final players = [
+          Player(id: '1', name: 'You', type: PlayerType.human),
+          Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        ];
+        final controller = GameController(
+          players: players,
+          seed: 971981,
+          eventBus: eventBus,
+        );
+        players[0].score = GameConfig.winningScore;
+        players[1].score = 6770;
+        controller.gameState.phase = GamePhase.roundEnd;
+
+        expect(controller.recoverGameEndIfNeeded(), isTrue);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(controller.gameState.phase, GamePhase.gameEnd);
+        expect(controller.gameState.winner, players[0]);
+        expect(ended, isNotNull);
+        expect(ended!.winner, players[0]);
+
+        final saved = await GameSaveService.loadGame();
+        expect(saved, isNotNull);
+        expect(saved!['phase'], 'gameEnd');
+        expect(saved['winner'], '1');
+
+        expect(controller.recoverGameEndIfNeeded(), isTrue);
+        expect(controller.gameState.phase, GamePhase.gameEnd);
+      },
+      tags: ['regression'],
+    );
+
+    test(
+      'recoverGameEndIfNeeded leaves under-threshold roundEnd unchanged',
+      () {
+        final eventBus = GameEventBus();
+        var endedCount = 0;
+        final subscription = eventBus.subscribeToType<GameEndedEvent>((_) {
+          endedCount++;
+        });
+        addTearDown(subscription.cancel);
+        addTearDown(eventBus.dispose);
+
+        final players = [
+          Player(id: '1', name: 'You', type: PlayerType.human),
+          Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        ];
+        final controller = GameController(
+          players: players,
+          seed: 971981,
+          eventBus: eventBus,
+        );
+        controller.autosaveEnabled = false;
+        players[0].score = 8310;
+        players[1].score = 6770;
+        controller.gameState.phase = GamePhase.roundEnd;
+
+        expect(controller.recoverGameEndIfNeeded(), isFalse);
+        expect(controller.gameState.phase, GamePhase.roundEnd);
+        expect(controller.gameState.winner, isNull);
+        expect(endedCount, 0);
       },
       tags: ['regression'],
     );

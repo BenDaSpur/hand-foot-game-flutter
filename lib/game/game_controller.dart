@@ -440,6 +440,46 @@ class GameController implements GameInterface {
     return roundEnded;
   }
 
+  /// Promote a leftover [GamePhase.roundEnd] to [GamePhase.gameEnd] when a
+  /// restored or imported save already has a player at the winning score.
+  ///
+  /// Returns true when the game is (or was just promoted to) game-end.
+  bool recoverGameEndIfNeeded() {
+    if (_gameState.phase == GamePhase.gameEnd) {
+      return true;
+    }
+    if (_gameState.phase != GamePhase.roundEnd || _gameState.players.isEmpty) {
+      return false;
+    }
+
+    final highestScore = _gameState.players
+        .map((player) => player.score)
+        .reduce((a, b) => a > b ? a : b);
+    if (highestScore < GameConfig.winningScore) {
+      return false;
+    }
+
+    DebugLogger.warning(
+      'Recovered game-end from roundEnd: highest score $highestScore '
+      '>= ${GameConfig.winningScore} (imported or restored save may '
+      'have skipped endRound promotion)',
+    );
+    _gameState.phase = GamePhase.gameEnd;
+    _gameState.winner = _gameState.players.firstWhere(
+      (player) => player.score == highestScore,
+    );
+
+    final roundScores = <Player, int>{};
+    for (final player in _gameState.players) {
+      roundScores[player] = player.score;
+    }
+    _eventBus.publish(
+      GameEndedEvent(winner: _gameState.winner!, finalScores: roundScores),
+    );
+    saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+    return true;
+  }
+
   @override
   void nextRound({bool dealCards = true}) {
     clearMeldUndoStack();
@@ -1017,6 +1057,10 @@ class GameController implements GameInterface {
     gameState.turnPhase = TurnPhase.values.firstWhere(
       (e) => e.name == turnPhaseName,
       orElse: () => TurnPhase.draw,
+    );
+
+    gameState.emergencyRoundEndReason = parseEmergencyRoundEndReason(
+      data['emergencyRoundEndReason'],
     );
   }
 

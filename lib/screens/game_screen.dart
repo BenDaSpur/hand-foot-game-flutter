@@ -776,22 +776,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return;
       }
 
-      if (controller.gameState.phase == GamePhase.roundEnd) {
-        final highestScore = controller.gameState.players
-            .map((player) => player.score)
-            .reduce((a, b) => a > b ? a : b);
-        if (highestScore >= GameConfig.winningScore) {
-          DebugLogger.warning(
-            'Recovered game-end from roundEnd: highest score $highestScore '
-            '>= ${GameConfig.winningScore} (imported or restored save may '
-            'have skipped endRound promotion)',
-          );
-          controller.gameState.phase = GamePhase.gameEnd;
-          controller.gameState.winner = controller.gameState.players.firstWhere(
-            (player) => player.score == highestScore,
-          );
-        }
-      }
+      controller.recoverGameEndIfNeeded();
 
       if (controller.gameState.phase == GamePhase.gameEnd) {
         if (!_gameEndDialogShown) {
