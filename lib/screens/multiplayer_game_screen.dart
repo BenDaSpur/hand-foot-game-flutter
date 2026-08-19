@@ -703,26 +703,45 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     }
 
     if (gameState.lastCallAlertPending) {
-      _earlyEndAlertInFlight = true;
-      gameState.consumeLastCallAlert();
-      final isLocalPlayerTurn =
-          gameState.currentPlayer.id == _gameController.userId;
-      await LastCallDialog.showEmptyDeck(
-        context,
-        isLocalPlayerTurn: isLocalPlayerTurn,
-      );
-      _earlyEndAlertInFlight = false;
-      if (mounted) {
-        setState(() {});
+      setState(() {
+        _earlyEndAlertInFlight = true;
+      });
+      try {
+        gameState.consumeLastCallAlert();
+        final isLocalPlayerTurn =
+            gameState.currentPlayer.id == _gameController.userId;
+        await LastCallDialog.showEmptyDeck(
+          context,
+          isLocalPlayerTurn: isLocalPlayerTurn,
+        );
+      } finally {
+        if (!mounted) {
+          _earlyEndAlertInFlight = false;
+        } else {
+          setState(() {
+            _earlyEndAlertInFlight = false;
+          });
+        }
       }
       return;
     }
 
     if (gameState.stalemateAlertPending) {
-      _earlyEndAlertInFlight = true;
-      gameState.consumeStalemateAlert();
-      await LastCallDialog.showStalemateWarning(context);
-      _earlyEndAlertInFlight = false;
+      setState(() {
+        _earlyEndAlertInFlight = true;
+      });
+      try {
+        gameState.consumeStalemateAlert();
+        await LastCallDialog.showStalemateWarning(context);
+      } finally {
+        if (!mounted) {
+          _earlyEndAlertInFlight = false;
+        } else {
+          setState(() {
+            _earlyEndAlertInFlight = false;
+          });
+        }
+      }
     }
   }
 
@@ -941,7 +960,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                             key: ValueKey(gameState.currentPlayer.id),
                             turnDurationSeconds: _turnDurationSeconds,
                             isActive: _gameController.isMyTurn,
-                            isPaused: _isMeldModalOpen,
+                            isPaused:
+                                _isMeldModalOpen || _earlyEndAlertInFlight,
                             onTimeUp: _handleTurnTimeout,
                             onTick: (remaining) {
                               if (remaining == _turnTimeWarningSeconds &&

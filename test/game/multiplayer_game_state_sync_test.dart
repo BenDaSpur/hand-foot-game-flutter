@@ -371,5 +371,55 @@ void main() {
       expect(controller!.gameState.turnPhase, TurnPhase.meld);
       expect(controller!.gameState.currentPlayerIndex, 1);
     });
+
+    test('copies last-call pending flags from server state', () async {
+      mockAdapter.mockUserId = 'player1';
+      mockAdapter.mockGameId = 'LASTCALL';
+
+      controller = await EnhancedMultiplayerController.createGame(
+        hostPlayerName: 'Player1',
+        maxPlayers: 2,
+        networkAdapter: mockAdapter,
+      );
+
+      final player1 = Player(
+        id: 'player1',
+        name: 'Player1',
+        type: PlayerType.human,
+      );
+      final player2 = Player(
+        id: 'player2',
+        name: 'Player2',
+        type: PlayerType.human,
+      );
+      final serverState = GameState(
+        players: [player1, player2],
+        deck: Deck.createHandAndFootDeck(2, seed: 3),
+        phase: GamePhase.playing,
+      );
+      serverState.lastCallActive = true;
+      serverState.lastCallAlertPending = true;
+      serverState.stalemateAlertPending = true;
+
+      await controller!.initializeFromServerState(serverState);
+      expect(controller!.gameState.lastCallActive, isTrue);
+      expect(controller!.gameState.lastCallAlertPending, isTrue);
+      expect(controller!.gameState.stalemateAlertPending, isTrue);
+
+      final updated = GameState(
+        players: [player1, player2],
+        deck: Deck.createHandAndFootDeck(2, seed: 3),
+        phase: GamePhase.playing,
+      );
+      updated.lastCallActive = true;
+      updated.lastCallAlertPending = false;
+      updated.stalemateAlertPending = false;
+      mockAdapter.simulateGameStateUpdate(updated);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(controller!.gameState.lastCallActive, isTrue);
+      expect(controller!.gameState.lastCallAlertPending, isFalse);
+      expect(controller!.gameState.stalemateAlertPending, isFalse);
+    });
   });
 }

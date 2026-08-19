@@ -128,6 +128,50 @@ void main() {
       expect(restored.currentPlayerIndex, 1);
     });
 
+    test('round-trips last-call and stalemate pending flags', () {
+      final playerA = Player(
+        id: 'player-a',
+        name: 'Alice',
+        type: PlayerType.human,
+      );
+      final playerB = Player(
+        id: 'player-b',
+        name: 'Bob',
+        type: PlayerType.human,
+      );
+
+      final original = GameState(
+        players: [playerA, playerB],
+        deck: Deck.createHandAndFootDeck(2, seed: 19),
+        phase: GamePhase.playing,
+        turnPhase: TurnPhase.meld,
+      );
+      original.lastCallActive = true;
+      original.lastCallAlertPending = true;
+      original.stalemateAlertPending = true;
+
+      final serialized = FirebaseService.gameStateToMapForTesting(original);
+
+      expect(serialized['lastCallActive'], isTrue);
+      expect(serialized['lastCallAlertPending'], isTrue);
+      expect(serialized['stalemateAlertPending'], isTrue);
+
+      final restored = FirebaseService.gameStateFromMapForTesting(serialized);
+
+      expect(restored.lastCallActive, isTrue);
+      expect(restored.lastCallAlertPending, isTrue);
+      expect(restored.stalemateAlertPending, isTrue);
+
+      serialized
+        ..remove('lastCallActive')
+        ..remove('lastCallAlertPending')
+        ..remove('stalemateAlertPending');
+      final legacy = FirebaseService.gameStateFromMapForTesting(serialized);
+      expect(legacy.lastCallActive, isFalse);
+      expect(legacy.lastCallAlertPending, isFalse);
+      expect(legacy.stalemateAlertPending, isFalse);
+    });
+
     test('defaults missing final-turn fields for legacy documents', () {
       final playerA = Player(
         id: 'player-a',

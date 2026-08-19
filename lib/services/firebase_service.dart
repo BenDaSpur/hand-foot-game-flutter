@@ -1184,6 +1184,8 @@ class FirebaseService {
       'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
       'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
       'lastCallActive': gameState.lastCallActive,
+      'lastCallAlertPending': gameState.lastCallAlertPending,
+      'stalemateAlertPending': gameState.stalemateAlertPending,
     };
   }
 
@@ -1222,32 +1224,35 @@ class FirebaseService {
     );
 
     return GameState(
-      players: players,
-      deck: deck,
-      discardPile: discardPile,
-      recentActions: recentActions,
-      currentPlayerIndex: data['currentPlayerIndex'] ?? 0,
-      phase: GamePhase.values.firstWhere(
-        (phase) => phase.name == (data['phase'] ?? 'setup'),
-        orElse: () => GamePhase.setup,
-      ),
-      turnPhase: TurnPhase.values.firstWhere(
-        (phase) => phase.name == (data['turnPhase'] ?? 'draw'),
-        orElse: () => TurnPhase.draw,
-      ),
-      round: data['round'] ?? 1,
-      winner: winner,
-      discardPileFrozen: data['discardPileFrozen'] ?? false,
-      hasDrawnFromDeck: data['hasDrawnFromDeck'] ?? false,
-      hasMelded: data['hasMelded'] ?? false,
-      hasTakenDiscardThisTurn: data['hasTakenDiscardThisTurn'] ?? false,
-      // Absent on documents written before final-turn multiplayer sync.
-      finalTurnPhaseActive: data['finalTurnPhaseActive'] ?? false,
-      playerWhoWentOutIndex: data['playerWhoWentOutIndex'] == null
-          ? null
-          : (data['playerWhoWentOutIndex'] as num).toInt(),
-      playersAwaitingFinalTurn: awaitingFinalTurn.toSet(),
-    )..lastCallActive = data['lastCallActive'] as bool? ?? false;
+        players: players,
+        deck: deck,
+        discardPile: discardPile,
+        recentActions: recentActions,
+        currentPlayerIndex: data['currentPlayerIndex'] ?? 0,
+        phase: GamePhase.values.firstWhere(
+          (phase) => phase.name == (data['phase'] ?? 'setup'),
+          orElse: () => GamePhase.setup,
+        ),
+        turnPhase: TurnPhase.values.firstWhere(
+          (phase) => phase.name == (data['turnPhase'] ?? 'draw'),
+          orElse: () => TurnPhase.draw,
+        ),
+        round: data['round'] ?? 1,
+        winner: winner,
+        discardPileFrozen: data['discardPileFrozen'] ?? false,
+        hasDrawnFromDeck: data['hasDrawnFromDeck'] ?? false,
+        hasMelded: data['hasMelded'] ?? false,
+        hasTakenDiscardThisTurn: data['hasTakenDiscardThisTurn'] ?? false,
+        // Absent on documents written before final-turn multiplayer sync.
+        finalTurnPhaseActive: data['finalTurnPhaseActive'] ?? false,
+        playerWhoWentOutIndex: data['playerWhoWentOutIndex'] == null
+            ? null
+            : (data['playerWhoWentOutIndex'] as num).toInt(),
+        playersAwaitingFinalTurn: awaitingFinalTurn.toSet(),
+      )
+      ..lastCallActive = data['lastCallActive'] as bool? ?? false
+      ..lastCallAlertPending = data['lastCallAlertPending'] as bool? ?? false
+      ..stalemateAlertPending = data['stalemateAlertPending'] as bool? ?? false;
   }
 
   /// Convert Player to Firestore map
