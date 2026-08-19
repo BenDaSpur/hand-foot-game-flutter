@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/config/game_config.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
@@ -277,5 +278,72 @@ void main() {
       expect(controller.gameState.winner, isNotNull);
       expect(controller.gameState.winner!.score, equals(8500));
     });
+
+    test(
+      '8310 after scoring stays under the win line and can start the next round',
+      () {
+        // Session 17870997145344534: You were at 8310 after R3. That is below
+        // 8500, so Round 4 is legal. This documents the real threshold.
+        final players = [
+          Player(id: '1', name: 'You', type: PlayerType.human),
+          Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        ];
+        final controller = GameController(players: players, seed: 971981);
+        for (final player in players) {
+          player.hand.clear();
+          player.foot.clear();
+          player.melds.clear();
+        }
+        players[0].score = 8310;
+        players[1].score = 6770;
+
+        controller.gameState.phase = GamePhase.playing;
+        controller.gameState.endRound();
+
+        expect(players[0].score, 8310);
+        expect(players[0].score, lessThan(GameConfig.winningScore));
+        expect(controller.gameState.phase, GamePhase.roundEnd);
+        expect(controller.gameState.winner, isNull);
+
+        controller.nextRound(dealCards: false);
+        expect(controller.gameState.phase, GamePhase.playing);
+      },
+    );
+
+    test(
+      'score at or above 8500 ends the game; nextRound and deal are no-ops',
+      () {
+        final players = [
+          Player(id: '1', name: 'You', type: PlayerType.human),
+          Player(id: '2', name: 'Rita', type: PlayerType.bot),
+        ];
+        final controller = GameController(players: players, seed: 971981);
+        for (final player in players) {
+          player.hand.clear();
+          player.foot.clear();
+          player.melds.clear();
+        }
+        players[0].score = GameConfig.winningScore;
+        players[1].score = 6770;
+
+        controller.gameState.phase = GamePhase.playing;
+        controller.gameState.endRound();
+
+        expect(controller.gameState.phase, GamePhase.gameEnd);
+        expect(controller.gameState.winner, players[0]);
+        final scoreAfterWin = players[0].score;
+        final roundAfterWin = controller.gameState.round;
+
+        controller.nextRound();
+        controller.prepareNewRoundDeal();
+        controller.gameState.resetForNewRound();
+        controller.gameState.endRound();
+
+        expect(controller.gameState.phase, GamePhase.gameEnd);
+        expect(controller.gameState.round, roundAfterWin);
+        expect(players[0].score, scoreAfterWin);
+        expect(players[0].hand, isEmpty);
+      },
+    );
   });
 }

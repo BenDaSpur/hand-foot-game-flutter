@@ -155,15 +155,30 @@ class GameController implements GameInterface {
           CardDrawnEvent(cards: drawnCards, fromDeck: true, player: player),
         );
       }
-    } else if (stuckGoOutPlayer != null &&
-        phaseBefore == GamePhase.playing &&
+    } else if (phaseBefore == GamePhase.playing &&
         (_gameState.phase == GamePhase.roundEnd ||
             _gameState.phase == GamePhase.gameEnd)) {
-      // Stuck go-out recovery inside GameState.drawFromDeck ended the round.
-      _publishRoundOrGameEndEvents(stuckGoOutPlayer, roundBefore);
+      if (stuckGoOutPlayer != null &&
+          _gameState.emergencyRoundEndReason == null) {
+        // Stuck go-out recovery inside GameState.drawFromDeck ended the round.
+        _publishRoundOrGameEndEvents(stuckGoOutPlayer, roundBefore);
+      } else {
+        _publishEmergencyRoundEndEvents(roundBefore);
+      }
     }
 
     return result;
+  }
+
+  /// End the round because the deck cannot deal — never credits a go-out.
+  void emergencyEndRoundForInsufficientCards() {
+    if (_gameState.phase == GamePhase.roundEnd ||
+        _gameState.phase == GamePhase.gameEnd) {
+      return;
+    }
+    final roundBefore = _gameState.round;
+    _gameState.emergencyEndRoundForInsufficientCards();
+    _publishEmergencyRoundEndEvents(roundBefore);
   }
 
   @override
@@ -310,6 +325,28 @@ class GameController implements GameInterface {
     }
   }
 
+  /// Round/game end without [PlayerWentOutEvent] (empty deck or stalemate).
+  void _publishEmergencyRoundEndEvents(int roundBefore) {
+    final phase = _gameState.phase;
+    if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
+      return;
+    }
+
+    final roundScores = <Player, int>{};
+    for (final p in _gameState.players) {
+      roundScores[p] = p.score;
+    }
+    _eventBus.publish(
+      RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
+    );
+
+    if (phase == GamePhase.gameEnd && _gameState.winner != null) {
+      _eventBus.publish(
+        GameEndedEvent(winner: _gameState.winner!, finalScores: roundScores),
+      );
+    }
+  }
+
   void _publishPostActionEvents({
     required GamePhase phaseBefore,
     required int roundBefore,
@@ -318,7 +355,11 @@ class GameController implements GameInterface {
     required int currentIndexBefore,
   }) {
     if (_gameState.phase != phaseBefore) {
-      _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      if (_gameState.emergencyRoundEndReason != null) {
+        _publishEmergencyRoundEndEvents(roundBefore);
+      } else {
+        _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      }
       return;
     }
 

@@ -32,6 +32,10 @@ void main() {
 
       // Should automatically end the round
       expect(gameState.phase, equals(GamePhase.roundEnd));
+      expect(
+        gameState.emergencyRoundEndReason,
+        EmergencyRoundEndReason.insufficientCards,
+      );
 
       // Check that emergency action was logged
       final actions = gameState.recentActions;

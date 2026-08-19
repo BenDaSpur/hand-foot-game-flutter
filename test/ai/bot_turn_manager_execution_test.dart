@@ -352,6 +352,260 @@ void main() {
       expect(controller.gameState.currentPlayerIndex, isNot(2));
     });
 
+    test('discard go-out keeps human final turn', () {
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final alex = Player(id: '2', name: 'Alex', type: PlayerType.bot);
+      final ben = Player(id: '3', name: 'Ben', type: PlayerType.bot);
+      final controller = GameController(
+        players: [human, alex, ben],
+        seed: 700168,
+        soloSettings: SoloGameSettings(
+          botCount: 2,
+          botPersonalities: [
+            BotPersonality.adaptive,
+            BotPersonality.bookBuilder,
+          ],
+          enableGoingOutBonus: true,
+          enableFinalTurnAfterGoingOut: true,
+        ),
+      );
+      controller.initializeGame();
+      _setupBotToGoOut(ben);
+      final lastKing = const PlayingCard(
+        suit: Suit.diamonds,
+        rank: CardRank.king,
+      );
+      ben.foot.add(lastKing);
+
+      controller.gameState.currentPlayerIndex = 2;
+      controller.gameState.turnPhase = TurnPhase.discard;
+      controller.gameState.hasDrawnFromDeck = true;
+
+      final manager = BotTurnManager(
+        gameController: controller,
+        botAI: EnhancedBotAI(seed: 700168),
+        onStateChanged: () {},
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+            }) {},
+      );
+
+      final success = manager.executeBotDecision(
+        BotDecision(action: 'discard', data: lastKing),
+        ben,
+      );
+
+      expect(success, isTrue);
+      expect(controller.gameState.phase, GamePhase.playing);
+      expect(controller.gameState.finalTurnPhaseActive, isTrue);
+      expect(controller.gameState.playerWhoWentOutIndex, 2);
+      expect(
+        controller.gameState.playersAwaitingFinalTurn.contains(0) ||
+            controller.gameState.currentPlayerIndex == 0,
+        isTrue,
+        reason: 'Human must receive a final turn after Ben discards out',
+      );
+      expect(
+        controller.gameState.recentActions.any(
+          (action) => action.message.contains('ended the round'),
+        ),
+        isFalse,
+        reason: 'Copy must not say the round ended when final turns start',
+      );
+    });
+
+    test('handlePostDiscardState during final turn does not dequeue human', () {
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final alex = Player(id: '2', name: 'Alex', type: PlayerType.bot);
+      final ben = Player(id: '3', name: 'Ben', type: PlayerType.bot);
+      final controller = GameController(
+        players: [human, alex, ben],
+        seed: 700168,
+        soloSettings: SoloGameSettings(
+          botCount: 2,
+          botPersonalities: [
+            BotPersonality.adaptive,
+            BotPersonality.bookBuilder,
+          ],
+          enableGoingOutBonus: true,
+          enableFinalTurnAfterGoingOut: true,
+        ),
+      );
+      controller.initializeGame();
+      _setupBotToGoOut(ben);
+
+      controller.gameState.finalTurnPhaseActive = true;
+      controller.gameState.playerWhoWentOutIndex = 2;
+      controller.gameState.playersAwaitingFinalTurn
+        ..clear()
+        ..addAll({0, 1});
+      controller.gameState.currentPlayerIndex = 0;
+      controller.gameState.phase = GamePhase.playing;
+
+      final manager = BotTurnManager(
+        gameController: controller,
+        botAI: EnhancedBotAI(seed: 700168),
+        onStateChanged: () {},
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+            }) {},
+      );
+
+      final advanced = manager.handlePostDiscardState(ben);
+
+      expect(advanced, isTrue);
+      expect(controller.gameState.phase, GamePhase.playing);
+      expect(controller.gameState.finalTurnPhaseActive, isTrue);
+      expect(controller.gameState.currentPlayerIndex, 0);
+      expect(controller.gameState.playersAwaitingFinalTurn.contains(0), isTrue);
+    });
+
+    test('empty-deck draw ends via emergency path, not a bot go-out', () {
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final alex = Player(id: '2', name: 'Alex', type: PlayerType.bot);
+      final ben = Player(id: '3', name: 'Ben', type: PlayerType.bot);
+      final controller = GameController(
+        players: [human, alex, ben],
+        seed: 700168,
+        soloSettings: SoloGameSettings(
+          botCount: 2,
+          botPersonalities: [
+            BotPersonality.adaptive,
+            BotPersonality.bookBuilder,
+          ],
+          enableGoingOutBonus: true,
+          enableFinalTurnAfterGoingOut: true,
+        ),
+      );
+      controller.initializeGame();
+      _setupBotToGoOut(ben);
+      ben.foot.add(const PlayingCard(suit: Suit.hearts, rank: CardRank.five));
+      expect(ben.canGoOut, isFalse);
+
+      while (!controller.gameState.deck.isEmpty) {
+        controller.gameState.deck.drawCard();
+      }
+      controller.gameState.discardPile.clear();
+      controller.gameState.currentPlayerIndex = 2;
+      controller.gameState.turnPhase = TurnPhase.draw;
+      controller.gameState.hasDrawnFromDeck = false;
+      controller.gameState.phase = GamePhase.playing;
+
+      final manager = BotTurnManager(
+        gameController: controller,
+        botAI: EnhancedBotAI(seed: 700168),
+        onStateChanged: () {},
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+            }) {},
+      );
+
+      final success = manager.executeBotDecision(
+        BotDecision(action: 'drawFromDeck'),
+        ben,
+      );
+
+      expect(success, isTrue);
+      expect(controller.gameState.phase, GamePhase.roundEnd);
+      expect(
+        controller.gameState.emergencyRoundEndReason,
+        EmergencyRoundEndReason.insufficientCards,
+      );
+      expect(
+        controller.gameState.recentActions.any(
+          (action) => action.message.contains('went out'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('empty-deck during final turn does not dequeue the human', () {
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final alex = Player(id: '2', name: 'Alex', type: PlayerType.bot);
+      final ben = Player(id: '3', name: 'Ben', type: PlayerType.bot);
+      final controller = GameController(
+        players: [human, alex, ben],
+        seed: 700168,
+        soloSettings: SoloGameSettings(
+          botCount: 2,
+          botPersonalities: [
+            BotPersonality.adaptive,
+            BotPersonality.bookBuilder,
+          ],
+          enableGoingOutBonus: true,
+          enableFinalTurnAfterGoingOut: true,
+        ),
+      );
+      controller.initializeGame();
+      _setupBotToGoOut(ben);
+      alex.hasPlayedDown = true;
+
+      controller.gameState.finalTurnPhaseActive = true;
+      controller.gameState.playerWhoWentOutIndex = 2;
+      controller.gameState.playersAwaitingFinalTurn
+        ..clear()
+        ..addAll({0, 1});
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.draw;
+      controller.gameState.hasDrawnFromDeck = false;
+      controller.gameState.phase = GamePhase.playing;
+      while (!controller.gameState.deck.isEmpty) {
+        controller.gameState.deck.drawCard();
+      }
+      controller.gameState.discardPile.clear();
+
+      final manager = BotTurnManager(
+        gameController: controller,
+        botAI: EnhancedBotAI(seed: 700168),
+        onStateChanged: () {},
+        logHumanAction: (_) {},
+        logBotDecision:
+            ({
+              required String botId,
+              required String decision,
+              required String reasoning,
+              Map<String, dynamic>? context,
+              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+            }) {},
+      );
+
+      manager.forceCompleteBotTurn(alex);
+
+      expect(
+        controller.gameState.emergencyRoundEndReason,
+        EmergencyRoundEndReason.insufficientCards,
+      );
+      expect(
+        controller.gameState.phase,
+        anyOf(GamePhase.roundEnd, GamePhase.gameEnd),
+      );
+      expect(
+        controller.gameState.recentActions.any(
+          (action) => action.message.contains('went out'),
+        ),
+        isFalse,
+        reason: 'Empty deck must not credit Alex with a go-out',
+      );
+    });
+
     test(
       'forceCompleteBotTurn is a no-op when the bot is no longer current player',
       () {

@@ -756,6 +756,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     DebugLogger.debug('Handling round transition - calculating scores');
 
     try {
+      final emergencyReason = controller.gameState.emergencyRoundEndReason;
+      if (emergencyReason != null) {
+        await _dialogManager.showEmergencyRoundEndDialog(
+          reason: emergencyReason,
+        );
+        if (_disposed || !mounted) {
+          return;
+        }
+      }
+
       await _logRoundEndAnalytics();
       if (_disposed || !mounted) {
         return;
@@ -779,6 +789,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
 
       if (controller.gameState.phase != GamePhase.roundEnd) {
+        return;
+      }
+
+      final highestScore = controller.gameState.players
+          .map((player) => player.score)
+          .reduce((a, b) => a > b ? a : b);
+      if (highestScore >= GameConfig.winningScore) {
         return;
       }
 
@@ -1131,11 +1148,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _clearHandHighlightState();
       setState(() {});
     } else {
-      // Check if the round ended automatically due to insufficient cards
-      final gameState = ref.read(currentGameStateProvider);
-      if (gameState?.phase == GamePhase.roundEnd) {
-        _dialogManager.showEmergencyRoundEndDialog();
-      } else if (gameState != null) {
+      // Empty-deck emergency end is explained in the round-transition dialog.
+      final gameState = controller.gameState;
+      if (gameState.phase == GamePhase.roundEnd ||
+          gameState.phase == GamePhase.gameEnd) {
+        processCurrentPlayerTurn();
+      } else {
         _dialogManager.showErrorDialog(
           GameActionFeedback.drawFromDeckFailureMessage(gameState),
         );

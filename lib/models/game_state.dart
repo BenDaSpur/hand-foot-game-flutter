@@ -13,6 +13,9 @@ enum GamePhase { setup, playing, roundEnd, gameEnd }
 
 enum TurnPhase { draw, meld, discard }
 
+/// Why the engine ended a round without a real go-out.
+enum EmergencyRoundEndReason { insufficientCards, stalemate }
+
 /// Exception thrown when game state becomes inconsistent
 class GameStateException implements Exception {
   final String message;
@@ -103,6 +106,9 @@ class GameState {
 
   /// Player indices still owed a final turn after a go-out.
   final Set<int> playersAwaitingFinalTurn;
+
+  /// Set when the round ended for an empty deck or 3s stalemate (not a go-out).
+  EmergencyRoundEndReason? emergencyRoundEndReason;
 
   GameState({
     required this.players,
@@ -424,6 +430,7 @@ class GameState {
     hasTakenDiscardThisTurn = false;
 
     _resetFinalTurnState();
+    emergencyRoundEndReason = null;
 
     // Reset stalemate tracking for new round
     _resetStalemateTracking();
@@ -879,6 +886,12 @@ class GameState {
         return true;
       }
 
+      // A 3s stalemate or other emergency end already left playing — do not
+      // advance the turn or credit a go-out.
+      if (phase != GamePhase.playing) {
+        return true;
+      }
+
       // Log helpful feedback when someone tries to go out but can't
       if (currentPlayer.hasPickedUpFoot && currentPlayer.currentHand.isEmpty) {
         _logAction('❌ Cannot go out - missing required books!');
@@ -907,8 +920,13 @@ class GameState {
   }
 
   void _handleThreeDiscard() {
-    // Check if discard pile only contains 3s (optimize by checking recent cards)
-    // If pile is large, just check the last N cards for performance
+    // Only consecutive *current* 3-discards while the deck is low count.
+    // Scanning the whole recentActions buffer (older 3s + any reshuffle)
+    // produced false stalemates (session_17870997145344534).
+    if (deck.size >= GameConfig.stalemateDeckThreshold) {
+      return;
+    }
+
     final cardsToCheck = discardPile.length > GameConfig.stalemateCheckCardCount
         ? discardPile
               .skip(discardPile.length - GameConfig.stalemateCheckCardCount)
@@ -916,57 +934,30 @@ class GameState {
         : discardPile;
     final onlyThreesInPile =
         cardsToCheck.isNotEmpty && cardsToCheck.every((card) => card.isThree);
+    if (!onlyThreesInPile) {
+      return;
+    }
 
-    // Check if deck is running low
-    final deckLow = deck.size < GameConfig.stalemateDeckThreshold;
+    if (_stalemateStartPlayer == null) {
+      _stalemateStartPlayer = currentPlayerIndex;
+      _stalemateDiscardCount = 1;
+      return;
+    }
 
-    // Enhanced stalemate detection: also check if recent actions show repeated 3s discarding
-    // even if discard pile was reshuffled
-    final recentThreeDiscards = recentActions
-        .where(
-          (action) =>
-              action.message.contains('discarded') &&
-              action.message.contains('3 '),
-        )
-        .length;
-    final recentReshuffles = recentActions
-        .where((action) => action.message.contains('force reshuffled'))
-        .length;
+    _stalemateDiscardCount++;
 
-    // Detect 3s stalemate even after reshuffles if:
-    // 1. Deck is low AND
-    // 2. Either discard pile has only 3s OR recent actions show repeated 3s with reshuffles
-    final stalemateCondition =
-        deckLow &&
-        (onlyThreesInPile ||
-            (recentThreeDiscards >= 4 && recentReshuffles >= 1));
-
-    if (stalemateCondition) {
-      if (_stalemateStartPlayer == null) {
-        // First detection - start tracking
-        _stalemateStartPlayer = currentPlayerIndex;
-        _stalemateDiscardCount = 1;
-      } else {
-        // Continue tracking
-        _stalemateDiscardCount++;
-
-        // Check if we've gone through all players once
-        if (_stalemateDiscardCount == players.length) {
-          // First full rotation complete - show warning
-          _logAction(
-            '⚠️ WARNING: Only 3s in discard pile with low deck (${deck.size} cards remaining)',
-          );
-          _logAction(
-            'Round will end automatically if all players discard 3s again',
-          );
-        } else if (_stalemateDiscardCount == players.length * 2) {
-          // Second full rotation complete - end round
-          _logAction(
-            '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',
-          );
-          _emergencyEndRoundDueToStalemate();
-        }
-      }
+    if (_stalemateDiscardCount == players.length) {
+      _logAction(
+        '⚠️ WARNING: Only 3s in discard pile with low deck (${deck.size} cards remaining)',
+      );
+      _logAction(
+        'Round will end automatically if all players discard 3s again',
+      );
+    } else if (_stalemateDiscardCount == players.length * 2) {
+      _logAction(
+        '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',
+      );
+      _emergencyEndRoundDueToStalemate();
     }
   }
 
@@ -976,29 +967,14 @@ class GameState {
   }
 
   void _emergencyEndRoundDueToStalemate() {
-    _logAction('🛑 Round ended due to 3s stalemate - no cards can be drawn');
-    _logAction('Only 3s were in the discard pile with insufficient deck cards');
-
-    // Calculate penalty points for cards in hand
-    for (final player in players) {
-      // Record detailed score breakdown for stalemate (no one went out)
-      player.recordRoundScoreBreakdown(
-        round: round,
-        wentOut: false,
-        goingOutBonusPoints: soloSettings.goingOutBonusPoints,
-      );
-
-      // Calculate total score including penalties for unplayed cards
-      final meldValue = player.calculateMeldValue();
-      final penalty = player.calculateAllUnplayedCardsValue();
-      final roundScore = meldValue - penalty;
-      player.updateScore(roundScore);
-
-      _logAction(
-        '${player.name}: +$meldValue (melds) -$penalty (cards) = $roundScore',
-      );
+    if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
+      return;
     }
 
+    emergencyRoundEndReason = EmergencyRoundEndReason.stalemate;
+    playerWhoWentOutIndex = null;
+    _logAction('🛑 Round ended due to 3s stalemate - no cards can be drawn');
+    _logAction('Only 3s were in the discard pile with insufficient deck cards');
     _logAction('📊 Round $round has ended due to stalemate conditions');
     endRound();
   }
@@ -1048,18 +1024,28 @@ class GameState {
   }
 
   void endRound() {
-    // Prevent multiple endRound calls
-    if (phase == GamePhase.roundEnd) {
+    // Prevent multiple endRound calls (including after the game already ended)
+    if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
       return;
     }
 
     phase = GamePhase.roundEnd;
 
-    // Find the player who went out (if any)
-    final playersWhoCanGoOut = players.where((p) => p.canGoOut).toList();
-    final Player? playerWhoWentOut = playerWhoWentOutIndex != null
-        ? players[playerWhoWentOutIndex!]
-        : (playersWhoCanGoOut.isEmpty ? null : playersWhoCanGoOut.first);
+    // Emergency ends are not go-outs. Only credit a go-out that was recorded,
+    // or (for normal play) a player who actually emptied their hand.
+    Player? playerWhoWentOut;
+    if (emergencyRoundEndReason == null) {
+      if (playerWhoWentOutIndex != null &&
+          playerWhoWentOutIndex! >= 0 &&
+          playerWhoWentOutIndex! < players.length) {
+        playerWhoWentOut = players[playerWhoWentOutIndex!];
+      } else {
+        final playersWhoCanGoOut = players.where((p) => p.canGoOut).toList();
+        playerWhoWentOut = playersWhoCanGoOut.isEmpty
+            ? null
+            : playersWhoCanGoOut.first;
+      }
+    }
 
     final goingOutBonus = soloSettings.goingOutBonusPoints;
 
@@ -1089,7 +1075,7 @@ class GameState {
     final highestScore = players
         .map((p) => p.score)
         .reduce((a, b) => a > b ? a : b);
-    if (highestScore >= 8500) {
+    if (highestScore >= GameConfig.winningScore) {
       phase = GamePhase.gameEnd;
       winner = players.where((p) => p.score == highestScore).first;
       _logAction(
@@ -1101,8 +1087,18 @@ class GameState {
     }
   }
 
+  /// Public emergency end for an empty / unusable deck (not a go-out).
+  void emergencyEndRoundForInsufficientCards() {
+    if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
+      return;
+    }
+    _emergencyEndRoundInsufficientCards();
+  }
+
   /// Emergency round end when insufficient cards prevent normal gameplay
   void _emergencyEndRoundInsufficientCards() {
+    emergencyRoundEndReason = EmergencyRoundEndReason.insufficientCards;
+    playerWhoWentOutIndex = null;
     _logAction(
       'emergency round end: insufficient cards - scores calculated and advancing to next round',
     );
