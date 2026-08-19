@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hand_foot_game_flutter/config/game_config.dart';
 import 'package:hand_foot_game_flutter/models/card.dart';
-import 'package:hand_foot_game_flutter/models/player.dart';
-import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/deck.dart';
+import 'package:hand_foot_game_flutter/models/game_state.dart';
+import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
   group('Three Stalemate With Reshuffle Tests', () {
@@ -189,6 +190,65 @@ void main() {
         );
         expect(hasWarning, isFalse);
       },
+    );
+
+    test(
+      'reshuffling discard into the deck resets stalemate count',
+      () {
+        while (gameState.deck.size > 9) {
+          gameState.deck.drawCard();
+        }
+
+        gameState.discardPile.clear();
+        gameState.discardPile.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+
+        // Five consecutive 3s: one short of ending after two rotations.
+        for (var i = 0; i < 5; i++) {
+          gameState.currentPlayerIndex = i % 3;
+          gameState.turnPhase = TurnPhase.discard;
+          final three = PlayingCard(
+            rank: CardRank.three,
+            suit: Suit.values[i % Suit.values.length],
+          );
+          gameState.players[i % 3].hand.add(three);
+          gameState.discard(three);
+        }
+
+        expect(gameState.phase, GamePhase.playing);
+        expect(gameState.discardPile.length, greaterThanOrEqualTo(2));
+
+        while (gameState.deck.size > 0) {
+          gameState.deck.drawCard();
+        }
+        gameState.turnPhase = TurnPhase.draw;
+        gameState.hasDrawnFromDeck = false;
+        expect(gameState.drawFromDeck(), isTrue);
+        expect(
+          gameState.deck.size,
+          lessThan(GameConfig.stalemateDeckThreshold),
+        );
+
+        gameState.recentActions.clear();
+        gameState.turnPhase = TurnPhase.discard;
+        final extraThree = PlayingCard(
+          rank: CardRank.three,
+          suit: Suit.values[gameState.currentPlayerIndex % Suit.values.length],
+        );
+        gameState.currentPlayer.hand.add(extraThree);
+        gameState.discard(extraThree);
+
+        expect(gameState.phase, GamePhase.playing);
+        expect(gameState.emergencyRoundEndReason, isNull);
+        expect(
+          gameState.recentActions.any(
+            (action) => action.message.contains('STALEMATE'),
+          ),
+          isFalse,
+        );
+      },
+      tags: ['regression'],
     );
   });
 }

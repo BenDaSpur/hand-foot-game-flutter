@@ -423,6 +423,7 @@ class GameState {
 
     _logAction('🏆 went out!');
     finalTurnPhaseActive = true;
+    _resetStalemateTracking();
     playersAwaitingFinalTurn.clear();
     for (var i = 0; i < players.length; i++) {
       if (i != playerWhoWentOutIndex) {
@@ -1310,6 +1311,7 @@ class GameState {
     // Add the cards to deck and shuffle
     deck.addCards(cardsToShuffle);
     deck.shuffle();
+    _resetStalemateTracking();
 
     _logAction(
       'force reshuffled ${cardsToShuffle.length} cards from discard into deck',
