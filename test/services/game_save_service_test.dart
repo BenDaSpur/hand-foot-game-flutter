@@ -115,5 +115,42 @@ void main() {
       expect(jokerCard.rank, equals(CardRank.joker));
       expect(jokerCard.suit, isNull); // Jokers have no suit
     });
+
+    test(
+      'restores emergencyRoundEndReason so resume can show the dialog',
+      () async {
+        final players = [
+          Player(id: '1', name: 'You', type: PlayerType.human),
+          Player(id: '2', name: 'Bot', type: PlayerType.bot),
+        ];
+        final gameController = GameController(players: players, seed: 42);
+        gameController.initializeGame();
+        gameController.gameState.phase = GamePhase.roundEnd;
+        gameController.gameState.emergencyRoundEndReason =
+            EmergencyRoundEndReason.stalemate;
+
+        await GameSaveService.saveGame(gameController.gameState, 42);
+
+        final restored = await GameController.loadSavedGame();
+        expect(restored, isNotNull);
+        expect(restored!.gameState.phase, GamePhase.roundEnd);
+        expect(
+          restored.gameState.emergencyRoundEndReason,
+          EmergencyRoundEndReason.stalemate,
+        );
+
+        final saved = await GameSaveService.loadGame();
+        expect(saved, isNotNull);
+        saved!['emergencyRoundEndReason'] = 'not-a-reason';
+        final invalid = GameSaveService.restoreGameController(saved);
+        expect(invalid, isNotNull);
+        expect(invalid!.gameState.emergencyRoundEndReason, isNull);
+
+        saved.remove('emergencyRoundEndReason');
+        final missing = GameSaveService.restoreGameController(saved);
+        expect(missing, isNotNull);
+        expect(missing!.gameState.emergencyRoundEndReason, isNull);
+      },
+    );
   });
 }

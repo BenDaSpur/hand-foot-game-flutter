@@ -756,6 +756,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     DebugLogger.debug('Handling round transition - calculating scores');
 
     try {
+      final emergencyReason = controller.gameState.emergencyRoundEndReason;
+      if (emergencyReason != null) {
+        await _dialogManager.showEmergencyRoundEndDialog(
+          reason: emergencyReason,
+        );
+        if (_disposed || !mounted) {
+          return;
+        }
+      }
+
       await _logRoundEndAnalytics();
       if (_disposed || !mounted) {
         return;
@@ -766,12 +776,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return;
       }
 
+      controller.recoverGameEndIfNeeded();
+
       if (controller.gameState.phase == GamePhase.gameEnd) {
         if (!_gameEndDialogShown) {
-          final winner = ref.read(gameWinnerProvider);
+          final winner =
+              controller.gameState.winner ?? ref.read(gameWinnerProvider);
           if (winner != null) {
             _gameEndDialogShown = true;
-            final players = ref.read(leaderboardProvider);
+            final players = List<Player>.from(controller.gameState.players)
+              ..sort((a, b) => b.score.compareTo(a.score));
             _dialogManager.showGameEndDialog(winner, players);
           }
         }
@@ -1131,11 +1145,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _clearHandHighlightState();
       setState(() {});
     } else {
-      // Check if the round ended automatically due to insufficient cards
-      final gameState = ref.read(currentGameStateProvider);
-      if (gameState?.phase == GamePhase.roundEnd) {
-        _dialogManager.showEmergencyRoundEndDialog();
-      } else if (gameState != null) {
+      // Empty-deck emergency end is explained in the round-transition dialog.
+      final gameState = controller.gameState;
+      if (gameState.phase == GamePhase.roundEnd ||
+          gameState.phase == GamePhase.gameEnd) {
+        processCurrentPlayerTurn();
+      } else {
         _dialogManager.showErrorDialog(
           GameActionFeedback.drawFromDeckFailureMessage(gameState),
         );

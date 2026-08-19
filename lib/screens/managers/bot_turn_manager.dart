@@ -44,21 +44,61 @@ class BotTurnManager {
   });
 
   /// End the round when a bot goes out, publishing events for UI transition.
-  void endRoundForBot(Player botPlayer, {String? actionMessage}) {
-    final gameState = gameController.gameState;
-    if (gameState.phase == GamePhase.roundEnd ||
-        gameState.phase == GamePhase.gameEnd) {
+  ///
+  /// Shared guard: skip if the round/game already ended, final-turn phase is
+  /// active (a second handlePlayerWentOut would dequeue the current awaiting
+  /// player — often the human), or this bot is no longer the current player.
+  void endRoundForBot(Player botPlayer, {bool logGoOutAction = false}) {
+    if (!_canEndRoundForBot(botPlayer)) {
       return;
     }
 
-    if (actionMessage != null) {
-      gameState.recentActions.add(
-        GameAction(message: actionMessage, playerName: botPlayer.name),
+    final roundEnded = gameController.endRoundForPlayer(botPlayer);
+    if (logGoOutAction) {
+      gameController.gameState.recentActions.add(
+        GameAction(
+          message: _goOutActionMessage(roundEnded),
+          playerName: botPlayer.name,
+        ),
       );
     }
-
-    gameController.endRoundForPlayer(botPlayer);
     onStateChanged();
+  }
+
+  bool _canEndRoundForBot(Player botPlayer) {
+    final gameState = gameController.gameState;
+    if (gameState.phase == GamePhase.roundEnd ||
+        gameState.phase == GamePhase.gameEnd) {
+      return false;
+    }
+    if (gameState.finalTurnPhaseActive) {
+      return false;
+    }
+    if (gameState.currentPlayer.id != botPlayer.id) {
+      return false;
+    }
+    return true;
+  }
+
+  String _goOutActionMessage(bool roundEnded) {
+    return roundEnded ? '🎉 went out and ended the round!' : '🏆 went out!';
+  }
+
+  /// Empty-deck / insufficient-cards must never credit a go-out.
+  ///
+  /// Returns true when the round already ended or this call ended it.
+  bool _endRoundForEmptyDeckIfNeeded() {
+    final gameState = gameController.gameState;
+    if (gameState.phase == GamePhase.roundEnd ||
+        gameState.phase == GamePhase.gameEnd) {
+      return true;
+    }
+    if (!gameState.deck.isEmpty || gameState.hasDrawnFromDeck) {
+      return false;
+    }
+    gameController.emergencyEndRoundForInsufficientCards();
+    onStateChanged();
+    return true;
   }
 
   /// Helper method to assign bot personalities consistently
@@ -327,10 +367,10 @@ class BotTurnManager {
       switch (decision.action) {
         case 'drawFromDeck':
           success = gameController.drawFromDeck();
-          if (!success && gameState.deck.isEmpty) {
-            // Handle empty deck - end round early
-            DebugLogger.debug('Deck empty during bot draw - ending round');
-            endRoundForBot(botPlayer);
+          if (!success && _endRoundForEmptyDeckIfNeeded()) {
+            DebugLogger.debug(
+              'Deck empty during bot draw - emergency round end',
+            );
             return true;
           }
           break;
@@ -420,10 +460,7 @@ class BotTurnManager {
 
         case 'goOut':
           if (botPlayer.canGoOut) {
-            endRoundForBot(
-              botPlayer,
-              actionMessage: '🎉 went out and ended the round!',
-            );
+            endRoundForBot(botPlayer, logGoOutAction: true);
             success = true;
           } else if (botPlayer.canGoOutWithBooks &&
               botPlayer.currentHand.length == 1) {
@@ -566,6 +603,7 @@ class BotTurnManager {
         player.canGoOut) {
       if (gameState.phase == GamePhase.roundEnd ||
           gameState.phase == GamePhase.gameEnd ||
+          gameState.finalTurnPhaseActive ||
           gameState.currentPlayer.id != player.id) {
         return true;
       }
@@ -688,10 +726,8 @@ class BotTurnManager {
           // Bot must draw to continue or move to discard phase
           if (!gameState.hasDrawnFromDeck) {
             final drawn = gameController.drawFromDeck();
-            if (!drawn && gameState.deck.isEmpty) {
-              // Deck is empty - end round
+            if (!drawn && _endRoundForEmptyDeckIfNeeded()) {
               DebugLogger.debug('Ending round due to empty deck');
-              endRoundForBot(botPlayer);
               return;
             }
           }
@@ -807,10 +843,7 @@ class BotTurnManager {
           DebugLogger.debug(
             'Bot ${botPlayer.name} forcing go out - empty hand with required books',
           );
-          endRoundForBot(
-            botPlayer,
-            actionMessage: '🎉 went out and ended the round!',
-          );
+          endRoundForBot(botPlayer, logGoOutAction: true);
           return;
         } else {
           // Bot has empty hand but can't go out - this is a critical game logic error
@@ -888,10 +921,7 @@ class BotTurnManager {
 
     // Option 3: Check if bot can go out (end round)
     if (botPlayer.canGoOut) {
-      endRoundForBot(
-        botPlayer,
-        actionMessage: '🎉 went out and ended the round!',
-      );
+      endRoundForBot(botPlayer, logGoOutAction: true);
       return;
     }
 
@@ -964,10 +994,7 @@ class BotTurnManager {
 
       // Empty hand/foot with books already satisfied — go out without discarding.
       if (botPlayer.currentHand.isEmpty && botPlayer.canGoOut) {
-        endRoundForBot(
-          botPlayer,
-          actionMessage: '🎉 went out and ended the round!',
-        );
+        endRoundForBot(botPlayer, logGoOutAction: true);
         return;
       }
 
@@ -1012,8 +1039,8 @@ class BotTurnManager {
         actionDescription = '⏭️ chose not to meld';
         break;
       case 'goOut':
-        actionDescription = '🎉 went out and ended the round!';
-        break;
+        // endRoundForBot already logs _goOutActionMessage(roundEnded).
+        return;
       // Skip 'discard' - already logged by game state to prevent duplicates
       case 'discard':
         return; // Don't log duplicate discard actions

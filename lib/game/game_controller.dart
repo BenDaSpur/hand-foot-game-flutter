@@ -155,15 +155,30 @@ class GameController implements GameInterface {
           CardDrawnEvent(cards: drawnCards, fromDeck: true, player: player),
         );
       }
-    } else if (stuckGoOutPlayer != null &&
-        phaseBefore == GamePhase.playing &&
+    } else if (phaseBefore == GamePhase.playing &&
         (_gameState.phase == GamePhase.roundEnd ||
             _gameState.phase == GamePhase.gameEnd)) {
-      // Stuck go-out recovery inside GameState.drawFromDeck ended the round.
-      _publishRoundOrGameEndEvents(stuckGoOutPlayer, roundBefore);
+      if (stuckGoOutPlayer != null &&
+          _gameState.emergencyRoundEndReason == null) {
+        // Stuck go-out recovery inside GameState.drawFromDeck ended the round.
+        _publishRoundOrGameEndEvents(stuckGoOutPlayer, roundBefore);
+      } else {
+        _publishEmergencyRoundEndEvents(roundBefore);
+      }
     }
 
     return result;
+  }
+
+  /// End the round because the deck cannot deal — never credits a go-out.
+  void emergencyEndRoundForInsufficientCards() {
+    if (_gameState.phase == GamePhase.roundEnd ||
+        _gameState.phase == GamePhase.gameEnd) {
+      return;
+    }
+    final roundBefore = _gameState.round;
+    _gameState.emergencyEndRoundForInsufficientCards();
+    _publishEmergencyRoundEndEvents(roundBefore);
   }
 
   @override
@@ -286,14 +301,25 @@ class GameController implements GameInterface {
   }
 
   void _publishRoundOrGameEndEvents(Player player, int roundBefore) {
+    _publishRoundEndEvents(roundBefore, wentOutPlayer: player);
+  }
+
+  /// Round/game end without [PlayerWentOutEvent] (empty deck or stalemate).
+  void _publishEmergencyRoundEndEvents(int roundBefore) {
+    _publishRoundEndEvents(roundBefore);
+  }
+
+  void _publishRoundEndEvents(int roundBefore, {Player? wentOutPlayer}) {
     final phase = _gameState.phase;
     if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
       return;
     }
 
-    _eventBus.publish(
-      PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-    );
+    if (wentOutPlayer != null) {
+      _eventBus.publish(
+        PlayerWentOutEvent(roundNumber: roundBefore, player: wentOutPlayer),
+      );
+    }
 
     final roundScores = <Player, int>{};
     for (final p in _gameState.players) {
@@ -318,7 +344,11 @@ class GameController implements GameInterface {
     required int currentIndexBefore,
   }) {
     if (_gameState.phase != phaseBefore) {
-      _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      if (_gameState.emergencyRoundEndReason != null) {
+        _publishEmergencyRoundEndEvents(roundBefore);
+      } else {
+        _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
+      }
       return;
     }
 
@@ -408,6 +438,46 @@ class GameController implements GameInterface {
     }
 
     return roundEnded;
+  }
+
+  /// Promote a leftover [GamePhase.roundEnd] to [GamePhase.gameEnd] when a
+  /// restored or imported save already has a player at the winning score.
+  ///
+  /// Returns true when the game is (or was just promoted to) game-end.
+  bool recoverGameEndIfNeeded() {
+    if (_gameState.phase == GamePhase.gameEnd) {
+      return true;
+    }
+    if (_gameState.phase != GamePhase.roundEnd || _gameState.players.isEmpty) {
+      return false;
+    }
+
+    final highestScore = _gameState.players
+        .map((player) => player.score)
+        .reduce((a, b) => a > b ? a : b);
+    if (highestScore < GameConfig.winningScore) {
+      return false;
+    }
+
+    DebugLogger.warning(
+      'Recovered game-end from roundEnd: highest score $highestScore '
+      '>= ${GameConfig.winningScore} (imported or restored save may '
+      'have skipped endRound promotion)',
+    );
+    _gameState.phase = GamePhase.gameEnd;
+    _gameState.winner = _gameState.players.firstWhere(
+      (player) => player.score == highestScore,
+    );
+
+    final roundScores = <Player, int>{};
+    for (final player in _gameState.players) {
+      roundScores[player] = player.score;
+    }
+    _eventBus.publish(
+      GameEndedEvent(winner: _gameState.winner!, finalScores: roundScores),
+    );
+    saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+    return true;
   }
 
   @override
@@ -987,6 +1057,10 @@ class GameController implements GameInterface {
     gameState.turnPhase = TurnPhase.values.firstWhere(
       (e) => e.name == turnPhaseName,
       orElse: () => TurnPhase.draw,
+    );
+
+    gameState.emergencyRoundEndReason = parseEmergencyRoundEndReason(
+      data['emergencyRoundEndReason'],
     );
   }
 
