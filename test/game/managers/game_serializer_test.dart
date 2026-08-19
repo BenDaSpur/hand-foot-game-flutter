@@ -1,10 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hand_foot_game_flutter/models/card.dart';
-import 'package:hand_foot_game_flutter/models/player.dart';
-import 'package:hand_foot_game_flutter/models/game_state.dart';
-import 'package:hand_foot_game_flutter/models/deck.dart';
-import 'package:hand_foot_game_flutter/models/meld.dart';
+import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/game/managers/game_serializer.dart';
+import 'package:hand_foot_game_flutter/models/card.dart';
+import 'package:hand_foot_game_flutter/models/deck.dart';
+import 'package:hand_foot_game_flutter/models/game_state.dart';
+import 'package:hand_foot_game_flutter/models/meld.dart';
+import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
   group('GameSerializer', () {
@@ -41,6 +42,34 @@ void main() {
         expect(gameStateData['round'], equals(3));
         expect(gameStateData['currentPlayerIndex'], equals(1));
         expect(gameStateData['discardPileFrozen'], isTrue);
+      });
+
+      test('persists emergencyRoundEndReason and ignores invalid values', () {
+        gameState.phase = GamePhase.roundEnd;
+        gameState.emergencyRoundEndReason =
+            EmergencyRoundEndReason.insufficientCards;
+
+        final exported = GameSerializer.exportGameState(gameState, 12345);
+        final imported = GameSerializer.importGameState(exported);
+        final gameStateData = imported!['gameState'] as Map<String, dynamic>;
+        expect(
+          gameStateData['emergencyRoundEndReason'],
+          EmergencyRoundEndReason.insufficientCards.name,
+        );
+
+        final controller = GameController.fromExportJson(exported);
+        expect(controller, isNotNull);
+        expect(
+          controller!.controller.gameState.emergencyRoundEndReason,
+          EmergencyRoundEndReason.insufficientCards,
+        );
+
+        expect(parseEmergencyRoundEndReason(null), isNull);
+        expect(parseEmergencyRoundEndReason('not-a-reason'), isNull);
+        expect(
+          parseEmergencyRoundEndReason('stalemate'),
+          EmergencyRoundEndReason.stalemate,
+        );
       });
 
       test('should handle player data with cards', () {

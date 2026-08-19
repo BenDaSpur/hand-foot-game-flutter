@@ -251,22 +251,89 @@ void main() {
               expect(stalemateLog, isTrue);
 
               // Verify scores changed (negative due to penalties)
-              // Since stalemate ends the round with penalties, scores should decrease
               expect(player1.score, lessThan(initialScore1));
               expect(player2.score, lessThan(initialScore2));
 
-              // Specifically check penalty calculations were logged
-              final scoreLog = gameState.recentActions.any(
-                (action) =>
-                    action.message.contains('(melds)') &&
-                    action.message.contains('(cards)'),
+              // Single endRound() scoring — no 2× pre-score + endRound
+              expect(
+                gameState.emergencyRoundEndReason,
+                EmergencyRoundEndReason.stalemate,
               );
-              expect(scoreLog, isTrue);
+              expect(
+                gameState.recentActions.any(
+                  (action) =>
+                      action.message.contains('(melds)') &&
+                      action.message.contains('(cards)'),
+                ),
+                isFalse,
+              );
+
+              final endedRound = gameState.round - 1;
+              for (final player in [player1, player2, player3]) {
+                final breakdowns = player.roundScoreHistory
+                    .where((b) => b.round == endedRound)
+                    .toList();
+                expect(breakdowns, hasLength(1));
+              }
+              expect(
+                player1.score,
+                initialScore1 +
+                    player1.roundScoreHistory
+                        .firstWhere((b) => b.round == endedRound)
+                        .totalRoundScore,
+              );
+              expect(
+                player2.score,
+                initialScore2 +
+                    player2.roundScoreHistory
+                        .firstWhere((b) => b.round == endedRound)
+                        .totalRoundScore,
+              );
+
+              // A second endRound() must not score again
+              final scoresAfterFirstEnd = [
+                player1.score,
+                player2.score,
+                player3.score,
+              ];
+              gameState.endRound();
+              expect(player1.score, scoresAfterFirstEnd[0]);
+              expect(player2.score, scoresAfterFirstEnd[1]);
+              expect(player3.score, scoresAfterFirstEnd[2]);
 
               return; // Test successful
             }
           }
         }
+
+        fail('Stalemate should have ended the round');
+      });
+
+      test('one 3-discard rotation does not end the round', () {
+        while (gameState.deck.size > 9) {
+          gameState.deck.drawCard();
+        }
+        gameState.discardPile.clear();
+        gameState.discardPile.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+
+        for (int i = 0; i < 3; i++) {
+          gameState.currentPlayerIndex = i;
+          gameState.turnPhase = TurnPhase.discard;
+          final three = PlayingCard(rank: CardRank.three, suit: Suit.values[i]);
+          gameState.players[i].hand.add(three);
+          gameState.discard(three);
+        }
+
+        expect(gameState.phase, GamePhase.playing);
+        expect(gameState.emergencyRoundEndReason, isNull);
+        expect(
+          gameState.recentActions.any(
+            (action) => action.message.contains('STALEMATE'),
+          ),
+          isFalse,
+        );
       });
     });
 
@@ -482,6 +549,54 @@ void main() {
         );
         expect(gameState.phase, GamePhase.roundEnd);
       });
+
+      test('go-out into final turns resets stalemate count', () {
+        while (gameState.deck.size > 9) {
+          gameState.deck.drawCard();
+        }
+
+        gameState.discardPile.clear();
+        gameState.discardPile.add(
+          const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
+        );
+
+        // Five consecutive 3s: one short of ending after two rotations.
+        for (var i = 0; i < 5; i++) {
+          gameState.currentPlayerIndex = i % 3;
+          gameState.turnPhase = TurnPhase.discard;
+          final three = PlayingCard(
+            rank: CardRank.three,
+            suit: Suit.values[i % Suit.values.length],
+          );
+          gameState.players[gameState.currentPlayerIndex].hand.add(three);
+          gameState.discard(three);
+        }
+
+        expect(gameState.phase, GamePhase.playing);
+        gameState.recentActions.clear();
+
+        final ended = gameState.handlePlayerWentOut();
+        expect(ended, isFalse);
+        expect(gameState.finalTurnPhaseActive, isTrue);
+        expect(gameState.phase, GamePhase.playing);
+
+        gameState.turnPhase = TurnPhase.discard;
+        final extraThree = PlayingCard(
+          rank: CardRank.three,
+          suit: Suit.values[gameState.currentPlayerIndex % Suit.values.length],
+        );
+        gameState.currentPlayer.hand.add(extraThree);
+        gameState.discard(extraThree);
+
+        expect(gameState.phase, GamePhase.playing);
+        expect(gameState.emergencyRoundEndReason, isNull);
+        expect(
+          gameState.recentActions.any(
+            (action) => action.message.contains('STALEMATE'),
+          ),
+          isFalse,
+        );
+      }, tags: ['regression']);
     });
 
     group('Edge Cases', () {

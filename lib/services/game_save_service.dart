@@ -123,6 +123,7 @@ class GameSaveService {
       'finalTurnPhaseActive': gameState.finalTurnPhaseActive,
       'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
       'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
+      'emergencyRoundEndReason': gameState.emergencyRoundEndReason?.name,
     };
   }
 
@@ -278,6 +279,10 @@ class GameSaveService {
         awaiting.map((value) => value as int),
       );
     }
+
+    gameState.emergencyRoundEndReason = parseEmergencyRoundEndReason(
+      savedData['emergencyRoundEndReason'],
+    );
 
     // Find winner if exists
     final winnerId = savedData['winner'] as String?;

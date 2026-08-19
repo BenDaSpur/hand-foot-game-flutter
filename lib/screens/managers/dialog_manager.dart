@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/player.dart';
 import '../../models/card.dart';
+import '../../models/game_state.dart';
 import '../../game/game_controller.dart';
 import '../../widgets/advanced_meld_selector.dart';
 import '../../widgets/emergency_round_end_dialog.dart';
@@ -361,14 +362,14 @@ class DialogManager {
     );
   }
 
-  /// Show emergency round end dialog
-  void showEmergencyRoundEndDialog() {
-    EmergencyRoundEndDialog.show(
+  /// Show emergency round end dialog and wait until the user dismisses it.
+  Future<void> showEmergencyRoundEndDialog({EmergencyRoundEndReason? reason}) {
+    return EmergencyRoundEndDialog.show(
       context,
-      onContinue: () {
-        Navigator.of(context).pop();
-        onStateChanged();
-      },
+      reason:
+          reason ??
+          gameController.gameState.emergencyRoundEndReason ??
+          EmergencyRoundEndReason.insufficientCards,
     );
   }
 

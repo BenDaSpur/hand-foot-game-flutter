@@ -186,6 +186,7 @@ class GameSerializer {
       'm': gameState.hasMelded,
       'u': gameState.hasTakenDiscardThisTurn,
       'q': gameState.playDownRequirement,
+      'e': gameState.emergencyRoundEndReason?.name,
     };
   }
 
@@ -292,6 +293,7 @@ class GameSerializer {
       'hasTakenDiscardThisTurn': data['u'] ?? false,
       'playDownRequirement':
           data['q'] ?? 60, // Default for backward compatibility
+      'emergencyRoundEndReason': data['e'],
     };
   }
 

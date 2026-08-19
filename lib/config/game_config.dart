@@ -55,6 +55,9 @@ class GameConfig {
   /// Number of recent discard cards to check for 3s stalemate (for performance)
   static const int stalemateCheckCardCount = 10;
 
+  /// Full player rotations of consecutive 3-discards that end a stalemate
+  static const int stalemateEndRotations = 2;
+
   // =============================================================================
   // SCORING SYSTEM
   // =============================================================================
