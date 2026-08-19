@@ -107,6 +107,12 @@ void main() {
     () async {
       final writeStarted = Completer<void>();
       final releaseWrite = Completer<void>();
+      addTearDown(() {
+        if (!releaseWrite.isCompleted) {
+          releaseWrite.complete();
+        }
+        GameSaveService.debugBlockAfterSaveWrite = null;
+      });
       GameSaveService.debugBlockAfterSaveWrite = () {
         if (!writeStarted.isCompleted) {
           writeStarted.complete();
@@ -135,6 +141,50 @@ void main() {
       await clear;
 
       expect(await GameController.hasSavedGame(), isFalse);
+    },
+    tags: ['regression'],
+  );
+
+  test(
+    'queued save persists the GameState captured at enqueue time',
+    () async {
+      final writeStarted = Completer<void>();
+      final releaseWrite = Completer<void>();
+      addTearDown(() {
+        if (!releaseWrite.isCompleted) {
+          releaseWrite.complete();
+        }
+        GameSaveService.debugBlockAfterSaveWrite = null;
+      });
+      GameSaveService.debugBlockAfterSaveWrite = () {
+        if (!writeStarted.isCompleted) {
+          writeStarted.complete();
+        }
+        return releaseWrite.future;
+      };
+
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+      final controller = GameController(players: [human, rita], seed: 771212);
+      controller.autosaveEnabled = false;
+      controller.initializeGame();
+      controller.autosaveEnabled = true;
+
+      final blockingSave = controller.saveGame();
+      await writeStarted.future;
+
+      controller.gameState.round = 3;
+      final queuedSave = controller.saveGame();
+      controller.gameState.round = 99;
+
+      GameSaveService.debugBlockAfterSaveWrite = null;
+      releaseWrite.complete();
+      await blockingSave;
+      await queuedSave;
+
+      final restored = await GameController.loadSavedGame();
+      expect(restored, isNotNull);
+      expect(restored!.gameState.round, 3);
     },
     tags: ['regression'],
   );

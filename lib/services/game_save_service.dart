@@ -37,16 +37,23 @@ class GameSaveService {
     int? gameSeed, {
     Map<String, BotPersonality>? botPersonalities,
   }) {
-    return _enqueuePersistence(() async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final gameData = _serializeGameState(
+    late final String jsonString;
+    try {
+      jsonString = jsonEncode(
+        _serializeGameState(
           gameState,
           gameSeed,
           botPersonalities: botPersonalities,
-        );
-        final jsonString = jsonEncode(gameData);
+        ),
+      );
+    } catch (e) {
+      _log.severe('Failed to save game: $e');
+      return Future<void>.value();
+    }
 
+    return _enqueuePersistence(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_saveKey, jsonString);
         _log.info('Game saved to local storage');
         final blocker = debugBlockAfterSaveWrite;
