@@ -308,6 +308,7 @@ void main() {
         controller.nextRound(dealCards: false);
         expect(controller.gameState.phase, GamePhase.playing);
       },
+      tags: ['regression'],
     );
 
     test(
@@ -344,6 +345,7 @@ void main() {
         expect(players[0].score, scoreAfterWin);
         expect(players[0].hand, isEmpty);
       },
+      tags: ['regression'],
     );
   });
 }

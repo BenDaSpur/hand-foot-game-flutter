@@ -85,8 +85,8 @@ class GameState {
   bool hasTakenDiscardThisTurn;
 
   // Track 3s stalemate situation
-  /// Player index where stalemate detection started (null if no stalemate detected)
-  int? _stalemateStartPlayer;
+  /// True after the first consecutive 3-discard in a low-deck all-3s pile.
+  bool _stalemateTrackingActive = false;
 
   /// Count of consecutive 3 discards in stalemate situation
   int _stalemateDiscardCount = 0;
@@ -938,31 +938,35 @@ class GameState {
       return;
     }
 
-    if (_stalemateStartPlayer == null) {
-      _stalemateStartPlayer = currentPlayerIndex;
+    if (!_stalemateTrackingActive) {
+      _stalemateTrackingActive = true;
       _stalemateDiscardCount = 1;
       return;
     }
 
+    final previousCount = _stalemateDiscardCount;
     _stalemateDiscardCount++;
 
-    if (_stalemateDiscardCount == players.length) {
+    final warningAt = players.length;
+    final endAt = players.length * 2;
+    if (_stalemateDiscardCount >= endAt && previousCount < endAt) {
+      _logAction(
+        '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',
+      );
+      _emergencyEndRoundDueToStalemate();
+    } else if (_stalemateDiscardCount >= warningAt &&
+        previousCount < warningAt) {
       _logAction(
         '⚠️ WARNING: Only 3s in discard pile with low deck (${deck.size} cards remaining)',
       );
       _logAction(
         'Round will end automatically if all players discard 3s again',
       );
-    } else if (_stalemateDiscardCount == players.length * 2) {
-      _logAction(
-        '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',
-      );
-      _emergencyEndRoundDueToStalemate();
     }
   }
 
   void _resetStalemateTracking() {
-    _stalemateStartPlayer = null;
+    _stalemateTrackingActive = false;
     _stalemateDiscardCount = 0;
   }
 

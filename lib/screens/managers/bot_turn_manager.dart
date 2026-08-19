@@ -48,13 +48,13 @@ class BotTurnManager {
   /// Shared guard: skip if the round/game already ended, final-turn phase is
   /// active (a second handlePlayerWentOut would dequeue the current awaiting
   /// player — often the human), or this bot is no longer the current player.
-  void endRoundForBot(Player botPlayer, {String? actionMessage}) {
+  void endRoundForBot(Player botPlayer, {bool logGoOutAction = false}) {
     if (!_canEndRoundForBot(botPlayer)) {
       return;
     }
 
     final roundEnded = gameController.endRoundForPlayer(botPlayer);
-    if (actionMessage != null) {
+    if (logGoOutAction) {
       gameController.gameState.recentActions.add(
         GameAction(
           message: _goOutActionMessage(roundEnded),
@@ -460,7 +460,7 @@ class BotTurnManager {
 
         case 'goOut':
           if (botPlayer.canGoOut) {
-            endRoundForBot(botPlayer, actionMessage: '🎉 went out!');
+            endRoundForBot(botPlayer, logGoOutAction: true);
             success = true;
           } else if (botPlayer.canGoOutWithBooks &&
               botPlayer.currentHand.length == 1) {
@@ -843,7 +843,7 @@ class BotTurnManager {
           DebugLogger.debug(
             'Bot ${botPlayer.name} forcing go out - empty hand with required books',
           );
-          endRoundForBot(botPlayer, actionMessage: '🎉 went out!');
+          endRoundForBot(botPlayer, logGoOutAction: true);
           return;
         } else {
           // Bot has empty hand but can't go out - this is a critical game logic error
@@ -921,7 +921,7 @@ class BotTurnManager {
 
     // Option 3: Check if bot can go out (end round)
     if (botPlayer.canGoOut) {
-      endRoundForBot(botPlayer, actionMessage: '🎉 went out!');
+      endRoundForBot(botPlayer, logGoOutAction: true);
       return;
     }
 
@@ -994,7 +994,7 @@ class BotTurnManager {
 
       // Empty hand/foot with books already satisfied — go out without discarding.
       if (botPlayer.currentHand.isEmpty && botPlayer.canGoOut) {
-        endRoundForBot(botPlayer, actionMessage: '🎉 went out!');
+        endRoundForBot(botPlayer, logGoOutAction: true);
         return;
       }
 
@@ -1039,8 +1039,8 @@ class BotTurnManager {
         actionDescription = '⏭️ chose not to meld';
         break;
       case 'goOut':
-        actionDescription = '🎉 went out and ended the round!';
-        break;
+        // endRoundForBot already logs _goOutActionMessage(roundEnded).
+        return;
       // Skip 'discard' - already logged by game state to prevent duplicates
       case 'discard':
         return; // Don't log duplicate discard actions

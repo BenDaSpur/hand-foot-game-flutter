@@ -301,35 +301,24 @@ class GameController implements GameInterface {
   }
 
   void _publishRoundOrGameEndEvents(Player player, int roundBefore) {
-    final phase = _gameState.phase;
-    if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
-      return;
-    }
-
-    _eventBus.publish(
-      PlayerWentOutEvent(roundNumber: roundBefore, player: player),
-    );
-
-    final roundScores = <Player, int>{};
-    for (final p in _gameState.players) {
-      roundScores[p] = p.score;
-    }
-    _eventBus.publish(
-      RoundEndedEvent(roundNumber: roundBefore, roundScores: roundScores),
-    );
-
-    if (phase == GamePhase.gameEnd && _gameState.winner != null) {
-      _eventBus.publish(
-        GameEndedEvent(winner: _gameState.winner!, finalScores: roundScores),
-      );
-    }
+    _publishRoundEndEvents(roundBefore, wentOutPlayer: player);
   }
 
   /// Round/game end without [PlayerWentOutEvent] (empty deck or stalemate).
   void _publishEmergencyRoundEndEvents(int roundBefore) {
+    _publishRoundEndEvents(roundBefore);
+  }
+
+  void _publishRoundEndEvents(int roundBefore, {Player? wentOutPlayer}) {
     final phase = _gameState.phase;
     if (phase != GamePhase.roundEnd && phase != GamePhase.gameEnd) {
       return;
+    }
+
+    if (wentOutPlayer != null) {
+      _eventBus.publish(
+        PlayerWentOutEvent(roundNumber: roundBefore, player: wentOutPlayer),
+      );
     }
 
     final roundScores = <Player, int>{};

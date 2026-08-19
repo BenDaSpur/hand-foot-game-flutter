@@ -776,12 +776,31 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return;
       }
 
+      if (controller.gameState.phase == GamePhase.roundEnd) {
+        final highestScore = controller.gameState.players
+            .map((player) => player.score)
+            .reduce((a, b) => a > b ? a : b);
+        if (highestScore >= GameConfig.winningScore) {
+          DebugLogger.warning(
+            'Recovered game-end from roundEnd: highest score $highestScore '
+            '>= ${GameConfig.winningScore} (imported or restored save may '
+            'have skipped endRound promotion)',
+          );
+          controller.gameState.phase = GamePhase.gameEnd;
+          controller.gameState.winner = controller.gameState.players.firstWhere(
+            (player) => player.score == highestScore,
+          );
+        }
+      }
+
       if (controller.gameState.phase == GamePhase.gameEnd) {
         if (!_gameEndDialogShown) {
-          final winner = ref.read(gameWinnerProvider);
+          final winner =
+              controller.gameState.winner ?? ref.read(gameWinnerProvider);
           if (winner != null) {
             _gameEndDialogShown = true;
-            final players = ref.read(leaderboardProvider);
+            final players = List<Player>.from(controller.gameState.players)
+              ..sort((a, b) => b.score.compareTo(a.score));
             _dialogManager.showGameEndDialog(winner, players);
           }
         }
@@ -789,13 +808,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
 
       if (controller.gameState.phase != GamePhase.roundEnd) {
-        return;
-      }
-
-      final highestScore = controller.gameState.players
-          .map((player) => player.score)
-          .reduce((a, b) => a > b ? a : b);
-      if (highestScore >= GameConfig.winningScore) {
         return;
       }
 
