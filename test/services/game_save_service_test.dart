@@ -55,17 +55,23 @@ void main() {
       ];
 
       final gameController = GameController(players: players);
+      gameController.autosaveEnabled = false;
       gameController.initializeGame();
+      await GameSaveService.saveGame(
+        gameController.gameState,
+        gameController.gameSeed,
+      );
 
       // Get the serialized data
       final serializedData = await GameSaveService.loadGame();
+      expect(serializedData, isNotNull);
 
       if (serializedData != null) {
         // Check that enums are serialized with .name (clean) not .toString()
         expect(
           serializedData['phase'],
-          equals('setup'),
-        ); // not 'GamePhase.setup'
+          equals('playing'),
+        ); // not 'GamePhase.playing'
         expect(
           serializedData['turnPhase'],
           equals('draw'),

@@ -353,7 +353,7 @@ class GameController implements GameInterface {
       } else {
         _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
       }
-      _scheduleAutosave(actingPlayer);
+      _scheduleAutosave();
       return;
     }
 
@@ -362,22 +362,17 @@ class GameController implements GameInterface {
       publishTurnEndedEvent(actingPlayer);
     }
 
-    // Meld-phase go-out never discards, so discard-only autosave used to
-    // drop the empty hand + final-turn flags (session_17871159981788178).
-    _scheduleAutosave(actingPlayer);
+    // Persist when the acting player no longer owns the turn (discard or
+    // meld-phase go-out). Mid-turn adds stay unsaved so tests and rapid
+    // meld taps do not write SharedPreferences on every card.
+    if (_gameState.currentPlayerIndex != currentIndexBefore) {
+      _scheduleAutosave();
+    }
   }
 
-  /// Persist after a human action, or whenever going out starts final turns
-  /// / ends the round so resume cannot roll back that go-out.
-  void _scheduleAutosave(Player actingPlayer) {
-    final shouldSave =
-        actingPlayer.type == PlayerType.human ||
-        _gameState.finalTurnPhaseActive ||
-        _gameState.phase == GamePhase.roundEnd ||
-        _gameState.phase == GamePhase.gameEnd;
-    if (!shouldSave) {
-      return;
-    }
+  /// Persist after a turn/round change, including meld-phase go-out
+  /// (session_17871159981788178 lost that state because only discard saved).
+  void _scheduleAutosave() {
     saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
   }
 
