@@ -48,11 +48,13 @@ class Player {
   void dealHand(List<PlayingCard> cards) {
     hand.clear();
     hand.addAll(cards);
+    newlyDrawnCardIndices.clear();
   }
 
   void dealFoot(List<PlayingCard> cards) {
     foot.clear();
     foot.addAll(cards);
+    newlyDrawnCardIndices.clear();
   }
 
   void addCardToHand(PlayingCard card) {
