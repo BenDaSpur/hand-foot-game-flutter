@@ -45,6 +45,10 @@ class GameController implements GameInterface {
   /// When false, [saveGame] is a no-op (used by Learn to Play).
   bool autosaveEnabled = true;
 
+  /// Serializes overlapping autosaves so a later go-out cannot be overwritten
+  /// by an earlier in-flight discard/round-start write.
+  Future<void> _saveChain = Future<void>.value();
+
   /// Personalities restored from local autosave (playerId → enum toString).
   /// Applied by GameScreen when continuing a saved solo game.
   Map<String, String> restoredBotPersonalities = {};
@@ -349,6 +353,7 @@ class GameController implements GameInterface {
       } else {
         _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
       }
+      _scheduleAutosave(actingPlayer);
       return;
     }
 
@@ -356,6 +361,24 @@ class GameController implements GameInterface {
         _gameState.currentPlayerIndex != currentIndexBefore) {
       publishTurnEndedEvent(actingPlayer);
     }
+
+    // Meld-phase go-out never discards, so discard-only autosave used to
+    // drop the empty hand + final-turn flags (session_17871159981788178).
+    _scheduleAutosave(actingPlayer);
+  }
+
+  /// Persist after a human action, or whenever going out starts final turns
+  /// / ends the round so resume cannot roll back that go-out.
+  void _scheduleAutosave(Player actingPlayer) {
+    final shouldSave =
+        actingPlayer.type == PlayerType.human ||
+        _gameState.finalTurnPhaseActive ||
+        _gameState.phase == GamePhase.roundEnd ||
+        _gameState.phase == GamePhase.gameEnd;
+    if (!shouldSave) {
+      return;
+    }
+    saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
   }
 
   @override
@@ -396,11 +419,6 @@ class GameController implements GameInterface {
           );
         }
       }
-    }
-
-    // Auto-save only after human player discards in single player games
-    if (result && player.type == PlayerType.human) {
-      saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
     }
 
     return result;
@@ -635,6 +653,11 @@ class GameController implements GameInterface {
       }
     }
 
+    final roundBefore = _gameState.round;
+    final phaseBefore = _gameState.phase;
+    final roundEndingPlayer = _captureRoundEndingPlayer(player);
+    final currentIndexBefore = _gameState.currentPlayerIndex;
+
     final result = _meldManager.createMultipleMeldsFromIndices(
       allMeldIndices,
       skipPlayDownCheck: skipPlayDownCheck,
@@ -648,6 +671,16 @@ class GameController implements GameInterface {
           unsetPlayedDown: !hadPlayedDown && player.hasPlayedDown,
           unsetPickedUpFoot: !hadPickedUpFoot && player.hasPickedUpFoot,
         ),
+      );
+    }
+
+    if (result) {
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
       );
     }
 
@@ -1098,7 +1131,12 @@ class GameController implements GameInterface {
     if (!autosaveEnabled) {
       return;
     }
-    await GameSaveService.saveGame(_gameState, gameSeed);
+    final previous = _saveChain;
+    final current = previous.then(
+      (_) => GameSaveService.saveGame(_gameState, gameSeed),
+    );
+    _saveChain = current.then((_) {}, onError: (_) {});
+    await current;
   }
 
   static Future<GameController?> loadSavedGame() async {
