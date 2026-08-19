@@ -39,7 +39,8 @@ void main() {
         const PlayingCard(rank: CardRank.three, suit: Suit.hearts),
       );
 
-      for (var i = 0; i < 3; i++) {
+      // Two 3-discards is not a full rotation, so no warning yet.
+      for (var i = 0; i < 2; i++) {
         gameState.currentPlayerIndex = i;
         gameState.turnPhase = TurnPhase.discard;
         final three = PlayingCard(rank: CardRank.three, suit: Suit.values[i]);
