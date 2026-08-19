@@ -121,6 +121,9 @@ void main() {
               action.message.contains('WARNING: Only 3s in discard pile'),
         );
         expect(hasWarning2, isTrue);
+        expect(gameState.stalemateAlertPending, isTrue);
+        expect(gameState.consumeStalemateAlert(), isTrue);
+        expect(gameState.stalemateAlertPending, isFalse);
       });
     });
 

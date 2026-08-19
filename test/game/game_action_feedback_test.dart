@@ -235,6 +235,37 @@ void main() {
     });
   });
 
+  group('last-call copy', () {
+    test('local-player last call tells them to dump cards', () {
+      expect(
+        GameActionFeedback.lastCallMessage(isLocalPlayerTurn: true),
+        contains('last turn of the round'),
+      );
+      expect(
+        GameActionFeedback.lastCallBannerHeadline(isLocalPlayerTurn: true),
+        'LAST CALL — YOUR TURN',
+      );
+    });
+
+    test('spectator last call says the round will end after this turn', () {
+      expect(
+        GameActionFeedback.lastCallMessage(isLocalPlayerTurn: false),
+        contains('After this turn the round will end'),
+      );
+    });
+
+    test('stalemate warning is distinct from empty-deck last call', () {
+      expect(
+        GameActionFeedback.stalemateWarningMessage(),
+        contains('Only 3s are being discarded'),
+      );
+      expect(
+        GameActionFeedback.stalemateWarningTitle,
+        isNot(GameActionFeedback.lastCallTitle),
+      );
+    });
+  });
+
   group('unlockDiscardBlockerMessage after taking the pile', () {
     test('says the pile was already taken this turn', () {
       final gameState = buildGameState();

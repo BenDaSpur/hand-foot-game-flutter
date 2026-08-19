@@ -133,6 +133,18 @@ class GameState {
   /// Set when the round ended for an empty deck or 3s stalemate (not a go-out).
   EmergencyRoundEndReason? emergencyRoundEndReason;
 
+  /// True after a draw that leaves too few cards for another required draw.
+  ///
+  /// The current player still finishes this turn (meld + discard). The next
+  /// player who cannot draw ends the round. Used for the last-call banner.
+  bool lastCallActive = false;
+
+  /// One-shot: UI should show the last-call modal before the player continues.
+  bool lastCallAlertPending = false;
+
+  /// One-shot: UI should show the 3s-stalemate warning modal.
+  bool stalemateAlertPending = false;
+
   GameState({
     required this.players,
     required this.deck,
@@ -460,9 +472,11 @@ class GameState {
 
     _resetFinalTurnState();
     emergencyRoundEndReason = null;
+    _resetLastCallTracking();
 
     // Reset stalemate tracking for new round
     _resetStalemateTracking();
+    stalemateAlertPending = false;
 
     discardPile.clear();
     for (final player in players) {
@@ -553,6 +567,72 @@ class GameState {
       privateMessage: '🎯 drew: $cardNames',
     );
 
+    _maybeActivateLastCallAfterDraw();
+
+    return true;
+  }
+
+  /// Whether a [GameConfig.requiredDrawCount] draw can be completed now,
+  /// optionally after [extraDiscardCards] more cards land on the discard pile.
+  ///
+  /// Models the next player's draw after the current player discards: the
+  /// stock is used first, then an emergency reshuffle that keeps the top
+  /// discard and feeds the rest back into the deck.
+  bool canFulfillRequiredDraw({int extraDiscardCards = 0}) {
+    if (extraDiscardCards < 0) {
+      extraDiscardCards = 0;
+    }
+
+    final deckSize = deck.size;
+    if (deckSize >= GameConfig.requiredDrawCount) {
+      return true;
+    }
+
+    final discardAfter = discardPile.length + extraDiscardCards;
+    if (discardAfter < GameConfig.minDiscardForReshuffle) {
+      return false;
+    }
+
+    final afterReshuffle = deckSize + (discardAfter - 1);
+    return afterReshuffle >= GameConfig.requiredDrawCount;
+  }
+
+  /// Marks this turn as the last playable one when the next draw cannot land.
+  void _maybeActivateLastCallAfterDraw() {
+    if (canFulfillRequiredDraw(extraDiscardCards: 1)) {
+      lastCallActive = false;
+      lastCallAlertPending = false;
+      return;
+    }
+
+    lastCallActive = true;
+    lastCallAlertPending = true;
+    _logAction(
+      '⚠️ LAST CALL: Not enough cards remain for another draw. '
+      'Play remaining cards this turn — the round will end after you discard.',
+    );
+  }
+
+  void _resetLastCallTracking() {
+    lastCallActive = false;
+    lastCallAlertPending = false;
+  }
+
+  /// Returns true once when the last-call modal should be shown.
+  bool consumeLastCallAlert() {
+    if (!lastCallAlertPending) {
+      return false;
+    }
+    lastCallAlertPending = false;
+    return true;
+  }
+
+  /// Returns true once when the 3s-stalemate warning modal should be shown.
+  bool consumeStalemateAlert() {
+    if (!stalemateAlertPending) {
+      return false;
+    }
+    stalemateAlertPending = false;
     return true;
   }
 
@@ -998,6 +1078,7 @@ class GameState {
       _emergencyEndRoundDueToStalemate();
     } else if (_stalemateDiscardCount >= warningAt &&
         previousCount < warningAt) {
+      stalemateAlertPending = true;
       _logAction(
         '⚠️ WARNING: Only 3s in discard pile with low deck (${deck.size} cards remaining)',
       );

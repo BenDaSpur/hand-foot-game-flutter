@@ -187,6 +187,9 @@ class GameSerializer {
       'u': gameState.hasTakenDiscardThisTurn,
       'q': gameState.playDownRequirement,
       'e': gameState.emergencyRoundEndReason?.name,
+      'lc': gameState.lastCallActive,
+      'lca': gameState.lastCallAlertPending,
+      'sa': gameState.stalemateAlertPending,
     };
   }
 
@@ -294,6 +297,9 @@ class GameSerializer {
       'playDownRequirement':
           data['q'] ?? 60, // Default for backward compatibility
       'emergencyRoundEndReason': data['e'],
+      'lastCallActive': data['lc'] ?? false,
+      'lastCallAlertPending': data['lca'] ?? false,
+      'stalemateAlertPending': data['sa'] ?? false,
     };
   }
 

@@ -155,4 +155,45 @@ class GameActionFeedback {
     return '${goOutBlockerMessage(player).replaceFirst('Discarding your last card would go out. ', '')} '
         'Undo a meld or skip your turn to continue.';
   }
+
+  /// Modal title when the stock cannot support another required draw.
+  static const String lastCallTitle = 'Last Call';
+
+  /// Modal / banner copy when the next required draw cannot be fulfilled.
+  static String lastCallMessage({required bool isLocalPlayerTurn}) {
+    if (isLocalPlayerTurn) {
+      return 'The deck is empty and there are not enough cards left for '
+          'another draw.\n\n'
+          'This is your last turn of the round. Play any remaining cards '
+          'you can, then discard. Leftover hand and foot cards become '
+          'penalty points when the round ends.';
+    }
+    return 'The deck is empty and there are not enough cards left for '
+        'another draw.\n\n'
+        'After this turn the round will end. Leftover cards become '
+        'penalty points.';
+  }
+
+  /// Compact banner headline for an empty-deck last call.
+  static String lastCallBannerHeadline({required bool isLocalPlayerTurn}) {
+    return isLocalPlayerTurn ? 'LAST CALL — YOUR TURN' : 'LAST CALL';
+  }
+
+  /// Compact banner body for an empty-deck last call.
+  static String lastCallBannerBody({required bool isLocalPlayerTurn}) {
+    if (isLocalPlayerTurn) {
+      return 'Deck is empty. Meld what you can — leftover cards count against you.';
+    }
+    return 'Deck is empty. The round will end after this turn.';
+  }
+
+  /// Modal title for the 3s-stalemate warning (before the round ends).
+  static const String stalemateWarningTitle = 'Round May End Soon';
+
+  /// Modal copy when players have discarded only 3s for a full rotation.
+  static String stalemateWarningMessage() {
+    return 'Only 3s are being discarded and the deck is running low.\n\n'
+        'If every player discards a 3 again, the round will end '
+        'automatically. Play remaining cards while you still can.';
+  }
 }

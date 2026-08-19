@@ -6,6 +6,7 @@ import '../../models/game_state.dart';
 import '../../game/game_controller.dart';
 import '../../widgets/advanced_meld_selector.dart';
 import '../../widgets/emergency_round_end_dialog.dart';
+import '../../widgets/last_call_dialog.dart';
 import '../../widgets/scoreboard_modal.dart';
 import '../../constants/keyboard_shortcuts.dart';
 import '../../theme/balatro_theme.dart';
@@ -371,6 +372,19 @@ class DialogManager {
           gameController.gameState.emergencyRoundEndReason ??
           EmergencyRoundEndReason.insufficientCards,
     );
+  }
+
+  /// Warn that this is the last playable turn before an empty-deck end.
+  Future<void> showLastCallAlert({required bool isLocalPlayerTurn}) {
+    return LastCallDialog.showEmptyDeck(
+      context,
+      isLocalPlayerTurn: isLocalPlayerTurn,
+    );
+  }
+
+  /// Warn that another rotation of 3-discards will end the round.
+  Future<void> showStalemateWarningAlert() {
+    return LastCallDialog.showStalemateWarning(context);
   }
 
   /// Show advanced meld selector modal

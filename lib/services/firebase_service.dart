@@ -1183,6 +1183,7 @@ class FirebaseService {
       'finalTurnPhaseActive': gameState.finalTurnPhaseActive,
       'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
       'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
+      'lastCallActive': gameState.lastCallActive,
     };
   }
 
@@ -1246,7 +1247,7 @@ class FirebaseService {
           ? null
           : (data['playerWhoWentOutIndex'] as num).toInt(),
       playersAwaitingFinalTurn: awaitingFinalTurn.toSet(),
-    );
+    )..lastCallActive = data['lastCallActive'] as bool? ?? false;
   }
 
   /// Convert Player to Firestore map

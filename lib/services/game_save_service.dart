@@ -156,6 +156,9 @@ class GameSaveService {
       'playerWhoWentOutIndex': gameState.playerWhoWentOutIndex,
       'playersAwaitingFinalTurn': gameState.playersAwaitingFinalTurn.toList(),
       'emergencyRoundEndReason': gameState.emergencyRoundEndReason?.name,
+      'lastCallActive': gameState.lastCallActive,
+      'lastCallAlertPending': gameState.lastCallAlertPending,
+      'stalemateAlertPending': gameState.stalemateAlertPending,
     };
   }
 
@@ -315,6 +318,11 @@ class GameSaveService {
     gameState.emergencyRoundEndReason = parseEmergencyRoundEndReason(
       savedData['emergencyRoundEndReason'],
     );
+    gameState.lastCallActive = savedData['lastCallActive'] as bool? ?? false;
+    gameState.lastCallAlertPending =
+        savedData['lastCallAlertPending'] as bool? ?? false;
+    gameState.stalemateAlertPending =
+        savedData['stalemateAlertPending'] as bool? ?? false;
 
     // Find winner if exists
     final winnerId = savedData['winner'] as String?;

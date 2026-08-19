@@ -72,6 +72,25 @@ void main() {
         );
       });
 
+      test('persists last-call flags', () {
+        gameState.lastCallActive = true;
+        gameState.lastCallAlertPending = true;
+        gameState.stalemateAlertPending = true;
+
+        final exported = GameSerializer.exportGameState(gameState, 12345);
+        final imported = GameSerializer.importGameState(exported);
+        final gameStateData = imported!['gameState'] as Map<String, dynamic>;
+        expect(gameStateData['lastCallActive'], isTrue);
+        expect(gameStateData['lastCallAlertPending'], isTrue);
+        expect(gameStateData['stalemateAlertPending'], isTrue);
+
+        final controller = GameController.fromExportJson(exported);
+        expect(controller, isNotNull);
+        expect(controller!.controller.gameState.lastCallActive, isTrue);
+        expect(controller.controller.gameState.lastCallAlertPending, isTrue);
+        expect(controller.controller.gameState.stalemateAlertPending, isTrue);
+      });
+
       test('should handle player data with cards', () {
         player1.hand.addAll([
           const PlayingCard(rank: CardRank.king, suit: Suit.hearts),
