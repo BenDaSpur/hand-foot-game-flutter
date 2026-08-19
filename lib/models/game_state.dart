@@ -886,9 +886,9 @@ class GameState {
         return true;
       }
 
-      // A 3s stalemate or other emergency end already left playing — do not
-      // advance the turn or credit a go-out.
-      if (phase != GamePhase.playing) {
+      // A 3s stalemate or other emergency end already finished the round —
+      // do not advance the turn or credit a go-out.
+      if (phase == GamePhase.roundEnd || phase == GamePhase.gameEnd) {
         return true;
       }
 
