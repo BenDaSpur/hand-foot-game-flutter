@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
@@ -9,6 +11,7 @@ import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/services/game_save_service.dart';
 
 /// Regression for session_17871159981788178:
 /// Human melded out (no discard). The bot appeared stuck on her final turn,
@@ -16,6 +19,11 @@ import 'package:hand_foot_game_flutter/models/player.dart';
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    GameSaveService.debugBlockAfterSaveWrite = null;
+  });
+
+  tearDown(() {
+    GameSaveService.debugBlockAfterSaveWrite = null;
   });
 
   test(
@@ -97,13 +105,32 @@ void main() {
   test(
     'queued clear after an in-flight save leaves no autosave',
     () async {
+      final writeStarted = Completer<void>();
+      final releaseWrite = Completer<void>();
+      GameSaveService.debugBlockAfterSaveWrite = () {
+        if (!writeStarted.isCompleted) {
+          writeStarted.complete();
+        }
+        return releaseWrite.future;
+      };
+
       final human = Player(id: '1', name: 'You', type: PlayerType.human);
       final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
       final controller = GameController(players: [human, rita], seed: 771212);
+      controller.autosaveEnabled = false;
       controller.initializeGame();
+      controller.autosaveEnabled = true;
 
       final save = controller.saveGame();
+      await writeStarted.future;
+      expect(
+        await GameController.hasSavedGame(),
+        isTrue,
+        reason: 'In-flight save must commit the key before clear is queued',
+      );
+
       final clear = GameController.clearSavedGame();
+      releaseWrite.complete();
       await save;
       await clear;
 
