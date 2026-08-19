@@ -176,9 +176,11 @@ void main() {
 
       expect(gameState.unlockDiscard(), isTrue);
 
-      final pickupMessages = serializedMessages(
-        gameState,
-      ).where((message) => message.contains('more cards from discard pile'));
+      final pickupMessages = serializedMessages(gameState).where(
+        (message) =>
+            message.contains('more cards from discard pile') ||
+            message.contains('from draw pile to complete unlock'),
+      );
       expect(pickupMessages, isNotEmpty);
       for (final message in pickupMessages) {
         expect(message.contains('9 ♥'), isFalse);
@@ -324,6 +326,12 @@ void main() {
         ),
         'took 2 more cards from discard pile',
       );
+      expect(
+        GameState.sanitizeLogMessage(
+          'took 3 more cards from draw pile to complete unlock: 9 ♥, 4 ♣',
+        ),
+        'took 3 more cards from draw pile to complete unlock',
+      );
     });
   });
 
@@ -371,6 +379,31 @@ void main() {
 
         final received = restored.recentActions.last;
         expect(received.message, 'took 2 more cards from discard pile');
+        expect(received.displayMessage.contains('9 ♥'), isFalse);
+        expect(received.displayMessage.contains('4 ♣'), isFalse);
+      },
+    );
+
+    test(
+      'a leaky draw-pile unlock fill message from an old client is sanitized on read',
+      () {
+        final gameState = buildGameState(multiplayer: true);
+        expect(gameState.drawFromDeck(), isTrue);
+
+        final document = FirebaseService.gameStateToMapForTesting(gameState);
+        final actions = (document['recentActions'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+        const leakyText =
+            'took 3 more cards from draw pile to complete unlock: 9 ♥, 4 ♣';
+        actions.last['message'] = leakyText;
+
+        final restored = FirebaseService.gameStateFromMapForTesting(document);
+
+        final received = restored.recentActions.last;
+        expect(
+          received.message,
+          'took 3 more cards from draw pile to complete unlock',
+        );
         expect(received.displayMessage.contains('9 ♥'), isFalse);
         expect(received.displayMessage.contains('4 ♣'), isFalse);
       },

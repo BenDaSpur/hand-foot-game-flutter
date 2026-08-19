@@ -45,7 +45,8 @@ class GameConfig {
   /// Maximum number of recent actions to store for game history
   static const int maxRecentActions = 10;
 
-  /// Additional cards to pick up when taking discard pile
+  /// Additional cards to pick up when taking the discard pile.
+  /// Taken from discard first; the draw pile fills any shortfall.
   static const int additionalDiscardPickup = 5;
 
   /// Minimum deck size threshold for detecting 3s stalemate situation

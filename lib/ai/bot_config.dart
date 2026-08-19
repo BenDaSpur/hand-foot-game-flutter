@@ -81,7 +81,8 @@ class BotConfig {
 
   /// Huge piles — take unless a tight go-out race forbids it.
   /// Note: unlock pickup is top + [GameConfig.additionalDiscardPickup] (~6 cards),
-  /// not the whole pile — optimize for unlock rate/denial, not haul size.
+  /// filling from the draw pile when the discard is short — optimize for
+  /// unlock rate/denial, not haul size.
   static const int postPlayDownAlmostAlwaysTakePileSize = 25;
 
   /// Late-round hand size that forces play-down when still not down

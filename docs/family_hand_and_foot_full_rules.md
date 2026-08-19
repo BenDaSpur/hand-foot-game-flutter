@@ -51,7 +51,7 @@
    - **Default:** Draw **two cards** from the draw pile.  
    - **Special Unlock:** If you’ve already met the play-down requirement for the round (60, 90, 120, etc.) **and** you have **two natural cards** in hand that match the **top card of the discard pile**:  
      1. Lay down the two matching cards **plus** the top discard as a meld (no wilds allowed for this unlock).  
-     2. Take the top discard **and the next 5 cards** from the discard pile into your hand.  
+     2. Take the top discard **and up to 5 more cards** from the discard pile into your hand. If the discard pile has fewer than 5 extra cards, draw the remainder from the **draw pile** so the unlock pickup still totals 5 when cards remain.  
 
 2. **Meld/Book Phase**  
    - If you haven’t played down yet, you must lay down cards from your hand worth at least the **current round’s point requirement** in one turn to start your books.  
@@ -72,8 +72,8 @@
   1. If the previous player discards a card you have at least **two matching natural cards** of in your hand:
      - Immediately play your matching natural cards down (no wilds allowed for this unlock).
      - Take the top discarded card.
-     - Draw 5 additional cards from the **draw pile**.
-  2. If fewer than 5 cards remain in draw pile, take what’s left.
+     - Take up to 5 additional cards from the discard pile. If fewer extras remain there than that pickup count, keep those discard cards and draw only the outstanding number from the **draw pile**.
+  2. Exhaust the draw pile only when it contains fewer cards than the remaining pickup count; take what’s left.
 
 ---
 
