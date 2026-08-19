@@ -483,6 +483,10 @@ class GameState {
       player.melds.clear();
       player.hasPickedUpFoot = false;
       player.hasPlayedDown = false;
+      // startRound does not call _beginCurrentPlayerTurn, so leftover
+      // highlights from the previous round would otherwise stick to the
+      // newly dealt hand and inflate the next deck-draw animation.
+      player.clearNewlyDrawnCards();
     }
   }
 
@@ -554,6 +558,9 @@ class GameState {
       }
     }
 
+    // Replace leftover highlights so CardDrawnEvent / fly-in animation
+    // include only the cards taken on this draw.
+    currentPlayer.clearNewlyDrawnCards();
     currentPlayer.addNewlyDrawnCards(cardsDrawn);
     hasDrawnFromDeck = true;
     turnPhase = TurnPhase.meld;
