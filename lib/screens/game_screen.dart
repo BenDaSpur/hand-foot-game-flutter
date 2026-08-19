@@ -1488,6 +1488,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       // Check if creating melds caused the round to end
       await _gameStateManager.checkAndHandleRoundEnd();
 
+      // Meld-phase go-out starts final turns without a discard, so kick the
+      // next bot if TurnEndedEvent was missed (session_17871159981788178).
+      _resumePlayAfterMeldIfNeeded();
+
       // Show success message
       final message = meldIndices.length == 1
           ? 'Successfully created meld!'
@@ -1503,6 +1507,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         'Failed to create melds. Please check your selections and try again.',
       );
     }
+  }
+
+  /// After a meld that went out, the next player may already be a bot.
+  void _resumePlayAfterMeldIfNeeded() {
+    final controller = _gameController;
+    if (controller == null || !mounted) {
+      return;
+    }
+    if (controller.gameState.phase != GamePhase.playing) {
+      return;
+    }
+    if (controller.gameState.currentPlayer.type != PlayerType.bot) {
+      return;
+    }
+    processCurrentPlayerTurn();
   }
 
   Future<void> _onDiscard() async {
@@ -1883,6 +1902,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
       // Check if adding cards to meld caused the round to end
       await _gameStateManager.checkAndHandleRoundEnd();
+      _resumePlayAfterMeldIfNeeded();
 
       if (invalidCards.isNotEmpty) {
         final invalidNames = invalidCards.map((c) => c.displayName).join(', ');

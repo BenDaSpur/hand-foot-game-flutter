@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:logging/logging.dart';
 import '../config/game_config.dart';
 import '../models/card.dart';
 import '../models/deck.dart';
@@ -44,6 +45,8 @@ class GameController implements GameInterface {
 
   /// When false, [saveGame] is a no-op (used by Learn to Play).
   bool autosaveEnabled = true;
+
+  static final _log = Logger('GameController');
 
   /// Personalities restored from local autosave (playerId → enum toString).
   /// Applied by GameScreen when continuing a saved solo game.
@@ -349,6 +352,7 @@ class GameController implements GameInterface {
       } else {
         _publishRoundOrGameEndEvents(roundEndingPlayer, roundBefore);
       }
+      _scheduleAutosave();
       return;
     }
 
@@ -356,6 +360,21 @@ class GameController implements GameInterface {
         _gameState.currentPlayerIndex != currentIndexBefore) {
       publishTurnEndedEvent(actingPlayer);
     }
+
+    // Persist when the acting player no longer owns the turn (discard or
+    // meld-phase go-out). Mid-turn adds stay unsaved so tests and rapid
+    // meld taps do not write SharedPreferences on every card.
+    if (_gameState.currentPlayerIndex != currentIndexBefore) {
+      _scheduleAutosave();
+    }
+  }
+
+  /// Persist after a turn/round change, including meld-phase go-out
+  /// (session_17871159981788178 lost that state because only discard saved).
+  void _scheduleAutosave() {
+    saveGame().catchError((e) {
+      _log.severe('Auto-save failed: $e');
+    });
   }
 
   @override
@@ -396,11 +415,6 @@ class GameController implements GameInterface {
           );
         }
       }
-    }
-
-    // Auto-save only after human player discards in single player games
-    if (result && player.type == PlayerType.human) {
-      saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
     }
 
     return result;
@@ -635,6 +649,11 @@ class GameController implements GameInterface {
       }
     }
 
+    final roundBefore = _gameState.round;
+    final phaseBefore = _gameState.phase;
+    final roundEndingPlayer = _captureRoundEndingPlayer(player);
+    final currentIndexBefore = _gameState.currentPlayerIndex;
+
     final result = _meldManager.createMultipleMeldsFromIndices(
       allMeldIndices,
       skipPlayDownCheck: skipPlayDownCheck,
@@ -648,6 +667,16 @@ class GameController implements GameInterface {
           unsetPlayedDown: !hadPlayedDown && player.hasPlayedDown,
           unsetPickedUpFoot: !hadPickedUpFoot && player.hasPickedUpFoot,
         ),
+      );
+    }
+
+    if (result) {
+      _publishPostActionEvents(
+        phaseBefore: phaseBefore,
+        roundBefore: roundBefore,
+        actingPlayer: player,
+        roundEndingPlayer: roundEndingPlayer,
+        currentIndexBefore: currentIndexBefore,
       );
     }
 

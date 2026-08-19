@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
 import '../models/game_state.dart';
@@ -14,26 +15,55 @@ class GameSaveService {
   static const String _saveKey = 'hand_foot_game_save';
   static final _log = Logger('GameSaveService');
 
+  /// Shared FIFO queue so instance [saveGame] and [clearSavedGame] cannot
+  /// race on the same SharedPreferences key.
+  static Future<void> _persistenceQueue = Future<void>.value();
+
+  static Future<void> _enqueuePersistence(Future<void> Function() operation) {
+    final previous = _persistenceQueue;
+    final current = previous.then((_) => operation());
+    _persistenceQueue = current.then((_) {}, onError: (_) {});
+    return current;
+  }
+
+  /// Awaits after a successful write so tests can enqueue [clearSavedGame]
+  /// while this save still occupies the persistence queue.
+  @visibleForTesting
+  static Future<void> Function()? debugBlockAfterSaveWrite;
+
   /// Save the current game state to local storage
   static Future<void> saveGame(
     GameState gameState,
     int? gameSeed, {
     Map<String, BotPersonality>? botPersonalities,
-  }) async {
+  }) {
+    late final String jsonString;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final gameData = _serializeGameState(
-        gameState,
-        gameSeed,
-        botPersonalities: botPersonalities,
+      jsonString = jsonEncode(
+        _serializeGameState(
+          gameState,
+          gameSeed,
+          botPersonalities: botPersonalities,
+        ),
       );
-      final jsonString = jsonEncode(gameData);
-
-      await prefs.setString(_saveKey, jsonString);
-      _log.info('Game saved to local storage');
     } catch (e) {
       _log.severe('Failed to save game: $e');
+      return Future<void>.value();
     }
+
+    return _enqueuePersistence(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_saveKey, jsonString);
+        _log.info('Game saved to local storage');
+        final blocker = debugBlockAfterSaveWrite;
+        if (blocker != null) {
+          await blocker();
+        }
+      } catch (e) {
+        _log.severe('Failed to save game: $e');
+      }
+    });
   }
 
   /// Load the saved game state from local storage
@@ -68,14 +98,16 @@ class GameSaveService {
   }
 
   /// Clear the saved game from local storage
-  static Future<void> clearSavedGame() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_saveKey);
-      _log.info('Saved game cleared');
-    } catch (e) {
-      _log.severe('Failed to clear saved game: $e');
-    }
+  static Future<void> clearSavedGame() {
+    return _enqueuePersistence(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_saveKey);
+        _log.info('Saved game cleared');
+      } catch (e) {
+        _log.severe('Failed to clear saved game: $e');
+      }
+    });
   }
 
   /// Serialize game state to a JSON-compatible map
