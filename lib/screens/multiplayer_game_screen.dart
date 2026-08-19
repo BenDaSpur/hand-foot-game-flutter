@@ -13,6 +13,8 @@ import '../widgets/game_hand_display.dart';
 import '../widgets/advanced_meld_selector.dart';
 import '../widgets/game_board_layout.dart';
 import '../widgets/final_turn_banner.dart';
+import '../widgets/last_call_banner.dart';
+import '../widgets/last_call_dialog.dart';
 import '../widgets/stuck_go_out_recovery_banner.dart';
 import '../widgets/turn_timer.dart';
 import '../game/go_out_guards.dart';
@@ -72,6 +74,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   bool _showKeyboardHelp = false;
   bool _isCardAnimationActive = false;
   bool _isExiting = false;
+  bool _earlyEndAlertInFlight = false;
   StreamSubscription<GameState>? _gameStateSubscription;
   StreamSubscription<MultiplayerLifecycleEvent>? _lifecycleSubscription;
 
@@ -110,6 +113,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     if (becameMyTurn) {
       setState(_clearHandHighlightState);
     }
+    _scheduleEarlyRoundEndAlerts();
   }
 
   @override
@@ -226,6 +230,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   void _onDrawFromDeck() {
     if (_gameController.drawFromDeck()) {
       setState(_clearHandHighlightState);
+      _scheduleEarlyRoundEndAlerts();
       return;
     }
 
@@ -665,6 +670,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       );
     }
 
+    if (gameState.lastCallActive && gameState.phase == GamePhase.playing) {
+      return LastCallBanner(
+        isLocalPlayerTurn: currentPlayer.id == _gameController.userId,
+      );
+    }
+
     if (gameState.finalTurnPhaseActive) {
       return FinalTurnBanner(
         gameState: gameState,
@@ -673,6 +684,65 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     }
 
     return null;
+  }
+
+  void _scheduleEarlyRoundEndAlerts() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowEarlyRoundEndAlerts();
+    });
+  }
+
+  Future<void> _maybeShowEarlyRoundEndAlerts() async {
+    if (_earlyEndAlertInFlight || !mounted || _isExiting) {
+      return;
+    }
+
+    final gameState = _gameController.gameState;
+    if (gameState.phase != GamePhase.playing) {
+      return;
+    }
+
+    if (gameState.lastCallAlertPending) {
+      setState(() {
+        _earlyEndAlertInFlight = true;
+      });
+      try {
+        gameState.consumeLastCallAlert();
+        final isLocalPlayerTurn =
+            gameState.currentPlayer.id == _gameController.userId;
+        await LastCallDialog.showEmptyDeck(
+          context,
+          isLocalPlayerTurn: isLocalPlayerTurn,
+        );
+      } finally {
+        if (!mounted) {
+          _earlyEndAlertInFlight = false;
+        } else {
+          setState(() {
+            _earlyEndAlertInFlight = false;
+          });
+        }
+      }
+      return;
+    }
+
+    if (gameState.stalemateAlertPending) {
+      setState(() {
+        _earlyEndAlertInFlight = true;
+      });
+      try {
+        gameState.consumeStalemateAlert();
+        await LastCallDialog.showStalemateWarning(context);
+      } finally {
+        if (!mounted) {
+          _earlyEndAlertInFlight = false;
+        } else {
+          setState(() {
+            _earlyEndAlertInFlight = false;
+          });
+        }
+      }
+    }
   }
 
   void _selectAllCardsForMeld(int meldIndex) {
@@ -890,7 +960,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                             key: ValueKey(gameState.currentPlayer.id),
                             turnDurationSeconds: _turnDurationSeconds,
                             isActive: _gameController.isMyTurn,
-                            isPaused: _isMeldModalOpen,
+                            isPaused:
+                                _isMeldModalOpen || _earlyEndAlertInFlight,
                             onTimeUp: _handleTurnTimeout,
                             onTick: (remaining) {
                               if (remaining == _turnTimeWarningSeconds &&

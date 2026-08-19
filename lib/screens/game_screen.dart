@@ -24,6 +24,7 @@ import '../widgets/game_app_bar.dart';
 import '../widgets/game_session_info_menu.dart';
 import '../widgets/card_animation_host.dart';
 import '../widgets/final_turn_banner.dart';
+import '../widgets/last_call_banner.dart';
 import '../widgets/stuck_go_out_recovery_banner.dart';
 import '../widgets/round_start_mini_game.dart';
 import '../game/go_out_guards.dart';
@@ -111,6 +112,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   // Prevent multiple game end dialogs
   bool _gameEndDialogShown = false;
   bool _isRoundTransitionInProgress = false;
+  bool _earlyEndAlertInFlight = false;
 
   // Queue for bot turn processing to ensure one at a time
   bool _isBotTurnInProgress = false;
@@ -213,6 +215,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           setState(() {
             // Empty setState triggers rebuild which reads latest game state
           });
+          _scheduleEarlyRoundEndAlerts();
           // Only trigger turn processing if no bot turn is currently in progress
           if (!_isBotTurnInProgress) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -716,6 +719,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         if (mounted) {
           if (controller.gameState.phase == GamePhase.roundEnd) {
             _triggerRoundTransition('human turn');
+          } else {
+            _scheduleEarlyRoundEndAlerts();
           }
         }
         return;
@@ -1143,6 +1148,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           false; // Reset interaction flag after drawing
       _clearHandHighlightState();
       setState(() {});
+      _scheduleEarlyRoundEndAlerts();
     } else {
       // Empty-deck emergency end is explained in the round-transition dialog.
       final gameState = controller.gameState;
@@ -2374,11 +2380,62 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       );
     }
 
+    if (gameState.lastCallActive && gameState.phase == GamePhase.playing) {
+      return LastCallBanner(
+        isLocalPlayerTurn: currentPlayer.type == PlayerType.human,
+      );
+    }
+
     if (gameState.finalTurnPhaseActive) {
       return FinalTurnBanner(gameState: gameState);
     }
 
     return null;
+  }
+
+  void _scheduleEarlyRoundEndAlerts() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowEarlyRoundEndAlerts();
+    });
+  }
+
+  Future<void> _maybeShowEarlyRoundEndAlerts() async {
+    final controller = _gameController;
+    if (controller == null ||
+        _earlyEndAlertInFlight ||
+        _disposed ||
+        !mounted ||
+        _isLearnToPlay ||
+        _isRoundTransitionInProgress) {
+      return;
+    }
+
+    final gameState = controller.gameState;
+    if (gameState.phase != GamePhase.playing) {
+      return;
+    }
+
+    if (gameState.lastCallAlertPending) {
+      _earlyEndAlertInFlight = true;
+      gameState.consumeLastCallAlert();
+      final isLocalPlayerTurn =
+          gameState.currentPlayer.type == PlayerType.human;
+      await _dialogManager.showLastCallAlert(
+        isLocalPlayerTurn: isLocalPlayerTurn,
+      );
+      _earlyEndAlertInFlight = false;
+      if (mounted) {
+        setState(() {});
+      }
+      return;
+    }
+
+    if (gameState.stalemateAlertPending) {
+      _earlyEndAlertInFlight = true;
+      gameState.consumeStalemateAlert();
+      await _dialogManager.showStalemateWarningAlert();
+      _earlyEndAlertInFlight = false;
+    }
   }
 
   GameSessionInfo _soloSessionInfo(GameState gameState) {

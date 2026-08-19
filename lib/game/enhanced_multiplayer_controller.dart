@@ -522,6 +522,9 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     localGameState.playersAwaitingFinalTurn
       ..clear()
       ..addAll(newGameState.playersAwaitingFinalTurn);
+    localGameState.lastCallActive = newGameState.lastCallActive;
+    localGameState.lastCallAlertPending = newGameState.lastCallAlertPending;
+    localGameState.stalemateAlertPending = newGameState.stalemateAlertPending;
 
     // Set multiplayer privacy controls
     localGameState.setMultiplayerMode(true, currentUserId);
@@ -848,6 +851,11 @@ class EnhancedMultiplayerController implements MultiplayerGameInterface {
     _gameController.gameState.playersAwaitingFinalTurn
       ..clear()
       ..addAll(serverState.playersAwaitingFinalTurn);
+    _gameController.gameState.lastCallActive = serverState.lastCallActive;
+    _gameController.gameState.lastCallAlertPending =
+        serverState.lastCallAlertPending;
+    _gameController.gameState.stalemateAlertPending =
+        serverState.stalemateAlertPending;
 
     // Same privacy controls as the steady-state sync path, so actions logged
     // before the first _updateLocalGameState use the viewer's perspective

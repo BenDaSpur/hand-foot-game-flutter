@@ -1091,6 +1091,11 @@ class GameController implements GameInterface {
     gameState.emergencyRoundEndReason = parseEmergencyRoundEndReason(
       data['emergencyRoundEndReason'],
     );
+    gameState.lastCallActive = data['lastCallActive'] as bool? ?? false;
+    gameState.lastCallAlertPending =
+        data['lastCallAlertPending'] as bool? ?? false;
+    gameState.stalemateAlertPending =
+        data['stalemateAlertPending'] as bool? ?? false;
   }
 
   static void _restoreRecentActions(

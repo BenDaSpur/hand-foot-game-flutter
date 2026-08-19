@@ -158,5 +158,25 @@ void main() {
         expect(missing!.gameState.emergencyRoundEndReason, isNull);
       },
     );
+
+    test('restores last-call flags so resume can show the alert', () async {
+      final players = [
+        Player(id: '1', name: 'You', type: PlayerType.human),
+        Player(id: '2', name: 'Bot', type: PlayerType.bot),
+      ];
+      final gameController = GameController(players: players, seed: 42);
+      gameController.initializeGame();
+      gameController.gameState.lastCallActive = true;
+      gameController.gameState.lastCallAlertPending = true;
+      gameController.gameState.stalemateAlertPending = true;
+
+      await GameSaveService.saveGame(gameController.gameState, 42);
+
+      final restored = await GameController.loadSavedGame();
+      expect(restored, isNotNull);
+      expect(restored!.gameState.lastCallActive, isTrue);
+      expect(restored.gameState.lastCallAlertPending, isTrue);
+      expect(restored.gameState.stalemateAlertPending, isTrue);
+    });
   });
 }
