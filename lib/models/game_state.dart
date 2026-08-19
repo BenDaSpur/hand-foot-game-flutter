@@ -976,7 +976,7 @@ class GameState {
     _stalemateDiscardCount++;
 
     final warningAt = players.length;
-    final endAt = players.length * 2;
+    final endAt = players.length * GameConfig.stalemateEndRotations;
     if (_stalemateDiscardCount >= endAt && previousCount < endAt) {
       _logAction(
         '🛑 STALEMATE DETECTED: All players discarded 3s for two full rotations',

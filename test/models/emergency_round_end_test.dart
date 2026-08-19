@@ -195,6 +195,7 @@ void main() {
           isFalse,
         );
       },
+      tags: ['regression'],
     );
   });
 }
