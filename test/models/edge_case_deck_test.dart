@@ -7,7 +7,7 @@ import 'package:hand_foot_game_flutter/models/player.dart';
 void main() {
   group('Edge Case Deck Tests', () {
     test(
-      'Edge Case 1: Should only take available cards from discard pile when unlocking',
+      'Edge Case 1: Should fill a one-card discard unlock from the draw pile',
       () {
         final players = [
           Player(id: '1', name: 'Player 1', type: PlayerType.human),
@@ -47,12 +47,11 @@ void main() {
         // Player should have:
         // - Lost 2 kings from hand (used to unlock)
         // - The king from discard pile goes directly to meld, not hand
-        // - NO additional cards (per official rules: only from discard pile)
-        final expectedHandSize = initialHandSize - 2;
+        // - 5 fill cards from the draw pile (discard had no extras)
+        final expectedHandSize = initialHandSize - 2 + 5;
         expect(player.currentHand.length, equals(expectedHandSize));
 
-        // Deck should be unchanged (per official rules)
-        expect(gameState.deck.size, equals(initialDeckSize));
+        expect(gameState.deck.size, equals(initialDeckSize - 5));
 
         // Player should have a meld with 3 kings
         expect(player.melds.length, equals(1));
@@ -160,15 +159,15 @@ void main() {
       final success = gameState.unlockDiscard();
       expect(success, true);
 
-      // Per official rules: take only from discard pile, not deck
-      // Should take unlock card (king) + 4 additional cards from discard
+      // Take unlock card (king) + 4 additional from discard + 1 from deck
       expect(player.melds.length, equals(1)); // Meld was created
 
-      // Player should have gained 4 cards from discard (lost 2 kings, gained 4)
-      expect(player.currentHand.length, equals(initialHandSize - 2 + 4));
+      // Player should have gained 5 cards (lost 2 kings, gained 4 + 1)
+      expect(player.currentHand.length, equals(initialHandSize - 2 + 5));
 
-      // Discard pile should be empty now
+      // Discard pile should be empty now; one leftover deck card remains
       expect(gameState.discardPile.length, equals(0));
+      expect(gameState.deck.size, equals(1));
     });
 
     test(

@@ -92,7 +92,8 @@ class CardAddedToMeldEvent extends GameEvent {
 
 /// Event fired when discard pile is unlocked
 class DiscardPileUnlockedEvent extends GameEvent {
-  /// Up to 5 additional cards added to the player's hand.
+  /// Up to 5 additional cards added to the player's hand (discard leftovers
+  /// plus any draw-pile cards that completed the pickup).
   final List<PlayingCard> handPickupCards;
 
   /// The 2 matching naturals from hand plus the top discard card melded.

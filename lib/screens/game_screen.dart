@@ -14,7 +14,6 @@ import '../game/game_controller_factory.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
 import '../config/bot_configurations.dart';
-import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../services/firebase_service.dart';
 import '../widgets/melds_section.dart';
@@ -1177,16 +1176,17 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     final pileSizeBefore = gameState.discardPile.length;
     final unlockTopCard = gameState.topDiscard?.compactName;
-    // Family rules: meld the top card + pick up up to additionalDiscardPickup more.
-    final cardsActuallyTaken = pileSizeBefore <= 0
-        ? 0
-        : 1 + (pileSizeBefore - 1).clamp(0, GameConfig.additionalDiscardPickup);
     if (controller.unlockDiscardPile()) {
       _hasPlayerInteractedSinceDraw = false;
       _clearHandHighlightState();
       setState(() {});
       // UI will update via Riverpod reactivity when DiscardPileUnlockedEvent fires
       debugPrint('DEBUG: Discard pile unlocked successfully');
+      // Top discard is melded; newly drawn cards are discard leftovers plus
+      // any draw-pile fill that completed the 5-card unlock pickup.
+      final cardsActuallyTaken = pileSizeBefore <= 0
+          ? 0
+          : 1 + currentPlayer.newlyDrawnCardIndices.length;
       _logHumanAction(
         action: 'unlockDiscardPile',
         reasoning: 'Human unlocked discard pile',

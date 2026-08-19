@@ -598,32 +598,56 @@ class GameState {
 
     currentPlayer.hasPlayedDown = true; // Ensure play-down status is set
 
-    // Take the next 5 cards from discard pile (or what's available)
-    // Per official rules: only take from discard pile, NOT from deck
-    final additionalDiscards = <PlayingCard>[];
+    // Take up to 5 additional cards from the discard pile. If the pile is
+    // short, fill the remainder from the draw pile so the unlock pickup
+    // still totals [GameConfig.additionalDiscardPickup] when cards remain.
+    final additionalCards = <PlayingCard>[];
     for (
       int i = 0;
       i < GameConfig.additionalDiscardPickup && discardPile.isNotEmpty;
       i++
     ) {
-      additionalDiscards.add(discardPile.removeLast());
+      additionalCards.add(discardPile.removeLast());
     }
 
-    if (additionalDiscards.isNotEmpty) {
-      currentPlayer.addNewlyDrawnCards(additionalDiscards);
+    final fromDiscardCount = additionalCards.length;
+    final neededFromDeck =
+        GameConfig.additionalDiscardPickup - fromDiscardCount;
+    if (neededFromDeck > 0) {
+      additionalCards.addAll(_drawUnlockFillFromDeck(neededFromDeck));
+    }
+
+    if (additionalCards.isNotEmpty) {
+      currentPlayer.addNewlyDrawnCards(additionalCards);
 
       // Same privacy rule as drawing: the shared log records only the count,
       // while the card names stay a device-local detail for the acting player.
-      final additionalNames = additionalDiscards
-          .map((c) => c.compactName)
-          .join(', ');
-      _logAction(
-        'took ${additionalDiscards.length} more cards from discard pile',
-        privateMessage:
-            'took ${additionalDiscards.length} more cards from discard pile: $additionalNames',
-      );
+      if (fromDiscardCount > 0) {
+        final discardNames = additionalCards
+            .take(fromDiscardCount)
+            .map((c) => c.compactName)
+            .join(', ');
+        _logAction(
+          'took $fromDiscardCount more cards from discard pile',
+          privateMessage:
+              'took $fromDiscardCount more cards from discard pile: $discardNames',
+        );
+      }
+
+      final fromDeckCount = additionalCards.length - fromDiscardCount;
+      if (fromDeckCount > 0) {
+        final deckNames = additionalCards
+            .skip(fromDiscardCount)
+            .map((c) => c.compactName)
+            .join(', ');
+        _logAction(
+          'took $fromDeckCount more cards from draw pile to complete unlock',
+          privateMessage:
+              'took $fromDeckCount more cards from draw pile to complete unlock: $deckNames',
+        );
+      }
     } else {
-      _logAction('no additional cards available in discard pile');
+      _logAction('no additional cards available in discard pile or draw pile');
     }
 
     turnPhase = TurnPhase.meld;
@@ -1233,6 +1257,41 @@ class GameState {
         'turnPhase=$turnPhase',
       );
     }
+  }
+
+  /// Draws up to [count] cards from the deck to complete an unlock pickup.
+  ///
+  /// Reshuffles leftover discard cards if the deck is empty. Returns whatever
+  /// is available rather than ending the round — the unlock meld already
+  /// happened, and a short stock just means a smaller pickup.
+  List<PlayingCard> _drawUnlockFillFromDeck(int count) {
+    final drawn = <PlayingCard>[];
+    if (count <= 0) {
+      return drawn;
+    }
+
+    if (deck.size < count) {
+      _attemptReshuffleForEmptyDeck();
+    }
+
+    for (int i = 0; i < count; i++) {
+      PlayingCard? card;
+      if (!deck.isEmpty) {
+        card = deck.drawCard();
+      } else {
+        _attemptReshuffleForEmptyDeck();
+        if (!deck.isEmpty) {
+          card = deck.drawCard();
+        }
+      }
+
+      if (card == null) {
+        break;
+      }
+      drawn.add(card);
+    }
+
+    return drawn;
   }
 
   /// Attempts to reshuffle discard pile when deck is completely empty.

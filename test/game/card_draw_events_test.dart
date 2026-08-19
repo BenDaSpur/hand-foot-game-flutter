@@ -107,5 +107,50 @@ void main() {
         }
       },
     );
+
+    test(
+      'DiscardPileUnlockedEvent includes draw-pile fill when discard is short',
+      () async {
+        final eventBus = GameEventBus();
+        final capturedEvents = <GameEvent>[];
+        final subscription = eventBus.subscribe(capturedEvents.add);
+        addTearDown(subscription.cancel);
+
+        final players = [
+          Player(id: 'human', name: 'You', type: PlayerType.human),
+          Player(id: 'bot', name: 'Bot', type: PlayerType.bot),
+        ];
+        final controller = GameController(players: players, eventBus: eventBus);
+        controller.initializeGame();
+        await Future<void>.delayed(Duration.zero);
+
+        final human = players.first;
+        final gameState = controller.gameState;
+
+        human.hasPlayedDown = true;
+        gameState.discardPile
+          ..clear()
+          ..add(const PlayingCard(suit: Suit.spades, rank: CardRank.nine));
+
+        human.currentHand.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+        ]);
+
+        final success = controller.unlockDiscardPile();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(success, isTrue);
+        final event = capturedEvents
+            .whereType<DiscardPileUnlockedEvent>()
+            .first;
+        expect(event.handPickupCards, hasLength(5));
+        expect(event.meldedCards, hasLength(3));
+        expect(gameState.discardPile, isEmpty);
+        for (final card in event.handPickupCards) {
+          expect(human.currentHand.contains(card), isTrue);
+        }
+      },
+    );
   });
 }

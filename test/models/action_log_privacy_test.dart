@@ -176,9 +176,11 @@ void main() {
 
       expect(gameState.unlockDiscard(), isTrue);
 
-      final pickupMessages = serializedMessages(
-        gameState,
-      ).where((message) => message.contains('more cards from discard pile'));
+      final pickupMessages = serializedMessages(gameState).where(
+        (message) =>
+            message.contains('more cards from discard pile') ||
+            message.contains('from draw pile to complete unlock'),
+      );
       expect(pickupMessages, isNotEmpty);
       for (final message in pickupMessages) {
         expect(message.contains('9 ♥'), isFalse);

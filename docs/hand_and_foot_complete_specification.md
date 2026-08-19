@@ -185,10 +185,11 @@ Process:
 1. Remove 2 matching cards from hand
 2. Take top discard card
 3. Form meld with those 3 cards (add to existing meld if rank exists)
-4. Take **up to 5 additional cards** from discard pile (NOT from deck)
-5. Set `hasPlayedDown = true`
+4. Take **up to 5 additional cards** from the discard pile
+5. If fewer than 5 extras remain in the discard pile, draw the remainder from the **draw pile** so the unlock pickup still totals 5 when cards remain
+6. Set `hasPlayedDown = true`
 
-**CRITICAL RULE**: Only take additional cards from discard pile. If discard pile has fewer than 5 cards below the top card, player gets fewer cards. Do NOT draw from deck.
+**SHORT-PILE FILL**: Discard leftovers are taken first. A one-card pile still yields 5 cards from the draw pile. If the draw pile cannot complete the 5, take what's left.
 
 #### Phase 2: MELD
 Player MAY perform any number of these actions:
@@ -368,11 +369,14 @@ function unlockDiscard(player, discardPile, deck) {
     player.melds.push(new Meld(meldCards));
   }
 
-  // 4. Take up to 5 additional cards from discard pile ONLY
-  // DO NOT take from deck if discard pile runs out
+  // 4. Take up to 5 additional cards from discard, then fill from deck
   const additionalCards = [];
   for (let i = 0; i < 5 && discardPile.cards.length > 0; i++) {
     additionalCards.push(discardPile.cards.pop());
+  }
+  const neededFromDeck = 5 - additionalCards.length;
+  for (let i = 0; i < neededFromDeck && deck.cards.length > 0; i++) {
+    additionalCards.push(deck.cards.pop());
   }
 
   // 5. Add additional cards to hand
@@ -1126,8 +1130,8 @@ function validateMeldWithFeedback(cards, player, playDownRequirement) {
 - [ ] Cannot unlock with wild on top
 - [ ] Cannot unlock with 3 on top
 - [ ] Cannot unlock with only 1 matching natural
-- [ ] Takes up to 5 cards from discard (NOT deck)
-- [ ] Unlocking with 2 cards in discard takes only 2 (not from deck)
+- [ ] Takes up to 5 cards from discard, then fills any shortfall from the draw pile
+- [ ] Unlocking with 2 cards in discard takes those 2 plus 3 from the draw pile
 
 **Scoring**:
 - [ ] Clean book awards 500 bonus
@@ -1222,7 +1226,7 @@ Min 3 cards | Min 2 naturals same rank | Wilds ≤ Naturals | No 3s
 
 ### Unlock Discard
 ```
-✓ Played down | ✓ Not wild | ✓ Not 3 | ✓ 2+ matching naturals → Take top + up to 5 more from discard
+✓ Played down | ✓ Not wild | ✓ Not 3 | ✓ 2+ matching naturals → Take top + up to 5 more from discard (draw pile fills any shortfall)
 ```
 
 ---
@@ -1230,7 +1234,7 @@ Min 3 cards | Min 2 naturals same rank | Wilds ≤ Naturals | No 3s
 ## Appendix B: Common Pitfalls
 
 ### ❌ Don't Do This
-1. **Allow drawing from deck during unlock** - Only take from discard pile
+1. **Skip the draw-pile fill on a short discard unlock** - Take leftover discards first, then complete 5 from the draw pile
 2. **Count hand cards toward play-down before melding** - Only melded cards count
 3. **Allow going out without both book types** - Need clean AND dirty
 4. **Let wilds exceed naturals in meld** - Wilds must be ≤ naturals
