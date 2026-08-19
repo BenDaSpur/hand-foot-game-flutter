@@ -91,6 +91,25 @@ void main() {
       expect(restored.gameState.players.first.hasCleanBook, isTrue);
       expect(restored.gameState.players.first.hasDirtyBook, isTrue);
     },
+    tags: ['regression'],
+  );
+
+  test(
+    'queued clear after an in-flight save leaves no autosave',
+    () async {
+      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+      final controller = GameController(players: [human, rita], seed: 771212);
+      controller.initializeGame();
+
+      final save = controller.saveGame();
+      final clear = GameController.clearSavedGame();
+      await save;
+      await clear;
+
+      expect(await GameController.hasSavedGame(), isFalse);
+    },
+    tags: ['regression'],
   );
 }
 

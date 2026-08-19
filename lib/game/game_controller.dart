@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:logging/logging.dart';
 import '../config/game_config.dart';
 import '../models/card.dart';
 import '../models/deck.dart';
@@ -45,9 +46,7 @@ class GameController implements GameInterface {
   /// When false, [saveGame] is a no-op (used by Learn to Play).
   bool autosaveEnabled = true;
 
-  /// Serializes overlapping autosaves so a later go-out cannot be overwritten
-  /// by an earlier in-flight discard/round-start write.
-  Future<void> _saveChain = Future<void>.value();
+  static final _log = Logger('GameController');
 
   /// Personalities restored from local autosave (playerId → enum toString).
   /// Applied by GameScreen when continuing a saved solo game.
@@ -373,7 +372,9 @@ class GameController implements GameInterface {
   /// Persist after a turn/round change, including meld-phase go-out
   /// (session_17871159981788178 lost that state because only discard saved).
   void _scheduleAutosave() {
-    saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+    saveGame().catchError((e) {
+      _log.severe('Auto-save failed: $e');
+    });
   }
 
   @override
@@ -1126,12 +1127,7 @@ class GameController implements GameInterface {
     if (!autosaveEnabled) {
       return;
     }
-    final previous = _saveChain;
-    final current = previous.then(
-      (_) => GameSaveService.saveGame(_gameState, gameSeed),
-    );
-    _saveChain = current.then((_) {}, onError: (_) {});
-    await current;
+    await GameSaveService.saveGame(_gameState, gameSeed);
   }
 
   static Future<GameController?> loadSavedGame() async {
