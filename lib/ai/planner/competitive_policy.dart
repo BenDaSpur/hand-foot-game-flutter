@@ -26,8 +26,11 @@ class CompetitivePolicy {
 
   /// Hard-take any eligible unlock unless [canEmptyThisTurn] is true.
   ///
-  /// Requires a verified meld/discard path that leaves at most one card.
-  /// Hand size alone is not enough — pass [context] and [meldAnalyzer].
+  /// Requires a verified meld/discard path. After the draw is in hand, a
+  /// leftover of at most one card is a finish. During [TurnPhase.draw] the
+  /// leftover must already be zero — the bot still has to draw two cards,
+  /// and those cards are not modeled here. Hand size alone is not enough —
+  /// pass [context] and [meldAnalyzer].
   static bool canEmptyThisTurn(
     Player bot, {
     BotGameContext? context,
@@ -40,13 +43,14 @@ class CompetitivePolicy {
     if (handSize > BotConfig.goOutThisTurnMaxHand) {
       return false;
     }
-    if (handSize <= 1) {
-      return true;
-    }
     if (context == null || meldAnalyzer == null) {
       return false;
     }
-    return _remainingAfterLegalPlays(bot, context, meldAnalyzer) <= 1;
+    final remaining = _remainingAfterLegalPlays(bot, context, meldAnalyzer);
+    if (context.turnPhase == TurnPhase.draw) {
+      return remaining == 0;
+    }
+    return remaining <= 1;
   }
 
   static int _remainingAfterLegalPlays(
@@ -66,7 +70,10 @@ class CompetitivePolicy {
         remaining.removeAt(identicalIndex);
         return;
       }
-      remaining.remove(card);
+      final valueIndex = remaining.indexWhere((c) => c == card);
+      if (valueIndex >= 0) {
+        remaining.removeAt(valueIndex);
+      }
     }
 
     final additions = meldAnalyzer
@@ -206,53 +213,61 @@ class CompetitivePolicy {
   static ScorerWeights weightsFor(BotPersonality personality) {
     switch (personality) {
       case BotPersonality.conservative:
-        return const ScorerWeights(
-          takePile: 1.0,
-          playDown: 1.05,
-          bookProgress: 1.25,
-          cleanBook: 1.35,
-          points: 1.0,
-          footTransition: 1.0,
-          goOut: 1.05,
-          keyHold: 1.2,
-          denial: 0.95,
-        );
+        {
+          return const ScorerWeights(
+            takePile: 1.0,
+            playDown: 1.05,
+            bookProgress: 1.25,
+            cleanBook: 1.35,
+            points: 1.0,
+            footTransition: 1.0,
+            goOut: 1.05,
+            keyHold: 1.2,
+            denial: 0.95,
+          );
+        }
       case BotPersonality.aggressive:
-        return const ScorerWeights(
-          takePile: 1.25,
-          playDown: 1.2,
-          bookProgress: 0.95,
-          cleanBook: 1.0,
-          points: 1.05,
-          footTransition: 1.2,
-          goOut: 1.15,
-          keyHold: 0.9,
-          denial: 1.25,
-        );
+        {
+          return const ScorerWeights(
+            takePile: 1.25,
+            playDown: 1.2,
+            bookProgress: 0.95,
+            cleanBook: 1.0,
+            points: 1.05,
+            footTransition: 1.2,
+            goOut: 1.15,
+            keyHold: 0.9,
+            denial: 1.25,
+          );
+        }
       case BotPersonality.bookBuilder:
-        return const ScorerWeights(
-          takePile: 1.05,
-          playDown: 1.0,
-          bookProgress: 1.4,
-          cleanBook: 1.45,
-          points: 1.1,
-          footTransition: 0.95,
-          goOut: 1.0,
-          keyHold: 1.1,
-          denial: 1.0,
-        );
+        {
+          return const ScorerWeights(
+            takePile: 1.05,
+            playDown: 1.0,
+            bookProgress: 1.4,
+            cleanBook: 1.45,
+            points: 1.1,
+            footTransition: 0.95,
+            goOut: 1.0,
+            keyHold: 1.1,
+            denial: 1.0,
+          );
+        }
       case BotPersonality.adaptive:
-        return const ScorerWeights(
-          takePile: 1.15,
-          playDown: 1.15,
-          bookProgress: 1.1,
-          cleanBook: 1.2,
-          points: 1.0,
-          footTransition: 1.1,
-          goOut: 1.1,
-          keyHold: 1.05,
-          denial: 1.15,
-        );
+        {
+          return const ScorerWeights(
+            takePile: 1.15,
+            playDown: 1.15,
+            bookProgress: 1.1,
+            cleanBook: 1.2,
+            points: 1.0,
+            footTransition: 1.1,
+            goOut: 1.1,
+            keyHold: 1.05,
+            denial: 1.15,
+          );
+        }
     }
   }
 }

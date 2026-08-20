@@ -75,7 +75,44 @@ void main() {
     );
 
     test(
-      'skips pile only when truly going out this turn',
+      'skips pile only when remaining plays empty the pile before the draw',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.queen, dirty: true),
+        ]);
+
+        _setPile(controller, size: 40, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(
+          CompetitivePolicy.canEmptyThisTurn(
+            bot,
+            context: BotGameContext(controller.gameState, controller),
+            meldAnalyzer: botAI.meldAnalyzer,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'drawFromDeck');
+        expect(decision.analyticsContext?['skipReason'], 'goOutThisTurn');
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'keeps drawFromDiscard when one leftover card cannot finish before the draw',
       () {
         bot.hasPlayedDown = true;
         bot.hasPickedUpFoot = true;
@@ -103,11 +140,11 @@ void main() {
             context: BotGameContext(controller.gameState, controller),
             meldAnalyzer: botAI.meldAnalyzer,
           ),
-          isTrue,
+          isFalse,
         );
         final decision = botAI.makeDecision(bot, controller);
-        expect(decision.action, 'drawFromDeck');
-        expect(decision.analyticsContext?['skipReason'], 'goOutThisTurn');
+        expect(decision.action, 'drawFromDiscard');
+        expect(decision.analyticsContext?['couldUnlock'], isTrue);
       },
       tags: ['competitive_planner'],
     );

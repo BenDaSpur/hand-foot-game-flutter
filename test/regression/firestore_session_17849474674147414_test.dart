@@ -313,7 +313,6 @@ void main() {
           const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
           const PlayingCard(suit: Suit.spades, rank: CardRank.five),
           const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
         ]);
         gameController.gameState.discardPile.addAll(
           List.generate(

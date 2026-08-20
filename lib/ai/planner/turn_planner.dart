@@ -122,20 +122,20 @@ class TurnPlanner {
     if (context.turnPhase == TurnPhase.draw) {
       if (canUnlock && !goOutThisTurn) {
         final take = candidates
-            .where((c) => c.kind == LegalActionKind.drawDiscard)
+            .where((candidate) => candidate.kind == LegalActionKind.drawDiscard)
             .toList();
         if (take.isNotEmpty) {
           return take;
         }
       }
       return candidates
-          .where((c) => c.kind == LegalActionKind.drawDeck)
+          .where((candidate) => candidate.kind == LegalActionKind.drawDeck)
           .toList();
     }
 
     if (context.turnPhase == TurnPhase.meld && !bot.hasPlayedDown) {
       final playDown = candidates
-          .where((c) => c.kind == LegalActionKind.playDown)
+          .where((candidate) => candidate.kind == LegalActionKind.playDown)
           .toList();
       if (playDown.isNotEmpty) {
         return playDown;
@@ -148,11 +148,17 @@ class TurnPlanner {
   BotDecision _fallback(TurnPhase phase) {
     switch (phase) {
       case TurnPhase.draw:
-        return BotDecision(action: 'drawFromDeck');
+        {
+          return BotDecision(action: 'drawFromDeck');
+        }
       case TurnPhase.meld:
-        return BotDecision(action: 'noMeld');
+        {
+          return BotDecision(action: 'noMeld');
+        }
       case TurnPhase.discard:
-        return BotDecision(action: 'endTurn');
+        {
+          return BotDecision(action: 'endTurn');
+        }
     }
   }
 
