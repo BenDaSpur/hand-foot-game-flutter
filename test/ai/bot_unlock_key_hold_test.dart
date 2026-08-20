@@ -30,7 +30,7 @@ void main() {
     });
 
     test('botAiVersion bumped for human-counter', () {
-      expect(BotConfig.botAiVersion, '2026.08-human-counter');
+      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
     });
 
     test('emergency hand size still hard-takes unlockable fat pile in draw', () {
