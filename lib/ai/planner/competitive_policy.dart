@@ -1,6 +1,8 @@
+import '../../config/game_config.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
+import '../bot_config.dart';
 import '../bot_personality.dart';
 
 /// Hard constraints and personality weights for the competitive planner.
@@ -9,9 +11,6 @@ import '../bot_personality.dart';
 /// because they play down late and rarely hold the live top pair. These
 /// constraints encode that lesson instead of human hand-size mimicry.
 class CompetitivePolicy {
-  /// Empty the foot this turn only when books are met and the hand is tiny.
-  static const int goOutThisTurnMaxHand = 5;
-
   /// Pile size that makes play-down / unlock contest urgent.
   static const int contestablePileSize = 6;
 
@@ -25,7 +24,7 @@ class CompetitivePolicy {
   static bool canEmptyThisTurn(Player bot) {
     return bot.hasPickedUpFoot &&
         bot.canGoOutWithBooks &&
-        bot.currentHand.length <= goOutThisTurnMaxHand;
+        bot.currentHand.length <= BotConfig.goOutThisTurnMaxHand;
   }
 
   static int keyCount(Player bot, CardRank? rank) {
@@ -69,7 +68,7 @@ class CompetitivePolicy {
   static String drawSkipReason({
     required bool hasPlayedDown,
     required bool topUnlockable,
-    required int liveKeys,
+    required int naturalTopCount,
     required bool goOutThisTurn,
   }) {
     if (!hasPlayedDown) {
@@ -78,18 +77,13 @@ class CompetitivePolicy {
     if (!topUnlockable) {
       return 'frozenTop';
     }
-    if (liveKeys < 2) {
+    if (naturalTopCount < GameConfig.minNaturalCardsForMeld) {
       return 'noKey';
     }
     if (goOutThisTurn) {
       return 'goOutThisTurn';
     }
     return 'default';
-  }
-
-  static bool shouldPlayDownNow({required bool hasLegalCombo}) {
-    // Always play down once a legal combo exists — unlock is gated on it.
-    return hasLegalCombo;
   }
 
   static bool humanAlreadyPlayedDown(GameState gameState, String botId) {
@@ -104,21 +98,21 @@ class CompetitivePolicy {
     if (topRank == null) {
       return false;
     }
-    for (final player in gameState.players) {
-      if (player.id == botId || player.type != PlayerType.human) {
-        continue;
-      }
-      if (!player.hasPlayedDown) {
-        continue;
-      }
-      if (player.melds.any((m) => m.rank == topRank)) {
-        return true;
-      }
-      if (gameState.discardPile.length >= contestablePileSize) {
-        return true;
-      }
+    final playedDownHumans = gameState.players.where(
+      (player) =>
+          player.id != botId &&
+          player.type == PlayerType.human &&
+          player.hasPlayedDown,
+    );
+    if (playedDownHumans.isEmpty) {
+      return false;
     }
-    return false;
+    if (gameState.discardPile.length >= contestablePileSize) {
+      return true;
+    }
+    return playedDownHumans.any(
+      (player) => player.melds.any((m) => m.rank == topRank),
+    );
   }
 
   static ScorerWeights weightsFor(BotPersonality personality) {

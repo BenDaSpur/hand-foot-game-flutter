@@ -313,6 +313,10 @@ class BotConfig {
   /// on 4/5/6 tops; bots dumped those pairs then had 278+171 no-key draws).
   static const int genericUnlockKeyHoldPenalty = 90;
 
+  /// Extra discard penalty on top of [genericUnlockKeyHoldPenalty] when the
+  /// card is the live discard top or a recent contestable rank.
+  static const int liveTopKeyHoldExtraPenalty = 40;
+
   /// Go-out race may skip an unlockable pile at or below this hand size.
   /// 2–5 cards can finish soon; 6+ still contests a fat farm (analytics:
   /// 8-card foot skipped pile 51; 5-card race must not take +7).

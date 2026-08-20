@@ -46,7 +46,7 @@ class TurnPlanner {
     final skipReason = CompetitivePolicy.drawSkipReason(
       hasPlayedDown: bot.hasPlayedDown,
       topUnlockable: topUnlockable,
-      liveKeys: keyCount,
+      naturalTopCount: keyCount,
       goOutThisTurn: goOutThisTurn,
     );
 
@@ -59,6 +59,7 @@ class TurnPlanner {
       bot,
       context,
       liveKeyRanks: liveKeys,
+      liveTop: liveTop,
       forceSpendKeys: forceSpendKeys,
     );
 
@@ -69,7 +70,7 @@ class TurnPlanner {
         skipReason: skipReason,
         chosen: 'fallback',
       );
-      return _fallback(context.turnPhase);
+      return _withAnalytics(_fallback(context.turnPhase), lastAnalytics);
     }
 
     final constrained = _applyHardConstraints(
@@ -88,7 +89,6 @@ class TurnPlanner {
         context: context,
         weights: weights,
         humanCanUnlock: humanCanUnlock,
-        liveTop: liveTop,
       );
       if (best == null || scored.score > best.score) {
         best = scored;
@@ -99,8 +99,8 @@ class TurnPlanner {
     lastAnalytics = _analytics(
       couldUnlock: canUnlock,
       keyCount: keyCount,
-      skipReason: chosen.kind == 'drawDeck' ? skipReason : null,
-      chosen: chosen.kind,
+      skipReason: chosen.kind == LegalActionKind.drawDeck ? skipReason : null,
+      chosen: chosen.kind.name,
     );
     return _withAnalytics(chosen.decision, lastAnalytics);
   }
@@ -114,18 +114,23 @@ class TurnPlanner {
   }) {
     if (context.turnPhase == TurnPhase.draw) {
       if (canUnlock && !goOutThisTurn) {
-        final take = candidates.where((c) => c.kind == 'drawDiscard').toList();
+        final take = candidates
+            .where((c) => c.kind == LegalActionKind.drawDiscard)
+            .toList();
         if (take.isNotEmpty) {
           return take;
         }
       }
-      return candidates.where((c) => c.kind == 'drawDeck').toList();
+      return candidates
+          .where((c) => c.kind == LegalActionKind.drawDeck)
+          .toList();
     }
 
     if (context.turnPhase == TurnPhase.meld && !bot.hasPlayedDown) {
-      final playDown = candidates.where((c) => c.kind == 'playDown').toList();
-      if (playDown.isNotEmpty &&
-          CompetitivePolicy.shouldPlayDownNow(hasLegalCombo: true)) {
+      final playDown = candidates
+          .where((c) => c.kind == LegalActionKind.playDown)
+          .toList();
+      if (playDown.isNotEmpty) {
         return playDown;
       }
     }

@@ -10,10 +10,25 @@ import '../bot_game_context.dart';
 import '../bot_meld_analyzer.dart';
 import 'competitive_policy.dart';
 
+/// Kinds of legal actions the planner can score.
+enum LegalActionKind {
+  drawDeck,
+  drawDiscard,
+  playDown,
+  createMeld,
+  maximalBurst,
+  addToMeld,
+  noMeld,
+  goOut,
+  endTurn,
+  discard,
+  error,
+}
+
 /// A legal (or skip) action the planner may choose this phase.
 class LegalCandidate {
   final BotDecision decision;
-  final String kind;
+  final LegalActionKind kind;
 
   const LegalCandidate({required this.decision, required this.kind});
 }
@@ -32,6 +47,7 @@ class LegalActionGenerator {
     Player bot,
     BotGameContext context, {
     required Set<CardRank> liveKeyRanks,
+    required CardRank? liveTop,
     required bool forceSpendKeys,
   }) {
     switch (context.turnPhase) {
@@ -41,7 +57,7 @@ class LegalActionGenerator {
         return _meldActions(
           bot,
           context,
-          liveKeyRanks: liveKeyRanks,
+          liveTop: liveTop,
           forceSpendKeys: forceSpendKeys,
         );
       case TurnPhase.discard:
@@ -53,14 +69,14 @@ class LegalActionGenerator {
     final actions = <LegalCandidate>[
       LegalCandidate(
         decision: BotDecision(action: 'drawFromDeck'),
-        kind: 'drawDeck',
+        kind: LegalActionKind.drawDeck,
       ),
     ];
     if (context.canUnlockDiscard()) {
       actions.add(
         LegalCandidate(
           decision: BotDecision(action: 'drawFromDiscard'),
-          kind: 'drawDiscard',
+          kind: LegalActionKind.drawDiscard,
         ),
       );
     }
@@ -70,13 +86,13 @@ class LegalActionGenerator {
   List<LegalCandidate> _meldActions(
     Player bot,
     BotGameContext context, {
-    required Set<CardRank> liveKeyRanks,
+    required CardRank? liveTop,
     required bool forceSpendKeys,
   }) {
     final actions = <LegalCandidate>[
       LegalCandidate(
         decision: BotDecision(action: 'noMeld'),
-        kind: 'noMeld',
+        kind: LegalActionKind.noMeld,
       ),
     ];
     if (bot.currentHand.isEmpty) {
@@ -96,14 +112,14 @@ class LegalActionGenerator {
           actions.add(
             LegalCandidate(
               decision: BotDecision(action: 'createMeld', data: combo.first),
-              kind: 'playDown',
+              kind: LegalActionKind.playDown,
             ),
           );
         } else {
           actions.add(
             LegalCandidate(
               decision: BotDecision(action: 'createMultipleMelds', data: combo),
-              kind: 'playDown',
+              kind: LegalActionKind.playDown,
             ),
           );
         }
@@ -120,7 +136,7 @@ class LegalActionGenerator {
               forceSpendKeys ||
               !_burnsLiveKeys(
                 bot,
-                liveKeyRanks,
+                liveTop,
                 usedCards: [addition['card'] as PlayingCard],
                 allowBook: false,
               ),
@@ -130,7 +146,7 @@ class LegalActionGenerator {
       actions.add(
         LegalCandidate(
           decision: BotDecision(action: 'addToMeld', data: additions.first),
-          kind: 'addToMeld',
+          kind: LegalActionKind.addToMeld,
         ),
       );
     }
@@ -138,7 +154,7 @@ class LegalActionGenerator {
     var possible = meldAnalyzer.getPossibleMelds(bot, controller);
     possible = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, possible);
     if (!forceSpendKeys) {
-      possible = _filterLiveKeyMelds(bot, possible, liveKeyRanks);
+      possible = _filterLiveKeyMelds(bot, possible, liveTop);
     }
     if (possible.isNotEmpty) {
       final best = meldAnalyzer.findBestMeld(
@@ -150,7 +166,7 @@ class LegalActionGenerator {
         actions.add(
           LegalCandidate(
             decision: BotDecision(action: 'createMeld', data: best),
-            kind: 'createMeld',
+            kind: LegalActionKind.createMeld,
           ),
         );
       }
@@ -160,7 +176,7 @@ class LegalActionGenerator {
       actions,
       bot,
       controller,
-      liveKeyRanks: liveKeyRanks,
+      liveTop: liveTop,
       forceSpendKeys: forceSpendKeys,
     );
 
@@ -171,7 +187,7 @@ class LegalActionGenerator {
     List<LegalCandidate> actions,
     Player bot,
     GameController controller, {
-    required Set<CardRank> liveKeyRanks,
+    required CardRank? liveTop,
     required bool forceSpendKeys,
   }) {
     if (bot.hasPickedUpFoot) {
@@ -193,19 +209,14 @@ class LegalActionGenerator {
     final emptiesHand = usedCards.length >= bot.currentHand.length - 1;
     if (!forceSpendKeys &&
         !emptiesHand &&
-        _burnsLiveKeys(
-          bot,
-          liveKeyRanks,
-          usedCards: usedCards,
-          allowBook: true,
-        )) {
+        _burnsLiveKeys(bot, liveTop, usedCards: usedCards, allowBook: true)) {
       return;
     }
 
     actions.add(
       LegalCandidate(
         decision: BotDecision(action: 'createMultipleMelds', data: filtered),
-        kind: 'maximalBurst',
+        kind: LegalActionKind.maximalBurst,
       ),
     );
   }
@@ -220,14 +231,14 @@ class LegalActionGenerator {
         return [
           LegalCandidate(
             decision: BotDecision(action: 'goOut'),
-            kind: 'goOut',
+            kind: LegalActionKind.goOut,
           ),
         ];
       }
       return [
         LegalCandidate(
           decision: BotDecision(action: 'error'),
-          kind: 'error',
+          kind: LegalActionKind.error,
         ),
       ];
     }
@@ -236,7 +247,7 @@ class LegalActionGenerator {
       return [
         LegalCandidate(
           decision: BotDecision(action: 'endTurn'),
-          kind: 'endTurn',
+          kind: LegalActionKind.endTurn,
         ),
       ];
     }
@@ -249,7 +260,7 @@ class LegalActionGenerator {
     return [
       LegalCandidate(
         decision: BotDecision(action: 'discard', data: card),
-        kind: 'discard',
+        kind: LegalActionKind.discard,
       ),
     ];
   }
@@ -314,19 +325,15 @@ class LegalActionGenerator {
   List<List<PlayingCard>> _filterLiveKeyMelds(
     Player bot,
     List<List<PlayingCard>> possibleMelds,
-    Set<CardRank> liveKeyRanks,
+    CardRank? liveTop,
   ) {
-    if (possibleMelds.isEmpty || liveKeyRanks.isEmpty) {
+    if (possibleMelds.isEmpty || liveTop == null) {
       return possibleMelds;
     }
     final preserving = possibleMelds
         .where(
-          (meld) => !_burnsLiveKeys(
-            bot,
-            liveKeyRanks,
-            usedCards: meld,
-            allowBook: true,
-          ),
+          (meld) =>
+              !_burnsLiveKeys(bot, liveTop, usedCards: meld, allowBook: true),
         )
         .toList();
     if (preserving.isNotEmpty) {
@@ -339,25 +346,22 @@ class LegalActionGenerator {
 
   bool _burnsLiveKeys(
     Player bot,
-    Set<CardRank> liveKeyRanks, {
+    CardRank? protectedRank, {
     required List<PlayingCard> usedCards,
     required bool allowBook,
   }) {
-    if (liveKeyRanks.isEmpty) {
+    if (protectedRank == null) {
       return false;
     }
     if (allowBook && usedCards.length >= GameConfig.bookSize) {
       return false;
     }
-    final top = liveKeyRanks.first;
-    // Protect the live top first; other recent ranks are secondary.
-    final rankToProtect = top;
-    final have = CompetitivePolicy.keyCount(bot, rankToProtect);
+    final have = CompetitivePolicy.keyCount(bot, protectedRank);
     if (have < GameConfig.minNaturalCardsForMeld) {
       return false;
     }
     final used = usedCards
-        .where((c) => !c.isWild && c.rank == rankToProtect)
+        .where((c) => !c.isWild && c.rank == protectedRank)
         .length;
     return have - used < GameConfig.minNaturalCardsForMeld;
   }

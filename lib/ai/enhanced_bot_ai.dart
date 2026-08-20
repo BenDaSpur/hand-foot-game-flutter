@@ -22,9 +22,10 @@ import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
 ///
-/// This class serves as the main interface for bot AI decisions, coordinating
-/// between specialized managers for different aspects of gameplay including
-/// personality, game analysis, meld analysis, foot transitions, and end game.
+/// Production [makeDecision] uses [TurnPlanner]. Adaptive cascade strategies
+/// such as `hoarder_counter` / `speed_counter` (wild-freeze discards, constant
+/// overrides) are not applied on that path — personality only changes planner
+/// weights. [debugLegacyAdaptiveAdjustment] remains for tests.
 class EnhancedBotAI {
   // Core components
   final BotPersonalityManager _personalityManager;
@@ -181,7 +182,17 @@ class EnhancedBotAI {
 
       // Update game analysis for discard/opponent features used by the planner.
       _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
-      _gameAnalyzer.incrementTurnCount(bot.id);
+      // Count each bot turn once at draw start. Meld/discard retries and
+      // repeated draw decisions with the same snapshot must not increment.
+      if (gameState.turnPhase == TurnPhase.draw &&
+          !gameState.hasDrawnFromDeck) {
+        _gameAnalyzer.incrementTurnCountIfNewTurn(
+          bot.id,
+          '${gameState.round}|${gameState.deck.size}|'
+          '${gameState.discardPile.length}|${bot.currentHand.length}|'
+          '${bot.hasPickedUpFoot}',
+        );
+      }
 
       final decision = _planner.plan(bot, context);
       DebugLogger.botDebug(
@@ -4711,8 +4722,8 @@ class EnhancedBotAI {
     }
   }
 
-  /// Legacy cascade entry points kept so shared foot/end-game helpers stay
-  /// reachable. [makeDecision] uses [TurnPlanner] instead.
+  /// Legacy cascade entry points for tests. [makeDecision] uses [TurnPlanner]
+  /// and does not run hoarder_counter / speed_counter discard overrides.
   @visibleForTesting
   BotDecision debugLegacyMeldDecision(Player bot, BotGameContext context) {
     return _withDecisionContext(context, () => _makeMeldDecision(bot, context));

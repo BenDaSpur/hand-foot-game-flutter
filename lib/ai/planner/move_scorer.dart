@@ -1,6 +1,7 @@
 import '../../config/game_config.dart';
 import '../../models/card.dart';
 import '../../models/player.dart';
+import '../bot_config.dart';
 import '../bot_game_context.dart';
 import 'competitive_policy.dart';
 import 'legal_actions.dart';
@@ -13,6 +14,40 @@ class ScoredCandidate {
   const ScoredCandidate({required this.candidate, required this.score});
 }
 
+/// Planner score magnitudes. Personality weights multiply these.
+class _MoveScores {
+  static const takePileBase = 1000.0;
+  static const denialBonus = 400.0;
+  static const contestableTakeBonus = 200.0;
+  static const drawDeckBase = 10.0;
+  static const goOutSkipPile = 800.0;
+  static const playDownBase = 900.0;
+  static const contestablePlayDown = 250.0;
+  static const playDownPointsFactor = 0.4;
+  static const createMeldBase = 80.0;
+  static const footCreateBonus = 120.0;
+  static const addToMeldBase = 90.0;
+  static const footAddBonus = 100.0;
+  static const noMeldBase = 1.0;
+  static const noMeldPrePlayDown = 20.0;
+  static const goOut = 2000.0;
+  static const endTurn = 500.0;
+  static const discardBase = 50.0;
+  static const discardGoOut = 300.0;
+  static const error = -10000.0;
+  static const burstBase = 220.0;
+  static const burstPointsFactor = 0.5;
+  static const burstPerCard = 12.0;
+  static const burstEmptyBonus = 400.0;
+  static const cleanLaneCreate = 300.0;
+  static const dirtyAfterClean = 200.0;
+  static const cleanBookComplete = 500.0;
+  static const dirtyBookComplete = 300.0;
+  static const addToMeldFlat = 40.0;
+  static const completeCleanBookAdd = 400.0;
+  static const completeDirtyBookAdd = 280.0;
+}
+
 /// Scores legal actions with personality-weighted features.
 class MoveScorer {
   ScoredCandidate score({
@@ -21,65 +56,67 @@ class MoveScorer {
     required BotGameContext context,
     required ScorerWeights weights,
     required bool humanCanUnlock,
-    required CardRank? liveTop,
   }) {
     var value = 0.0;
-    final kind = candidate.kind;
     final pileSize = context.discardPileSize;
     final handSize = bot.currentHand.length;
+    final nearFoot =
+        !bot.hasPickedUpFoot &&
+        handSize <= BotConfig.emergencyTransitionThreshold;
 
-    switch (kind) {
-      case 'drawDiscard':
-        value += 1000 * weights.takePile;
+    switch (candidate.kind) {
+      case LegalActionKind.drawDiscard:
+        value += _MoveScores.takePileBase * weights.takePile;
         if (humanCanUnlock) {
-          value += 400 * weights.denial;
+          value += _MoveScores.denialBonus * weights.denial;
         }
         if (pileSize >= CompetitivePolicy.contestablePileSize) {
-          value += 200 * weights.takePile;
+          value += _MoveScores.contestableTakeBonus * weights.takePile;
         }
-      case 'drawDeck':
-        value += 10;
+      case LegalActionKind.drawDeck:
+        value += _MoveScores.drawDeckBase;
         if (CompetitivePolicy.canEmptyThisTurn(bot)) {
-          value += 800 * weights.goOut;
+          value += _MoveScores.goOutSkipPile * weights.goOut;
         }
-      case 'playDown':
-        value += 900 * weights.playDown;
+      case LegalActionKind.playDown:
+        value += _MoveScores.playDownBase * weights.playDown;
         if (pileSize >= CompetitivePolicy.contestablePileSize) {
-          value += 250 * weights.takePile;
+          value += _MoveScores.contestablePlayDown * weights.takePile;
         }
-        value += _meldedPoints(candidate) * 0.4 * weights.points;
-      case 'createMeld':
-        value += 80 * weights.bookProgress;
+        value +=
+            _meldedPoints(candidate) *
+            _MoveScores.playDownPointsFactor *
+            weights.points;
+      case LegalActionKind.createMeld:
+        value += _MoveScores.createMeldBase * weights.bookProgress;
         value += _createMeldScore(candidate, bot, weights);
-        if (!bot.hasPickedUpFoot && handSize <= 8) {
-          value += 120 * weights.footTransition;
+        if (nearFoot) {
+          value += _MoveScores.footCreateBonus * weights.footTransition;
         }
-      case 'maximalBurst':
+      case LegalActionKind.maximalBurst:
         value += _maximalBurstScore(candidate, bot, weights);
-      case 'addToMeld':
-        value += 90 * weights.bookProgress;
+      case LegalActionKind.addToMeld:
+        value += _MoveScores.addToMeldBase * weights.bookProgress;
         value += _addToMeldScore(candidate, bot, weights);
-        if (!bot.hasPickedUpFoot && handSize <= 8) {
-          value += 100 * weights.footTransition;
+        if (nearFoot) {
+          value += _MoveScores.footAddBonus * weights.footTransition;
         }
-      case 'noMeld':
-        value += 1;
+      case LegalActionKind.noMeld:
+        value += _MoveScores.noMeldBase;
         if (!bot.hasPlayedDown) {
-          value += 20;
+          value += _MoveScores.noMeldPrePlayDown;
         }
-      case 'goOut':
-        value += 2000 * weights.goOut;
-      case 'endTurn':
-        value += 500;
-      case 'discard':
-        value += 50;
+      case LegalActionKind.goOut:
+        value += _MoveScores.goOut * weights.goOut;
+      case LegalActionKind.endTurn:
+        value += _MoveScores.endTurn;
+      case LegalActionKind.discard:
+        value += _MoveScores.discardBase;
         if (CompetitivePolicy.canEmptyThisTurn(bot)) {
-          value += 300 * weights.goOut;
+          value += _MoveScores.discardGoOut * weights.goOut;
         }
-      case 'error':
-        value -= 10000;
-      default:
-        value += 0;
+      case LegalActionKind.error:
+        value += _MoveScores.error;
     }
 
     return ScoredCandidate(candidate: candidate, score: value);
@@ -112,11 +149,11 @@ class MoveScorer {
     if (data is List<List<PlayingCard>>) {
       cardsUsed = data.fold<int>(0, (sum, meld) => sum + meld.length);
     }
-    var score = 220 * weights.footTransition;
-    score += points * 0.5 * weights.points;
-    score += cardsUsed * 12.0;
+    var score = _MoveScores.burstBase * weights.footTransition;
+    score += points * _MoveScores.burstPointsFactor * weights.points;
+    score += cardsUsed * _MoveScores.burstPerCard;
     if (cardsUsed >= bot.currentHand.length - 1) {
-      score += 400 * weights.footTransition;
+      score += _MoveScores.burstEmptyBonus * weights.footTransition;
     }
     return score;
   }
@@ -133,13 +170,15 @@ class MoveScorer {
     var score = data.fold<double>(0, (sum, card) => sum + card.pointValue);
     final isClean = !data.any((c) => c.isWild);
     if (isClean && !bot.hasCleanBook) {
-      score += 300 * weights.cleanBook;
+      score += _MoveScores.cleanLaneCreate * weights.cleanBook;
     }
     if (!isClean && !bot.hasDirtyBook && bot.hasCleanBook) {
-      score += 200 * weights.bookProgress;
+      score += _MoveScores.dirtyAfterClean * weights.bookProgress;
     }
     if (data.length >= GameConfig.bookSize) {
-      score += isClean ? 500 * weights.cleanBook : 300 * weights.bookProgress;
+      score += isClean
+          ? _MoveScores.cleanBookComplete * weights.cleanBook
+          : _MoveScores.dirtyBookComplete * weights.bookProgress;
     }
     return score;
   }
@@ -155,7 +194,7 @@ class MoveScorer {
     }
     final card = data['card'];
     final meldIndex = data['meldIndex'] as int?;
-    var score = 40.0;
+    var score = _MoveScores.addToMeldFlat;
     if (card is PlayingCard) {
       score += card.pointValue * weights.points;
     }
@@ -164,9 +203,15 @@ class MoveScorer {
       final nextSize = meld.cards.length + 1;
       if (nextSize >= GameConfig.bookSize &&
           meld.cards.length < GameConfig.bookSize) {
-        score += meld.isClean || (card is PlayingCard && !card.isWild)
-            ? 400 * weights.cleanBook
-            : 280 * weights.bookProgress;
+        // Award clean-book only when the completed book stays natural.
+        // Meld.isClean requires book size, so it is always false here.
+        final completesCleanBook =
+            !meld.cards.any((c) => c.isWild) &&
+            card is PlayingCard &&
+            !card.isWild;
+        score += completesCleanBook
+            ? _MoveScores.completeCleanBookAdd * weights.cleanBook
+            : _MoveScores.completeDirtyBookAdd * weights.bookProgress;
       }
     }
     return score;

@@ -214,7 +214,9 @@ class BotDiscardAnalyzer {
         !card.isWild &&
         !card.isThree &&
         sameRankCount == 2) {
-      score -= BotConfig.genericUnlockKeyHoldPenalty + 40;
+      score -=
+          BotConfig.genericUnlockKeyHoldPenalty +
+          BotConfig.liveTopKeyHoldExtraPenalty;
     }
 
     return score;

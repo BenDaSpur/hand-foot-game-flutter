@@ -72,7 +72,7 @@ void main() {
         botPlayer.hand.clear();
         for (int i = 0; i < 23; i++) {
           botPlayer.addCardToHand(
-            PlayingCard(rank: CardRank.king, suit: Suit.hearts),
+            const PlayingCard(rank: CardRank.king, suit: Suit.hearts),
           );
         }
 

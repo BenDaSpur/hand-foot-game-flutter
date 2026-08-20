@@ -33,7 +33,7 @@ void main() {
 
     test('botAiVersion is competitive-planner', () {
       expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
-      expect(CompetitivePolicy.goOutThisTurnMaxHand, 5);
+      expect(BotConfig.goOutThisTurnMaxHand, 5);
     });
 
     test('takes when eligible and not actually going out this turn', () {
@@ -179,13 +179,12 @@ void main() {
       controller.gameState.turnPhase = TurnPhase.meld;
       controller.gameState.hasDrawnFromDeck = true;
       final decision = botAI.makeDecision(bot, controller);
-      if (decision.action == 'addToMeld') {
-        final data = decision.data as Map<String, dynamic>;
-        final card = data['card'] as PlayingCard;
-        final meldIndex = data['meldIndex'] as int;
-        if (card.isWild) {
-          expect(bot.melds[meldIndex].cards.any((c) => c.isWild), isTrue);
-        }
+      expect(decision.action, 'addToMeld');
+      final data = decision.data as Map<String, dynamic>;
+      final card = data['card'] as PlayingCard;
+      final meldIndex = data['meldIndex'] as int;
+      if (card.isWild) {
+        expect(bot.melds[meldIndex].cards.any((c) => c.isWild), isTrue);
       }
     });
   });
