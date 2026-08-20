@@ -274,10 +274,14 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     final overlaySize = context.size ?? MediaQuery.sizeOf(context);
     final revealCenter = Offset(
       overlaySize.width / 2,
-      overlaySize.height * 0.46,
+      overlaySize.height * 0.50,
     );
     final handSizes = GameResponsiveLayout.handSizes(context);
-    final spread = (handSizes.handWidth * 0.78).clamp(40.0, 76.0);
+    final maxFanWidth = overlaySize.width * 0.86;
+    final spread = request.handCards.length <= 1
+        ? 0.0
+        : ((maxFanWidth - handSizes.handWidth) / (request.handCards.length - 1))
+              .clamp(28.0, 76.0);
     final revealPositions = <Offset>[];
     for (int i = 0; i < request.handCards.length; i++) {
       final offset = (i - (request.handCards.length - 1) / 2) * spread;
@@ -735,7 +739,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       name = actorName;
     }
     return Align(
-      alignment: const Alignment(0, -0.18),
+      alignment: const Alignment(0, -0.42),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: BalatroTheme.darkPurple.withValues(alpha: 0.92),

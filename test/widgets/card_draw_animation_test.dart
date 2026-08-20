@@ -561,22 +561,24 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: CardAnimationHost(
-              eventBus: eventBus,
-              deckKey: deckKey,
-              discardKey: discardKey,
-              handStackKey: handStackKey,
-              meldAreaKey: meldAreaKey,
-              handScrollController: scrollController,
-              onAnimationStateChanged: (value) => isAnimating = value,
-              child: Column(
-                children: [
-                  SizedBox(key: deckKey, width: 60, height: 80),
-                  SizedBox(key: discardKey, width: 60, height: 80),
-                  SizedBox(key: handStackKey, width: 300, height: 120),
-                  SizedBox(key: meldAreaKey, width: 300, height: 200),
-                  const Text('board'),
-                ],
+            body: SizedBox.expand(
+              child: CardAnimationHost(
+                eventBus: eventBus,
+                deckKey: deckKey,
+                discardKey: discardKey,
+                handStackKey: handStackKey,
+                meldAreaKey: meldAreaKey,
+                handScrollController: scrollController,
+                onAnimationStateChanged: (value) => isAnimating = value,
+                child: Column(
+                  children: [
+                    SizedBox(key: deckKey, width: 60, height: 80),
+                    SizedBox(key: discardKey, width: 60, height: 80),
+                    SizedBox(key: handStackKey, width: 300, height: 120),
+                    SizedBox(key: meldAreaKey, width: 300, height: 200),
+                    const Text('board'),
+                  ],
+                ),
               ),
             ),
           ),
