@@ -14,6 +14,7 @@ import '../game/game_controller_factory.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
 import '../config/bot_configurations.dart';
+import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../services/firebase_service.dart';
 import '../widgets/melds_section.dart';
@@ -229,6 +230,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       logHumanAction: (action) =>
           _logHumanAction(action: action, reasoning: 'Bot turn processing'),
       logBotDecision: _logBotDecision,
+      waitForPendingUi: _waitForPendingCardAnimation,
     );
 
     _dialogManager = DialogManager(
@@ -535,6 +537,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     if (mounted) {
       processCurrentPlayerTurn();
+    }
+  }
+
+  Future<void> _waitForPendingCardAnimation() async {
+    // DiscardPileUnlockedEvent is delivered on a microtask.
+    await Future<void>.delayed(Duration.zero);
+    if (!_isCardAnimationActive || !mounted) {
+      return;
+    }
+    const poll = Duration(milliseconds: 32);
+    final deadline = DateTime.now().add(GameConfig.cardAnimationSafetyTimeout);
+    while (_isCardAnimationActive &&
+        mounted &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(poll);
     }
   }
 
@@ -2019,6 +2036,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               ),
               body: CardAnimationHost(
                 eventBus: ref.read(gameEventBusProvider),
+                localHumanPlayer: () => ref.read(humanPlayerProvider),
                 deckKey: _deckKey,
                 discardKey: _discardKey,
                 handStackKey: _handStackKey,

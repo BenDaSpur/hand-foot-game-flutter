@@ -348,6 +348,51 @@ void main() {
       expect(completed, isTrue);
       scrollController.dispose();
     });
+
+    testWidgets(
+      'spectator discard unlock shows actor name and face-up pickup cards',
+      (tester) async {
+        final deckKey = GlobalKey();
+        final discardKey = GlobalKey();
+        final handStackKey = GlobalKey();
+        final meldAreaKey = GlobalKey();
+        final scrollController = ScrollController();
+
+        await pumpOverlayHarness(
+          tester,
+          request: const CardAnimationRequest(
+            type: CardDrawAnimationType.discardUnlock,
+            isSpectator: true,
+            actorName: 'Clara',
+            fromDiscardCount: 3,
+            handCards: [
+              PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+              PlayingCard(suit: Suit.spades, rank: CardRank.king),
+              PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+              PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+              PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            ],
+            handTargetIndices: [],
+          ),
+          deckKey: deckKey,
+          discardKey: discardKey,
+          handStackKey: handStackKey,
+          meldAreaKey: meldAreaKey,
+          scrollController: scrollController,
+          onComplete: () {},
+          onSkip: () {},
+        );
+
+        await tester.pump();
+        await tester.pump(GameConfig.cardFlyDuration);
+
+        expect(find.text('Clara took the discard'), findsOneWidget);
+        expect(find.byType(PlayingCardWidget), findsNWidgets(3));
+        expect(find.byType(CardBackWidget), findsNWidgets(2));
+
+        scrollController.dispose();
+      },
+    );
   });
 
   group('CardAnimationHost interaction gates', () {
@@ -488,6 +533,141 @@ void main() {
       // Finish scroll/stagger/pause work so teardown has no pending animation.
       await tester.pump(twoCardDrawDrainWindow());
       await tester.pumpAndSettle();
+
+      scrollController.dispose();
+      eventBus.dispose();
+    });
+
+    testWidgets('CardAnimationHost reveals discard unlocks for bots', (
+      tester,
+    ) async {
+      final eventBus = GameEventBus();
+      final deckKey = GlobalKey();
+      final discardKey = GlobalKey();
+      final handStackKey = GlobalKey();
+      final meldAreaKey = GlobalKey();
+      final scrollController = ScrollController();
+      var isAnimating = false;
+
+      final bot = Player(id: 'bot', name: 'Clara', type: PlayerType.bot);
+      const pickup = [
+        PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+        PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox.expand(
+              child: CardAnimationHost(
+                eventBus: eventBus,
+                deckKey: deckKey,
+                discardKey: discardKey,
+                handStackKey: handStackKey,
+                meldAreaKey: meldAreaKey,
+                handScrollController: scrollController,
+                onAnimationStateChanged: (value) => isAnimating = value,
+                child: Column(
+                  children: [
+                    SizedBox(key: deckKey, width: 60, height: 80),
+                    SizedBox(key: discardKey, width: 60, height: 80),
+                    SizedBox(key: handStackKey, width: 300, height: 120),
+                    SizedBox(key: meldAreaKey, width: 300, height: 200),
+                    const Text('board'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      eventBus.publish(
+        DiscardPileUnlockedEvent(
+          handPickupCards: pickup,
+          meldedCards: const [
+            PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+            PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          ],
+          meldIndex: 0,
+          fromDiscardCount: 5,
+          player: bot,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(isAnimating, isTrue);
+      expect(find.text('Clara took the discard'), findsOneWidget);
+      expect(
+        CardAnimationScope.maybeOf(
+          tester.element(find.text('board')),
+        )?.hiddenHandIndices,
+        isEmpty,
+      );
+
+      await tester.tap(find.text('Clara took the discard'));
+      await tester.pump();
+      expect(isAnimating, isFalse);
+
+      scrollController.dispose();
+      eventBus.dispose();
+    });
+
+    testWidgets('CardAnimationHost still skips deck draws for bots', (
+      tester,
+    ) async {
+      final eventBus = GameEventBus();
+      final deckKey = GlobalKey();
+      final discardKey = GlobalKey();
+      final handStackKey = GlobalKey();
+      final meldAreaKey = GlobalKey();
+      final scrollController = ScrollController();
+      var isAnimating = false;
+
+      final bot = Player(id: 'bot', name: 'Clara', type: PlayerType.bot);
+      const cards = [
+        PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ];
+      bot.hand.addAll(cards);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CardAnimationHost(
+              eventBus: eventBus,
+              deckKey: deckKey,
+              discardKey: discardKey,
+              handStackKey: handStackKey,
+              meldAreaKey: meldAreaKey,
+              handScrollController: scrollController,
+              onAnimationStateChanged: (value) => isAnimating = value,
+              child: Column(
+                children: [
+                  SizedBox(key: deckKey, width: 60, height: 80),
+                  SizedBox(key: discardKey, width: 60, height: 80),
+                  SizedBox(key: handStackKey, width: 300, height: 120),
+                  SizedBox(key: meldAreaKey, width: 300, height: 200),
+                  const Text('board'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      eventBus.publish(
+        CardDrawnEvent(cards: cards, fromDeck: true, player: bot),
+      );
+      await tester.pump();
+
+      expect(isAnimating, isFalse);
+      expect(find.text('Clara took the discard'), findsNothing);
 
       scrollController.dispose();
       eventBus.dispose();

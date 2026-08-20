@@ -100,6 +100,7 @@ void main() {
         expect(event.handPickupCards, isNotEmpty);
         expect(event.handPickupCards.length, lessThanOrEqualTo(5));
         expect(event.cardsTaken, equals(event.handPickupCards));
+        expect(event.fromDiscardCount, event.handPickupCards.length);
         expect(event.meldIndex, greaterThanOrEqualTo(0));
 
         for (final card in event.handPickupCards) {
@@ -145,10 +146,91 @@ void main() {
             .whereType<DiscardPileUnlockedEvent>()
             .first;
         expect(event.handPickupCards, hasLength(5));
+        expect(event.fromDiscardCount, 0);
         expect(event.meldedCards, hasLength(3));
         expect(gameState.discardPile, isEmpty);
         for (final card in event.handPickupCards) {
           expect(human.currentHand.contains(card), isTrue);
+        }
+      },
+    );
+
+    test(
+      'DiscardPileUnlockedEvent keeps discard-prefix order for mixed pickups',
+      () async {
+        final eventBus = GameEventBus();
+        final capturedEvents = <GameEvent>[];
+        final subscription = eventBus.subscribe(capturedEvents.add);
+        addTearDown(subscription.cancel);
+
+        final players = [
+          Player(id: 'human', name: 'You', type: PlayerType.human),
+          Player(id: 'bot', name: 'Bot', type: PlayerType.bot),
+        ];
+        final controller = GameController(players: players, eventBus: eventBus);
+        controller.initializeGame();
+        await Future<void>.delayed(Duration.zero);
+
+        final human = players.first;
+        final gameState = controller.gameState;
+
+        human.hasPlayedDown = true;
+        const leftoverDiscard = [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        ];
+        const deckFill = [
+          PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        ];
+        gameState.discardPile
+          ..clear()
+          ..addAll([
+            ...leftoverDiscard,
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          ]);
+        gameState.deck.addCards(deckFill);
+        human.currentHand.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+        ]);
+
+        Map<PlayingCard, int> cardCounts(Iterable<PlayingCard> cards) {
+          final counts = <PlayingCard, int>{};
+          for (final card in cards) {
+            counts[card] = (counts[card] ?? 0) + 1;
+          }
+          return counts;
+        }
+
+        final handCountsBefore = cardCounts(human.currentHand);
+
+        final success = controller.unlockDiscardPile();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(success, isTrue);
+        final event = capturedEvents
+            .whereType<DiscardPileUnlockedEvent>()
+            .first;
+        expect(event.fromDiscardCount, leftoverDiscard.length);
+        expect(event.handPickupCards, hasLength(5));
+        expect(
+          event.handPickupCards.take(event.fromDiscardCount),
+          equals(leftoverDiscard.reversed.toList()),
+        );
+        expect(
+          event.handPickupCards.skip(event.fromDiscardCount),
+          equals(deckFill.reversed.toList()),
+        );
+
+        final handCountsAfter = cardCounts(human.currentHand);
+        final pickupCounts = cardCounts(event.handPickupCards);
+        for (final entry in pickupCounts.entries) {
+          expect(
+            handCountsAfter[entry.key] ?? 0,
+            (handCountsBefore[entry.key] ?? 0) + entry.value,
+          );
         }
       },
     );

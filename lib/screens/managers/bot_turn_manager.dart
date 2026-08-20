@@ -33,6 +33,10 @@ class BotTurnManager {
   })
   logBotDecision;
 
+  /// Waits for card overlays (e.g. opponent discard reveal) before the next
+  /// bot action so players can see what was taken.
+  final Future<void> Function()? waitForPendingUi;
+
   bool _isProcessingBotTurn = false;
 
   BotTurnManager({
@@ -41,6 +45,7 @@ class BotTurnManager {
     required this.onStateChanged,
     required this.logHumanAction,
     required this.logBotDecision,
+    this.waitForPendingUi,
   });
 
   /// End the round when a bot goes out, publishing events for UI transition.
@@ -302,6 +307,9 @@ class BotTurnManager {
 
         // Update UI state after successful action
         onStateChanged();
+        if (waitForPendingUi != null) {
+          await waitForPendingUi!();
+        }
 
         // Add delay after each bot action so users can see what happened
         // Use shorter delay for actions within meld phase, longer for phase transitions
