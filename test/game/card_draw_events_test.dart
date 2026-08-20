@@ -196,6 +196,16 @@ void main() {
           const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
         ]);
 
+        Map<PlayingCard, int> cardCounts(Iterable<PlayingCard> cards) {
+          final counts = <PlayingCard, int>{};
+          for (final card in cards) {
+            counts[card] = (counts[card] ?? 0) + 1;
+          }
+          return counts;
+        }
+
+        final handCountsBefore = cardCounts(human.currentHand);
+
         final success = controller.unlockDiscardPile();
         await Future<void>.delayed(Duration.zero);
 
@@ -213,8 +223,14 @@ void main() {
           event.handPickupCards.skip(event.fromDiscardCount),
           equals(deckFill.reversed.toList()),
         );
-        for (final card in event.handPickupCards) {
-          expect(human.currentHand.contains(card), isTrue);
+
+        final handCountsAfter = cardCounts(human.currentHand);
+        final pickupCounts = cardCounts(event.handPickupCards);
+        for (final entry in pickupCounts.entries) {
+          expect(
+            handCountsAfter[entry.key] ?? 0,
+            (handCountsBefore[entry.key] ?? 0) + entry.value,
+          );
         }
       },
     );
