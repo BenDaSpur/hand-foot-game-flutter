@@ -58,6 +58,7 @@ class BotGameAnalyzer {
 
   // Tracking data
   final Map<String, int> _playerTurnCounts = {};
+  final Map<String, String> _lastTurnKeys = {};
   final Map<String, OpponentAnalysis> _opponentAnalysis = {};
 
   BotGameAnalyzer();
@@ -192,6 +193,15 @@ class BotGameAnalyzer {
     _playerTurnCounts[playerId] = (_playerTurnCounts[playerId] ?? 0) + 1;
   }
 
+  /// Increment once per distinct start-of-turn snapshot for [playerId].
+  void incrementTurnCountIfNewTurn(String playerId, String turnKey) {
+    if (_lastTurnKeys[playerId] == turnKey) {
+      return;
+    }
+    _lastTurnKeys[playerId] = turnKey;
+    incrementTurnCount(playerId);
+  }
+
   /// Check if any opponent is in a dangerous position (close to winning)
   bool isAnyOpponentDangerous() {
     return _opponentAnalysis.values.any((analysis) => analysis.isDangerous);
@@ -320,6 +330,7 @@ class BotGameAnalyzer {
   /// Clear all analysis data (call when game ends)
   void clearAnalysisData() {
     _playerTurnCounts.clear();
+    _lastTurnKeys.clear();
     _opponentAnalysis.clear();
   }
 

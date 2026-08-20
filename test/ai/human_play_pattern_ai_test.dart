@@ -30,110 +30,33 @@ void main() {
       );
     });
 
-    test(
-      'accumulates hand instead of incremental melds in 8-14 card window',
-      () {
-        final bot = controller.gameState.players.firstWhere(
-          (p) => p.id == 'bot1',
-        );
-        bot.hasPlayedDown = true;
-        bot.hasPickedUpFoot = false;
-        bot.hand.clear();
-        bot.hand.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
-        ]);
-        bot.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.two),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-          ])!,
-        );
+    Player playedDownBotWithHand(List<PlayingCard> cards) {
+      final bot = controller.gameState.players.firstWhere(
+        (p) => p.id == 'bot1',
+      );
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.hand
+        ..clear()
+        ..addAll(cards);
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      return bot;
+    }
 
-        controller.gameState.currentPlayerIndex = 1;
-        controller.gameState.turnPhase = TurnPhase.meld;
-        controller.gameState.hasDrawnFromDeck = true;
-
-        final decision = botAI.makeDecision(bot, controller);
-
-        expect(
-          decision.action,
-          'noMeld',
-          reason:
-              'Human-style bots should hold 8-14 cards before burst-melding',
-        );
-      },
-    );
-
-    test(
-      'holds accumulation through 14-card boundary with high meld potential',
-      () {
-        final bot = controller.gameState.players.firstWhere(
-          (p) => p.id == 'bot1',
-        );
-        bot.hasPlayedDown = true;
-        bot.hasPickedUpFoot = false;
-        bot.hand.clear();
-        bot.hand.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-        ]);
-        bot.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.two),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-          ])!,
-        );
-
-        controller.gameState.currentPlayerIndex = 1;
-        controller.gameState.turnPhase = TurnPhase.meld;
-        controller.gameState.hasDrawnFromDeck = true;
-
-        final decision = botAI.makeDecision(bot, controller);
-
-        expect(
-          decision.action,
-          'noMeld',
-          reason:
-              '14-card boundary should still accumulate before burst threshold',
-        );
-        expect(bot.currentHand.length, 14);
-      },
-    );
-
-    test('bursts at 15-card threshold with high meld potential', () {
+    test('melds in the old 8-14 accumulation window instead of holding', () {
       final bot = controller.gameState.players.firstWhere(
         (p) => p.id == 'bot1',
       );
@@ -141,6 +64,75 @@ void main() {
       bot.hasPickedUpFoot = false;
       bot.hand.clear();
       bot.hand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+      ]);
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
+
+      controller.gameState.currentPlayerIndex = 1;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+
+      final decision = botAI.makeDecision(bot, controller);
+
+      expect(
+        decision.action,
+        anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
+        reason:
+            'Competitive planner melds book progress instead of holding 8-14',
+      );
+    });
+
+    test('melds at the 14-card boundary instead of waiting to burst', () {
+      final bot = playedDownBotWithHand([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+      ]);
+
+      final decision = botAI.makeDecision(bot, controller);
+
+      expect(
+        decision.action,
+        anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
+        reason: '14-card hands with meld potential should play, not hold',
+      );
+      expect(bot.currentHand.length, 14);
+    });
+
+    test('bursts at 15-card threshold with high meld potential', () {
+      final bot = playedDownBotWithHand([
         const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
         const PlayingCard(suit: Suit.spades, rank: CardRank.four),
         const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
@@ -157,28 +149,13 @@ void main() {
         const PlayingCard(suit: Suit.spades, rank: CardRank.king),
         const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
       ]);
-      bot.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-        ])!,
-      );
-
-      controller.gameState.currentPlayerIndex = 1;
-      controller.gameState.turnPhase = TurnPhase.meld;
-      controller.gameState.hasDrawnFromDeck = true;
 
       final decision = botAI.makeDecision(bot, controller);
 
       expect(
         decision.action,
-        anyOf('addToMeld', 'createMultipleMelds'),
-        reason: '15-card hand should burst-meld past accumulation threshold',
+        anyOf('addToMeld', 'createMeld', 'createMultipleMelds'),
+        reason: '15-card hand should meld instead of holding',
       );
       expect(bot.currentHand.length, 15);
     });
@@ -220,34 +197,44 @@ void main() {
     });
 
     test(
-      'draws from deck during accumulation instead of unlocking discard pile',
+      'takes an eligible keyed pile instead of accumulating from the deck',
       () {
         final bot = controller.gameState.players.firstWhere(
           (p) => p.id == 'bot1',
         );
         bot.hasPlayedDown = true;
         bot.hand.clear();
-        bot.hand.addAll(
-          List.generate(
-            10,
-            (i) => PlayingCard(
-              suit: Suit.values[i % 4],
-              rank: CardRank.values[(i % 9) + 4],
-            ),
-          ),
-        );
+        bot.hand.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+        ]);
 
         controller.gameState.currentPlayerIndex = 1;
         controller.gameState.turnPhase = TurnPhase.draw;
-        controller.gameState.discardPile.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        ]);
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
+        controller.gameState.discardPile
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          ]);
 
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
         final decision = botAI.makeDecision(bot, controller);
-
-        expect(decision.action, 'drawFromDeck');
+        expect(decision.action, 'drawFromDiscard');
       },
     );
   });

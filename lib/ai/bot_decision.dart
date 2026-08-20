@@ -12,10 +12,14 @@ class BotDecision {
   /// Whether to skip play-down requirement checks for this action
   final bool skipPlayDownCheck;
 
+  /// Planner analytics (couldUnlock, keyCount, skipReason, chosenKind).
+  final Map<String, dynamic>? analyticsContext;
+
   BotDecision({
     required this.action,
     this.data,
     this.skipPlayDownCheck = false,
+    this.analyticsContext,
   });
 
   @override

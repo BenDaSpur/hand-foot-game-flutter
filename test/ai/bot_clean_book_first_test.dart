@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for human-counter', () {
-      expect(BotConfig.botAiVersion, '2026.08-human-counter');
+    test('botAiVersion bumped for competitive-planner', () {
+      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
     });
 
     test(
