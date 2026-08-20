@@ -350,6 +350,9 @@ class GameConfig {
   /// Pause after reveal so the player can read drawn cards
   static const Duration cardRevealPause = Duration(milliseconds: 500);
 
+  /// Longer hold when watching another player take the discard pile
+  static const Duration cardOpponentRevealPause = Duration(milliseconds: 1400);
+
   /// Stagger delay between sequential card flights
   static const Duration cardStaggerDelay = Duration(milliseconds: 120);
 

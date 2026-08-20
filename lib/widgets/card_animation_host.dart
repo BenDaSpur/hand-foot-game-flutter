@@ -48,7 +48,7 @@ class CardAnimationScope extends InheritedWidget {
 class CardAnimationHost extends StatefulWidget {
   final Widget child;
   final GameEventBus eventBus;
-  final Player Function()? localHumanPlayer;
+  final Player? Function()? localHumanPlayer;
   final GlobalKey deckKey;
   final GlobalKey discardKey;
   final GlobalKey handStackKey;
@@ -118,7 +118,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
     super.dispose();
   }
 
-  bool _shouldAnimateFor(Player? player) {
+  bool _isLocalHuman(Player? player) {
     if (player == null || player.type != PlayerType.human) {
       return false;
     }
@@ -131,7 +131,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
 
   void _handleCardDrawn(CardDrawnEvent event) {
     if (!widget.animationsEnabled ||
-        !_shouldAnimateFor(event.player) ||
+        !_isLocalHuman(event.player) ||
         !event.fromDeck ||
         event.cards.isEmpty) {
       return;
@@ -146,17 +146,25 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
   }
 
   void _handleDiscardUnlocked(DiscardPileUnlockedEvent event) {
-    if (!widget.animationsEnabled || !_shouldAnimateFor(event.player)) {
+    final player = event.player;
+    if (!widget.animationsEnabled || player == null) {
       return;
     }
+    if (event.handPickupCards.isEmpty && event.meldedCards.isEmpty) {
+      return;
+    }
+
+    final isLocalHuman = _isLocalHuman(player);
     _startRequest(
       CardAnimationRequest(
         type: CardDrawAnimationType.discardUnlock,
+        isSpectator: !isLocalHuman,
+        actorName: player.name,
+        fromDiscardCount: event.fromDiscardCount,
         handCards: List<PlayingCard>.from(event.handPickupCards),
-        handTargetIndices: _indicesForCards(
-          event.player!,
-          event.handPickupCards,
-        ),
+        handTargetIndices: isLocalHuman
+            ? _indicesForCards(player, event.handPickupCards)
+            : const [],
         meldedCards: List<PlayingCard>.from(event.meldedCards),
         meldIndex: event.meldIndex,
       ),
@@ -204,7 +212,9 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
 
     setState(() {
       _isAnimating = true;
-      _hiddenHandIndices = request.handTargetIndices.toSet();
+      _hiddenHandIndices = request.isSpectator
+          ? <int>{}
+          : request.handTargetIndices.toSet();
       _activeRequest = request;
       _requestVersion++;
     });

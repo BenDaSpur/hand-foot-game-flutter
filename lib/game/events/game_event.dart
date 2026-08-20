@@ -102,6 +102,10 @@ class DiscardPileUnlockedEvent extends GameEvent {
   /// Index of the meld that received the unlock cards.
   final int meldIndex;
 
+  /// How many [handPickupCards] came from the face-up discard pile.
+  /// Remaining cards were drawn face-down from the stock to complete the pickup.
+  final int fromDiscardCount;
+
   /// Backward-compatible alias for hand pickup cards only.
   List<PlayingCard> get cardsTaken => handPickupCards;
 
@@ -111,7 +115,8 @@ class DiscardPileUnlockedEvent extends GameEvent {
     required this.meldIndex,
     required super.player,
     super.timestamp,
-  });
+    int? fromDiscardCount,
+  }) : fromDiscardCount = fromDiscardCount ?? handPickupCards.length;
 
   @override
   String get eventType => 'DiscardPileUnlocked';

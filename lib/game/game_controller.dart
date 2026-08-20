@@ -251,6 +251,7 @@ class GameController implements GameInterface {
         handPickupCards: handPickupCards,
         meldedCards: meldedCards,
         meldIndex: meldIndex,
+        fromDiscardCount: _gameState.lastUnlockFromDiscardCount,
         player: player,
       ),
     );

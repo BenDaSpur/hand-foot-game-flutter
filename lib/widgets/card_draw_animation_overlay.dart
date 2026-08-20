@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../config/game_config.dart';
 import '../constants/hand_layout_constants.dart';
 import '../models/card.dart';
+import '../theme/balatro_theme.dart';
 import '../utils/debug_logger.dart';
 import '../utils/game_responsive_layout.dart';
 import 'card_back_widget.dart';
@@ -18,13 +19,33 @@ class CardAnimationRequest {
   final List<PlayingCard> meldedCards;
   final int meldIndex;
 
+  /// True when another player (bot or opponent) unlocked the pile.
+  final bool isSpectator;
+
+  /// Display name for spectator captions.
+  final String? actorName;
+
+  /// How many [handCards] came from the face-up discard pile.
+  /// `-1` means every pickup card is treated as public.
+  final int fromDiscardCount;
+
   const CardAnimationRequest({
     required this.type,
     required this.handCards,
     required this.handTargetIndices,
     this.meldedCards = const [],
     this.meldIndex = -1,
+    this.isSpectator = false,
+    this.actorName,
+    this.fromDiscardCount = -1,
   });
+
+  int get revealedFromDiscardCount {
+    if (fromDiscardCount < 0) {
+      return handCards.length;
+    }
+    return fromDiscardCount;
+  }
 }
 
 class _FlyingCardVisual {
@@ -96,8 +117,11 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     with TickerProviderStateMixin {
   List<_FlyingCardVisual> _visuals = [];
   bool _showScrim = false;
+  bool _showCaption = false;
   bool _skipped = false;
   AnimationController? _activeController;
+  Timer? _pauseTimer;
+  Completer<void>? _pauseCompleter;
 
   @override
   void initState() {
@@ -120,7 +144,9 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       // blocker so a stale scrim cannot keep eating hand taps.
       _skipped = true;
       _activeController?.stop();
+      _cancelPauseTimer();
       _showScrim = false;
+      _showCaption = false;
       _visuals = [];
       return;
     }
@@ -135,8 +161,36 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
 
   @override
   void dispose() {
+    _cancelPauseTimer();
     _activeController?.dispose();
     super.dispose();
+  }
+
+  void _cancelPauseTimer() {
+    _pauseTimer?.cancel();
+    _pauseTimer = null;
+    final completer = _pauseCompleter;
+    _pauseCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  Future<void> _pause(Duration duration) async {
+    if (_skipped || !mounted) {
+      return;
+    }
+    _cancelPauseTimer();
+    final completer = Completer<void>();
+    _pauseCompleter = completer;
+    _pauseTimer = Timer(duration, () {
+      _pauseTimer = null;
+      _pauseCompleter = null;
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    await completer.future;
   }
 
   void _handleSkip() {
@@ -145,8 +199,10 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     }
     _skipped = true;
     _activeController?.stop();
+    _cancelPauseTimer();
     setState(() {
       _showScrim = false;
+      _showCaption = false;
       _visuals = [];
     });
     // Host wires onSkip -> complete. Avoid also calling onComplete here so a
@@ -162,8 +218,14 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     try {
       setState(() {
         _showScrim = true;
+        _showCaption = request.isSpectator;
         _visuals = [];
       });
+
+      if (request.isSpectator) {
+        await _runOpponentUnlockReveal(request);
+        return;
+      }
 
       if (request.type == CardDrawAnimationType.discardUnlock &&
           request.meldedCards.isNotEmpty) {
@@ -193,9 +255,142 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     }
     setState(() {
       _showScrim = false;
+      _showCaption = false;
       _visuals = [];
     });
     widget.onComplete();
+  }
+
+  Future<void> _runOpponentUnlockReveal(CardAnimationRequest request) async {
+    if (request.handCards.isEmpty) {
+      return;
+    }
+
+    final source = _anchorCenter(widget.discardKey);
+    if (source == null) {
+      return;
+    }
+
+    final overlaySize = context.size ?? MediaQuery.sizeOf(context);
+    final revealCenter = Offset(
+      overlaySize.width / 2,
+      overlaySize.height * 0.46,
+    );
+    final handSizes = GameResponsiveLayout.handSizes(context);
+    final spread = (handSizes.handWidth * 0.78).clamp(40.0, 76.0);
+    final revealPositions = <Offset>[];
+    for (int i = 0; i < request.handCards.length; i++) {
+      final offset = (i - (request.handCards.length - 1) / 2) * spread;
+      revealPositions.add(revealCenter + Offset(offset, 0));
+    }
+
+    final visuals = <_FlyingCardVisual>[];
+    for (int i = 0; i < request.handCards.length; i++) {
+      visuals.add(
+        _FlyingCardVisual(
+          card: request.handCards[i],
+          position: source,
+          showBack: i >= request.revealedFromDiscardCount,
+        ),
+      );
+    }
+    setState(() {
+      _showCaption = true;
+      _visuals = visuals;
+    });
+
+    await _animateVisualsToTargets(
+      visuals: visuals,
+      targets: revealPositions,
+      duration: GameConfig.cardFlyDuration,
+      endScale: 1.08,
+    );
+    if (_skipped || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _visuals = [
+        for (int i = 0; i < request.handCards.length; i++)
+          _FlyingCardVisual(
+            card: request.handCards[i],
+            position: revealPositions[i],
+            scale: 1.08,
+            showBack: i >= request.revealedFromDiscardCount,
+          ),
+      ];
+    });
+
+    await _pause(GameConfig.cardOpponentRevealPause);
+    if (_skipped || !mounted) {
+      return;
+    }
+
+    await _fadeVisuals(duration: GameConfig.animationDuration);
+  }
+
+  Future<void> _animateVisualsToTargets({
+    required List<_FlyingCardVisual> visuals,
+    required List<Offset> targets,
+    required Duration duration,
+    double endScale = 1,
+  }) async {
+    final controller = AnimationController(vsync: this, duration: duration);
+    _activeController = controller;
+    final animation = CurvedAnimation(
+      parent: controller,
+      curve: Curves.easeOutCubic,
+    );
+    final starts = visuals.map((visual) => visual.position).toList();
+
+    controller.addListener(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _visuals = [
+          for (int i = 0; i < visuals.length; i++)
+            visuals[i].copyWith(
+              position: Offset.lerp(starts[i], targets[i], animation.value)!,
+              scale: 1 + (endScale - 1) * animation.value,
+              showBack: visuals[i].showBack,
+            ),
+        ];
+      });
+    });
+
+    await controller.forward();
+    controller.dispose();
+    _activeController = null;
+  }
+
+  Future<void> _fadeVisuals({required Duration duration}) async {
+    if (_visuals.isEmpty) {
+      return;
+    }
+    final controller = AnimationController(vsync: this, duration: duration);
+    _activeController = controller;
+    final animation = CurvedAnimation(
+      parent: controller,
+      curve: Curves.easeOut,
+    );
+    final starts = List<_FlyingCardVisual>.from(_visuals);
+
+    controller.addListener(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _visuals = [
+          for (final visual in starts)
+            visual.copyWith(opacity: 1 - animation.value),
+        ];
+      });
+    });
+
+    await controller.forward();
+    controller.dispose();
+    _activeController = null;
   }
 
   Future<void> _runMeldBeat(CardAnimationRequest request) async {
@@ -525,8 +720,59 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
           children: [
             if (_showScrim)
               Container(color: Colors.black.withValues(alpha: 0.35)),
+            if (_showCaption) _buildSpectatorCaption(),
             ..._visuals.map((visual) => _buildFlyingCard(visual, handSizes)),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpectatorCaption() {
+    final actorName = widget.request?.actorName?.trim();
+    var name = 'Opponent';
+    if (actorName != null && actorName.isNotEmpty) {
+      name = actorName;
+    }
+    return Align(
+      alignment: const Alignment(0, -0.18),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: BalatroTheme.darkPurple.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: BalatroTheme.neonOrange, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: BalatroTheme.neonOrange.withValues(alpha: 0.35),
+              blurRadius: 12,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$name took the discard',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: BalatroTheme.primaryText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Tap to continue',
+                style: TextStyle(
+                  color: BalatroTheme.secondaryText,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

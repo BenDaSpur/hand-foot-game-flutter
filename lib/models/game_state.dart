@@ -107,6 +107,10 @@ class GameState {
   /// stops a second pickup when the new top card also matches two naturals.
   bool hasTakenDiscardThisTurn;
 
+  /// How many of the most recent unlock pickup cards came from the discard pile.
+  /// Transient UI metadata — not serialized.
+  int lastUnlockFromDiscardCount;
+
   // Track 3s stalemate situation
   /// True after the first consecutive 3-discard in a low-deck all-3s pile.
   bool _stalemateTrackingActive = false;
@@ -159,6 +163,7 @@ class GameState {
     this.hasDrawnFromDeck = false,
     this.hasMelded = false,
     this.hasTakenDiscardThisTurn = false,
+    this.lastUnlockFromDiscardCount = 0,
     SoloGameSettings? soloSettings,
     this.finalTurnPhaseActive = false,
     this.playerWhoWentOutIndex,
@@ -727,6 +732,7 @@ class GameState {
     final pickup = _collectUnlockPickupCards();
     final additionalCards = pickup.cards;
     final fromDiscardCount = pickup.fromDiscardCount;
+    lastUnlockFromDiscardCount = fromDiscardCount;
 
     if (additionalCards.isNotEmpty) {
       currentPlayer.addNewlyDrawnCards(additionalCards);
@@ -1151,6 +1157,7 @@ class GameState {
     }
 
     final pickup = _collectUnlockPickupCards();
+    lastUnlockFromDiscardCount = pickup.fromDiscardCount;
     if (pickup.cards.isNotEmpty) {
       player.addCardsToHand(pickup.cards);
     }

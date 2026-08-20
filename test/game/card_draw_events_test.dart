@@ -100,6 +100,7 @@ void main() {
         expect(event.handPickupCards, isNotEmpty);
         expect(event.handPickupCards.length, lessThanOrEqualTo(5));
         expect(event.cardsTaken, equals(event.handPickupCards));
+        expect(event.fromDiscardCount, event.handPickupCards.length);
         expect(event.meldIndex, greaterThanOrEqualTo(0));
 
         for (final card in event.handPickupCards) {
@@ -145,6 +146,7 @@ void main() {
             .whereType<DiscardPileUnlockedEvent>()
             .first;
         expect(event.handPickupCards, hasLength(5));
+        expect(event.fromDiscardCount, 0);
         expect(event.meldedCards, hasLength(3));
         expect(gameState.discardPile, isEmpty);
         for (final card in event.handPickupCards) {
