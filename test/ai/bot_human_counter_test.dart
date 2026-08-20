@@ -37,6 +37,7 @@ void main() {
       expect(BotConfig.botAiVersion, '2026.08-human-counter');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
+      expect(BotConfig.booklessFarmForceFootMaxHand, 8);
     });
 
     test('foot with 8 cards and keys hard-takes a 30-card pile', () {
@@ -252,6 +253,62 @@ void main() {
 
       controller.gameState.turnPhase = TurnPhase.discard;
       expect(botAI.makeDecision(bot, controller).action, 'discard');
+    });
+
+    test('bookless 6-card hand pile completes to foot when pile is fat', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+        ]);
+      controller.gameState.discardPile
+        ..clear()
+        ..addAll(
+          List.generate(
+            38,
+            (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.four),
+          ),
+        );
+      human.hasPlayedDown = true;
+      human.hasPickedUpFoot = false;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+
+      final context = BotGameContext(controller.gameState, controller);
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context), isTrue);
+      expect(botAI.shouldRushHandToFoot(bot, context), isTrue);
+    });
+
+    test('bookless 5-card hand pile stays off foot when pile is small', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+        ]);
+      controller.gameState.discardPile
+        ..clear()
+        ..add(const PlayingCard(suit: Suit.clubs, rank: CardRank.nine));
+      human.hasPlayedDown = true;
+      human.hasPickedUpFoot = false;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+
+      final context = BotGameContext(controller.gameState, controller);
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context), isFalse);
+      expect(botAI.shouldRushHandToFoot(bot, context), isFalse);
     });
   });
 }

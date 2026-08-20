@@ -2396,6 +2396,13 @@ class EnhancedBotAI {
       return true;
     }
 
+    // Bookless + fat discard farm — dump toward foot (incomplete 6-card stall)
+    if (stillOnHandPile &&
+        _handPileFatDiscardForcesFoot(bot, context) &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
+      return true;
+    }
+
     // Opponent on foot — race to pick up foot before they go out
     if (stillOnHandPile &&
         _opponentOnFootPressure(context, bot) &&
@@ -2776,9 +2783,19 @@ class EnhancedBotAI {
     if (bot.bookCount >= 1) {
       return false;
     }
-    return context.gameState.discardPile.length >=
-            BotConfig.pileFarmForcePlayDownPileSize ||
+    return _handPileFatDiscardForcesFoot(bot, context) ||
         _opponentOnFootPressure(context, bot);
+  }
+
+  /// Incomplete unlock-churn: bookless bots sat on 6 cards while the pile
+  /// grew to 38. Fat discard is a stronger signal than opponent-on-foot,
+  /// which still requires books above the critical 4-card window.
+  bool _handPileFatDiscardForcesFoot(Player bot, BotGameContext context) {
+    if (bot.bookCount >= 1) {
+      return false;
+    }
+    return context.gameState.discardPile.length >=
+        BotConfig.pileFarmForcePlayDownPileSize;
   }
 
   /// True when soft hand→foot rush is justified by books or a clear-all path.
@@ -2806,6 +2823,12 @@ class EnhancedBotAI {
     if (handSize <= BotConfig.handToFootCriticalHandSize &&
         (_hasBookOrClearAllPath(bot, context) ||
             _handPileFarmForcesFoot(bot, context))) {
+      return true;
+    }
+
+    // Fat pile + 0 books: rush at 5–8 as well (adaptive sat at 6 / pile 38).
+    if (_handPileFatDiscardForcesFoot(bot, context) &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
       return true;
     }
 
@@ -2927,6 +2950,12 @@ class EnhancedBotAI {
 
     if (handSize <= BotConfig.handPileFootCompletionMaxHand &&
         _hasBookOrClearAllPath(bot, context)) {
+      return true;
+    }
+
+    // Fat discard farm: empty a bookless 5–8 card hand pile (adaptive 6 / 38).
+    if (_handPileFatDiscardForcesFoot(bot, context) &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
       return true;
     }
 

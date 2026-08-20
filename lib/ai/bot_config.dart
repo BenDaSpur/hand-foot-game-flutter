@@ -44,6 +44,12 @@ class BotConfig {
   /// e.g. 5-card hands qualify). Opponent-on-foot pressure may extend the limit.
   static const int handPileFootCompletionMaxHand = 5;
 
+  /// Bookless bots still empty the hand pile at or below this size when the
+  /// discard is being farmed (incomplete unlock-churn: adaptive 6 cards /
+  /// 0 books / pile 38). Opponent-on-foot without a fat pile still requires
+  /// books above [handToFootCriticalHandSize].
+  static const int booklessFarmForceFootMaxHand = 8;
+
   /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
   static const int handToFootRushAggressiveOpponentPressureMargin = 2;
 
