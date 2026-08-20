@@ -150,6 +150,122 @@ void main() {
       tags: ['competitive_planner'],
     );
 
+    test('keeps one buried 3 as a useful safe discard', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = true;
+      bot.foot
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+        ]);
+      bot.melds.addAll([
+        _book(CardRank.ace, dirty: false),
+        _book(CardRank.queen, dirty: true),
+      ]);
+
+      _setPile(controller, size: 20, top: CardRank.king);
+      _replaceUnderTopWithThrees(controller, 1);
+      controller.gameState.turnPhase = TurnPhase.draw;
+      controller.gameState.hasDrawnFromDeck = false;
+      controller.gameState.discardPileFrozen = false;
+
+      expect(CompetitivePolicy.pickupThreeCount(controller.gameState), 1);
+      expect(
+        CompetitivePolicy.shouldSkipUnlockForThrees(bot, controller.gameState),
+        isFalse,
+      );
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, 'drawFromDiscard');
+      expect(decision.analyticsContext?['pickupThrees'], 1);
+    }, tags: ['competitive_planner']);
+
+    test(
+      'skips a pickup that would add three 3s and extra dump turns',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.queen, dirty: true),
+        ]);
+
+        _setPile(controller, size: 20, top: CardRank.king);
+        _replaceUnderTopWithThrees(controller, 3);
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(CompetitivePolicy.pickupThreeCount(controller.gameState), 3);
+        expect(CompetitivePolicy.threeDumpTurns(bot, controller.gameState), 3);
+        expect(
+          CompetitivePolicy.shouldSkipUnlockForThrees(
+            bot,
+            controller.gameState,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'drawFromDeck');
+        expect(decision.analyticsContext?['skipReason'], 'toxicThrees');
+        expect(decision.analyticsContext?['pickupThrees'], 3);
+        expect(decision.analyticsContext?['threeDumpTurns'], 3);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'skips two buried 3s when still on the hand pile near foot',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          ]);
+
+        _setPile(controller, size: 16, top: CardRank.king);
+        _replaceUnderTopWithThrees(controller, 2);
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(
+          bot.currentHand.length <= BotConfig.emergencyTransitionThreshold,
+          isTrue,
+        );
+        expect(
+          CompetitivePolicy.shouldSkipUnlockForThrees(
+            bot,
+            controller.gameState,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'drawFromDeck');
+        expect(decision.analyticsContext?['skipReason'], 'toxicThrees');
+      },
+      tags: ['competitive_planner'],
+    );
+
     test(
       'discard retains a live-top pair over an equivalent non-live pair',
       () {
@@ -485,6 +601,16 @@ void _setPile(
       ),
     )
     ..add(PlayingCard(suit: topSuit, rank: top));
+}
+
+void _replaceUnderTopWithThrees(GameController controller, int count) {
+  final pile = controller.gameState.discardPile;
+  for (var i = 1; i <= count && i < pile.length; i++) {
+    pile[pile.length - 1 - i] = PlayingCard(
+      suit: i.isOdd ? Suit.clubs : Suit.hearts,
+      rank: CardRank.three,
+    );
+  }
 }
 
 Meld _book(CardRank rank, {required bool dirty}) {

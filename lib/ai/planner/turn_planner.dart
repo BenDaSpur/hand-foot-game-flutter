@@ -42,6 +42,12 @@ class TurnPlanner {
       meldAnalyzer: _meldAnalyzer,
     );
     final canUnlock = context.canUnlockDiscard();
+    final skipThrees = CompetitivePolicy.shouldSkipUnlockForThrees(
+      bot,
+      gameState,
+    );
+    final pickupThrees = CompetitivePolicy.pickupThreeCount(gameState);
+    final threeDumpTurns = CompetitivePolicy.threeDumpTurns(bot, gameState);
     final topUnlockable = liveTop != null && !gameState.discardPileFrozen;
     final humanCanUnlock = CompetitivePolicy.humanLikelyCanUnlock(
       gameState,
@@ -54,6 +60,7 @@ class TurnPlanner {
       topUnlockable: topUnlockable,
       naturalTopCount: keyCount,
       goOutThisTurn: goOutThisTurn,
+      toxicThrees: skipThrees,
     );
 
     final forceSpendKeys =
@@ -75,6 +82,8 @@ class TurnPlanner {
         keyCount: keyCount,
         skipReason: skipReason,
         chosen: 'fallback',
+        pickupThrees: pickupThrees,
+        threeDumpTurns: threeDumpTurns,
       );
       return _withAnalytics(_fallback(context.turnPhase), lastAnalytics);
     }
@@ -85,6 +94,7 @@ class TurnPlanner {
       candidates: candidates,
       canUnlock: canUnlock,
       goOutThisTurn: goOutThisTurn,
+      skipThrees: skipThrees,
     );
 
     ScoredCandidate? best;
@@ -108,6 +118,8 @@ class TurnPlanner {
       keyCount: keyCount,
       skipReason: chosen.kind == LegalActionKind.drawDeck ? skipReason : null,
       chosen: chosen.kind.name,
+      pickupThrees: pickupThrees,
+      threeDumpTurns: threeDumpTurns,
     );
     return _withAnalytics(chosen.decision, lastAnalytics);
   }
@@ -118,9 +130,10 @@ class TurnPlanner {
     required List<LegalCandidate> candidates,
     required bool canUnlock,
     required bool goOutThisTurn,
+    required bool skipThrees,
   }) {
     if (context.turnPhase == TurnPhase.draw) {
-      if (canUnlock && !goOutThisTurn) {
+      if (canUnlock && !goOutThisTurn && !skipThrees) {
         final take = candidates
             .where((candidate) => candidate.kind == LegalActionKind.drawDiscard)
             .toList();
@@ -167,12 +180,16 @@ class TurnPlanner {
     required int keyCount,
     required String? skipReason,
     required String chosen,
+    required int pickupThrees,
+    required int threeDumpTurns,
   }) {
     return {
       'couldUnlock': couldUnlock,
       'keyCount': keyCount,
       if (skipReason != null) 'skipReason': skipReason,
       'chosenKind': chosen,
+      'pickupThrees': pickupThrees,
+      'threeDumpTurns': threeDumpTurns,
     };
   }
 

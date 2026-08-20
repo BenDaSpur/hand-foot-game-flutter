@@ -24,6 +24,15 @@ class CompetitivePolicy {
   /// How many recent discard cards (besides the top) seed live key ranks.
   static const int recentDiscardLookback = 8;
 
+  /// One buried 3 in the unlock extras is a useful safe discard.
+  static const int usefulPickupThreeCount = 1;
+
+  /// Three or more buried 3s means at least three dump turns and a pickup loop.
+  static const int toxicPickupThreeCount = 3;
+
+  /// Skip when hand 3s plus pickup 3s would take this many discards to shed.
+  static const int toxicThreeDumpTurns = 4;
+
   /// Hard-take any eligible unlock unless [canEmptyThisTurn] is true.
   ///
   /// Requires a verified meld/discard path. After the draw is in hand, a
@@ -159,11 +168,93 @@ class CompetitivePolicy {
     return ranks;
   }
 
+  /// Extra cards an unlock would add to hand (the [GameConfig.additionalDiscardPickup]
+  /// cards under the top). The top itself is melded and is never a 3.
+  static List<PlayingCard> peekUnlockExtras(GameState gameState) {
+    final pile = gameState.discardPile;
+    if (pile.length < 2) {
+      return const [];
+    }
+    final extras = <PlayingCard>[];
+    final maxExtras = GameConfig.additionalDiscardPickup;
+    for (var i = 1; i <= maxExtras && i < pile.length; i++) {
+      extras.add(pile[pile.length - 1 - i]);
+    }
+    return extras;
+  }
+
+  static int pickupThreeCount(GameState gameState) {
+    return peekUnlockExtras(gameState).where((card) => card.isThree).length;
+  }
+
+  /// Turns needed to discard current 3s plus 3s sitting in the unlock extras.
+  /// Each turn sheds one card, and 3s cannot be melded.
+  static int threeDumpTurns(Player bot, GameState gameState) {
+    final handThrees = bot.currentHand.where((card) => card.isThree).length;
+    return handThrees + pickupThreeCount(gameState);
+  }
+
+  /// Skip an otherwise legal unlock when the pickup would load too many 3s.
+  ///
+  /// One extra 3 is kept as a safe discard so the bot does not dump points.
+  /// Two or more extra 3s are refused near foot, while racing to go out, or
+  /// when an opponent is close to going out. Three or more extra 3s are
+  /// always refused — that is a multi-turn dump loop.
+  static bool shouldSkipUnlockForThrees(Player bot, GameState gameState) {
+    final extras = peekUnlockExtras(gameState);
+    final pickupThrees = extras.where((card) => card.isThree).length;
+    if (pickupThrees <= usefulPickupThreeCount) {
+      return false;
+    }
+    final pickupRedThrees = extras.where((card) => card.isRedThree).length;
+    final handThrees = bot.currentHand.where((card) => card.isThree).length;
+    final dumpTurns = handThrees + pickupThrees;
+    final nearFoot =
+        !bot.hasPickedUpFoot &&
+        bot.currentHand.length <= BotConfig.emergencyTransitionThreshold;
+    final racingOut = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+    final opponentRacing = _opponentLikelyGoingOut(gameState, bot.id);
+
+    if (pickupThrees >= toxicPickupThreeCount) {
+      return true;
+    }
+    if (dumpTurns >= toxicThreeDumpTurns) {
+      return true;
+    }
+    if (handThrees >= BotConfig.handQualityThreeCountThreshold) {
+      return true;
+    }
+    if (nearFoot) {
+      return true;
+    }
+    if (racingOut) {
+      return true;
+    }
+    if (opponentRacing && (pickupThrees >= 2 || pickupRedThrees >= 1)) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _opponentLikelyGoingOut(GameState gameState, String botId) {
+    return gameState.players.any((player) {
+      if (player.id == botId) {
+        return false;
+      }
+      if (!player.hasPickedUpFoot) {
+        return false;
+      }
+      return player.canGoOutWithBooks ||
+          player.currentHand.length <= BotConfig.goOutThisTurnMaxHand;
+    });
+  }
+
   static String drawSkipReason({
     required bool hasPlayedDown,
     required bool topUnlockable,
     required int naturalTopCount,
     required bool goOutThisTurn,
+    bool toxicThrees = false,
   }) {
     if (!hasPlayedDown) {
       return 'notPlayedDown';
@@ -173,6 +264,9 @@ class CompetitivePolicy {
     }
     if (naturalTopCount < GameConfig.minNaturalCardsForMeld) {
       return 'noKey';
+    }
+    if (toxicThrees) {
+      return 'toxicThrees';
     }
     if (goOutThisTurn) {
       return 'goOutThisTurn';
