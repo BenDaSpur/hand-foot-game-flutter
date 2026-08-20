@@ -186,8 +186,8 @@ class EnhancedBotAI {
       final handSize = bot.currentHand.length;
       final isEarlyGame = _isEarlyGamePhase(bot);
 
-      // NEW: Opponent pressure detection and competitive response (with caching)
-      final pressureResponse = _evaluateOpponentPressureWithCaching(
+      // Opponent pressure detection — recomputed every decision.
+      final pressureResponse = _evaluateOpponentPressure(
         bot,
         context,
         gameState,
@@ -611,12 +611,9 @@ class EnhancedBotAI {
     final isEarlyGame = _isEarlyGamePhase(bot);
     final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
 
-    // Check if competitive pressure should override early game grace
-    // Note: This method is called from makeDecision, so we don't have access to pressureResponse
-    // We need to check pressure here, but this should be cached from the earlier call
+    // Recompute pressure here rather than reuse an earlier call's decision.
     final hasCompetitivePressure =
-        _evaluateOpponentPressureWithCaching(bot, context, context.gameState) !=
-        null;
+        _evaluateOpponentPressure(bot, context, context.gameState) != null;
     // Only bypass early game if enough turns have passed
     final shouldBypassEarlyGame =
         (!isEarlyGame || hasCompetitivePressure) &&
@@ -1823,6 +1820,9 @@ class EnhancedBotAI {
     }
 
     if (!_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
+      // No live top keys — keep holding a generic 4–8 pair for discard.
+      // Meld selection falls back in filterUnlockKeyMeldCandidates so a
+      // last-pair burn cannot stall into noMeld.
       return;
     }
 
@@ -3915,18 +3915,7 @@ class EnhancedBotAI {
     return maxThreat.clamp(0.0, 1.0);
   }
 
-  /// Recompute pressure tactics every decision. A 2s BotDecision cache
-  /// replayed draw-phase actions during meld/draw and skipped keyed unlocks
-  /// (analytics: adaptive 1-book, pile 34/50, still drawFromDeck).
-  BotDecision? _evaluateOpponentPressureWithCaching(
-    Player bot,
-    BotGameContext context,
-    GameState gameState,
-  ) {
-    return _evaluateOpponentPressure(bot, context, gameState);
-  }
-
-  /// NEW: Evaluate opponent pressure and return competitive counter-strategy
+  /// Evaluate opponent pressure and return competitive counter-strategy.
   BotDecision? _evaluateOpponentPressure(
     Player bot,
     BotGameContext context,

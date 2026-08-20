@@ -14,7 +14,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
-  group('Pile-farm contest AI (2026.08-unlock-churn)', () {
+  group('Pile-farm contest AI (2026.08-human-counter)', () {
     late EnhancedBotAI botAI;
     late GameController controller;
     late Player human;
@@ -30,7 +30,7 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for unlock-churn', () {
+    test('botAiVersion bumped for human-counter', () {
       expect(BotConfig.botAiVersion, '2026.08-human-counter');
     });
 

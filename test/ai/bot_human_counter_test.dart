@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_config.dart';
 import 'package:hand_foot_game_flutter/ai/bot_discard_analyzer.dart';
 import 'package:hand_foot_game_flutter/ai/bot_game_context.dart';
+import 'package:hand_foot_game_flutter/ai/bot_meld_analyzer.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
@@ -285,6 +286,57 @@ void main() {
       expect(botAI.shouldCompleteHandPileForFoot(bot, context), isTrue);
       expect(botAI.shouldRushHandToFoot(bot, context), isTrue);
     });
+
+    test(
+      'no live top keys still melds when only option spends last 4-8 pair',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          ]);
+        controller.gameState.discardPile
+          ..clear()
+          ..addAll(
+            List.generate(
+              8,
+              (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.ten),
+            ),
+          )
+          ..add(const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace));
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.discardPileFrozen = false;
+
+        final foursOnly = [
+          [
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          ],
+        ];
+        final filtered = BotMeldAnalyzer.filterUnlockKeyMeldCandidates(
+          bot,
+          controller.gameState,
+          foursOnly,
+        );
+        expect(filtered, isNotEmpty);
+        expect(filtered.first.every((c) => c.rank == CardRank.four), isTrue);
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'createMeld');
+        final meld = decision.data as List<PlayingCard>;
+        expect(meld.every((c) => c.rank == CardRank.four), isTrue);
+      },
+    );
 
     test('bookless 5-card hand pile stays off foot when pile is small', () {
       bot.hasPlayedDown = true;

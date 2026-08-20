@@ -4,6 +4,7 @@ import '../models/meld.dart';
 import '../models/game_state.dart';
 import 'bot_game_analyzer.dart';
 import 'bot_config.dart';
+import 'bot_meld_analyzer.dart';
 
 /// Analyzes discard decisions for bot players.
 ///
@@ -350,11 +351,7 @@ class BotDiscardAnalyzer {
 
   /// Ranks humans discard most while trimming large hands (analytics).
   bool _isHumanPreferredDiscardRank(CardRank rank) {
-    return rank == CardRank.four ||
-        rank == CardRank.five ||
-        rank == CardRank.six ||
-        rank == CardRank.seven ||
-        rank == CardRank.eight;
+    return BotMeldAnalyzer.isHumanUnlockKeyRank(rank);
   }
 
   /// Check if a card can be added to a meld.

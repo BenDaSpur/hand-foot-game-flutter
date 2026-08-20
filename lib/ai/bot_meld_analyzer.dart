@@ -133,7 +133,21 @@ class BotMeldAnalyzer {
     if (genericPreserving.isNotEmpty) {
       return genericPreserving;
     }
-    // Every remaining small meld would burn the last 4–8 pair or live keys.
+
+    // No live top keys: do not stall on noMeld when every small meld would
+    // spend the last 4–8 pair. Callers / `_updateForceSpendUnlockKeys` still
+    // hold when the current top is actually unlockable.
+    final unlockTopRank = topIsUnlockable ? top.rank : null;
+    final liveTopKeys = unlockTopRank == null
+        ? 0
+        : bot.currentHand
+              .where((card) => !card.isWild && card.rank == unlockTopRank)
+              .length;
+    if (liveTopKeys < GameConfig.minNaturalCardsForMeld) {
+      return candidates;
+    }
+
+    // Live keys exist and every remaining small meld burns the last 4–8 pair.
     return const <List<PlayingCard>>[];
   }
 
