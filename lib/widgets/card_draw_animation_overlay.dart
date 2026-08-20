@@ -121,6 +121,21 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
   static const double _maxFanSpread = 76.0;
   static const double _revealScale = 1.08;
 
+  static double _revealFanSpread({
+    required int cardCount,
+    required double maxFanWidth,
+    required double cardWidth,
+  }) {
+    if (cardCount <= 1) {
+      return 0.0;
+    }
+    final rawSpread = (maxFanWidth - cardWidth) / (cardCount - 1);
+    if (rawSpread < _minFanSpread) {
+      return rawSpread.clamp(0.0, _maxFanSpread).toDouble();
+    }
+    return rawSpread.clamp(_minFanSpread, _maxFanSpread).toDouble();
+  }
+
   List<_FlyingCardVisual> _visuals = [];
   bool _showScrim = false;
   bool _showCaption = false;
@@ -168,8 +183,27 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
   @override
   void dispose() {
     _cancelPauseTimer();
-    _activeController?.dispose();
+    final controller = _activeController;
+    if (controller != null) {
+      _activeController = null;
+      controller.stop();
+      controller.dispose();
+    }
     super.dispose();
+  }
+
+  Future<void> _runActiveController(AnimationController controller) async {
+    _activeController = controller;
+    try {
+      await controller.forward().orCancel;
+    } on TickerCanceled {
+      // Skip, host interrupt, or widget dispose requested a stop.
+    } finally {
+      if (identical(_activeController, controller)) {
+        _activeController = null;
+        controller.dispose();
+      }
+    }
   }
 
   void _cancelPauseTimer() {
@@ -284,14 +318,16 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     );
     final handSizes = GameResponsiveLayout.handSizes(context);
     final maxFanWidth = overlaySize.width * _revealFanWidthFactor;
-    final spread = request.handCards.length <= 1
-        ? 0.0
-        : ((maxFanWidth - handSizes.handWidth) / (request.handCards.length - 1))
-              .clamp(_minFanSpread, _maxFanSpread);
+    final spread = _revealFanSpread(
+      cardCount: request.handCards.length,
+      maxFanWidth: maxFanWidth,
+      cardWidth: handSizes.handWidth,
+    );
     final revealPositions = <Offset>[];
     for (int i = 0; i < request.handCards.length; i++) {
-      final offset = (i - (request.handCards.length - 1) / 2) * spread;
-      revealPositions.add(revealCenter + Offset(offset, 0));
+      final offset = ((i - (request.handCards.length - 1) / 2) * spread)
+          .toDouble();
+      revealPositions.add(revealCenter + Offset(offset, 0.0));
     }
 
     final visuals = <_FlyingCardVisual>[];
@@ -369,9 +405,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       });
     });
 
-    await controller.forward();
-    controller.dispose();
-    _activeController = null;
+    await _runActiveController(controller);
   }
 
   Future<void> _fadeVisuals({required Duration duration}) async {
@@ -398,9 +432,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       });
     });
 
-    await controller.forward();
-    controller.dispose();
-    _activeController = null;
+    await _runActiveController(controller);
   }
 
   Future<void> _runMeldBeat(CardAnimationRequest request) async {
@@ -489,7 +521,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
         endScale: 1.1,
       );
       if (i < visuals.length - 1) {
-        await Future<void>.delayed(GameConfig.cardStaggerDelay);
+        await _pause(GameConfig.cardStaggerDelay);
       }
     }
 
@@ -508,7 +540,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       ];
     });
 
-    await Future<void>.delayed(GameConfig.cardRevealPause);
+    await _pause(GameConfig.cardRevealPause);
     if (_skipped || !mounted) {
       return;
     }
@@ -532,7 +564,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
         endScale: 1,
       );
       if (i < request.handCards.length - 1) {
-        await Future<void>.delayed(GameConfig.cardStaggerDelay);
+        await _pause(GameConfig.cardStaggerDelay);
       }
     }
   }
@@ -568,9 +600,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       });
     });
 
-    await controller.forward();
-    controller.dispose();
-    _activeController = null;
+    await _runActiveController(controller);
   }
 
   Future<void> _animateSingleVisual({
@@ -611,9 +641,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       });
     });
 
-    await controller.forward();
-    controller.dispose();
-    _activeController = null;
+    await _runActiveController(controller);
 
     if (mounted && index < _visuals.length) {
       setState(() {
