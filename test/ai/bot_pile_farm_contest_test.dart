@@ -31,7 +31,7 @@ void main() {
     });
 
     test('botAiVersion bumped for unlock-churn', () {
-      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
+      expect(BotConfig.botAiVersion, '2026.08-human-counter');
     });
 
     test(

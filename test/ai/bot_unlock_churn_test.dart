@@ -30,7 +30,7 @@ void main() {
     });
 
     test('botAiVersion is unlock-churn', () {
-      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
+      expect(BotConfig.botAiVersion, '2026.08-human-counter');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
       expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });

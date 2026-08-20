@@ -173,7 +173,7 @@ void main() {
     });
 
     test('botAiVersion bumped for this analytics fix', () {
-      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
+      expect(BotConfig.botAiVersion, '2026.08-human-counter');
     });
   });
 }

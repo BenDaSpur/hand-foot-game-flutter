@@ -97,39 +97,99 @@ class BotMeldAnalyzer {
       return possibleMelds;
     }
 
+    var candidates = possibleMelds;
     final top = gameState.topDiscard;
-    if (top == null || top.isWild || top.isThree) {
-      return possibleMelds;
-    }
+    final topIsUnlockable = top != null && !top.isWild && !top.isThree;
+    var holdingCurrentTopKeys = false;
 
-    final matchingInHand = bot.currentHand
-        .where((card) => !card.isWild && card.rank == top.rank)
-        .length;
-    if (matchingInHand < GameConfig.minNaturalCardsForMeld) {
-      return possibleMelds;
-    }
-
-    bool leavesUnlockKeys(List<PlayingCard> meld) {
-      final used = meld
+    if (topIsUnlockable) {
+      final matchingInHand = bot.currentHand
           .where((card) => !card.isWild && card.rank == top.rank)
           .length;
-      return matchingInHand - used >= GameConfig.minNaturalCardsForMeld;
+      if (matchingInHand >= GameConfig.minNaturalCardsForMeld) {
+        holdingCurrentTopKeys = true;
+        bool leavesUnlockKeys(List<PlayingCard> meld) {
+          final used = meld
+              .where((card) => !card.isWild && card.rank == top.rank)
+              .length;
+          return matchingInHand - used >= GameConfig.minNaturalCardsForMeld;
+        }
+
+        final preserving = candidates.where(leavesUnlockKeys).toList();
+        if (preserving.isNotEmpty) {
+          candidates = preserving;
+        } else {
+          final bookMelds = candidates
+              .where((meld) => meld.length >= GameConfig.bookSize)
+              .toList();
+          if (bookMelds.isNotEmpty) {
+            return bookMelds;
+          }
+          // Hold for the live top — do not burn the last keys on a small meld.
+          return const <List<PlayingCard>>[];
+        }
+      }
     }
 
-    final preserving = possibleMelds.where(leavesUnlockKeys).toList();
+    final genericPreserving = _filterLastGenericUnlockPair(bot, candidates);
+    if (genericPreserving.isNotEmpty) {
+      return genericPreserving;
+    }
+    if (holdingCurrentTopKeys) {
+      return const <List<PlayingCard>>[];
+    }
+    return candidates;
+  }
+
+  /// Drop small melds that would spend the last 4–8 natural pair.
+  static List<List<PlayingCard>> _filterLastGenericUnlockPair(
+    Player bot,
+    List<List<PlayingCard>> possibleMelds,
+  ) {
+    if (!bot.hasPlayedDown || possibleMelds.isEmpty) {
+      return possibleMelds;
+    }
+
+    bool leavesGenericPair(List<PlayingCard> meld) {
+      return !_burnsLastGenericUnlockPair(bot, meld);
+    }
+
+    final preserving = possibleMelds.where(leavesGenericPair).toList();
     if (preserving.isNotEmpty) {
       return preserving;
     }
 
-    final bookMelds = possibleMelds
+    return possibleMelds
         .where((meld) => meld.length >= GameConfig.bookSize)
         .toList();
-    if (bookMelds.isNotEmpty) {
-      return bookMelds;
-    }
+  }
 
-    // Hold for unlock — do not burn the last keys on a small meld.
-    return const <List<PlayingCard>>[];
+  static bool isHumanUnlockKeyRank(CardRank rank) {
+    return rank == CardRank.four ||
+        rank == CardRank.five ||
+        rank == CardRank.six ||
+        rank == CardRank.seven ||
+        rank == CardRank.eight;
+  }
+
+  static bool _burnsLastGenericUnlockPair(
+    Player bot,
+    List<PlayingCard> usedCards,
+  ) {
+    final remaining = <CardRank, int>{};
+    for (final card in bot.currentHand) {
+      if (card.isWild || !isHumanUnlockKeyRank(card.rank)) {
+        continue;
+      }
+      remaining[card.rank] = (remaining[card.rank] ?? 0) + 1;
+    }
+    for (final card in usedCards) {
+      if (card.isWild || !isHumanUnlockKeyRank(card.rank)) {
+        continue;
+      }
+      remaining[card.rank] = (remaining[card.rank] ?? 0) - 1;
+    }
+    return !remaining.values.any((count) => count >= 2);
   }
 
   /// Whether adding [card] to [meld] would leave fewer than 2 unlock naturals
@@ -148,20 +208,25 @@ class BotMeldAnalyzer {
       return false;
     }
     final top = gameState.topDiscard;
-    if (top == null || top.isWild || top.isThree) {
-      return false;
-    }
-    if (card.isWild || card.rank != top.rank) {
+    if (top == null) {
       return false;
     }
     // Completing a book with this add is worth spending a key.
     if (meld.cards.length + 1 >= GameConfig.bookSize) {
       return false;
     }
-    final matchingInHand = bot.currentHand
-        .where((c) => !c.isWild && c.rank == top.rank)
-        .length;
-    return matchingInHand - 1 < GameConfig.minNaturalCardsForMeld;
+    if (!top.isWild && !top.isThree && !card.isWild && card.rank == top.rank) {
+      final matchingInHand = bot.currentHand
+          .where((c) => !c.isWild && c.rank == top.rank)
+          .length;
+      if (matchingInHand - 1 < GameConfig.minNaturalCardsForMeld) {
+        return true;
+      }
+    }
+    if (card.isWild || !isHumanUnlockKeyRank(card.rank)) {
+      return false;
+    }
+    return _burnsLastGenericUnlockPair(bot, [card]);
   }
 
   // Cached results for performance
