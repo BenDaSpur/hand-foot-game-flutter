@@ -35,7 +35,7 @@ void main() {
 
     test('botAiVersion is human-counter', () {
       expect(BotConfig.botAiVersion, '2026.08-human-counter');
-      expect(BotConfig.goOutThisTurnMaxHand, 2);
+      expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
     });
 

@@ -307,8 +307,10 @@ class BotConfig {
   /// on 4/5/6 tops; bots dumped those pairs then had 278+171 no-key draws).
   static const int genericUnlockKeyHoldPenalty = 90;
 
-  /// Go-out race may skip an unlockable pile only at or below this hand size.
-  static const int goOutThisTurnMaxHand = 2;
+  /// Go-out race may skip an unlockable pile at or below this hand size.
+  /// 2–5 cards can finish soon; 6+ still contests a fat farm (analytics:
+  /// 8-card foot skipped pile 51; 5-card race must not take +7).
+  static const int goOutThisTurnMaxHand = 5;
 
   /// Opponent melds at or above this size reveal a rank they are collecting
   static const int meldRankTrackingThreshold = 3;
