@@ -42,6 +42,7 @@ class BotDiscardAnalyzer {
     GameState gameState, {
     BotGameAnalyzer? analyzer,
     bool preserveUnlockKeys = true,
+    Set<CardRank>? extraProtectedRanks,
   }) {
     if (bot.currentHand.isEmpty) {
       throw StateError('Cannot discard from empty hand');
@@ -68,6 +69,7 @@ class BotDiscardAnalyzer {
         gameState,
         analyzer,
         preserveUnlockKeys: preserveUnlockKeys,
+        extraProtectedRanks: extraProtectedRanks,
       );
     }
 
@@ -86,6 +88,7 @@ class BotDiscardAnalyzer {
     GameState gameState,
     BotGameAnalyzer? analyzer, {
     bool preserveUnlockKeys = true,
+    Set<CardRank>? extraProtectedRanks,
   }) {
     int score = 0;
 
@@ -201,6 +204,17 @@ class BotDiscardAnalyzer {
         sameRankCount == 2 &&
         !_hasOtherGenericUnlockPair(bot, card.rank)) {
       score -= BotConfig.genericUnlockKeyHoldPenalty;
+    }
+
+    // Live top / recent discard ranks: never break the last matching pair.
+    final protected = extraProtectedRanks;
+    if (preserveUnlockKeys &&
+        protected != null &&
+        protected.contains(card.rank) &&
+        !card.isWild &&
+        !card.isThree &&
+        sameRankCount == 2) {
+      score -= BotConfig.genericUnlockKeyHoldPenalty + 40;
     }
 
     return score;

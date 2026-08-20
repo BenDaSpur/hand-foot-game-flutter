@@ -17,6 +17,7 @@ import 'bot_end_game_manager.dart';
 import 'bot_game_context.dart';
 import 'bot_discard_analyzer.dart';
 import 'bot_config.dart';
+import 'planner/turn_planner.dart';
 import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
@@ -32,6 +33,7 @@ class EnhancedBotAI {
   final BotFootTransitionManager _footTransitionManager;
   final BotEndGameManager _endGameManager;
   final BotDiscardAnalyzer _discardAnalyzer;
+  final TurnPlanner _planner;
 
   // Random number generator for decision variability
   final math.Random _random;
@@ -57,16 +59,23 @@ class EnhancedBotAI {
 
   factory EnhancedBotAI({int? seed}) {
     final meldAnalyzer = BotMeldAnalyzer();
+    final discardAnalyzer = BotDiscardAnalyzer();
+    final personalityManager = BotPersonalityManager();
     final random = seed != null ? math.Random(seed) : math.Random();
     return EnhancedBotAI._(
-      personalityManager: BotPersonalityManager(),
+      personalityManager: personalityManager,
       gameAnalyzer: BotGameAnalyzer(),
       meldAnalyzer: meldAnalyzer,
       footTransitionManager: BotFootTransitionManager(
         meldAnalyzer: meldAnalyzer,
       ),
       endGameManager: BotEndGameManager(meldAnalyzer: meldAnalyzer),
-      discardAnalyzer: BotDiscardAnalyzer(),
+      discardAnalyzer: discardAnalyzer,
+      planner: TurnPlanner(
+        meldAnalyzer: meldAnalyzer,
+        discardAnalyzer: discardAnalyzer,
+        personalityOf: personalityManager.getPersonality,
+      ),
       random: random,
     );
   }
@@ -78,6 +87,7 @@ class EnhancedBotAI {
     required BotFootTransitionManager footTransitionManager,
     required BotEndGameManager endGameManager,
     required BotDiscardAnalyzer discardAnalyzer,
+    required TurnPlanner planner,
     required math.Random random,
   }) : _personalityManager = personalityManager,
        _gameAnalyzer = gameAnalyzer,
@@ -85,6 +95,7 @@ class EnhancedBotAI {
        _footTransitionManager = footTransitionManager,
        _endGameManager = endGameManager,
        _discardAnalyzer = discardAnalyzer,
+       _planner = planner,
        _random = random;
 
   /// Main entry point for bot decisions
@@ -168,227 +179,15 @@ class EnhancedBotAI {
         'makeDecision in phase ${gameState.turnPhase}',
       );
 
-      // NEW: Dynamic adaptive personality adjustment
-      _applyAdaptivePersonalityAdjustment(bot, gameState);
-
-      // Update game analysis
+      // Update game analysis for discard/opponent features used by the planner.
       _gameAnalyzer.updateOpponentAnalysis(gameState, bot);
       _gameAnalyzer.incrementTurnCount(bot.id);
 
-      // Meld/discard: do not freeze on unlock keys when holding is useless or
-      // we would decline the pile anyway (analytics: key-hold → noMeld stalls).
-      if (gameState.turnPhase == TurnPhase.meld ||
-          gameState.turnPhase == TurnPhase.discard) {
-        _updateForceSpendUnlockKeys(bot, context);
-      }
-
-      // Calculate early game status to prevent emergency panic on normal starting hands
-      final handSize = bot.currentHand.length;
-      final isEarlyGame = _isEarlyGamePhase(bot);
-
-      // Opponent pressure detection — recomputed every decision.
-      final pressureResponse = _evaluateOpponentPressure(
-        bot,
-        context,
-        gameState,
-      );
-
-      // If under pressure AND have large hand, bypass early game grace
-      if (pressureResponse != null &&
-          handSize >= BotConfig.criticalHandSizeThreshold) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'Competitive pressure with large hand - forcing emergency meld instead of pressure response',
-        );
-        // Continue to emergency logic below instead of returning pressure response
-      } else if (pressureResponse != null) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'Applying pressure response: ${pressureResponse.action}',
-        );
-        return pressureResponse;
-      }
-
-      // CRITICAL EMERGENCY: Hand size protocols override ALL other logic
-      // But only after bot has had enough turns to play normally
-      final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
-      final hasCompetitivePressure = pressureResponse != null;
-      // Only bypass early game if we have competitive pressure AND have had enough turns
-      final shouldBypassEarlyGame =
-          (!isEarlyGame || hasCompetitivePressure) &&
-          botTurnCount >= BotConfig.minTurnsForEmergency;
-
-      if (handSize >= BotConfig.criticalHandSizeThreshold &&
-          shouldBypassEarlyGame) {
-        // PANIC MODE: But still try conservative play-down first if not played down yet
-        if (gameState.turnPhase == TurnPhase.meld) {
-          _forceSpendUnlockKeys = true;
-          List<List<PlayingCard>> emergencyMelds;
-
-          // If not played down, try conservative play-down even in emergency
-          if (!bot.hasPlayedDown) {
-            final controller = context.controller as GameController?;
-            if (controller == null) {
-              return BotDecision(action: 'noMeld');
-            }
-            emergencyMelds = _meldAnalyzer.findBestPlayDownCombination(
-              bot,
-              controller,
-              gameState.playDownRequirement,
-            );
-            if (emergencyMelds.isEmpty) {
-              // Conservative failed, fall back to maximal as last resort
-              emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
-                bot,
-                controller,
-              );
-            }
-          } else {
-            // Already played down, use maximal for foot transition
-            final controller = context.controller as GameController?;
-            if (controller == null) {
-              return BotDecision(action: 'noMeld');
-            }
-            emergencyMelds = _meldAnalyzer.findMaximalMeldCombination(
-              bot,
-              controller,
-            );
-          }
-
-          if (emergencyMelds.isNotEmpty) {
-            final meldType = bot.hasPlayedDown
-                ? 'maximal'
-                : 'conservative emergency';
-            DebugLogger.botDebug(
-              bot.id,
-              bot.name,
-              'CRITICAL EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $BotConfig.criticalHandSizeThreshold - using $meldType combination (${emergencyMelds.length} melds)',
-            );
-
-            if (emergencyMelds.length == 1) {
-              return BotDecision(
-                action: 'createMeld',
-                data: emergencyMelds.first,
-                skipPlayDownCheck: bot.hasPlayedDown,
-              );
-            } else {
-              return BotDecision(
-                action: 'createMultipleMelds',
-                data: emergencyMelds,
-                skipPlayDownCheck: bot.hasPlayedDown,
-              );
-            }
-          }
-        }
-      }
-
-      if (handSize >= BotConfig.emergencyHandSizeThreshold &&
-          shouldBypassEarlyGame) {
-        // EMERGENCY MODE: Use maximal meld combination for aggressive melding
-        if (gameState.turnPhase == TurnPhase.meld) {
-          _forceSpendUnlockKeys = true;
-          // If not played down, force emergency play-down with enhanced combination
-          if (!bot.hasPlayedDown) {
-            return _handleEmergencyPlayDown(bot, context);
-          }
-
-          // Post-play-down: Use maximal meld combination
-          final controller = context.controller as GameController?;
-          if (controller == null) {
-            return BotDecision(action: 'noMeld');
-          }
-          final maximalMelds = _meldAnalyzer.findMaximalMeldCombination(
-            bot,
-            controller,
-          );
-          if (maximalMelds.isNotEmpty) {
-            DebugLogger.botDebug(
-              bot.id,
-              bot.name,
-              'EMERGENCY (turn $botTurnCount): Hand size $handSize exceeds $BotConfig.emergencyHandSizeThreshold - using maximal meld combination (${maximalMelds.length} melds)',
-            );
-
-            if (maximalMelds.length == 1) {
-              return BotDecision(
-                action: 'createMeld',
-                data: maximalMelds.first,
-              );
-            } else {
-              return BotDecision(
-                action: 'createMultipleMelds',
-                data: maximalMelds,
-              );
-            }
-          }
-        }
-        // Draw phase: still evaluate the discard pile — emergency must not
-        // skip unlockable fat piles (analytics: bots deck-looped after large hands).
-        if (gameState.turnPhase == TurnPhase.draw) {
-          DebugLogger.botDebug(
-            bot.id,
-            bot.name,
-            'EMERGENCY (turn $botTurnCount): Hand size $handSize - evaluating draw with pile contest',
-          );
-          return _makeDrawDecision(bot, context);
-        }
-      }
-
-      // SPECIAL EMERGENCY: Bot with too many cards and no play-down
-      if (handSize >= BotConfig.playDownEmergencyThreshold &&
-          !bot.hasPlayedDown &&
-          shouldBypassEarlyGame &&
-          gameState.turnPhase == TurnPhase.meld) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'PLAY-DOWN EMERGENCY: $handSize cards without play-down - forcing any viable meld',
-        );
-        final emergencyPlayDown = _handleEmergencyPlayDown(bot, context);
-        // Safety check: if emergency play-down fails, fall back to normal logic
-        if (emergencyPlayDown.action != 'noMeld') {
-          return emergencyPlayDown;
-        }
-        // Continue to normal logic if emergency play-down couldn't find viable melds
-      }
-
-      // PANIC MODE: Override normal logic for bots in terrible situations
-      if (bot.score < -100 && !bot.hasPlayedDown) {
-        return _handlePanicMode(bot, context, gameState);
-      }
-
-      // Route to appropriate decision handler based on turn phase with enhanced error handling
-      BotDecision decision;
-      try {
-        decision = switch (gameState.turnPhase) {
-          TurnPhase.draw => _makeDrawDecision(bot, context),
-          TurnPhase.meld => _makeMeldDecision(bot, context),
-          TurnPhase.discard => _makeDiscardDecision(bot, context),
-        };
-
-        // Validate decision before returning
-        if (!_isValidDecision(decision, bot, context)) {
-          DebugLogger.botDebug(
-            bot.id,
-            bot.name,
-            'Invalid decision ${decision.action}, falling back to safe choice',
-          );
-          decision = _getSafeDecision(gameState.turnPhase, bot, context);
-        }
-      } catch (e) {
-        DebugLogger.botDebug(
-          bot.id,
-          bot.name,
-          'Decision error: $e, using emergency fallback',
-        );
-        decision = _getSafeDecision(gameState.turnPhase, bot, context);
-      }
-
+      final decision = _planner.plan(bot, context);
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'makeDecision returning: ${decision.action}',
+        'planner returning: ${decision.action} ${_planner.lastAnalytics}',
       );
       return decision;
     } catch (e, stackTrace) {
@@ -4912,6 +4711,45 @@ class EnhancedBotAI {
     }
   }
 
+  /// Legacy cascade entry points kept so shared foot/end-game helpers stay
+  /// reachable. [makeDecision] uses [TurnPlanner] instead.
+  @visibleForTesting
+  BotDecision debugLegacyMeldDecision(Player bot, BotGameContext context) {
+    return _withDecisionContext(context, () => _makeMeldDecision(bot, context));
+  }
+
+  @visibleForTesting
+  BotDecision debugLegacyDiscardDecision(Player bot, BotGameContext context) {
+    return _withDecisionContext(
+      context,
+      () => _makeDiscardDecision(bot, context),
+    );
+  }
+
+  @visibleForTesting
+  BotDecision debugLegacyPanicDecision(
+    Player bot,
+    BotGameContext context,
+    GameState gameState,
+  ) {
+    return _withDecisionContext(
+      context,
+      () => _handlePanicMode(bot, context, gameState),
+    );
+  }
+
+  @visibleForTesting
+  void debugLegacyUnlockKeySpend(Player bot, BotGameContext context) {
+    _withDecisionContext(context, () {
+      _updateForceSpendUnlockKeys(bot, context);
+    });
+  }
+
+  @visibleForTesting
+  void debugLegacyAdaptiveAdjustment(Player bot, GameState gameState) {
+    _applyAdaptivePersonalityAdjustment(bot, gameState);
+  }
+
   @visibleForTesting
   bool shouldCompleteHandPileForFoot(Player bot, BotGameContext context) {
     return _withDecisionContext(
@@ -4958,6 +4796,9 @@ class EnhancedBotAI {
   Map<String, OpponentAnalysis> get opponentAnalysis =>
       _gameAnalyzer.opponentAnalysis;
   BotPersonalityManager get personalityManager => _personalityManager;
+
+  /// Last planner analytics payload (couldUnlock / keyCount / skipReason).
+  Map<String, dynamic> get lastPlannerAnalytics => _planner.lastAnalytics;
   BotGameAnalyzer get gameAnalyzer => _gameAnalyzer;
   BotMeldAnalyzer get meldAnalyzer => _meldAnalyzer;
   bool get inMultiMeldSequence => _inMultiMeldSequence;

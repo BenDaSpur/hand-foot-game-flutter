@@ -273,9 +273,10 @@ class BotTurnManager {
                 botId: botPlayer.id,
                 decision: decision.action,
                 reasoning: strategicReasoning,
-                context: decision.data != null
-                    ? {'data': decision.data.toString()}
-                    : null,
+                context: {
+                  ...?decision.analyticsContext,
+                  if (decision.data != null) 'data': decision.data.toString(),
+                },
                 gameStateSnapshot: gameStateSnapshot,
               );
               break;
@@ -1082,6 +1083,10 @@ class BotTurnManager {
 
       switch (decision.action) {
         case 'drawFromDeck':
+          final skip = decision.analyticsContext?['skipReason'];
+          if (skip != null) {
+            return '$personality bot drawing from deck ($skip, $handSize cards, $hasBooks books)';
+          }
           if (!bot.hasPlayedDown) {
             return '$personality bot drawing from deck to build hand for play-down ($handSize cards)';
           } else if (!bot.hasPickedUpFoot) {
