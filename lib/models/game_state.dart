@@ -111,6 +111,10 @@ class GameState {
   /// Transient UI metadata — not serialized.
   int lastUnlockFromDiscardCount;
 
+  /// Unlock pickup cards in collection order (discard leftovers, then stock fill).
+  /// Transient UI metadata — not serialized.
+  List<PlayingCard> lastUnlockPickupCards;
+
   // Track 3s stalemate situation
   /// True after the first consecutive 3-discard in a low-deck all-3s pile.
   bool _stalemateTrackingActive = false;
@@ -164,6 +168,7 @@ class GameState {
     this.hasMelded = false,
     this.hasTakenDiscardThisTurn = false,
     this.lastUnlockFromDiscardCount = 0,
+    List<PlayingCard>? lastUnlockPickupCards,
     SoloGameSettings? soloSettings,
     this.finalTurnPhaseActive = false,
     this.playerWhoWentOutIndex,
@@ -172,6 +177,7 @@ class GameState {
     String? viewerId,
   }) : discardPile = discardPile ?? [],
        recentActions = recentActions ?? [],
+       lastUnlockPickupCards = lastUnlockPickupCards ?? [],
        soloSettings = soloSettings ?? SoloGameSettings.defaults,
        playersAwaitingFinalTurn = playersAwaitingFinalTurn ?? {},
        _isMultiplayer = isMultiplayer,
@@ -733,6 +739,7 @@ class GameState {
     final additionalCards = pickup.cards;
     final fromDiscardCount = pickup.fromDiscardCount;
     lastUnlockFromDiscardCount = fromDiscardCount;
+    lastUnlockPickupCards = List<PlayingCard>.from(additionalCards);
 
     if (additionalCards.isNotEmpty) {
       currentPlayer.addNewlyDrawnCards(additionalCards);
@@ -1158,6 +1165,7 @@ class GameState {
 
     final pickup = _collectUnlockPickupCards();
     lastUnlockFromDiscardCount = pickup.fromDiscardCount;
+    lastUnlockPickupCards = List<PlayingCard>.from(pickup.cards);
     if (pickup.cards.isNotEmpty) {
       player.addCardsToHand(pickup.cards);
     }

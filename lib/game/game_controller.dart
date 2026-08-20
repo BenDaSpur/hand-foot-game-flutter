@@ -237,7 +237,9 @@ class GameController implements GameInterface {
     Player player,
     _DiscardUnlockContext unlockContext,
   ) {
-    final handPickupCards = _cardsFromNewlyDrawnIndices(player);
+    final handPickupCards = List<PlayingCard>.from(
+      _gameState.lastUnlockPickupCards,
+    );
 
     final meldIndex = unlockContext.meldIndex != -1
         ? unlockContext.meldIndex
