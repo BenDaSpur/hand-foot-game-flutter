@@ -34,7 +34,11 @@ class TurnPlanner {
     final liveTop = CompetitivePolicy.liveTopRank(gameState);
     final liveKeys = CompetitivePolicy.liveKeyRanks(gameState);
     final keyCount = CompetitivePolicy.keyCount(bot, liveTop);
-    final goOutThisTurn = CompetitivePolicy.canEmptyThisTurn(bot);
+    final goOutThisTurn = CompetitivePolicy.canEmptyThisTurn(
+      bot,
+      context: context,
+      meldAnalyzer: _generator.meldAnalyzer,
+    );
     final canUnlock = context.canUnlockDiscard();
     final topUnlockable = liveTop != null && !gameState.discardPileFrozen;
     final humanCanUnlock = CompetitivePolicy.humanLikelyCanUnlock(
@@ -89,6 +93,7 @@ class TurnPlanner {
         context: context,
         weights: weights,
         humanCanUnlock: humanCanUnlock,
+        goOutThisTurn: goOutThisTurn,
       );
       if (best == null || scored.score > best.score) {
         best = scored;

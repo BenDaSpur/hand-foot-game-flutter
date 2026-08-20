@@ -312,8 +312,7 @@ void main() {
         bot.foot.addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
           const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
           const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
         ]);
         gameController.gameState.discardPile.addAll(

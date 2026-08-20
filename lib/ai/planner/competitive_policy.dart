@@ -1,8 +1,12 @@
 import '../../config/game_config.dart';
+import '../../game/game_controller.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../bot_config.dart';
+import '../bot_end_game_manager.dart';
+import '../bot_game_context.dart';
+import '../bot_meld_analyzer.dart';
 import '../bot_personality.dart';
 
 /// Hard constraints and personality weights for the competitive planner.
@@ -21,10 +25,72 @@ class CompetitivePolicy {
   static const int recentDiscardLookback = 8;
 
   /// Hard-take any eligible unlock unless [canEmptyThisTurn] is true.
-  static bool canEmptyThisTurn(Player bot) {
-    return bot.hasPickedUpFoot &&
-        bot.canGoOutWithBooks &&
-        bot.currentHand.length <= BotConfig.goOutThisTurnMaxHand;
+  ///
+  /// Requires a verified meld/discard path that leaves at most one card.
+  /// Hand size alone is not enough — pass [context] and [meldAnalyzer].
+  static bool canEmptyThisTurn(
+    Player bot, {
+    BotGameContext? context,
+    BotMeldAnalyzer? meldAnalyzer,
+  }) {
+    if (!bot.hasPickedUpFoot || !bot.canGoOutWithBooks) {
+      return false;
+    }
+    final handSize = bot.currentHand.length;
+    if (handSize > BotConfig.goOutThisTurnMaxHand) {
+      return false;
+    }
+    if (handSize <= 1) {
+      return true;
+    }
+    if (context == null || meldAnalyzer == null) {
+      return false;
+    }
+    return _remainingAfterLegalPlays(bot, context, meldAnalyzer) <= 1;
+  }
+
+  static int _remainingAfterLegalPlays(
+    Player bot,
+    BotGameContext context,
+    BotMeldAnalyzer meldAnalyzer,
+  ) {
+    final controller = context.controller;
+    if (controller is! GameController) {
+      return bot.currentHand.length;
+    }
+    final remaining = List<PlayingCard>.from(bot.currentHand);
+
+    void take(PlayingCard card) {
+      final identicalIndex = remaining.indexWhere((c) => identical(c, card));
+      if (identicalIndex >= 0) {
+        remaining.removeAt(identicalIndex);
+        return;
+      }
+      remaining.remove(card);
+    }
+
+    final additions = meldAnalyzer
+        .findCardsToAddToExistingMelds(bot, controller)
+        .where((addition) => !BotMeldAnalyzer.isHardBlockedAddition(addition))
+        .where((addition) => BotEndGameManager.isSafeAddToMeld(bot, addition));
+    for (final addition in additions) {
+      final card = addition['card'];
+      if (card is PlayingCard) {
+        take(card);
+      }
+    }
+
+    var possible = meldAnalyzer.getPossibleMelds(bot, controller);
+    possible = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, possible)
+      ..sort((a, b) => b.length.compareTo(a.length));
+    for (final meld in possible) {
+      if (meld.every(remaining.contains)) {
+        for (final card in meld) {
+          take(card);
+        }
+      }
+    }
+    return remaining.length;
   }
 
   static int keyCount(Player bot, CardRank? rank) {

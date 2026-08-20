@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/ai/bot_config.dart';
+import 'package:hand_foot_game_flutter/ai/bot_discard_analyzer.dart';
+import 'package:hand_foot_game_flutter/ai/bot_game_context.dart';
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/ai/enhanced_bot_ai.dart';
 import 'package:hand_foot_game_flutter/ai/planner/competitive_policy.dart';
@@ -76,7 +78,8 @@ void main() {
         ..addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
           const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
         ]);
       bot.melds.addAll([
         _book(CardRank.ace, dirty: false),
@@ -88,11 +91,52 @@ void main() {
       controller.gameState.hasDrawnFromDeck = false;
       controller.gameState.discardPileFrozen = false;
 
-      expect(CompetitivePolicy.canEmptyThisTurn(bot), isTrue);
+      expect(
+        CompetitivePolicy.canEmptyThisTurn(
+          bot,
+          context: BotGameContext(controller.gameState, controller),
+          meldAnalyzer: botAI.meldAnalyzer,
+        ),
+        isTrue,
+      );
       final decision = botAI.makeDecision(bot, controller);
       expect(decision.action, 'drawFromDeck');
       expect(decision.analyticsContext?['skipReason'], 'goOutThisTurn');
     });
+
+    test(
+      'discard retains a live-top pair over an equivalent non-live pair',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          ]);
+        _setPile(controller, size: 8, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.discard;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.discardPileFrozen = false;
+
+        final liveKeys = CompetitivePolicy.liveKeyRanks(controller.gameState);
+        expect(liveKeys.contains(CardRank.king), isTrue);
+
+        final discarded = BotDiscardAnalyzer().chooseCardToDiscard(
+          bot,
+          controller.gameState,
+          extraProtectedRanks: liveKeys,
+        );
+        expect(discarded.rank, CardRank.queen);
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'discard');
+        expect((decision.data as PlayingCard).rank, isNot(CardRank.king));
+      },
+    );
 
     test('plays down as soon as a legal combo exists', () {
       bot.hasPlayedDown = false;

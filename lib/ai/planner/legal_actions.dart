@@ -61,7 +61,12 @@ class LegalActionGenerator {
           forceSpendKeys: forceSpendKeys,
         );
       case TurnPhase.discard:
-        return _discardActions(bot, context, liveKeyRanks: liveKeyRanks);
+        return _discardActions(
+          bot,
+          context,
+          liveKeyRanks: liveKeyRanks,
+          forceSpendKeys: forceSpendKeys,
+        );
     }
   }
 
@@ -225,6 +230,7 @@ class LegalActionGenerator {
     Player bot,
     BotGameContext context, {
     required Set<CardRank> liveKeyRanks,
+    required bool forceSpendKeys,
   }) {
     if (bot.currentHand.isEmpty) {
       if (bot.canGoOut) {
@@ -255,7 +261,8 @@ class LegalActionGenerator {
     final card = discardAnalyzer.chooseCardToDiscard(
       bot,
       context.gameState,
-      extraProtectedRanks: liveKeyRanks,
+      preserveUnlockKeys: !forceSpendKeys,
+      extraProtectedRanks: forceSpendKeys ? null : liveKeyRanks,
     );
     return [
       LegalCandidate(

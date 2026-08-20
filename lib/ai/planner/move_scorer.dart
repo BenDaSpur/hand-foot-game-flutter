@@ -56,6 +56,7 @@ class MoveScorer {
     required BotGameContext context,
     required ScorerWeights weights,
     required bool humanCanUnlock,
+    required bool goOutThisTurn,
   }) {
     var value = 0.0;
     final pileSize = context.discardPileSize;
@@ -66,57 +67,79 @@ class MoveScorer {
 
     switch (candidate.kind) {
       case LegalActionKind.drawDiscard:
-        value += _MoveScores.takePileBase * weights.takePile;
-        if (humanCanUnlock) {
-          value += _MoveScores.denialBonus * weights.denial;
-        }
-        if (pileSize >= CompetitivePolicy.contestablePileSize) {
-          value += _MoveScores.contestableTakeBonus * weights.takePile;
+        {
+          value += _MoveScores.takePileBase * weights.takePile;
+          if (humanCanUnlock) {
+            value += _MoveScores.denialBonus * weights.denial;
+          }
+          if (pileSize >= CompetitivePolicy.contestablePileSize) {
+            value += _MoveScores.contestableTakeBonus * weights.takePile;
+          }
         }
       case LegalActionKind.drawDeck:
-        value += _MoveScores.drawDeckBase;
-        if (CompetitivePolicy.canEmptyThisTurn(bot)) {
-          value += _MoveScores.goOutSkipPile * weights.goOut;
+        {
+          value += _MoveScores.drawDeckBase;
+          if (goOutThisTurn) {
+            value += _MoveScores.goOutSkipPile * weights.goOut;
+          }
         }
       case LegalActionKind.playDown:
-        value += _MoveScores.playDownBase * weights.playDown;
-        if (pileSize >= CompetitivePolicy.contestablePileSize) {
-          value += _MoveScores.contestablePlayDown * weights.takePile;
+        {
+          value += _MoveScores.playDownBase * weights.playDown;
+          if (pileSize >= CompetitivePolicy.contestablePileSize) {
+            value += _MoveScores.contestablePlayDown * weights.takePile;
+          }
+          value +=
+              _meldedPoints(candidate) *
+              _MoveScores.playDownPointsFactor *
+              weights.points;
         }
-        value +=
-            _meldedPoints(candidate) *
-            _MoveScores.playDownPointsFactor *
-            weights.points;
       case LegalActionKind.createMeld:
-        value += _MoveScores.createMeldBase * weights.bookProgress;
-        value += _createMeldScore(candidate, bot, weights);
-        if (nearFoot) {
-          value += _MoveScores.footCreateBonus * weights.footTransition;
+        {
+          value += _MoveScores.createMeldBase * weights.bookProgress;
+          value += _createMeldScore(candidate, bot, weights);
+          if (nearFoot) {
+            value += _MoveScores.footCreateBonus * weights.footTransition;
+          }
         }
       case LegalActionKind.maximalBurst:
-        value += _maximalBurstScore(candidate, bot, weights);
+        {
+          value += _maximalBurstScore(candidate, bot, weights);
+        }
       case LegalActionKind.addToMeld:
-        value += _MoveScores.addToMeldBase * weights.bookProgress;
-        value += _addToMeldScore(candidate, bot, weights);
-        if (nearFoot) {
-          value += _MoveScores.footAddBonus * weights.footTransition;
+        {
+          value += _MoveScores.addToMeldBase * weights.bookProgress;
+          value += _addToMeldScore(candidate, bot, weights);
+          if (nearFoot) {
+            value += _MoveScores.footAddBonus * weights.footTransition;
+          }
         }
       case LegalActionKind.noMeld:
-        value += _MoveScores.noMeldBase;
-        if (!bot.hasPlayedDown) {
-          value += _MoveScores.noMeldPrePlayDown;
+        {
+          value += _MoveScores.noMeldBase;
+          if (!bot.hasPlayedDown) {
+            value += _MoveScores.noMeldPrePlayDown;
+          }
         }
       case LegalActionKind.goOut:
-        value += _MoveScores.goOut * weights.goOut;
+        {
+          value += _MoveScores.goOut * weights.goOut;
+        }
       case LegalActionKind.endTurn:
-        value += _MoveScores.endTurn;
+        {
+          value += _MoveScores.endTurn;
+        }
       case LegalActionKind.discard:
-        value += _MoveScores.discardBase;
-        if (CompetitivePolicy.canEmptyThisTurn(bot)) {
-          value += _MoveScores.discardGoOut * weights.goOut;
+        {
+          value += _MoveScores.discardBase;
+          if (goOutThisTurn) {
+            value += _MoveScores.discardGoOut * weights.goOut;
+          }
         }
       case LegalActionKind.error:
-        value += _MoveScores.error;
+        {
+          value += _MoveScores.error;
+        }
     }
 
     return ScoredCandidate(candidate: candidate, score: value);
