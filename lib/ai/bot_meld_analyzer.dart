@@ -100,14 +100,12 @@ class BotMeldAnalyzer {
     var candidates = possibleMelds;
     final top = gameState.topDiscard;
     final topIsUnlockable = top != null && !top.isWild && !top.isThree;
-    var holdingCurrentTopKeys = false;
 
     if (topIsUnlockable) {
       final matchingInHand = bot.currentHand
           .where((card) => !card.isWild && card.rank == top.rank)
           .length;
       if (matchingInHand >= GameConfig.minNaturalCardsForMeld) {
-        holdingCurrentTopKeys = true;
         bool leavesUnlockKeys(List<PlayingCard> meld) {
           final used = meld
               .where((card) => !card.isWild && card.rank == top.rank)
@@ -135,10 +133,8 @@ class BotMeldAnalyzer {
     if (genericPreserving.isNotEmpty) {
       return genericPreserving;
     }
-    if (holdingCurrentTopKeys) {
-      return const <List<PlayingCard>>[];
-    }
-    return candidates;
+    // Every remaining small meld would burn the last 4–8 pair or live keys.
+    return const <List<PlayingCard>>[];
   }
 
   /// Drop small melds that would spend the last 4–8 natural pair.
@@ -182,6 +178,10 @@ class BotMeldAnalyzer {
         continue;
       }
       remaining[card.rank] = (remaining[card.rank] ?? 0) + 1;
+    }
+    final hadPair = remaining.values.any((count) => count >= 2);
+    if (!hadPair) {
+      return false;
     }
     for (final card in usedCards) {
       if (card.isWild || !isHumanUnlockKeyRank(card.rank)) {
