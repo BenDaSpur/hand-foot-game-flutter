@@ -115,6 +115,12 @@ class CardDrawAnimationOverlay extends StatefulWidget {
 
 class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     with TickerProviderStateMixin {
+  static const double _revealCenterYFactor = 0.50;
+  static const double _revealFanWidthFactor = 0.86;
+  static const double _minFanSpread = 28.0;
+  static const double _maxFanSpread = 76.0;
+  static const double _revealScale = 1.08;
+
   List<_FlyingCardVisual> _visuals = [];
   bool _showScrim = false;
   bool _showCaption = false;
@@ -274,14 +280,14 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     final overlaySize = context.size ?? MediaQuery.sizeOf(context);
     final revealCenter = Offset(
       overlaySize.width / 2,
-      overlaySize.height * 0.50,
+      overlaySize.height * _revealCenterYFactor,
     );
     final handSizes = GameResponsiveLayout.handSizes(context);
-    final maxFanWidth = overlaySize.width * 0.86;
+    final maxFanWidth = overlaySize.width * _revealFanWidthFactor;
     final spread = request.handCards.length <= 1
         ? 0.0
         : ((maxFanWidth - handSizes.handWidth) / (request.handCards.length - 1))
-              .clamp(28.0, 76.0);
+              .clamp(_minFanSpread, _maxFanSpread);
     final revealPositions = <Offset>[];
     for (int i = 0; i < request.handCards.length; i++) {
       final offset = (i - (request.handCards.length - 1) / 2) * spread;
@@ -307,7 +313,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       visuals: visuals,
       targets: revealPositions,
       duration: GameConfig.cardFlyDuration,
-      endScale: 1.08,
+      endScale: _revealScale,
     );
     if (_skipped || !mounted) {
       return;
@@ -319,7 +325,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
           _FlyingCardVisual(
             card: request.handCards[i],
             position: revealPositions[i],
-            scale: 1.08,
+            scale: _revealScale,
             showBack: i >= request.revealedFromDiscardCount,
           ),
       ];
