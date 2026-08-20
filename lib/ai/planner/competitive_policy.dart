@@ -84,13 +84,35 @@ class CompetitivePolicy {
     possible = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, possible)
       ..sort((a, b) => b.length.compareTo(a.length));
     for (final meld in possible) {
-      if (meld.every(remaining.contains)) {
+      if (_canTakeMeld(remaining, meld)) {
         for (final card in meld) {
           take(card);
         }
       }
     }
     return remaining.length;
+  }
+
+  /// True when [remaining] has a distinct card for every meld card (by
+  /// identity, then value), so duplicates and already-taken cards fail.
+  static bool _canTakeMeld(
+    List<PlayingCard> remaining,
+    List<PlayingCard> meld,
+  ) {
+    final available = List<PlayingCard>.from(remaining);
+    for (final card in meld) {
+      final identicalIndex = available.indexWhere((c) => identical(c, card));
+      if (identicalIndex >= 0) {
+        available.removeAt(identicalIndex);
+        continue;
+      }
+      final valueIndex = available.indexWhere((c) => c == card);
+      if (valueIndex < 0) {
+        return false;
+      }
+      available.removeAt(valueIndex);
+    }
+    return true;
   }
 
   static int keyCount(Player bot, CardRank? rank) {

@@ -36,73 +36,81 @@ void main() {
     test('botAiVersion is competitive-planner', () {
       expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
-    });
+    }, tags: ['competitive_planner']);
 
-    test('takes when eligible and not actually going out this turn', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+    test(
+      'takes when eligible and not actually going out this turn',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.queen, dirty: true),
         ]);
-      bot.melds.addAll([
-        _book(CardRank.ace, dirty: false),
-        _book(CardRank.queen, dirty: true),
-      ]);
 
-      _setPile(controller, size: 50, top: CardRank.king);
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
+        _setPile(controller, size: 50, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
 
-      expect(controller.gameState.canUnlockDiscard(), isTrue);
-      final decision = botAI.makeDecision(bot, controller);
-      expect(decision.action, 'drawFromDiscard');
-      expect(decision.analyticsContext?['couldUnlock'], isTrue);
-      expect(decision.analyticsContext?['keyCount'], 2);
-    });
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'drawFromDiscard');
+        expect(decision.analyticsContext?['couldUnlock'], isTrue);
+        expect(decision.analyticsContext?['keyCount'], 2);
+      },
+      tags: ['competitive_planner'],
+    );
 
-    test('skips pile only when truly going out this turn', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
+    test(
+      'skips pile only when truly going out this turn',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.queen, dirty: true),
         ]);
-      bot.melds.addAll([
-        _book(CardRank.ace, dirty: false),
-        _book(CardRank.queen, dirty: true),
-      ]);
 
-      _setPile(controller, size: 40, top: CardRank.king);
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
+        _setPile(controller, size: 40, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
 
-      expect(
-        CompetitivePolicy.canEmptyThisTurn(
-          bot,
-          context: BotGameContext(controller.gameState, controller),
-          meldAnalyzer: botAI.meldAnalyzer,
-        ),
-        isTrue,
-      );
-      final decision = botAI.makeDecision(bot, controller);
-      expect(decision.action, 'drawFromDeck');
-      expect(decision.analyticsContext?['skipReason'], 'goOutThisTurn');
-    });
+        expect(
+          CompetitivePolicy.canEmptyThisTurn(
+            bot,
+            context: BotGameContext(controller.gameState, controller),
+            meldAnalyzer: botAI.meldAnalyzer,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'drawFromDeck');
+        expect(decision.analyticsContext?['skipReason'], 'goOutThisTurn');
+      },
+      tags: ['competitive_planner'],
+    );
 
     test(
       'discard retains a live-top pair over an equivalent non-live pair',
@@ -136,6 +144,7 @@ void main() {
         expect(decision.action, 'discard');
         expect((decision.data as PlayingCard).rank, isNot(CardRank.king));
       },
+      tags: ['competitive_planner'],
     );
 
     test('plays down as soon as a legal combo exists', () {
@@ -157,80 +166,88 @@ void main() {
 
       final decision = botAI.makeDecision(bot, controller);
       expect(decision.action, anyOf('createMeld', 'createMultipleMelds'));
-    });
+    }, tags: ['competitive_planner']);
 
-    test('holds the live top pair instead of melding it away', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = false;
-      bot.hand
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+    test(
+      'holds the live top pair instead of melding it away',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+          ]);
+        bot.melds.add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          ])!,
+        );
+
+        _setPile(controller, size: 12, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        if (decision.action == 'createMeld') {
+          final meld = decision.data as List<PlayingCard>;
+          final kings = meld.where((c) => c.rank == CardRank.king).length;
+          expect(kings, lessThan(2));
+        } else {
+          expect(decision.action, anyOf('noMeld', 'addToMeld'));
+        }
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'never poisons the only clean-book lane with a wild',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          ]);
+        bot.melds.addAll([
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          ])!,
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          ])!,
         ]);
-      bot.melds.add(
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        ])!,
-      );
 
-      _setPile(controller, size: 12, top: CardRank.king);
-      controller.gameState.turnPhase = TurnPhase.meld;
-      controller.gameState.hasDrawnFromDeck = true;
-
-      final decision = botAI.makeDecision(bot, controller);
-      if (decision.action == 'createMeld') {
-        final meld = decision.data as List<PlayingCard>;
-        final kings = meld.where((c) => c.rank == CardRank.king).length;
-        expect(kings, lessThan(2));
-      } else {
-        expect(decision.action, anyOf('noMeld', 'addToMeld'));
-      }
-    });
-
-    test('never poisons the only clean-book lane with a wild', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-        ]);
-      bot.melds.addAll([
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-        ])!,
-        Meld.createMeld([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-        ])!,
-      ]);
-
-      controller.gameState.turnPhase = TurnPhase.meld;
-      controller.gameState.hasDrawnFromDeck = true;
-      final decision = botAI.makeDecision(bot, controller);
-      expect(decision.action, 'addToMeld');
-      final data = decision.data as Map<String, dynamic>;
-      final card = data['card'] as PlayingCard;
-      final meldIndex = data['meldIndex'] as int;
-      if (card.isWild) {
-        expect(bot.melds[meldIndex].cards.any((c) => c.isWild), isTrue);
-      }
-    });
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'addToMeld');
+        final data = decision.data as Map<String, dynamic>;
+        final card = data['card'] as PlayingCard;
+        final meldIndex = data['meldIndex'] as int;
+        if (card.isWild) {
+          expect(bot.melds[meldIndex].cards.any((c) => c.isWild), isTrue);
+        }
+      },
+      tags: ['competitive_planner'],
+    );
   });
 
   group('Production seed snapshots', () {

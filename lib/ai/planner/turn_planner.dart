@@ -13,6 +13,7 @@ import 'move_scorer.dart';
 /// constraints, then pick the highest-scoring remainder.
 class TurnPlanner {
   final LegalActionGenerator _generator;
+  final BotMeldAnalyzer _meldAnalyzer;
   final MoveScorer _scorer;
   final BotPersonality Function(String playerId) _personalityOf;
 
@@ -22,7 +23,8 @@ class TurnPlanner {
     required BotMeldAnalyzer meldAnalyzer,
     required BotDiscardAnalyzer discardAnalyzer,
     required BotPersonality Function(String playerId) personalityOf,
-  }) : _generator = LegalActionGenerator(
+  }) : _meldAnalyzer = meldAnalyzer,
+       _generator = LegalActionGenerator(
          meldAnalyzer: meldAnalyzer,
          discardAnalyzer: discardAnalyzer,
        ),
@@ -37,7 +39,7 @@ class TurnPlanner {
     final goOutThisTurn = CompetitivePolicy.canEmptyThisTurn(
       bot,
       context: context,
-      meldAnalyzer: _generator.meldAnalyzer,
+      meldAnalyzer: _meldAnalyzer,
     );
     final canUnlock = context.canUnlockDiscard();
     final topUnlockable = liveTop != null && !gameState.discardPileFrozen;
