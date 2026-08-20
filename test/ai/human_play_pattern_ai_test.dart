@@ -170,8 +170,8 @@ void main() {
 
       expect(
         decision.action,
-        anyOf('addToMeld', 'createMultipleMelds'),
-        reason: '15-card hand should burst-meld past accumulation threshold',
+        anyOf('addToMeld', 'createMeld', 'createMultipleMelds'),
+        reason: '15-card hand should meld instead of holding',
       );
       expect(bot.currentHand.length, 15);
     });

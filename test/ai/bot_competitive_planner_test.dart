@@ -33,7 +33,7 @@ void main() {
 
     test('botAiVersion is competitive-planner', () {
       expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
-      expect(CompetitivePolicy.goOutThisTurnMaxHand, 3);
+      expect(CompetitivePolicy.goOutThisTurnMaxHand, 5);
     });
 
     test('takes when eligible and not actually going out this turn', () {

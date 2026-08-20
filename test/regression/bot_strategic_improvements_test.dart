@@ -68,11 +68,11 @@ void main() {
         humanPlayer.score = 6800; // Significant lead
         botAI.assignPersonality(botPlayer.id, BotPersonality.bookBuilder);
 
-        // Give bot 23 cards (over the new 22-card threshold)
+        // Kings meet round-3 play-down (23×10 ≥ 120). Sevens (5 pts) do not.
         botPlayer.hand.clear();
         for (int i = 0; i < 23; i++) {
           botPlayer.addCardToHand(
-            PlayingCard(rank: CardRank.seven, suit: Suit.hearts),
+            PlayingCard(rank: CardRank.king, suit: Suit.hearts),
           );
         }
 

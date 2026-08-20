@@ -54,6 +54,8 @@ class MoveScorer {
         if (!bot.hasPickedUpFoot && handSize <= 8) {
           value += 120 * weights.footTransition;
         }
+      case 'maximalBurst':
+        value += _maximalBurstScore(candidate, bot, weights);
       case 'addToMeld':
         value += 90 * weights.bookProgress;
         value += _addToMeldScore(candidate, bot, weights);
@@ -97,6 +99,26 @@ class MoveScorer {
       );
     }
     return 0;
+  }
+
+  double _maximalBurstScore(
+    LegalCandidate candidate,
+    Player bot,
+    ScorerWeights weights,
+  ) {
+    final points = _meldedPoints(candidate);
+    final data = candidate.decision.data;
+    var cardsUsed = 0;
+    if (data is List<List<PlayingCard>>) {
+      cardsUsed = data.fold<int>(0, (sum, meld) => sum + meld.length);
+    }
+    var score = 220 * weights.footTransition;
+    score += points * 0.5 * weights.points;
+    score += cardsUsed * 12.0;
+    if (cardsUsed >= bot.currentHand.length - 1) {
+      score += 400 * weights.footTransition;
+    }
+    return score;
   }
 
   double _createMeldScore(

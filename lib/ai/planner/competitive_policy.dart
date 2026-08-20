@@ -10,7 +10,7 @@ import '../bot_personality.dart';
 /// constraints encode that lesson instead of human hand-size mimicry.
 class CompetitivePolicy {
   /// Empty the foot this turn only when books are met and the hand is tiny.
-  static const int goOutThisTurnMaxHand = 3;
+  static const int goOutThisTurnMaxHand = 5;
 
   /// Pile size that makes play-down / unlock contest urgent.
   static const int contestablePileSize = 6;

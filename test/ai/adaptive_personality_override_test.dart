@@ -70,7 +70,12 @@ void main() {
         gameController.gameState.turnPhase = TurnPhase.draw;
         gameController.gameState.currentPlayerIndex = 1;
 
-        botAI.makeDecision(adaptiveBot, gameController);
+        // Planner uses personality weights only; cascade overrides stay on
+        // the legacy helper for tests and telemetry.
+        botAI.debugLegacyAdaptiveAdjustment(
+          adaptiveBot,
+          gameController.gameState,
+        );
 
         final constants = botAI.personalityManager.getConstants(adaptiveBot.id);
         expect(constants.maxTurnsBeforeForcePlayDown, 1);

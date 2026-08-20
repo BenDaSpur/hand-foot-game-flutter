@@ -156,7 +156,58 @@ class LegalActionGenerator {
       }
     }
 
+    _addMaximalBurstCandidate(
+      actions,
+      bot,
+      controller,
+      liveKeyRanks: liveKeyRanks,
+      forceSpendKeys: forceSpendKeys,
+    );
+
     return actions;
+  }
+
+  void _addMaximalBurstCandidate(
+    List<LegalCandidate> actions,
+    Player bot,
+    GameController controller, {
+    required Set<CardRank> liveKeyRanks,
+    required bool forceSpendKeys,
+  }) {
+    if (bot.hasPickedUpFoot) {
+      return;
+    }
+    final combo = meldAnalyzer.findMaximalMeldCombination(bot, controller);
+    if (combo.length < 2) {
+      return;
+    }
+    final filtered = BotMeldAnalyzer.filterCleanLaneMeldCandidates(bot, combo);
+    if (filtered.length < 2) {
+      return;
+    }
+    if (!BotEndGameManager.isSafeCreateMultipleMelds(bot, filtered)) {
+      return;
+    }
+
+    final usedCards = filtered.expand((meld) => meld).toList();
+    final emptiesHand = usedCards.length >= bot.currentHand.length - 1;
+    if (!forceSpendKeys &&
+        !emptiesHand &&
+        _burnsLiveKeys(
+          bot,
+          liveKeyRanks,
+          usedCards: usedCards,
+          allowBook: true,
+        )) {
+      return;
+    }
+
+    actions.add(
+      LegalCandidate(
+        decision: BotDecision(action: 'createMultipleMelds', data: filtered),
+        kind: 'maximalBurst',
+      ),
+    );
   }
 
   List<LegalCandidate> _discardActions(

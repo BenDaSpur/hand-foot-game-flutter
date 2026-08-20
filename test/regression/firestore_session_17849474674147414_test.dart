@@ -440,7 +440,7 @@ void main() {
           const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
         ]);
 
-        botAI.makeDecision(bot, gameController);
+        botAI.debugLegacyAdaptiveAdjustment(bot, gameController.gameState);
 
         expect(
           botAI.personalityManager.getAdaptiveStrategy(bot.id),
@@ -451,7 +451,7 @@ void main() {
     );
 
     test(
-      'hoarder_counter discards a wild to freeze the discard pile',
+      'hoarder_counter does not discard a wild just to freeze the pile',
       () {
         makeHumanHoarder(handSize: 25);
         // Pre-foot bot: wilds are not yet needed for a missing go-out book.
@@ -474,18 +474,21 @@ void main() {
         final decision = botAI.makeDecision(bot, gameController);
 
         expect(decision.action, equals('discard'));
-        expect((decision.data as PlayingCard).isWild, isTrue);
+        expect(
+          (decision.data as PlayingCard).isWild,
+          isFalse,
+          reason:
+              'Competitive planner keeps wilds; pile freeze is not a discard rule',
+        );
       },
       tags: ['hoarder_counter'],
     );
 
     test(
-      'hoarder_counter freezes the pile with a hand above the wild guard',
+      'hoarder_counter keeps wilds with a hand above the wild guard',
       () {
-        // The pile freeze is chosen before BotDiscardAnalyzer runs, so
-        // shouldProtectWilds must not reach it. The sibling test above uses a
-        // 3-card hand, which sits at the desperation threshold and would pass
-        // either way; this one sits above it.
+        // Planner discard ranking protects wilds; it does not force-freeze
+        // the pile the way the old cascade did.
         makeHumanHoarder(handSize: 25);
         bot.hasPickedUpFoot = false;
         bot.melds.add(
@@ -512,7 +515,7 @@ void main() {
         final decision = botAI.makeDecision(bot, gameController);
 
         expect(decision.action, equals('discard'));
-        expect((decision.data as PlayingCard).isWild, isTrue);
+        expect((decision.data as PlayingCard).isWild, isFalse);
       },
       tags: ['hoarder_counter'],
     );
