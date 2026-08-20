@@ -83,7 +83,8 @@ class GameHandDisplay extends StatelessWidget {
                       viewingPlayerMelds != player) {
                     return 'Viewing ${viewingPlayerMelds!.name} — tap to return';
                   }
-                  return 'Your Hand (${player.currentHand.length})';
+                  final pileName = player.hasPickedUpFoot ? 'Foot' : 'Hand';
+                  return 'Your $pileName (${player.currentHand.length})';
                 }(),
                 style: TextStyle(
                   fontSize: 13,
