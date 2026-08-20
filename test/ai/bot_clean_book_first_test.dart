@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for unlock-churn', () {
-      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
+    test('botAiVersion bumped for human-counter', () {
+      expect(BotConfig.botAiVersion, '2026.08-human-counter');
     });
 
     test(

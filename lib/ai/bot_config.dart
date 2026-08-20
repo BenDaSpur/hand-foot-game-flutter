@@ -44,6 +44,12 @@ class BotConfig {
   /// e.g. 5-card hands qualify). Opponent-on-foot pressure may extend the limit.
   static const int handPileFootCompletionMaxHand = 5;
 
+  /// Bookless bots still empty the hand pile at or below this size when the
+  /// discard is being farmed (incomplete unlock-churn: adaptive 6 cards /
+  /// 0 books / pile 38). Opponent-on-foot without a fat pile still requires
+  /// books above [handToFootCriticalHandSize].
+  static const int booklessFarmForceFootMaxHand = 8;
+
   /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
   static const int handToFootRushAggressiveOpponentPressureMargin = 2;
 
@@ -303,6 +309,15 @@ class BotConfig {
   /// Extra penalty when the opponent with a matching meld also has a large hand
   static const int opponentUnlockRiskPenalty = 100;
 
+  /// Keep a 4–8 natural pair as a generic unlock key (analytics: humans unlock
+  /// on 4/5/6 tops; bots dumped those pairs then had 278+171 no-key draws).
+  static const int genericUnlockKeyHoldPenalty = 90;
+
+  /// Go-out race may skip an unlockable pile at or below this hand size.
+  /// 2–5 cards can finish soon; 6+ still contests a fat farm (analytics:
+  /// 8-card foot skipped pile 51; 5-card race must not take +7).
+  static const int goOutThisTurnMaxHand = 5;
+
   /// Opponent melds at or above this size reveal a rank they are collecting
   static const int meldRankTrackingThreshold = 3;
 
@@ -330,7 +345,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.08-unlock-churn';
+  static const String botAiVersion = '2026.08-human-counter';
 
   // Prevent instantiation
   BotConfig._();

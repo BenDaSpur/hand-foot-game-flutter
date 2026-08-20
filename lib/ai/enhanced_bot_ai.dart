@@ -40,9 +40,8 @@ class EnhancedBotAI {
   List<List<PlayingCard>>? _plannedMelds;
   bool _inMultiMeldSequence = false;
 
-  // Performance optimization: Cache pressure analysis results
-  Map<String, DateTime>? _lastPressureAnalysis;
-  Map<String, BotDecision?>? _cachedPressureResponse;
+  // Pressure tactics are recomputed every decision — caching a BotDecision
+  // across phases replayed stale drawFromDeck and skipped keyed unlocks.
 
   // Performance optimization: Cache meld analysis results
   Map<String, List<List<PlayingCard>>>? _cachedPossibleMelds;
@@ -187,8 +186,8 @@ class EnhancedBotAI {
       final handSize = bot.currentHand.length;
       final isEarlyGame = _isEarlyGamePhase(bot);
 
-      // NEW: Opponent pressure detection and competitive response (with caching)
-      final pressureResponse = _evaluateOpponentPressureWithCaching(
+      // Opponent pressure detection — recomputed every decision.
+      final pressureResponse = _evaluateOpponentPressure(
         bot,
         context,
         gameState,
@@ -426,16 +425,14 @@ class EnhancedBotAI {
       return BotDecision(action: 'drawFromDeck');
     }
 
-    // GO-OUT RACE DISCIPLINE: a go-out-ready bot racing to punish a hoarding
-    // opponent must never take the discard pile — extra cards delay going out
-    // (analytics: conservative bot took +7 pile cards mid-race).
-    if (bot.hasPickedUpFoot &&
-        bot.canGoOutWithBooks &&
+    // GO-OUT RACE DISCIPLINE: skip the pile only when this turn can finish
+    // (analytics: conservative skipped pile 51 with 8 cards / 2 keys).
+    if (_goOutThisTurnForbidsPile(bot) &&
         BotEndGameManager.shouldGoOutAggressively(bot, gameState)) {
       DebugLogger.botDebug(
         bot.id,
         bot.name,
-        'RACE DISCIPLINE: go-out-ready under pressure - drawing from deck only',
+        'RACE DISCIPLINE: go-out this turn - drawing from deck only',
       );
       return BotDecision(action: 'drawFromDeck');
     }
@@ -614,12 +611,9 @@ class EnhancedBotAI {
     final isEarlyGame = _isEarlyGamePhase(bot);
     final botTurnCount = _gameAnalyzer.getTurnCount(bot.id);
 
-    // Check if competitive pressure should override early game grace
-    // Note: This method is called from makeDecision, so we don't have access to pressureResponse
-    // We need to check pressure here, but this should be cached from the earlier call
+    // Recompute pressure here rather than reuse an earlier call's decision.
     final hasCompetitivePressure =
-        _evaluateOpponentPressureWithCaching(bot, context, context.gameState) !=
-        null;
+        _evaluateOpponentPressure(bot, context, context.gameState) != null;
     // Only bypass early game if enough turns have passed
     final shouldBypassEarlyGame =
         (!isEarlyGame || hasCompetitivePressure) &&
@@ -1704,31 +1698,17 @@ class EnhancedBotAI {
                   .minimumDiscardPileSize; // Take any pile with minimum cards if not played down
     }
 
-    // FOOT PHASE URGENCY - if in foot with few cards, prioritize going out
-    if (isInFoot && handSize <= BotConfig.footPhaseUrgencyThreshold) {
-      // Check if we should be rushing to go out instead of taking discard pile
-      if (handSize <= 2 && bot.canGoOutWithBooks) {
-        return false; // Don't take pile, focus on going out
-      }
-      return pileValue >
-          adjustedValueThreshold *
-              BotConfig
-                  .aggressiveDiscardMultiplier; // Actually MORE aggressive in foot
+    // Hard-take after play-down comes before foot-urgency value gating so an
+    // 8-card foot with keys still contests 14–51 card piles (incomplete +
+    // completed unlock-churn sessions).
+    if (_goOutThisTurnForbidsPile(bot)) {
+      return false;
     }
 
     // Hard-take rules after play-down (analytics: bots ~1.5% unlock vs humans ~12%).
-    // ≥25: take unless a *tight* go-out race forbids it; ≥6: unconditional hard-take.
+    // ≥25 / ≥6: take unless this turn can actually go out.
     // Holding unlock keys + pile ≥5: hard-take when currently eligible.
     if (pileSize >= BotConfig.postPlayDownAlmostAlwaysTakePileSize) {
-      final goOutRaceForbids =
-          bot.hasPickedUpFoot &&
-          bot.canGoOutWithBooks &&
-          handSize <= 3 &&
-          (_shouldRushToGoOut(bot, gameState) ||
-              BotEndGameManager.shouldGoOutAggressively(bot, gameState));
-      if (goOutRaceForbids) {
-        return false;
-      }
       return true;
     }
     if (pileSize >= BotConfig.postPlayDownHardTakePileSize) {
@@ -1790,6 +1770,13 @@ class EnhancedBotAI {
     return false;
   }
 
+  /// True when taking the pile would delay a go-out that can finish this turn.
+  bool _goOutThisTurnForbidsPile(Player bot) {
+    return bot.hasPickedUpFoot &&
+        bot.canGoOutWithBooks &&
+        bot.currentHand.length <= BotConfig.goOutThisTurnMaxHand;
+  }
+
   /// Check if bot could unlock discard pile if they had already played down
   bool _couldUnlockDiscardPileIfPlayedDown(Player bot, GameState gameState) {
     if (gameState.discardPile.isEmpty) {
@@ -1833,6 +1820,9 @@ class EnhancedBotAI {
     }
 
     if (!_couldUnlockDiscardPileIfPlayedDown(bot, gameState)) {
+      // No live top keys — keep holding a generic 4–8 pair for discard.
+      // Meld selection falls back in filterUnlockKeyMeldCandidates so a
+      // last-pair burn cannot stall into noMeld.
       return;
     }
 
@@ -2406,6 +2396,13 @@ class EnhancedBotAI {
       return true;
     }
 
+    // Bookless + fat discard farm — dump toward foot (incomplete 6-card stall)
+    if (stillOnHandPile &&
+        _handPileFatDiscardForcesFoot(bot, context) &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
+      return true;
+    }
+
     // Opponent on foot — race to pick up foot before they go out
     if (stillOnHandPile &&
         _opponentOnFootPressure(context, bot) &&
@@ -2780,6 +2777,27 @@ class EnhancedBotAI {
     return completePlan;
   }
 
+  /// True when sitting on the hand pile with 0 books is worse than picking
+  /// up foot — fat discard farm or an opponent already on foot.
+  bool _handPileFarmForcesFoot(Player bot, BotGameContext context) {
+    if (bot.bookCount >= 1) {
+      return false;
+    }
+    return _handPileFatDiscardForcesFoot(bot, context) ||
+        _opponentOnFootPressure(context, bot);
+  }
+
+  /// Incomplete unlock-churn: bookless bots sat on 6 cards while the pile
+  /// grew to 38. Fat discard is a stronger signal than opponent-on-foot,
+  /// which still requires books above the critical 4-card window.
+  bool _handPileFatDiscardForcesFoot(Player bot, BotGameContext context) {
+    if (bot.bookCount >= 1) {
+      return false;
+    }
+    return context.gameState.discardPile.length >=
+        BotConfig.pileFarmForcePlayDownPileSize;
+  }
+
   /// True when soft hand→foot rush is justified by books or a clear-all path.
   bool _hasBookOrClearAllPath(Player bot, BotGameContext context) {
     if (bot.bookCount >= 1) {
@@ -2799,10 +2817,18 @@ class EnhancedBotAI {
       return false;
     }
 
-    // Critical hand size: still require book progress or clear-all (analytics:
-    // rush_to_foot with 0 books was the dominant noMeld stall).
+    // Critical hand size: require book/clear-all, or abandon the hand pile
+    // when a fat farm or an opponent on foot makes sitting worse (incomplete
+    // session 17871159981788178: 2 cards, 0 books, pile 38).
     if (handSize <= BotConfig.handToFootCriticalHandSize &&
-        _hasBookOrClearAllPath(bot, context)) {
+        (_hasBookOrClearAllPath(bot, context) ||
+            _handPileFarmForcesFoot(bot, context))) {
+      return true;
+    }
+
+    // Fat pile + 0 books: rush at 5–8 as well (adaptive sat at 6 / pile 38).
+    if (_handPileFatDiscardForcesFoot(bot, context) &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
       return true;
     }
 
@@ -2914,14 +2940,22 @@ class EnhancedBotAI {
     }
 
     // Critical / soft completion: require books or a clear-all path so bots do
-    // not enter foot with 0 books (analytics FOOT_NO_BOOKS / rush_to_foot).
+    // not enter foot with 0 books — unless a fat farm / opponent-on-foot
+    // makes sitting on 2–4 cards worse (incomplete unlock-churn games).
     if (handSize <= BotConfig.handToFootCriticalHandSize &&
-        _hasBookOrClearAllPath(bot, context)) {
+        (_hasBookOrClearAllPath(bot, context) ||
+            _handPileFarmForcesFoot(bot, context))) {
       return true;
     }
 
     if (handSize <= BotConfig.handPileFootCompletionMaxHand &&
         _hasBookOrClearAllPath(bot, context)) {
+      return true;
+    }
+
+    // Fat discard farm: empty a bookless 5–8 card hand pile (adaptive 6 / 38).
+    if (_handPileFatDiscardForcesFoot(bot, context) &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
       return true;
     }
 
@@ -3465,11 +3499,6 @@ class EnhancedBotAI {
     _meldAnalyzer.clearCache();
     _plannedMelds = null;
     _inMultiMeldSequence = false;
-    // Clear pressure analysis caches to prevent state contamination in tests
-    _lastPressureAnalysis?.clear();
-    _cachedPressureResponse?.clear();
-    _lastPressureAnalysis = null;
-    _cachedPressureResponse = null;
   }
 
   /// Filter out wild cards from add-to-meld opportunities unless in critical situations
@@ -3886,35 +3915,7 @@ class EnhancedBotAI {
     return maxThreat.clamp(0.0, 1.0);
   }
 
-  /// NEW: Cached opponent pressure evaluation for performance
-  BotDecision? _evaluateOpponentPressureWithCaching(
-    Player bot,
-    BotGameContext context,
-    GameState gameState,
-  ) {
-    // Cache pressure analysis for performance (check max every 2 seconds)
-    final now = DateTime.now();
-    final lastCheck = _lastPressureAnalysis?[bot.id];
-
-    if (lastCheck != null &&
-        now.difference(lastCheck).inSeconds < 2 &&
-        _cachedPressureResponse != null) {
-      return _cachedPressureResponse![bot.id];
-    }
-
-    // Perform fresh analysis
-    final result = _evaluateOpponentPressure(bot, context, gameState);
-
-    // Cache the result
-    _lastPressureAnalysis ??= {};
-    _cachedPressureResponse ??= {};
-    _lastPressureAnalysis![bot.id] = now;
-    _cachedPressureResponse![bot.id] = result;
-
-    return result;
-  }
-
-  /// NEW: Evaluate opponent pressure and return competitive counter-strategy
+  /// Evaluate opponent pressure and return competitive counter-strategy.
   BotDecision? _evaluateOpponentPressure(
     Player bot,
     BotGameContext context,
@@ -3993,10 +3994,8 @@ class EnhancedBotAI {
     }
 
     // OTHER BOTS: General counter-tactics.
-    // RACE DISCIPLINE: never take the pile while go-out-ready — denying the
-    // hoarder cards is worthless compared to ending the round before they
-    // can dump (analytics: conservative bot took +7 cards mid-race).
-    final goOutReady = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+    // RACE DISCIPLINE: skip pile denial only when go-out can finish this turn.
+    final goOutReady = _goOutThisTurnForbidsPile(bot);
     if (gameState.turnPhase == TurnPhase.draw &&
         gameState.discardPile.length >= 6 &&
         !goOutReady) {
@@ -4024,7 +4023,7 @@ class EnhancedBotAI {
       if (!gameState.hasDrawnFromDeck) {
         // Prefer discard pile when unlockable to speed up the game — unless
         // go-out-ready: extra pile cards only delay ending the round.
-        final goOutReady = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+        final goOutReady = _goOutThisTurnForbidsPile(bot);
         if (!goOutReady &&
             gameState.discardPile.length >= 4 &&
             context.canUnlockDiscard()) {

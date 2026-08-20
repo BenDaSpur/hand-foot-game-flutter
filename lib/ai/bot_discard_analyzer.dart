@@ -4,6 +4,7 @@ import '../models/meld.dart';
 import '../models/game_state.dart';
 import 'bot_game_analyzer.dart';
 import 'bot_config.dart';
+import 'bot_meld_analyzer.dart';
 
 /// Analyzes discard decisions for bot players.
 ///
@@ -112,14 +113,17 @@ class BotDiscardAnalyzer {
     );
     score -= opponentNeedScore; // Reduce score if opponents need it
 
-    // 4. STRATEGIC: Duplicate ranks — humans shed low-rank pairs on large hands
+    // 4. STRATEGIC: Duplicate ranks — keep at least one 4–8 pair as a generic
+    // unlock key. Humans dump *singletons* of those ranks, not their last pair
+    // (analytics: 278+171 no-key draws after bots shed 4/5/7/8 pairs).
     final sameRankCount = bot.currentHand
         .where((c) => c.rank == card.rank && !c.isWild)
         .length;
     final handSize = bot.currentHand.length;
     if (sameRankCount >= 2) {
       if (handSize >= BotConfig.humanLargeHandDiscardThreshold &&
-          _isHumanPreferredDiscardRank(card.rank)) {
+          _isHumanPreferredDiscardRank(card.rank) &&
+          sameRankCount >= 3) {
         var protectedNearBook = false;
         for (final meld in bot.melds) {
           if (meld.cards.length >= 5 && _cardFitsMeld(card, meld)) {
@@ -128,7 +132,8 @@ class BotDiscardAnalyzer {
           }
         }
         if (!protectedNearBook) {
-          score += BotConfig.humanLowRankDiscardBonus * sameRankCount;
+          // 3+ copies: dump extras, keep a pair.
+          score += BotConfig.humanLowRankDiscardBonus;
         } else {
           score -= BotConfig.duplicateBonus;
         }
@@ -184,6 +189,18 @@ class BotDiscardAnalyzer {
           }
         }
       }
+    }
+
+    // Generic 4–8 pair hold: even when the current top is a different rank,
+    // keep the last unlock-rank pair so the next 4/5/6 discard is contestable.
+    if (preserveUnlockKeys &&
+        !gameState.discardPileFrozen &&
+        !card.isWild &&
+        !card.isThree &&
+        _isHumanPreferredDiscardRank(card.rank) &&
+        sameRankCount == 2 &&
+        !_hasOtherGenericUnlockPair(bot, card.rank)) {
+      score -= BotConfig.genericUnlockKeyHoldPenalty;
     }
 
     return score;
@@ -315,13 +332,26 @@ class BotDiscardAnalyzer {
     return candidates.first;
   }
 
+  /// True when the hand still has a 4–8 natural pair other than [exceptRank].
+  bool _hasOtherGenericUnlockPair(Player bot, CardRank exceptRank) {
+    final counts = <CardRank, int>{};
+    for (final held in bot.currentHand) {
+      if (held.isWild ||
+          !_isHumanPreferredDiscardRank(held.rank) ||
+          held.rank == exceptRank) {
+        continue;
+      }
+      counts[held.rank] = (counts[held.rank] ?? 0) + 1;
+      if ((counts[held.rank] ?? 0) >= 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Ranks humans discard most while trimming large hands (analytics).
   bool _isHumanPreferredDiscardRank(CardRank rank) {
-    return rank == CardRank.four ||
-        rank == CardRank.five ||
-        rank == CardRank.six ||
-        rank == CardRank.seven ||
-        rank == CardRank.eight;
+    return BotMeldAnalyzer.isHumanUnlockKeyRank(rank);
   }
 
   /// Check if a card can be added to a meld.

@@ -13,7 +13,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 
 void main() {
-  group('Unlock-key hold AI (2026.08-unlock-churn)', () {
+  group('Unlock-key hold AI (2026.08-human-counter)', () {
     late EnhancedBotAI botAI;
     late GameController controller;
     late Player human;
@@ -29,8 +29,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for unlock-churn', () {
-      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
+    test('botAiVersion bumped for human-counter', () {
+      expect(BotConfig.botAiVersion, '2026.08-human-counter');
     });
 
     test('emergency hand size still hard-takes unlockable fat pile in draw', () {

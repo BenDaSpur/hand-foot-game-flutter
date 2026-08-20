@@ -29,8 +29,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is unlock-churn', () {
-      expect(BotConfig.botAiVersion, '2026.08-unlock-churn');
+    test('botAiVersion is human-counter', () {
+      expect(BotConfig.botAiVersion, '2026.08-human-counter');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
       expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });
