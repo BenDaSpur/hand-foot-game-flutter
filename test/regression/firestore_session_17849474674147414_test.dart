@@ -305,10 +305,10 @@ void main() {
     });
 
     test(
-      'go-out-ready bot never takes the discard pile mid-race',
+      'go-out-ready bot still takes an eligible pile before the draw',
       () {
-        // Session: the go-out-ready conservative bot unlocked a 39-card pile
-        // (+7 cards) while racing a 30-card hoarder.
+        // Draw-phase finish is never assumed: incoming cards are not modeled,
+        // so a fully meldable foot still unlocks when the pile is eligible.
         bot.foot.addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
           const PlayingCard(suit: Suit.spades, rank: CardRank.five),
@@ -333,7 +333,7 @@ void main() {
         );
 
         final decision = botAI.makeDecision(bot, gameController);
-        expect(decision.action, equals('drawFromDeck'));
+        expect(decision.action, equals('drawFromDiscard'));
       },
       tags: ['go_out_race'],
     );

@@ -75,7 +75,7 @@ void main() {
     );
 
     test(
-      'skips pile only when remaining plays empty the pile before the draw',
+      'takes pile when the current hand is fully meldable before the draw',
       () {
         bot.hasPlayedDown = true;
         bot.hasPickedUpFoot = true;
@@ -96,17 +96,18 @@ void main() {
         controller.gameState.hasDrawnFromDeck = false;
         controller.gameState.discardPileFrozen = false;
 
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
         expect(
           CompetitivePolicy.canEmptyThisTurn(
             bot,
             context: BotGameContext(controller.gameState, controller),
             meldAnalyzer: botAI.meldAnalyzer,
           ),
-          isTrue,
+          isFalse,
         );
         final decision = botAI.makeDecision(bot, controller);
-        expect(decision.action, 'drawFromDeck');
-        expect(decision.analyticsContext?['skipReason'], 'goOutThisTurn');
+        expect(decision.action, 'drawFromDiscard');
+        expect(decision.analyticsContext?['couldUnlock'], isTrue);
       },
       tags: ['competitive_planner'],
     );
@@ -236,8 +237,12 @@ void main() {
           final meld = decision.data as List<PlayingCard>;
           final kings = meld.where((c) => c.rank == CardRank.king).length;
           expect(kings, lessThan(2));
+        } else if (decision.action == 'addToMeld') {
+          final card =
+              (decision.data as Map<String, dynamic>)['card'] as PlayingCard;
+          expect(card.rank, isNot(CardRank.king));
         } else {
-          expect(decision.action, anyOf('noMeld', 'addToMeld'));
+          expect(decision.action, 'noMeld');
         }
       },
       tags: ['competitive_planner'],
@@ -288,114 +293,147 @@ void main() {
   });
 
   group('Production seed snapshots', () {
-    test('seed 966057: 8-card foot with 2 kings takes pile 50', () {
-      final botAI = EnhancedBotAI(seed: 966057);
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final bot = Player(id: '2', name: 'Adaptive', type: PlayerType.bot);
-      final controller = GameController(players: [human, bot], seed: 966057);
-      controller.initializeGame();
-      botAI.assignPersonality(bot.id, BotPersonality.adaptive);
-      controller.gameState.currentPlayerIndex = 1;
+    test(
+      'seed 966057: 8-card foot with 2 kings takes pile 50',
+      () {
+        final botAI = EnhancedBotAI(seed: 966057);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final bot = Player(id: '2', name: 'Adaptive', type: PlayerType.bot);
+        final controller = GameController(players: [human, bot], seed: 966057);
+        controller.initializeGame();
+        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+        controller.gameState.currentPlayerIndex = 1;
 
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.three),
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.three),
+          ]);
+        bot.melds.add(_book(CardRank.ace, dirty: true));
+
+        _setPile(
+          controller,
+          size: 50,
+          top: CardRank.king,
+          topSuit: Suit.hearts,
+        );
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
+        expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
+        expect(controller.drawFromDiscardPile(), isTrue);
+        expect(controller.gameState.discardPile.length, 44);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'seed 971981: conservative 8-card foot takes pile 51',
+      () {
+        final botAI = EnhancedBotAI(seed: 971981);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final bot = Player(id: '3', name: 'Carl', type: PlayerType.bot);
+        final controller = GameController(players: [human, bot], seed: 971981);
+        controller.initializeGame();
+        botAI.assignPersonality(bot.id, BotPersonality.conservative);
+        controller.gameState.currentPlayerIndex = 1;
+
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.king, dirty: true),
+          _book(CardRank.jack, dirty: true),
         ]);
-      bot.melds.add(_book(CardRank.ace, dirty: true));
 
-      _setPile(controller, size: 50, top: CardRank.king, topSuit: Suit.hearts);
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
+        _setPile(
+          controller,
+          size: 51,
+          top: CardRank.eight,
+          topSuit: Suit.hearts,
+        );
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
 
-      expect(controller.gameState.canUnlockDiscard(), isTrue);
-      expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
-    });
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
+        expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
+        expect(controller.drawFromDiscardPile(), isTrue);
+        expect(controller.gameState.discardPile.length, 45);
+      },
+      tags: ['competitive_planner'],
+    );
 
-    test('seed 971981: conservative 8-card foot takes pile 51', () {
-      final botAI = EnhancedBotAI(seed: 971981);
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final bot = Player(id: '3', name: 'Carl', type: PlayerType.bot);
-      final controller = GameController(players: [human, bot], seed: 971981);
-      controller.initializeGame();
-      botAI.assignPersonality(bot.id, BotPersonality.conservative);
-      controller.gameState.currentPlayerIndex = 1;
+    test(
+      'seed 938454: 11-card foot with 3 nines takes pile 34',
+      () {
+        final botAI = EnhancedBotAI(seed: 938454);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final bot = Player(id: '2', name: 'Alex', type: PlayerType.bot);
+        final controller = GameController(players: [human, bot], seed: 938454);
+        controller.initializeGame();
+        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+        controller.gameState.currentPlayerIndex = 1;
 
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-        ]);
-      bot.melds.addAll([
-        _book(CardRank.ace, dirty: false),
-        _book(CardRank.king, dirty: true),
-        _book(CardRank.jack, dirty: true),
-      ]);
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          ]);
+        bot.melds.add(_book(CardRank.ace, dirty: true));
 
-      _setPile(controller, size: 51, top: CardRank.eight, topSuit: Suit.hearts);
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
+        _setPile(
+          controller,
+          size: 34,
+          top: CardRank.nine,
+          topSuit: Suit.spades,
+        );
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
 
-      expect(controller.gameState.canUnlockDiscard(), isTrue);
-      expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
-    });
-
-    test('seed 938454: 11-card foot with 3 nines takes pile 34', () {
-      final botAI = EnhancedBotAI(seed: 938454);
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final bot = Player(id: '2', name: 'Alex', type: PlayerType.bot);
-      final controller = GameController(players: [human, bot], seed: 938454);
-      controller.initializeGame();
-      botAI.assignPersonality(bot.id, BotPersonality.adaptive);
-      controller.gameState.currentPlayerIndex = 1;
-
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = true;
-      bot.foot
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-        ]);
-      bot.melds.add(_book(CardRank.ace, dirty: true));
-
-      _setPile(controller, size: 34, top: CardRank.nine, topSuit: Suit.spades);
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
-
-      expect(controller.gameState.canUnlockDiscard(), isTrue);
-      expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
-    });
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
+        expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
+        expect(controller.drawFromDiscardPile(), isTrue);
+        expect(controller.gameState.discardPile.length, 28);
+      },
+      tags: ['competitive_planner'],
+    );
 
     test('seed 880086: 5-card hand pile takes pile 35', () {
       final botAI = EnhancedBotAI(seed: 880086);
@@ -426,7 +464,9 @@ void main() {
 
       expect(controller.gameState.canUnlockDiscard(), isTrue);
       expect(botAI.makeDecision(bot, controller).action, 'drawFromDiscard');
-    });
+      expect(controller.drawFromDiscardPile(), isTrue);
+      expect(controller.gameState.discardPile.length, 29);
+    }, tags: ['competitive_planner']);
   });
 }
 

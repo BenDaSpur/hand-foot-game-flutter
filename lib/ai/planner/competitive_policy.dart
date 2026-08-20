@@ -27,10 +27,10 @@ class CompetitivePolicy {
   /// Hard-take any eligible unlock unless [canEmptyThisTurn] is true.
   ///
   /// Requires a verified meld/discard path. After the draw is in hand, a
-  /// leftover of at most one card is a finish. During [TurnPhase.draw] the
-  /// leftover must already be zero — the bot still has to draw two cards,
-  /// and those cards are not modeled here. Hand size alone is not enough —
-  /// pass [context] and [meldAnalyzer].
+  /// leftover of at most one card is a finish. During [TurnPhase.draw] this
+  /// is always false: the bot still has to draw two cards, and those incoming
+  /// cards are not modeled here. Hand size alone is not enough — pass
+  /// [context] and [meldAnalyzer].
   static bool canEmptyThisTurn(
     Player bot, {
     BotGameContext? context,
@@ -46,11 +46,10 @@ class CompetitivePolicy {
     if (context == null || meldAnalyzer == null) {
       return false;
     }
-    final remaining = _remainingAfterLegalPlays(bot, context, meldAnalyzer);
     if (context.turnPhase == TurnPhase.draw) {
-      return remaining == 0;
+      return false;
     }
-    return remaining <= 1;
+    return _remainingAfterLegalPlays(bot, context, meldAnalyzer) <= 1;
   }
 
   static int _remainingAfterLegalPlays(
