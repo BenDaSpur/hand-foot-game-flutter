@@ -1,3 +1,6 @@
+@Tags(['widget'])
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/project_links.dart';
@@ -60,6 +63,31 @@ void main() {
       MaterialApp(
         theme: BalatroTheme.darkTheme,
         home: MainMenuScreen(isWeb: true, urlLauncher: (_) async => false),
+      ),
+    );
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('Get on iOS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Get on iOS'));
+    await tester.pump();
+
+    expect(
+      find.text('Could not open the App Store. Try again later.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('main menu Get on iOS tap does not crash when launch throws', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: BalatroTheme.darkTheme,
+        home: MainMenuScreen(
+          isWeb: true,
+          urlLauncher: (_) async => throw Exception('launch failed'),
+        ),
       ),
     );
     await tester.pump();
