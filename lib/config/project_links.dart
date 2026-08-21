@@ -14,6 +14,8 @@ abstract final class ProjectLinks {
 
   static const String privacyPolicy = '$playOnline/privacy.html';
 
+  static const String appAdsTxt = '$playOnline/app-ads.txt';
+
   static const String securityPolicy =
       '$githubRepository/blob/main/SECURITY.md';
 }
