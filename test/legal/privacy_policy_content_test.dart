@@ -102,5 +102,9 @@ void main() {
   test('project links point at the public privacy policy URL', () {
     expect(ProjectLinks.privacyPolicy, 'https://playhandfoot.com/privacy.html');
     expect(ProjectLinks.securityPolicy, endsWith('/blob/main/SECURITY.md'));
+    expect(
+      ProjectLinks.iosAppStore,
+      'https://apps.apple.com/us/app/hand-foot-card-game/id6802127614',
+    );
   });
 }
