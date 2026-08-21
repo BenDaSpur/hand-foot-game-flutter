@@ -9,7 +9,12 @@ abstract final class ProjectLinks {
 
   static const String playOnline = 'https://playhandfoot.com';
 
+  static const String iosAppStore =
+      'https://apps.apple.com/us/app/hand-foot-card-game/id6802127614';
+
   static const String privacyPolicy = '$playOnline/privacy.html';
+
+  static const String appAdsTxt = '$playOnline/app-ads.txt';
 
   static const String securityPolicy =
       '$githubRepository/blob/main/SECURITY.md';

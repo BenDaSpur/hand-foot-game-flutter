@@ -54,10 +54,15 @@ abstract final class _MenuButtonLayout {
 }
 
 class MainMenuScreen extends StatefulWidget {
-  const MainMenuScreen({super.key, this.urlLauncher});
+  const MainMenuScreen({super.key, this.urlLauncher, bool? isWeb})
+    : isWeb = isWeb ?? kIsWeb;
 
   /// Optional launcher override for tests. Defaults to [launchUrl].
   final Future<bool> Function(Uri uri)? urlLauncher;
+
+  /// Whether web-only links (iOS App Store, PWA install) are shown.
+  /// Defaults to [kIsWeb]; override in tests.
+  final bool isWeb;
 
   @override
   State<MainMenuScreen> createState() => _MainMenuScreenState();
@@ -286,7 +291,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         _buildInfoButton(),
                         const SizedBox(height: 16),
                         _buildGitHubButton(),
-                        if (kIsWeb) ...[
+                        if (widget.isWeb) ...[
+                          const SizedBox(height: 16),
+                          _buildIosAppStoreButton(),
                           const SizedBox(height: 16),
                           _buildInstallButton(),
                         ],
@@ -557,36 +564,76 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   Future<void> _openGitHubRepository() async {
-    final uri = Uri.parse(ProjectLinks.githubRepository);
+    await _openExternalLink(
+      Uri.parse(ProjectLinks.githubRepository),
+      errorMessage: 'Could not open GitHub. Try again later.',
+    );
+  }
+
+  Future<void> _openIosAppStore() async {
+    await _openExternalLink(
+      Uri.parse(ProjectLinks.iosAppStore),
+      errorMessage: 'Could not open the App Store. Try again later.',
+    );
+  }
+
+  Future<void> _openExternalLink(
+    Uri uri, {
+    required String errorMessage,
+  }) async {
     try {
       final launcher = widget.urlLauncher;
       final launched = launcher != null
           ? await launcher(uri)
           : await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched) {
-        DebugLogger.warning('Could not open GitHub repository URL');
-        _showGitHubLaunchError();
+        DebugLogger.warning('Could not open URL: $uri');
+        _showLinkLaunchError(errorMessage);
       }
     } catch (e) {
-      DebugLogger.warning('Failed to open GitHub repository: $e');
-      _showGitHubLaunchError();
+      DebugLogger.warning('Failed to open URL $uri: $e');
+      _showLinkLaunchError(errorMessage);
     }
   }
 
-  void _showGitHubLaunchError() {
+  void _showLinkLaunchError(String message) {
     if (!mounted) {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text(
-          'Could not open GitHub. Try again later.',
-          style: TextStyle(color: BalatroTheme.snackBarContentOnBright),
+        content: Text(
+          message,
+          style: const TextStyle(color: BalatroTheme.snackBarContentOnBright),
         ),
         backgroundColor: BalatroTheme.neonPink,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Widget _buildIosAppStoreButton() {
+    return TextButton(
+      onPressed: _openIosAppStore,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.phone_iphone,
+            color: BalatroTheme.neonOrange.withValues(alpha: 0.85),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Get on iOS',
+            style: TextStyle(
+              color: BalatroTheme.neonOrange.withValues(alpha: 0.85),
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
