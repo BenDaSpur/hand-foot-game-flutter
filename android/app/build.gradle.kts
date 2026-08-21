@@ -31,6 +31,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Google sample AdMob app ID by default. Override with
+        // -PADMOB_ANDROID_APP_ID=ca-app-pub-...~... before a store release.
+        manifestPlaceholders["adMobAppId"] =
+            (project.findProperty("ADMOB_ANDROID_APP_ID") as String?)
+                ?: "ca-app-pub-3940256099942544~3347511713"
     }
 
     buildTypes {

@@ -1,0 +1,3 @@
+// Google sample AdMob app ID. Replace with the production iOS app ID
+// (ca-app-pub-8788020871095245~...) before a store release. See docs/ADMOB.md.
+ADMOB_IOS_APP_ID = ca-app-pub-3940256099942544~1458002511

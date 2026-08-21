@@ -4,7 +4,7 @@ import '../config/project_links.dart';
 /// https://playhandfoot.com/privacy.html
 abstract final class PrivacyPolicyContent {
   static const String title = 'Privacy Policy';
-  static const String lastUpdated = 'August 17, 2026';
+  static const String lastUpdated = 'August 21, 2026';
   static const String website = 'https://playhandfoot.com';
   static const String publicUrl = '$website/privacy.html';
 
@@ -50,7 +50,12 @@ abstract final class PrivacyPolicyContent {
           '• Firebase Analytics events (for example app start, game created, game '
           'joined). Google may process device and network metadata such as '
           'approximate location derived from IP address, browser type, and similar '
-          'technical data as described in Google’s privacy policy.\n\n'
+          'technical data as described in Google’s privacy policy.\n'
+          '• On native iOS and Android apps, Google AdMob may collect a device '
+          'advertising identifier, IP address, approximate location, device and '
+          'ad interaction data, and similar technical information in order to '
+          'show ads. This does not apply to playhandfoot.com in a browser or as '
+          'a progressive web app.\n\n'
           'If Firebase is not configured (typical for a local development build), '
           'these network analytics are not sent.',
     ),
@@ -74,9 +79,12 @@ abstract final class PrivacyPolicyContent {
           '• Understand how games unfold and how bots behave, so we can fix bugs '
           'and improve AI.\n'
           '• Measure basic usage (for example that the site loaded) and keep the '
-          'service reliable.\n\n'
-          'We do not use this data to show third-party advertising, and we do not '
-          'sell personal information.',
+          'service reliable.\n'
+          '• On native iOS and Android apps, show third-party ads through Google '
+          'AdMob at natural pauses (for example after a solo round) and on the '
+          'main menu.\n\n'
+          'We do not sell personal information. The website and PWA at '
+          'playhandfoot.com do not show ads.',
     ),
     PrivacyPolicySection(
       title: 'Cookies, local storage, and similar technologies',
@@ -84,8 +92,10 @@ abstract final class PrivacyPolicyContent {
           'The Game is a web app. It uses browser local storage and similar '
           'technologies for settings and saved games. Firebase Authentication and '
           'Firebase Analytics (Google) may set cookies or equivalent storage on '
-          'playhandfoot.com. We do not use a separate advertising cookie or a '
-          'marketing pixel.\n\n'
+          'playhandfoot.com. Native iOS and Android apps may use the Google Mobile '
+          'Ads SDK (AdMob) and the Google User Messaging Platform, which can use '
+          'cookies, advertising IDs, or similar technologies to show ads and '
+          'remember your consent choices.\n\n'
           'You can block cookies or clear site data in your browser. Doing so may '
           'sign you out of anonymous multiplayer, forget local settings, or limit '
           'analytics. The Game will still offer solo play.',
@@ -99,7 +109,10 @@ abstract final class PrivacyPolicyContent {
           '• Vercel — website hosting. Vercel may process request logs such as IP '
           'address, user agent, and timestamps. See Vercel’s privacy policy.\n'
           '• Google Fonts — the Game may load fonts from Google, which can receive '
-          'your IP address and user agent.\n\n'
+          'your IP address and user agent.\n'
+          '• Google AdMob (native iOS and Android apps only) — third-party ads, '
+          'including a consent form where required. See Google’s advertising '
+          'privacy documentation.\n\n'
           'These providers act on our behalf to host and operate the Game. They '
           'have their own privacy policies that govern how they process data.',
     ),
@@ -114,6 +127,22 @@ abstract final class PrivacyPolicyContent {
           'protect the Game, players, or the public.\n\n'
           'Gameplay analytics from completed games may be reviewed by maintainers '
           'to improve bot AI. We do not sell or rent your information.',
+    ),
+    PrivacyPolicySection(
+      title: 'Advertising on native apps',
+      body:
+          'Native iOS and Android builds may show Google AdMob ads: a banner on '
+          'the main menu, and a full-screen interstitial after you finish a solo '
+          'round. Ads are not shown during a turn, in Learn to Play, in '
+          'multiplayer matches, or on playhandfoot.com (browser or PWA).\n\n'
+          'Where required (for example the EEA, UK, and Switzerland), the Google '
+          'User Messaging Platform shows a consent form before personalized ads. '
+          'You can change those choices later with Privacy options on the main '
+          'menu when that entry is required. You can also limit ad tracking in '
+          'your device settings.\n\n'
+          'Google and its partners may use advertising identifiers and similar '
+          'data as described in Google’s advertising privacy policies. We do not '
+          'sell personal information.',
     ),
     PrivacyPolicySection(
       title: 'How long we keep information',
@@ -140,14 +169,18 @@ abstract final class PrivacyPolicyContent {
           'Depending on where you live (for example the EEA, UK, or California), '
           'you may have rights to request access, correction, deletion, or a copy '
           'of personal information, or to object to certain processing. We do not '
-          'currently provide an in-app analytics opt-out. To make a request, '
-          'contact us privately using the email address or GitHub Security '
-          'Advisories form listed in the project Security Policy. Do not open a '
-          'public GitHub issue or post identifiers in public discussion. Include '
-          'any device ID, display name, or approximate play time you can share so '
-          'we can find matching records. We may not be able to identify you if '
-          'you only played solo and never set a unique name.\n\n'
-          'We do not sell personal information or share it for cross-context '
+          'currently provide an in-app analytics opt-out. On native iOS and '
+          'Android apps, where a privacy options entry is required, you can open '
+          'Privacy options from the main menu to manage AdMob consent. To make a '
+          'request, contact us privately using the email address or GitHub '
+          'Security Advisories form listed in the project Security Policy. Do not '
+          'open a public GitHub issue or post identifiers in public discussion. '
+          'Include any device ID, display name, or approximate play time you can '
+          'share so we can find matching records. We may not be able to identify '
+          'you if you only played solo and never set a unique name.\n\n'
+          'We do not sell personal information. Native apps may share device and '
+          'ad data with Google AdMob for advertising when you consent. The '
+          'website and PWA do not show ads or share data for cross-context '
           'behavioral advertising.',
     ),
     PrivacyPolicySection(

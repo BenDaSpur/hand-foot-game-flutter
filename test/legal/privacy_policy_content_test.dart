@@ -20,6 +20,7 @@ void main() {
     );
     expect(titles, contains('Third-party services'));
     expect(titles, contains('Your choices and rights'));
+    expect(titles, contains('Advertising on native apps'));
     expect(titles, contains('Children'));
     expect(titles, contains('Contact'));
 
@@ -30,6 +31,7 @@ void main() {
     expect(fullText, contains('Firebase'));
     expect(fullText, contains('Vercel'));
     expect(fullText, contains('GitHub'));
+    expect(fullText, contains('AdMob'));
     expect(fullText, contains('do not sell'));
     expect(fullText, contains('Security Policy'));
     expect(fullText, contains(ProjectLinks.securityPolicy));

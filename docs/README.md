@@ -7,6 +7,7 @@ This directory contains all documentation for the Hand & Foot Flutter game.
 - **[TESTING.md](TESTING.md)** - Comprehensive guide for running unit tests and E2E integration tests
 - **[family_hand_and_foot_full_rules.md](family_hand_and_foot_full_rules.md)** - Complete game rules reference
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment and release process documentation  
+- **[ADMOB.md](ADMOB.md)** - Native iOS/Android AdMob units, test IDs, and placement rules
 - **[BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)** - Git branch protection and workflow guidelines
 
 ## Quick Links
