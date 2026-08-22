@@ -34,8 +34,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is competitive-planner', () {
-      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
+    test('botAiVersion is planner-pressure', () {
+      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
       expect(BotConfig.booklessFarmForceFootMaxHand, 8);

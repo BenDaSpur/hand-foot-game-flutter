@@ -29,8 +29,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is competitive-planner', () {
-      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
+    test('botAiVersion is planner-pressure', () {
+      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
       expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });
