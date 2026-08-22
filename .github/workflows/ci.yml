@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [main, master, develop]
   merge_group:
+  workflow_dispatch:
 
 jobs:
   quality-checks:

@@ -2,41 +2,39 @@ name: Bump Build Version
 
 # Stamp YYYY.M.D+N onto the PR branch when that PR is about to merge.
 # GitHub's merge queue cannot inject commits into its read-only merge group,
-# and GITHUB_TOKEN cannot push through protected main or create PRs unless
-# the repo allows it. Pushing to the unprotected PR head works with the
-# workflow's contents: write permission.
+# and GITHUB_TOKEN cannot push through protected main. Pushing to the
+# unprotected PR head works with contents: write. Commits created with
+# GITHUB_TOKEN do not start pull_request/push workflows, so this job
+# dispatches CI on the new SHA (workflow_dispatch is allowed).
 on:
   pull_request:
     types: [auto_merge_enabled, enqueued, synchronize]
     branches: [main, master]
-  workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
-  group: bump-build-version-${{ github.event.pull_request.number || github.ref }}
+  group: bump-build-version
   cancel-in-progress: false
 
 jobs:
   bump:
     if: >
-      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'chore/bump-build-version' &&
+      !startsWith(github.event.pull_request.title, 'chore: bump build version') &&
       (
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.pull_request.head.ref != 'chore/bump-build-version' &&
-        !startsWith(github.event.pull_request.title, 'chore: bump build version') &&
-        (
-          github.event.action != 'synchronize' ||
-          github.event.pull_request.auto_merge != null
-        )
+        github.event.action != 'synchronize' ||
+        github.event.pull_request.auto_merge != null
       )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -53,8 +51,7 @@ jobs:
       - name: Bump pubspec version
         id: bump
         env:
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref || github.ref_name }}
-          EVENT_NAME: ${{ github.event_name }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           GITHUB_TOKEN: ""
         run: |
           set -euo pipefail
@@ -64,19 +61,13 @@ jobs:
 
           git fetch origin "$BASE_BRANCH"
 
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            git checkout "$BASE_BRANCH"
-            git reset --hard "origin/$BASE_BRANCH"
-            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
-          else
-            BASE_VERSION=$(git show "origin/${BASE_BRANCH}:pubspec.yaml" | sed -n 's/^version:[[:space:]]*//p' | head -n 1)
-            if [ -z "$BASE_VERSION" ]; then
-              echo "Could not read version from origin/${BASE_BRANCH}:pubspec.yaml"
-              exit 1
-            fi
-            python3 scripts/set_pubspec_version.py pubspec.yaml "$BASE_VERSION"
-            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
+          BASE_VERSION=$(git show "origin/${BASE_BRANCH}:pubspec.yaml" | sed -n 's/^version:[[:space:]]*//p' | head -n 1)
+          if [ -z "$BASE_VERSION" ]; then
+            echo "Could not read version from origin/${BASE_BRANCH}:pubspec.yaml"
+            exit 1
           fi
+          python3 scripts/set_pubspec_version.py pubspec.yaml "$BASE_VERSION"
+          NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
 
           if git diff --quiet -- pubspec.yaml; then
             echo "No pending version bump"
@@ -90,14 +81,16 @@ jobs:
           echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Push version bump
-        if: steps.bump.outputs.changed == 'true' && github.event_name == 'pull_request'
+        if: steps.bump.outputs.changed == 'true'
         env:
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           VERSION: ${{ steps.bump.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Git over HTTPS authenticates with Basic auth (x-access-token).
           remote_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push "${remote_url}" "HEAD:${HEAD_BRANCH}"
           echo "Pushed ${VERSION} to ${HEAD_BRANCH}"
+          gh workflow run ci.yml --ref "$HEAD_BRANCH"
+          echo "Dispatched CI on ${HEAD_BRANCH} so required checks run on the bump commit"
