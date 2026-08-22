@@ -12,8 +12,9 @@ import '../bot_personality.dart';
 /// Hard constraints and personality weights for the competitive planner.
 ///
 /// Production analytics (2026.08): humans unlock 10–17% of draws; bots ~3%
-/// because they play down late and rarely hold the live top pair. These
-/// constraints encode that lesson instead of human hand-size mimicry.
+/// because they play down late, stall on the hand pile, and rarely hold the
+/// live top pair. #180–#196 encoded those lessons in the cascade; #197's
+/// planner did not call that path. These constraints are the planner port.
 class CompetitivePolicy {
   /// Pile size that makes play-down / unlock contest urgent.
   static const int contestablePileSize = 6;
@@ -278,6 +279,93 @@ class CompetitivePolicy {
     return gameState.players.any(
       (p) => p.id != botId && p.type == PlayerType.human && p.hasPlayedDown,
     );
+  }
+
+  /// True when any opponent has already picked up their foot pile.
+  static bool opponentOnFoot(GameState gameState, String botId) {
+    return gameState.players.any(
+      (player) => player.id != botId && player.hasPickedUpFoot,
+    );
+  }
+
+  /// Discard pile large enough that sitting on the hand pile cedes the farm.
+  static bool fatDiscardFarm(GameState gameState) {
+    return gameState.discardPile.length >=
+        BotConfig.pileFarmForcePlayDownPileSize;
+  }
+
+  /// Port of cascade `_shouldCompleteHandPileForFoot` into the planner.
+  ///
+  /// #196/#182 encoded this in EnhancedBotAI; #197's TurnPlanner never called
+  /// it, so adaptive bots sat on the hand pile until round 4 (session
+  /// 17873581070627062). Empty the hand pile when books exist, the discard
+  /// farm is fat, or an opponent is already on foot.
+  static bool shouldEmptyHandPile(
+    Player bot,
+    GameState gameState, {
+    BotPersonality? personality,
+  }) {
+    if (!bot.hasPlayedDown || bot.hasPickedUpFoot) {
+      return false;
+    }
+    final handSize = bot.currentHand.length;
+    if (handSize == 0) {
+      return false;
+    }
+
+    final hasBook = bot.bookCount >= 1;
+    final farm = fatDiscardFarm(gameState) && bot.bookCount == 0;
+    final opponentFoot = opponentOnFoot(gameState, bot.id);
+
+    if (handSize <= BotConfig.handToFootCriticalHandSize &&
+        (hasBook || farm || opponentFoot)) {
+      return true;
+    }
+    if (handSize <= BotConfig.handPileFootCompletionMaxHand && hasBook) {
+      return true;
+    }
+    if (farm && handSize <= BotConfig.booklessFarmForceFootMaxHand) {
+      return true;
+    }
+    if (opponentFoot &&
+        hasBook &&
+        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+      return true;
+    }
+    if (personality == BotPersonality.aggressive &&
+        hasBook &&
+        handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+      return true;
+    }
+    return false;
+  }
+
+  /// When true, skip unlock-key-preserving play-down and try a greedy dump.
+  ///
+  /// Does not relax the round point requirement — it only searches harder for
+  /// a legal disjoint combo (`findBestPlayDownCombination` caps 3+ meld
+  /// searches at 20–50 combinations, which missed play-downs at 13–16 cards).
+  static bool shouldSearchGreedyPlayDown(Player bot, GameState gameState) {
+    if (bot.hasPlayedDown) {
+      return false;
+    }
+    final handSize = bot.currentHand.length;
+    if (handSize >= latePlayDownHandSize) {
+      return true;
+    }
+    if (handSize >= BotConfig.pileFarmForcePlayDownHandSize &&
+        fatDiscardFarm(gameState)) {
+      return true;
+    }
+    if (humanAlreadyPlayedDown(gameState, bot.id) &&
+        gameState.discardPile.length >= contestablePileSize) {
+      return true;
+    }
+    if (gameState.round >= 3 &&
+        handSize >= BotConfig.playDownEmergencyThreshold) {
+      return true;
+    }
+    return false;
   }
 
   /// Visible-info guess that a human can contest the current top.

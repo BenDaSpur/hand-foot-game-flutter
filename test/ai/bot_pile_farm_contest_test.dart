@@ -31,7 +31,7 @@ void main() {
     });
 
     test('botAiVersion bumped for competitive-planner', () {
-      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
+      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
     });
 
     test(

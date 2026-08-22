@@ -349,7 +349,7 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.08-competitive-planner';
+  static const String botAiVersion = '2026.08-planner-pressure';
 
   // Prevent instantiation
   BotConfig._();

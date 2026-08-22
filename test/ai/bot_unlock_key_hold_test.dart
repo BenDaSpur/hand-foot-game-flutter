@@ -30,7 +30,7 @@ void main() {
     });
 
     test('botAiVersion bumped for competitive-planner', () {
-      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
+      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
     });
 
     test('emergency hand size still hard-takes unlockable fat pile in draw', () {

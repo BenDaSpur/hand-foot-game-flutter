@@ -53,7 +53,13 @@ class TurnPlanner {
       gameState,
       bot.id,
     );
-    final weights = CompetitivePolicy.weightsFor(_personalityOf(bot.id));
+    final personality = _personalityOf(bot.id);
+    final weights = CompetitivePolicy.weightsFor(personality);
+    final emptyHandPile = CompetitivePolicy.shouldEmptyHandPile(
+      bot,
+      gameState,
+      personality: personality,
+    );
 
     final skipReason = CompetitivePolicy.drawSkipReason(
       hasPlayedDown: bot.hasPlayedDown,
@@ -66,7 +72,8 @@ class TurnPlanner {
     final forceSpendKeys =
         gameState.discardPileFrozen ||
         liveTop == null ||
-        (canUnlock && goOutThisTurn);
+        (canUnlock && goOutThisTurn) ||
+        emptyHandPile;
 
     final candidates = _generator.generate(
       bot,
@@ -95,6 +102,7 @@ class TurnPlanner {
       canUnlock: canUnlock,
       goOutThisTurn: goOutThisTurn,
       skipThrees: skipThrees,
+      emptyHandPile: emptyHandPile,
     );
 
     ScoredCandidate? best;
@@ -131,6 +139,7 @@ class TurnPlanner {
     required bool canUnlock,
     required bool goOutThisTurn,
     required bool skipThrees,
+    required bool emptyHandPile,
   }) {
     if (context.turnPhase == TurnPhase.draw) {
       if (canUnlock && !goOutThisTurn && !skipThrees) {
@@ -152,6 +161,21 @@ class TurnPlanner {
           .toList();
       if (playDown.isNotEmpty) {
         return playDown;
+      }
+    }
+
+    if (context.turnPhase == TurnPhase.meld && emptyHandPile) {
+      final emptying = candidates
+          .where(
+            (candidate) =>
+                candidate.kind == LegalActionKind.addToMeld ||
+                candidate.kind == LegalActionKind.createMeld ||
+                candidate.kind == LegalActionKind.maximalBurst ||
+                candidate.kind == LegalActionKind.playDown,
+          )
+          .toList();
+      if (emptying.isNotEmpty) {
+        return emptying;
       }
     }
 

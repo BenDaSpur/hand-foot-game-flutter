@@ -3,6 +3,7 @@ import '../../game/game_controller.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
+import '../bot_config.dart';
 import '../bot_decision.dart';
 import '../bot_discard_analyzer.dart';
 import '../bot_end_game_manager.dart';
@@ -195,7 +196,9 @@ class LegalActionGenerator {
     required CardRank? liveTop,
     required bool forceSpendKeys,
   }) {
-    if (bot.hasPickedUpFoot) {
+    if (bot.hasPickedUpFoot &&
+        bot.currentHand.length <
+            BotConfig.footPhaseAggressiveMeldingThreshold) {
       return;
     }
     final combo = meldAnalyzer.findMaximalMeldCombination(bot, controller);
@@ -277,12 +280,26 @@ class LegalActionGenerator {
     GameController controller,
     BotGameContext context,
   ) {
-    final combo = meldAnalyzer.findBestPlayDownCombination(
+    var combo = meldAnalyzer.findBestPlayDownCombination(
       bot,
       controller,
       context.playDownRequirement,
     );
+    if (combo.isNotEmpty &&
+        !meldAnalyzer.combinationFitsHand(bot.currentHand, combo)) {
+      combo = [];
+    }
     if (combo.isEmpty) {
+      combo = meldAnalyzer.findGreedyPlayDownCombination(
+        bot,
+        controller,
+        context.playDownRequirement,
+      );
+    }
+    if (combo.isEmpty) {
+      return combo;
+    }
+    if (CompetitivePolicy.shouldSearchGreedyPlayDown(bot, context.gameState)) {
       return combo;
     }
     final top = CompetitivePolicy.liveTopRank(context.gameState);

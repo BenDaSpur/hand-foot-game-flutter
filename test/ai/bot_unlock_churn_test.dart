@@ -30,7 +30,7 @@ void main() {
     });
 
     test('botAiVersion is competitive-planner', () {
-      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
+      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
       expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });

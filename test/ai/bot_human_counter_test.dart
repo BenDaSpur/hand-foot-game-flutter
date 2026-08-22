@@ -35,7 +35,7 @@ void main() {
     });
 
     test('botAiVersion is competitive-planner', () {
-      expect(BotConfig.botAiVersion, '2026.08-competitive-planner');
+      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
       expect(BotConfig.booklessFarmForceFootMaxHand, 8);
