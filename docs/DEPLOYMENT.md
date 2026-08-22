@@ -135,7 +135,7 @@ The next number is computed from `main`'s current `pubspec.yaml`, so two PRs do 
 
 Use **Enable auto-merge** on feature PRs (the repo already allows it). A GitHub merge queue is optional; if you turn on **Require merge queue**, keep CI listening for `merge_group` (already in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) and use a batch size of 1 so two PRs do not share one version.
 
-Do not set the version by hand in feature PRs. Only one bump job runs at a time so two merge-ready PRs cannot allocate the same `N`. After the bot pushes the stamp, it dispatches CI on that commit because `GITHUB_TOKEN` pushes do not start `pull_request` workflows.
+Do not set the version by hand in feature PRs. Bump jobs run one at a time and skip stamping if another open PR already has that `YYYY.M.D+N`. After that PR merges, enable auto-merge (or re-enqueue) so this one restamps from the new `main`. After the bot pushes a stamp, it dispatches CI on that commit because `GITHUB_TOKEN` pushes do not start `pull_request` workflows.
 
 Flutter maps the part before `+` to the version name and `N` to the build number. The in-app session menu and analytics `appVersion` field show the full `YYYY.M.D+N` string.
 

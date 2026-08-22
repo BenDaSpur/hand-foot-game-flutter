@@ -14,6 +14,7 @@ on:
 permissions:
   contents: write
   actions: write
+  pull-requests: read
 
 concurrency:
   group: bump-build-version
@@ -52,7 +53,9 @@ jobs:
         id: bump
         env:
           BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           GITHUB_TOKEN: ""
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -67,7 +70,30 @@ jobs:
             exit 1
           fi
           python3 scripts/set_pubspec_version.py pubspec.yaml "$BASE_VERSION"
-          NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
+          NEW_VERSION=$(env -u GH_TOKEN dart run scripts/bump_build_version.dart pubspec.yaml)
+
+          other_refs=()
+          while IFS= read -r ref; do
+            if [ -z "$ref" ] || [ "$ref" = "$HEAD_REF" ]; then
+              continue
+            fi
+            other_refs+=("$ref")
+          done < <(gh pr list --repo "$GITHUB_REPOSITORY" --base "$BASE_BRANCH" --state open --limit 100 --json headRefName --jq '.[].headRefName')
+
+          origin_refs=()
+          if [ "${#other_refs[@]}" -gt 0 ]; then
+            git fetch origin "${other_refs[@]}"
+            for ref in "${other_refs[@]}"; do
+              origin_refs+=("origin/${ref}")
+            done
+          fi
+
+          if [ "${#origin_refs[@]}" -gt 0 ] && \
+            reserved_ref=$(python3 scripts/find_reserved_version.py "$NEW_VERSION" "origin/${HEAD_REF}" "${origin_refs[@]}"); then
+            echo "Version $NEW_VERSION is already on $reserved_ref; waiting until that PR merges, then restamp"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if git diff --quiet -- pubspec.yaml; then
             echo "No pending version bump"
