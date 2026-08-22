@@ -1,0 +1,76 @@
+name: Bump Build Version
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump-build-version-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !contains(github.event.head_commit.message, 'chore: bump build version') &&
+        github.event.head_commit.author.name != 'github-actions[bot]'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: "stable"
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Bump pubspec version and push
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3 4; do
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
+            echo "Next build version: $NEW_VERSION"
+
+            if git diff --quiet -- pubspec.yaml; then
+              echo "pubspec.yaml already has $NEW_VERSION"
+              exit 0
+            fi
+
+            git add pubspec.yaml
+            git commit -m "chore: bump build version to ${NEW_VERSION}"
+
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed build version $NEW_VERSION"
+              exit 0
+            fi
+
+            echo "Push failed (attempt ${attempt}); retrying against latest $BRANCH"
+            sleep $((attempt * 4))
+          done
+
+          echo "Failed to push build version after retries"
+          exit 1
