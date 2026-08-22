@@ -48,9 +48,12 @@ DateTime _parseUtcDate(String value) {
   if (match == null) {
     throw FormatException('Expected YYYY-MM-DD, got "$value"');
   }
-  return DateTime.utc(
-    int.parse(match.group(1)!),
-    int.parse(match.group(2)!),
-    int.parse(match.group(3)!),
-  );
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final parsed = DateTime.utc(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    throw FormatException('Invalid calendar date "$value"');
+  }
+  return parsed;
 }

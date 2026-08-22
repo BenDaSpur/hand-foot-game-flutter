@@ -157,5 +157,29 @@ void main() {
         'name: demo\nversion: 2026.8.22+1\n',
       );
     });
+
+    test('rejects an invalid month', () async {
+      final result = await Process.run('dart', [
+        'run',
+        'scripts/bump_build_version.dart',
+        'pubspec.yaml',
+        '2026-13-01',
+      ]);
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('Invalid calendar date'));
+    });
+
+    test('rejects an invalid day', () async {
+      final result = await Process.run('dart', [
+        'run',
+        'scripts/bump_build_version.dart',
+        'pubspec.yaml',
+        '2026-02-30',
+      ]);
+
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr.toString(), contains('Invalid calendar date'));
+    });
   });
 }

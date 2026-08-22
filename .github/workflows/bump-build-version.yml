@@ -27,6 +27,7 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -41,18 +42,27 @@ jobs:
       - name: Bump pubspec version and push
         env:
           BRANCH: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          BUMP_ARGS=(pubspec.yaml)
+          if [ "$EVENT_NAME" = "push" ]; then
+            VERSION_DATE=$(date -u -d "$PUSH_TIMESTAMP" +%Y-%m-%d)
+            BUMP_ARGS+=("$VERSION_DATE")
+          fi
+
           for attempt in 1 2 3 4; do
             git fetch origin "$BRANCH"
             git checkout "$BRANCH"
             git reset --hard "origin/$BRANCH"
 
-            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
+            NEW_VERSION=$(dart run scripts/bump_build_version.dart "${BUMP_ARGS[@]}")
             echo "Next build version: $NEW_VERSION"
 
             if git diff --quiet -- pubspec.yaml; then
@@ -63,7 +73,8 @@ jobs:
             git add pubspec.yaml
             git commit -m "chore: bump build version to ${NEW_VERSION}"
 
-            if git push origin "HEAD:$BRANCH"; then
+            if git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
+              push origin "HEAD:$BRANCH"; then
               echo "Pushed build version $NEW_VERSION"
               exit 0
             fi
