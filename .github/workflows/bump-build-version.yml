@@ -85,5 +85,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
-            push origin "HEAD:$BRANCH"
+          # Git over HTTPS authenticates with Basic auth (x-access-token),
+          # not a Bearer extraheader. Bearer is ignored, then git prompts
+          # for a username and fails in CI with "No such device or address".
+          git push \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:${BRANCH}"
