@@ -29,7 +29,7 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion bumped for competitive-planner', () {
+    test('botAiVersion bumped for planner-pressure', () {
       expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
     });
 

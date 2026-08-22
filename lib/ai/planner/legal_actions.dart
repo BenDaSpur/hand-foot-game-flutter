@@ -212,6 +212,9 @@ class LegalActionGenerator {
     if (!BotEndGameManager.isSafeCreateMultipleMelds(bot, filtered)) {
       return;
     }
+    if (!meldAnalyzer.combinationFitsHand(bot.currentHand, filtered)) {
+      return;
+    }
 
     final usedCards = filtered.expand((meld) => meld).toList();
     final emptiesHand = usedCards.length >= bot.currentHand.length - 1;
