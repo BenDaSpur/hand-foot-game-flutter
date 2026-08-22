@@ -133,9 +133,16 @@ Queued merges are applied in first-parent ancestry order from the last version-b
 
 Flutter maps the part before `+` to the version name and `N` to the build number. The in-app session menu and analytics `appVersion` field show the full `YYYY.M.D+N` string.
 
-Do not set the version in feature PRs — the bump commit lands on `main` after merge so PRs do not conflict on `pubspec.yaml`.
+Do not set the version in feature PRs — the bump lands after merge so feature PRs do not conflict on `pubspec.yaml`.
 
-If the bump workflow cannot push because `main` requires pull requests, allow the **GitHub Actions** app to bypass that requirement (see [`.github/workflows/setup-branch-protection.yml`](../.github/workflows/setup-branch-protection.yml)).
+`main` requires pull requests and the `quality-checks / quality-checks` status check. The default `GITHUB_TOKEN` cannot push through that protection (the Actions app also cannot change the rule: [`.github/workflows/setup-branch-protection.yml`](../.github/workflows/setup-branch-protection.yml) fails with `Resource not accessible by integration`).
+
+The bump workflow therefore:
+
+1. Tries a direct push (works only if protection allows it)
+2. Otherwise force-pushes `chore/bump-build-version` and opens a PR with auto-merge
+
+Fully automatic direct pushes need a repo secret `VERSION_BUMP_TOKEN`: a fine-grained PAT from a repo admin (`enforce_admins` is off, so an admin token bypasses protection) with Contents read/write. Without that secret, merge or approve the bump PR after its checks pass. Repo **Actions → General** must allow GitHub Actions to create pull requests.
 
 ## Native releases (Android, Windows, macOS, Linux)
 
