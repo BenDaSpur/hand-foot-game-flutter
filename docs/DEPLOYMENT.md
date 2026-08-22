@@ -129,6 +129,8 @@ Format: **`YYYY.M.D+N`** (UTC calendar date, no leading zeros).
 - Second merge that same UTC day → `2026.8.22+2`
 - First merge the next UTC day → `2026.8.23+1`
 
+Queued merges are applied in first-parent ancestry order from the last version-bump commit, so an older run cannot overwrite a newer date. Manual `workflow_dispatch` increments once using the current UTC time.
+
 Flutter maps the part before `+` to the version name and `N` to the build number. The in-app session menu and analytics `appVersion` field show the full `YYYY.M.D+N` string.
 
 Do not set the version in feature PRs — the bump commit lands on `main` after merge so PRs do not conflict on `pubspec.yaml`.

@@ -39,49 +39,51 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Bump pubspec version and push
+      - name: Bump pubspec version
+        id: bump
         env:
           BRANCH: ${{ github.ref_name }}
           EVENT_NAME: ${{ github.event_name }}
-          PUSH_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ""
         run: |
           set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          BUMP_ARGS=(pubspec.yaml)
-          if [ "$EVENT_NAME" = "push" ]; then
-            VERSION_DATE=$(date -u -d "$PUSH_TIMESTAMP" +%Y-%m-%d)
-            BUMP_ARGS+=("$VERSION_DATE")
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
+          else
+            NEW_VERSION=""
+            while IFS= read -r version_date; do
+              if [ -z "$version_date" ]; then
+                continue
+              fi
+              NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml "$version_date")
+            done < <(bash scripts/pending_version_bump_dates.sh)
           fi
 
-          for attempt in 1 2 3 4; do
-            git fetch origin "$BRANCH"
-            git checkout "$BRANCH"
-            git reset --hard "origin/$BRANCH"
+          if git diff --quiet -- pubspec.yaml; then
+            echo "No pending version bump"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-            NEW_VERSION=$(dart run scripts/bump_build_version.dart "${BUMP_ARGS[@]}")
-            echo "Next build version: $NEW_VERSION"
+          git add pubspec.yaml
+          git commit -m "chore: bump build version to ${NEW_VERSION}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
-            if git diff --quiet -- pubspec.yaml; then
-              echo "pubspec.yaml already has $NEW_VERSION"
-              exit 0
-            fi
-
-            git add pubspec.yaml
-            git commit -m "chore: bump build version to ${NEW_VERSION}"
-
-            if git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
-              push origin "HEAD:$BRANCH"; then
-              echo "Pushed build version $NEW_VERSION"
-              exit 0
-            fi
-
-            echo "Push failed (attempt ${attempt}); retrying against latest $BRANCH"
-            sleep $((attempt * 4))
-          done
-
-          echo "Failed to push build version after retries"
-          exit 1
+      - name: Push version bump
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
+            push origin "HEAD:$BRANCH"
