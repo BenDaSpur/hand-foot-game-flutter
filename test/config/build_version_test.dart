@@ -182,4 +182,47 @@ void main() {
       expect(result.stderr.toString(), contains('Invalid calendar date'));
     });
   });
+
+  group('set_pubspec_version.py', () {
+    test(
+      'copies main version then CLI yields the next calendar build',
+      () async {
+        final temp = await Directory.systemTemp.createTemp(
+          'set_pubspec_version_',
+        );
+        addTearDown(() => temp.delete(recursive: true));
+
+        final pubspec = File('${temp.path}/pubspec.yaml');
+        await pubspec.writeAsString('name: demo\nversion: 9.9.9+9\n');
+
+        final setResult = await Process.run('python3', [
+          'scripts/set_pubspec_version.py',
+          pubspec.path,
+          '2026.8.22+1',
+        ]);
+        expect(
+          setResult.exitCode,
+          0,
+          reason: '${setResult.stdout}\n${setResult.stderr}',
+        );
+        expect(
+          await pubspec.readAsString(),
+          'name: demo\nversion: 2026.8.22+1\n',
+        );
+
+        final bumpResult = await Process.run('dart', [
+          'run',
+          'scripts/bump_build_version.dart',
+          pubspec.path,
+          '2026-08-22',
+        ]);
+        expect(
+          bumpResult.exitCode,
+          0,
+          reason: '${bumpResult.stdout}\n${bumpResult.stderr}',
+        );
+        expect(bumpResult.stdout.toString().trim(), '2026.8.22+2');
+      },
+    );
+  });
 }

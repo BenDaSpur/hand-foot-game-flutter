@@ -121,7 +121,9 @@ To test with production Firebase locally, use [`scripts/setup_local_firebase.sh`
 
 ## App version
 
-Merges to `main` automatically bump `version` in [`pubspec.yaml`](../pubspec.yaml) via [`.github/workflows/bump-build-version.yml`](../.github/workflows/bump-build-version.yml).
+The bump workflow stamps `version` in [`pubspec.yaml`](../pubspec.yaml) onto the **PR branch** when that PR is about to merge: auto-merge is enabled, or the PR is added to a GitHub merge queue.
+
+GitHub's merge queue cannot inject commits into its temporary `gh-readonly-queue/` snapshot, and `GITHUB_TOKEN` cannot push through protected `main`. Pushing to the unprotected PR head works with the workflow's `contents: write` permission and does not need **Allow GitHub Actions to create and approve pull requests**.
 
 Format: **`YYYY.M.D+N`** (UTC calendar date, no leading zeros).
 
@@ -129,20 +131,13 @@ Format: **`YYYY.M.D+N`** (UTC calendar date, no leading zeros).
 - Second merge that same UTC day → `2026.8.22+2`
 - First merge the next UTC day → `2026.8.23+1`
 
-Queued merges are applied in first-parent ancestry order from the last version-bump commit, so an older run cannot overwrite a newer date. Manual `workflow_dispatch` increments once using the current UTC time.
+The next number is computed from `main`'s current `pubspec.yaml`, so two PRs do not invent versions while you work. If a second PR is still open after the first merges, enable auto-merge (or re-enqueue) so it is restamped against the new `main`.
+
+Use **Enable auto-merge** on feature PRs (the repo already allows it). A GitHub merge queue is optional; if you turn on **Require merge queue**, keep CI listening for `merge_group` (already in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) and use a batch size of 1 so two PRs do not share one version.
+
+Do not set the version by hand in feature PRs. Bump jobs run one at a time and skip stamping if another open PR already has that `YYYY.M.D+N`. After that PR merges, enable auto-merge (or re-enqueue) so this one restamps from the new `main`. After the bot pushes a stamp, it dispatches CI on that commit because `GITHUB_TOKEN` pushes do not start `pull_request` workflows.
 
 Flutter maps the part before `+` to the version name and `N` to the build number. The in-app session menu and analytics `appVersion` field show the full `YYYY.M.D+N` string.
-
-Do not set the version in feature PRs — the bump lands after merge so feature PRs do not conflict on `pubspec.yaml`.
-
-`main` requires pull requests and the `quality-checks / quality-checks` status check. The default `GITHUB_TOKEN` cannot push through that protection (the Actions app also cannot change the rule: [`.github/workflows/setup-branch-protection.yml`](../.github/workflows/setup-branch-protection.yml) fails with `Resource not accessible by integration`).
-
-The bump workflow therefore:
-
-1. Tries a direct push (works only if protection allows it)
-2. Otherwise force-pushes `chore/bump-build-version` and opens a PR with auto-merge
-
-Fully automatic direct pushes need a repo secret `VERSION_BUMP_TOKEN`: a fine-grained PAT from a repo admin (`enforce_admins` is off, so an admin token bypasses protection) with Contents read/write. Without that secret, merge or approve the bump PR after its checks pass. Repo **Actions → General** must allow GitHub Actions to create pull requests.
 
 ## Native releases (Android, Windows, macOS, Linux)
 
