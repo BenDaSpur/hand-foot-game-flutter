@@ -1,16 +1,21 @@
 name: Bump Build Version
 
+# Stamp YYYY.M.D+N onto the PR branch when that PR is about to merge.
+# GitHub's merge queue cannot inject commits into its read-only merge group,
+# and GITHUB_TOKEN cannot push through protected main or create PRs unless
+# the repo allows it. Pushing to the unprotected PR head works with the
+# workflow's contents: write permission.
 on:
-  push:
+  pull_request:
+    types: [auto_merge_enabled, enqueued, synchronize]
     branches: [main, master]
   workflow_dispatch:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
-  group: bump-build-version-${{ github.ref }}
+  group: bump-build-version-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -18,16 +23,20 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (
-        !contains(github.event.head_commit.message, 'chore: bump build version') &&
-        !contains(github.event.head_commit.message, 'chore/bump-build-version') &&
-        github.event.head_commit.author.name != 'github-actions[bot]'
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.ref != 'chore/bump-build-version' &&
+        !startsWith(github.event.pull_request.title, 'chore: bump build version') &&
+        (
+          github.event.action != 'synchronize' ||
+          github.event.pull_request.auto_merge != null
+        )
       )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -44,7 +53,7 @@ jobs:
       - name: Bump pubspec version
         id: bump
         env:
-          BRANCH: ${{ github.ref_name }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref || github.ref_name }}
           EVENT_NAME: ${{ github.event_name }}
           GITHUB_TOKEN: ""
         run: |
@@ -53,20 +62,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin "$BRANCH"
-          git checkout "$BRANCH"
-          git reset --hard "origin/$BRANCH"
+          git fetch origin "$BASE_BRANCH"
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            git checkout "$BASE_BRANCH"
+            git reset --hard "origin/$BASE_BRANCH"
             NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
           else
-            NEW_VERSION=""
-            while IFS= read -r version_date; do
-              if [ -z "$version_date" ]; then
-                continue
-              fi
-              NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml "$version_date")
-            done < <(bash scripts/pending_version_bump_dates.sh)
+            BASE_VERSION=$(git show "origin/${BASE_BRANCH}:pubspec.yaml" | sed -n 's/^version:[[:space:]]*//p' | head -n 1)
+            if [ -z "$BASE_VERSION" ]; then
+              echo "Could not read version from origin/${BASE_BRANCH}:pubspec.yaml"
+              exit 1
+            fi
+            python3 scripts/set_pubspec_version.py pubspec.yaml "$BASE_VERSION"
+            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
           fi
 
           if git diff --quiet -- pubspec.yaml; then
@@ -81,55 +90,14 @@ jobs:
           echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Push version bump
-        if: steps.bump.outputs.changed == 'true'
+        if: steps.bump.outputs.changed == 'true' && github.event_name == 'pull_request'
         env:
-          BRANCH: ${{ github.ref_name }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
           VERSION: ${{ steps.bump.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION_BUMP_TOKEN: ${{ secrets.VERSION_BUMP_TOKEN }}
         run: |
           set -euo pipefail
-          # Git over HTTPS authenticates with Basic auth (x-access-token),
-          # not a Bearer extraheader. Bearer is ignored, then git prompts
-          # for a username and fails in CI with "No such device or address".
+          # Git over HTTPS authenticates with Basic auth (x-access-token).
           remote_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          bump_branch="chore/bump-build-version"
-
-          if [ -n "${VERSION_BUMP_TOKEN:-}" ]; then
-            echo "Pushing ${VERSION} to ${BRANCH} with VERSION_BUMP_TOKEN"
-            git push \
-              "https://x-access-token:${VERSION_BUMP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-              "HEAD:${BRANCH}"
-            exit 0
-          fi
-
-          if git push "${remote_url}" "HEAD:${BRANCH}"; then
-            echo "Pushed ${VERSION} to ${BRANCH}"
-            exit 0
-          fi
-
-          echo "Direct push to ${BRANCH} was rejected; opening a pull request"
-          git push --force "${remote_url}" "HEAD:refs/heads/${bump_branch}"
-
-          pr_title="chore: bump build version to ${VERSION}"
-          pr_body="Automated calendar build version bump to \`${VERSION}\`.
-
-          This PR only changes \`pubspec.yaml\`. It is opened because \`${BRANCH}\` requires pull requests and status checks, and the default \`GITHUB_TOKEN\` cannot push through that protection.
-
-          Auto-merge is enabled so the bump lands after required checks pass (and after any required review)."
-
-          pr_state="$(gh pr view "${bump_branch}" --repo "${GITHUB_REPOSITORY}" --json state --jq .state 2>/dev/null || true)"
-          if [ "${pr_state}" = "OPEN" ]; then
-            gh pr edit "${bump_branch}" --repo "${GITHUB_REPOSITORY}" --title "${pr_title}" --body "${pr_body}"
-          elif ! gh pr create --repo "${GITHUB_REPOSITORY}" --base "${BRANCH}" --head "${bump_branch}" --title "${pr_title}" --body "${pr_body}"; then
-            echo "::error::Failed to create bump PR. Enable 'Allow GitHub Actions to create and approve pull requests' under Settings → Actions → General, or add a VERSION_BUMP_TOKEN admin PAT secret."
-            exit 1
-          fi
-
-          if gh pr merge "${bump_branch}" --repo "${GITHUB_REPOSITORY}" --squash --auto --delete-branch \
-            --subject "${pr_title}" --body ""; then
-            echo "Auto-merge enabled for ${pr_title}"
-          else
-            echo "Could not enable auto-merge; the pull request is open for review"
-          fi
+          git push "${remote_url}" "HEAD:${HEAD_BRANCH}"
+          echo "Pushed ${VERSION} to ${HEAD_BRANCH}"
