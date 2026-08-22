@@ -61,7 +61,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
     "conservative": 1
   },
   gameSeed: 123456, // For reproducible game analysis
-  appVersion: "1.0.0",
+  appVersion: "2026.8.22+1",
   botAiVersion: "2026.07-hand-foot-rush",
   finalScores: [1250, 980, 750],
   winnerId: "player_1",
@@ -87,7 +87,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   botPersonality: "aggressive",
   decision: "takePile",
   drawSource: "discard",
-  appVersion: "1.0.0",
+  appVersion: "2026.8.22+1",
   botAiVersion: "2026.07-hand-foot-rush",
   reasoning: "Pile contains valuable cards for book completion",
   confidence: 0.8,
@@ -109,7 +109,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   playerId: "player_1",
   playerType: "human",
   drawSource: "deck",  // deck | discard | unlock (when applicable)
-  appVersion: "1.0.0",
+  appVersion: "2026.8.22+1",
   botAiVersion: "2026.07-hand-foot-rush",
   success: true,
   eventData: {
@@ -145,7 +145,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   discardedRank: "five",
   handSizeAtEnd: 11,
   nextPlayerId: "bot_1",
-  appVersion: "1.0.0",
+  appVersion: "2026.8.22+1",
   botAiVersion: "2026.07-hand-foot-rush"
 }
 ```
@@ -165,7 +165,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
     discarderId: "bot_1",
     takerId: "player_1"
   },
-  appVersion: "1.0.0",
+  appVersion: "2026.8.22+1",
   botAiVersion: "2026.07-hand-foot-rush"
 }
 ```

@@ -2,7 +2,10 @@
 
 # Hand & Foot Game Release Script
 # Usage: ./scripts/release.sh <version>
-# Example: ./scripts/release.sh 1.0.0
+# Example: ./scripts/release.sh 2026.8.22
+#
+# pubspec.yaml is auto-bumped on merge to main as YYYY.M.D+N.
+# Pass the calendar version name (before +) when cutting a GitHub Release.
 
 set -e
 

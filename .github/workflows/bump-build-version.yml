@@ -1,0 +1,89 @@
+name: Bump Build Version
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump-build-version-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        !contains(github.event.head_commit.message, 'chore: bump build version') &&
+        github.event.head_commit.author.name != 'github-actions[bot]'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: "stable"
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Bump pubspec version
+        id: bump
+        env:
+          BRANCH: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ""
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          git reset --hard "origin/$BRANCH"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml)
+          else
+            NEW_VERSION=""
+            while IFS= read -r version_date; do
+              if [ -z "$version_date" ]; then
+                continue
+              fi
+              NEW_VERSION=$(dart run scripts/bump_build_version.dart pubspec.yaml "$version_date")
+            done < <(bash scripts/pending_version_bump_dates.sh)
+          fi
+
+          if git diff --quiet -- pubspec.yaml; then
+            echo "No pending version bump"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git add pubspec.yaml
+          git commit -m "chore: bump build version to ${NEW_VERSION}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Push version bump
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
+            push origin "HEAD:$BRANCH"

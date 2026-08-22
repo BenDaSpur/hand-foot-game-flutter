@@ -119,6 +119,24 @@ To test with production Firebase locally, use [`scripts/setup_local_firebase.sh`
 - The web app polls `version.json` and shows a **Reload** banner when a newer deploy is detected.
 - Flutter's service worker still handles offline caching and asset hash upgrades.
 
+## App version
+
+Merges to `main` automatically bump `version` in [`pubspec.yaml`](../pubspec.yaml) via [`.github/workflows/bump-build-version.yml`](../.github/workflows/bump-build-version.yml).
+
+Format: **`YYYY.M.D+N`** (UTC calendar date, no leading zeros).
+
+- First merge on 22 Aug 2026 → `2026.8.22+1`
+- Second merge that same UTC day → `2026.8.22+2`
+- First merge the next UTC day → `2026.8.23+1`
+
+Queued merges are applied in first-parent ancestry order from the last version-bump commit, so an older run cannot overwrite a newer date. Manual `workflow_dispatch` increments once using the current UTC time.
+
+Flutter maps the part before `+` to the version name and `N` to the build number. The in-app session menu and analytics `appVersion` field show the full `YYYY.M.D+N` string.
+
+Do not set the version in feature PRs — the bump commit lands on `main` after merge so PRs do not conflict on `pubspec.yaml`.
+
+If the bump workflow cannot push because `main` requires pull requests, allow the **GitHub Actions** app to bypass that requirement (see [`.github/workflows/setup-branch-protection.yml`](../.github/workflows/setup-branch-protection.yml)).
+
 ## Native releases (Android, Windows, macOS, Linux)
 
 Desktop and mobile builds are published via GitHub Releases. See [`.github/workflows/build-and-release.yml`](../.github/workflows/build-and-release.yml).
