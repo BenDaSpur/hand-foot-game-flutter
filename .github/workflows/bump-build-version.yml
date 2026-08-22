@@ -123,8 +123,10 @@ jobs:
           if [ "${pr_state}" = "OPEN" ]; then
             gh pr edit "${bump_branch}" --repo "${GITHUB_REPOSITORY}" --title "${pr_title}" --body "${pr_body}"
           elif ! gh pr create --repo "${GITHUB_REPOSITORY}" --base "${BRANCH}" --head "${bump_branch}" --title "${pr_title}" --body "${pr_body}"; then
-            echo "::error::Failed to create bump PR. Enable 'Allow GitHub Actions to create and approve pull requests' under Settings → Actions → General, or add a VERSION_BUMP_TOKEN admin PAT secret."
-            exit 1
+            compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/${BRANCH}...${bump_branch}?expand=1"
+            echo "::warning::Pushed ${VERSION} to ${bump_branch} but GitHub Actions is not permitted to create pull requests. Enable Settings → Actions → General → Allow GitHub Actions to create and approve pull requests, or open ${compare_url}"
+            echo "Bump branch is ready: ${compare_url}"
+            exit 0
           fi
 
           if gh pr merge "${bump_branch}" --repo "${GITHUB_REPOSITORY}" --squash --auto --delete-branch \

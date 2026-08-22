@@ -142,7 +142,9 @@ The bump workflow therefore:
 1. Tries a direct push (works only if protection allows it)
 2. Otherwise force-pushes `chore/bump-build-version` and opens a PR with auto-merge
 
-Fully automatic direct pushes need a repo secret `VERSION_BUMP_TOKEN`: a fine-grained PAT from a repo admin (`enforce_admins` is off, so an admin token bypasses protection) with Contents read/write. Without that secret, merge or approve the bump PR after its checks pass. Repo **Actions → General** must allow GitHub Actions to create pull requests.
+If PR creation is blocked (`GitHub Actions is not permitted to create or approve pull requests`), the job still succeeds: the version commit is on `chore/bump-build-version`. Open a PR from that branch, or enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**.
+
+Fully automatic direct pushes to `main` need a repo secret `VERSION_BUMP_TOKEN`: a fine-grained PAT from a repo admin (`enforce_admins` is off, so an admin token bypasses protection) with Contents read/write.
 
 ## Native releases (Android, Windows, macOS, Linux)
 
