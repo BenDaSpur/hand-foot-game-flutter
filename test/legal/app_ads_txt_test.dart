@@ -57,14 +57,11 @@ void main() {
 
     expect(html, contains(_expectedAdSenseScriptSrc));
     expect(html, contains('crossorigin="anonymous"'));
+    final escapedSrc = RegExp.escape(_expectedAdSenseScriptSrc);
     expect(
       RegExp(
-        r'<script[^>]*\basync\b[^>]*src="' +
-            RegExp.escape(_expectedAdSenseScriptSrc) +
-            r'"|'
-                r'<script[^>]*src="' +
-            RegExp.escape(_expectedAdSenseScriptSrc) +
-            r'"[^>]*\basync\b',
+        '<script[^>]*\\basync\\b[^>]*src="$escapedSrc"|'
+        '<script[^>]*src="$escapedSrc"[^>]*\\basync\\b',
       ).hasMatch(html),
       isTrue,
     );
