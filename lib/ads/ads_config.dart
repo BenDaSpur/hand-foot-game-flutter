@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 
 /// AdMob application / unit IDs and timing knobs.
 ///
-/// Debug and profile always use Google sample IDs. Release uses the same
-/// sample IDs unless production unit IDs are supplied with `--dart-define`
+/// Debug and profile always use Google sample IDs. Release uses the Hand &
+/// Foot production units below unless overridden with `--dart-define`
 /// (see `docs/ADMOB.md`). App IDs in native manifests are separate.
 abstract final class AdsConfig {
   static const Duration interstitialCooldown = Duration(minutes: 2);
@@ -27,6 +27,14 @@ abstract final class AdsConfig {
       'ca-app-pub-3940256099942544/2934735716';
 
   static const String publisherId = 'pub-8788020871095245';
+
+  /// Production interstitial (`solo_round_end_interstitial`).
+  static const String productionInterstitialId =
+      'ca-app-pub-8788020871095245/2472333204';
+
+  /// Production banner (`main_menu_banner`).
+  static const String productionBannerId =
+      'ca-app-pub-8788020871095245/7317465770';
 
   static bool get useTestAds {
     const forceTest = bool.fromEnvironment(
@@ -53,9 +61,7 @@ abstract final class AdsConfig {
     if (configured.isNotEmpty) {
       return configured;
     }
-    return isIos
-        ? googleTestIosInterstitialId
-        : googleTestAndroidInterstitialId;
+    return productionInterstitialId;
   }
 
   static String get bannerUnitId {
@@ -68,6 +74,6 @@ abstract final class AdsConfig {
     if (configured.isNotEmpty) {
       return configured;
     }
-    return isIos ? googleTestIosBannerId : googleTestAndroidBannerId;
+    return productionBannerId;
   }
 }

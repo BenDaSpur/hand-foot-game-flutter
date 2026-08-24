@@ -21,4 +21,15 @@ void main() {
     expect(AdsConfig.publisherId, 'pub-8788020871095245');
     expect(AdsConfig.interstitialCooldown, const Duration(minutes: 2));
   });
+
+  test('production unit IDs match the AdMob console units', () {
+    expect(
+      AdsConfig.productionInterstitialId,
+      'ca-app-pub-8788020871095245/2472333204',
+    );
+    expect(
+      AdsConfig.productionBannerId,
+      'ca-app-pub-8788020871095245/7317465770',
+    );
+  });
 }
