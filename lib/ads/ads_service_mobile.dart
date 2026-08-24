@@ -355,6 +355,8 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
   BannerAd? _pendingBanner;
   bool _loaded = false;
   bool _loadInFlight = false;
+  int? _loadedWidth;
+  int? _pendingWidth;
 
   @override
   void didChangeDependencies() {
@@ -362,24 +364,59 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
     _loadAd();
   }
 
+  int _currentWidth() => MediaQuery.sizeOf(context).width.truncate();
+
   void _clearInFlight(BannerAd? ad) {
     if (ad != null && identical(_pendingBanner, ad)) {
       _pendingBanner = null;
     }
     _loadInFlight = false;
+    _pendingWidth = null;
+  }
+
+  void _disposeLoadedBanner() {
+    final old = _banner;
+    _banner = null;
+    _loaded = false;
+    _loadedWidth = null;
+    old?.dispose();
+  }
+
+  void _reloadIfWidthChanged() {
+    if (!mounted) {
+      return;
+    }
+    final width = _currentWidth();
+    if (width > 0 && width != _loadedWidth) {
+      _loadAd();
+    }
   }
 
   Future<void> _loadAd() async {
-    if (_banner != null || _loadInFlight) {
+    final width = _currentWidth();
+    if (width <= 0) {
       return;
     }
-    _loadInFlight = true;
-    try {
-      final width = MediaQuery.sizeOf(context).width.truncate();
-      if (width <= 0) {
-        _loadInFlight = false;
-        return;
+    if (_loadInFlight && _pendingWidth == width) {
+      return;
+    }
+    if (_loadInFlight) {
+      return;
+    }
+    if (_banner != null && _loadedWidth == width) {
+      return;
+    }
+
+    if (_banner != null) {
+      _disposeLoadedBanner();
+      if (mounted) {
+        setState(() {});
       }
+    }
+
+    _loadInFlight = true;
+    _pendingWidth = width;
+    try {
       AdSize? size;
       try {
         final resolveSize = MobileMenuBannerDebug.resolveSize;
@@ -388,18 +425,19 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
             : await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
       } catch (e) {
         DebugLogger.warning('Adaptive banner size failed: $e');
-        _loadInFlight = false;
+        _clearInFlight(null);
         return;
       }
       if (!mounted) {
-        _loadInFlight = false;
+        _clearInFlight(null);
         return;
       }
       if (size == null) {
-        _loadInFlight = false;
+        _clearInFlight(null);
         return;
       }
 
+      final requestedWidth = width;
       final banner = BannerAd(
         adUnitId: widget.adUnitId,
         size: size,
@@ -412,10 +450,16 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
               loaded.dispose();
               return;
             }
+            if (_currentWidth() != requestedWidth) {
+              loaded.dispose();
+              _reloadIfWidthChanged();
+              return;
+            }
             final previous = _banner;
             setState(() {
               _banner = loaded;
               _loaded = true;
+              _loadedWidth = requestedWidth;
             });
             if (previous != null && !identical(previous, loaded)) {
               previous.dispose();
@@ -430,7 +474,11 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
               setState(() {
                 _loaded = false;
                 _banner = null;
+                _loadedWidth = null;
               });
+            }
+            if (mounted && _currentWidth() != requestedWidth) {
+              _reloadIfWidthChanged();
             }
           },
         ),
@@ -453,7 +501,7 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
       // _loadInFlight true until onAdLoaded / onAdFailedToLoad.
     } catch (e) {
       DebugLogger.warning('Banner load failed: $e');
-      _loadInFlight = false;
+      _clearInFlight(null);
     }
   }
 
@@ -475,7 +523,9 @@ class _MobileMenuBannerState extends State<MobileMenuBanner> {
     return SizedBox(
       width: banner.size.width.toDouble(),
       height: banner.size.height.toDouble(),
-      child: AdWidget(ad: banner),
+      child: MobileMenuBannerDebug.loadAd == null
+          ? AdWidget(ad: banner)
+          : const SizedBox.expand(),
     );
   }
 }

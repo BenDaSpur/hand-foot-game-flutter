@@ -77,6 +77,21 @@ void main() {
       html.toLowerCase(),
       isNot(contains('open a github issue on the project')),
     );
+
+    final firebaseOffAt = html.indexOf(
+      'If Firebase is not configured (typical for a local development build)',
+    );
+    final analyticsOffAt = html.indexOf(
+      'these network analytics are not sent.',
+    );
+    final admobAt = html.indexOf('Google AdMob');
+    expect(firebaseOffAt, greaterThanOrEqualTo(0));
+    expect(analyticsOffAt, greaterThan(firebaseOffAt));
+    expect(
+      admobAt,
+      greaterThan(analyticsOffAt),
+      reason: 'AdMob disclosure must stay visible when Firebase is off',
+    );
   });
 
   test('vercel.json sets no-cache headers for both privacy URL forms', () {
