@@ -109,12 +109,13 @@ abstract final class PrivacyPolicyContent {
           '• Vercel — website hosting. Vercel may process request logs such as IP '
           'address, user agent, and timestamps. See Vercel’s privacy policy.\n'
           '• Google Fonts — the Game may load fonts from Google, which can receive '
-          'your IP address and user agent.\n'
-          '• Google AdMob (native iOS and Android apps only) — third-party ads, '
-          'including a consent form where required. See Google’s advertising '
-          'privacy documentation.\n\n'
-          'These providers act on our behalf to host and operate the Game. They '
-          'have their own privacy policies that govern how they process data.',
+          'your IP address and user agent.\n\n'
+          'These processors act on our behalf to host and operate the Game. They '
+          'have their own privacy policies that govern how they process data.\n\n'
+          'Google AdMob is an advertising provider used only in native iOS and '
+          'Android apps (banner and interstitial ads, plus a consent form where '
+          'required). See Google’s advertising privacy documentation. AdMob is '
+          'not a processor that hosts the Game.',
     ),
     PrivacyPolicySection(
       title: 'When we share information',
@@ -179,7 +180,8 @@ abstract final class PrivacyPolicyContent {
           'share so we can find matching records. We may not be able to identify '
           'you if you only played solo and never set a unique name.\n\n'
           'We do not sell personal information. Native apps may share device and '
-          'ad data with Google AdMob for advertising when you consent. The '
+          'ad data with Google AdMob for advertising. Consent is collected where '
+          'required, and processing follows applicable law and your settings. The '
           'website and PWA do not show ads or share data for cross-context '
           'behavioral advertising.',
     ),

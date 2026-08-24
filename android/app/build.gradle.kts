@@ -31,8 +31,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Google sample AdMob app ID by default. Override with
-        // -PADMOB_ANDROID_APP_ID=ca-app-pub-...~... before a store release.
+        // Google sample AdMob app ID for debug/profile. Release overrides below.
         manifestPlaceholders["adMobAppId"] =
             (project.findProperty("ADMOB_ANDROID_APP_ID") as String?)
                 ?: "ca-app-pub-3940256099942544~3347511713"
@@ -43,6 +42,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            val releaseAdMobAppId =
+                project.findProperty("ADMOB_ANDROID_APP_ID") as String?
+            require(!releaseAdMobAppId.isNullOrBlank()) {
+                "Release builds require -PADMOB_ANDROID_APP_ID=" +
+                    "ca-app-pub-XXXX~YYYY (see docs/ADMOB.md)"
+            }
+            manifestPlaceholders["adMobAppId"] = releaseAdMobAppId!!
         }
     }
 }

@@ -103,9 +103,13 @@ jobs:
         run: flutter pub get
 
       - name: Build Android APK
+        env:
+          ORG_GRADLE_PROJECT_ADMOB_ANDROID_APP_ID: ${{ secrets.ADMOB_ANDROID_APP_ID != '' && secrets.ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713' }}
         run: flutter build apk --release
 
       - name: Build Android App Bundle
+        env:
+          ORG_GRADLE_PROJECT_ADMOB_ANDROID_APP_ID: ${{ secrets.ADMOB_ANDROID_APP_ID != '' && secrets.ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713' }}
         run: flutter build appbundle --release
 
       - name: Upload APK artifact

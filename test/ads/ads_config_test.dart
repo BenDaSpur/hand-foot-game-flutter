@@ -20,6 +20,8 @@ void main() {
     );
     expect(AdsConfig.publisherId, 'pub-8788020871095245');
     expect(AdsConfig.interstitialCooldown, const Duration(minutes: 2));
+    expect(AdsConfig.interstitialDismissTimeout, const Duration(minutes: 5));
+    expect(AdsConfig.consentGatherTimeout, const Duration(seconds: 15));
   });
 
   test('production unit IDs match the AdMob console units', () {

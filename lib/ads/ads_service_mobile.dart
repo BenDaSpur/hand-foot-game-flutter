@@ -83,7 +83,12 @@ class MobileAdsService extends AdsService {
         completer.complete();
       }
     }
-    await completer.future;
+    await completer.future.timeout(
+      AdsConfig.consentGatherTimeout,
+      onTimeout: () {
+        DebugLogger.warning('UMP consent timed out');
+      },
+    );
   }
 
   Future<void> _refreshConsentFlags() async {
@@ -217,10 +222,16 @@ class MobileAdsService extends AdsService {
 
       await ad.show();
 
-      final didPresent = await presented.future.timeout(
-        AdsConfig.interstitialPresentTimeout,
-        onTimeout: () => false,
-      );
+      try {
+        await Future.any<void>([
+          presented.future.then((_) {}),
+          dismissed.future,
+        ]).timeout(AdsConfig.interstitialDismissTimeout);
+      } on TimeoutException {
+        preloadInterstitial();
+        return;
+      }
+      final didPresent = presented.isCompleted && await presented.future;
       if (!didPresent) {
         preloadInterstitial();
         return;
@@ -230,10 +241,12 @@ class MobileAdsService extends AdsService {
       _lastInterstitialShownAt = shownAt;
       await _persistLastShown(shownAt);
 
-      await dismissed.future.timeout(
-        const Duration(minutes: 5),
-        onTimeout: () {},
-      );
+      if (!dismissed.isCompleted) {
+        await dismissed.future.timeout(
+          AdsConfig.interstitialDismissTimeout,
+          onTimeout: () {},
+        );
+      }
     } catch (e) {
       DebugLogger.warning('Interstitial show failed: $e');
     } finally {
@@ -290,6 +303,7 @@ class _MobileMenuBanner extends StatefulWidget {
 class _MobileMenuBannerState extends State<_MobileMenuBanner> {
   BannerAd? _banner;
   bool _loaded = false;
+  bool _loadInFlight = false;
 
   @override
   void didChangeDependencies() {
@@ -298,58 +312,69 @@ class _MobileMenuBannerState extends State<_MobileMenuBanner> {
   }
 
   Future<void> _loadAd() async {
-    if (_banner != null) {
+    if (_banner != null || _loadInFlight) {
       return;
     }
-    final width = MediaQuery.sizeOf(context).width.truncate();
-    if (width <= 0) {
-      return;
-    }
-    AdSize? size;
+    _loadInFlight = true;
     try {
-      size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
-    } catch (e) {
-      DebugLogger.warning('Adaptive banner size failed: $e');
-      return;
-    }
-    if (size == null || !mounted) {
-      return;
-    }
+      final width = MediaQuery.sizeOf(context).width.truncate();
+      if (width <= 0) {
+        return;
+      }
+      AdSize? size;
+      try {
+        size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
+      } catch (e) {
+        DebugLogger.warning('Adaptive banner size failed: $e');
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      if (size == null) {
+        return;
+      }
 
-    final banner = BannerAd(
-      adUnitId: widget.adUnitId,
-      size: size,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          if (!mounted) {
-            ad.dispose();
-            return;
-          }
-          setState(() {
-            _banner = ad as BannerAd;
-            _loaded = true;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          DebugLogger.debug('Banner failed to load: $error');
-          ad.dispose();
-          if (mounted) {
+      final banner = BannerAd(
+        adUnitId: widget.adUnitId,
+        size: size,
+        request: const AdRequest(),
+        listener: BannerAdListener(
+          onAdLoaded: (ad) {
+            if (!mounted) {
+              ad.dispose();
+              return;
+            }
             setState(() {
-              _loaded = false;
-              _banner = null;
+              _banner = ad as BannerAd;
+              _loaded = true;
             });
-          }
-        },
-      ),
-    );
-    _banner = banner;
-    try {
-      await banner.load();
-    } catch (e) {
-      DebugLogger.warning('Banner load threw: $e');
-      banner.dispose();
-      _banner = null;
+          },
+          onAdFailedToLoad: (ad, error) {
+            DebugLogger.debug('Banner failed to load: $error');
+            ad.dispose();
+            if (mounted) {
+              setState(() {
+                _loaded = false;
+                _banner = null;
+              });
+            }
+          },
+        ),
+      );
+      try {
+        await banner.load();
+      } catch (e) {
+        DebugLogger.warning('Banner load threw: $e');
+        banner.dispose();
+        return;
+      }
+      if (!mounted) {
+        banner.dispose();
+        return;
+      }
+    } finally {
+      _loadInFlight = false;
     }
   }
 

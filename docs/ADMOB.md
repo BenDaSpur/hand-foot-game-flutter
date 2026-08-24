@@ -22,8 +22,9 @@ Banner units are created as **Banner**; adaptive sizing is a request size, not a
 separate AdMob format.
 
 Also create a **GDPR** privacy message (and **IDFA / ATT** on iOS) under
-Privacy & messaging. UMP will not show a consent form until those messages
-exist.
+Privacy & messaging. Set the privacy-policy URL to
+https://playhandfoot.com/privacy.html. UMP will not show a consent form until
+those messages exist.
 
 ## Test vs production IDs
 
@@ -35,10 +36,12 @@ not flagged for invalid traffic.
 | Android | `ca-app-pub-3940256099942544~3347511713` | `ca-app-pub-3940256099942544/1033173712` | `ca-app-pub-3940256099942544/6300978111` |
 | iOS | `ca-app-pub-3940256099942544~1458002511` | `ca-app-pub-3940256099942544/4411468910` | `ca-app-pub-3940256099942544/2934735716` |
 
-Native manifests (`AndroidManifest.xml` `APPLICATION_ID` and iOS
-`GADApplicationIdentifier`) default to those test app IDs. Replace them with
-your real app IDs before a store release, or the SDK will not serve production
-ads.
+Android sets `com.google.android.gms.ads.APPLICATION_ID` in
+`AndroidManifest.xml` from the Gradle property `ADMOB_ANDROID_APP_ID`. iOS
+sets `GADApplicationIdentifier` from `ADMOB_IOS_APP_ID`. Debug and profile
+default to Google sample app IDs. Release builds require a real app ID
+(`-PADMOB_ANDROID_APP_ID=...` / `ADMOB_IOS_APP_ID=...`), or the SDK will not
+serve production ads.
 
 Release Dart builds use the production unit IDs above. Override per platform
 only if you later create separate Android/iOS units:
@@ -53,14 +56,19 @@ flutter build ipa --release \
   --dart-define=ADMOB_IOS_BANNER_ID=ca-app-pub-8788020871095245/OTHER_BANNER
 ```
 
-Android app ID override at Gradle time:
+Android app ID override at Gradle time (required for release):
 
 ```bash
 ./gradlew assembleRelease -PADMOB_ANDROID_APP_ID=ca-app-pub-8788020871095245~YOUR_APP
 ```
 
-iOS app ID: set `GADApplicationIdentifier` in `ios/Runner/Info.plist` (or
-`ADMOB_IOS_APP_ID` in `ios/Flutter/AdMob.xcconfig`).
+Store CI can set the same value as secret `ADMOB_ANDROID_APP_ID` (`ORG_GRADLE_PROJECT_ADMOB_ANDROID_APP_ID`). Debug/profile keep the Google sample app ID if the property is omitted.
+
+iOS app ID: `Info.plist` reads `GADApplicationIdentifier` from
+`ADMOB_IOS_APP_ID`. Debug and profile set the Google sample ID via
+`ios/Flutter/AdMob.xcconfig`. Release archives do not include that fallback —
+pass a real `ADMOB_IOS_APP_ID` to `xcodebuild` or set it in the Release
+configuration.
 
 AdMob app and unit IDs are public in the binary. Do not put them in `.env`.
 

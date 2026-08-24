@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 abstract final class AdsConfig {
   static const Duration interstitialCooldown = Duration(minutes: 2);
   static const Duration interstitialPresentTimeout = Duration(seconds: 1);
+  static const Duration interstitialDismissTimeout = Duration(minutes: 5);
+  static const Duration consentGatherTimeout = Duration(seconds: 15);
 
   static const String lastInterstitialPrefKey = 'ads.last_interstitial_ms';
 
