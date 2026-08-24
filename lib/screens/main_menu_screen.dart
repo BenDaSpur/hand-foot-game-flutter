@@ -12,6 +12,8 @@ import 'multiplayer_lobby_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'solo_game_setup_screen.dart';
 import 'multiplayer_game_screen.dart';
+import '../ads/ads_banner.dart';
+import '../ads/ads_service.dart';
 import '../services/firebase_service.dart';
 import '../services/game_save_service.dart';
 import '../services/multiplayer_resume_service.dart';
@@ -181,129 +183,152 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Game Title
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 60),
+          child: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
                     child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'HAND & FOOT',
-                          style: Theme.of(context).textTheme.displayLarge
-                              ?.copyWith(
-                                color: BalatroTheme.neonBlue,
-                                shadows: [
-                                  Shadow(
-                                    color: BalatroTheme.neonBlue.withValues(
-                                      alpha: 0.5,
+                        // Game Title
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 60),
+                          child: Column(
+                            children: [
+                              Text(
+                                'HAND & FOOT',
+                                style: Theme.of(context).textTheme.displayLarge
+                                    ?.copyWith(
+                                      color: BalatroTheme.neonBlue,
+                                      shadows: [
+                                        Shadow(
+                                          color: BalatroTheme.neonBlue
+                                              .withValues(alpha: 0.5),
+                                          blurRadius: 20,
+                                        ),
+                                      ],
                                     ),
-                                    blurRadius: 20,
-                                  ),
-                                ],
                               ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'CARD GAME',
-                          style: Theme.of(context).textTheme.displaySmall
-                              ?.copyWith(
-                                color: BalatroTheme.neonPink,
-                                letterSpacing: 4,
+                              const SizedBox(height: 8),
+                              Text(
+                                'CARD GAME',
+                                style: Theme.of(context).textTheme.displaySmall
+                                    ?.copyWith(
+                                      color: BalatroTheme.neonPink,
+                                      letterSpacing: 4,
+                                    ),
                               ),
+                            ],
+                          ),
                         ),
+
+                        // Menu Options
+                        if (_isLoading)
+                          const CircularProgressIndicator(
+                            color: BalatroTheme.neonBlue,
+                          )
+                        else
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Continue button (only shown if saved single player game exists)
+                              if (_hasSavedSinglePlayerGame) ...[
+                                _buildMenuButton(
+                                  icon: Icons.play_arrow,
+                                  label: 'CONTINUE',
+                                  description: 'Resume your saved game',
+                                  onPressed: _continueSavedGame,
+                                  isPrimary: true,
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                              if (_rejoinableGame != null &&
+                                  _multiplayerAvailable) ...[
+                                _buildMenuButton(
+                                  icon: Icons.wifi,
+                                  label: 'REJOIN GAME',
+                                  description:
+                                      'Reconnect to ${_rejoinableGame!['gameId']}',
+                                  onPressed: _rejoinMultiplayerGame,
+                                  isPrimary: true,
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                              _buildMenuButton(
+                                icon: Icons.person,
+                                label: 'PLAY SOLO',
+                                description: 'Play against AI opponents',
+                                onPressed: _startSoloGame,
+                                onSettingsPressed: _openSoloGameSettings,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildMenuButton(
+                                icon: Icons.school,
+                                label: 'LEARN TO PLAY',
+                                description:
+                                    'Guided lesson for rules and controls',
+                                onPressed: _startLearnToPlay,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildMenuButton(
+                                icon: Icons.group_add,
+                                label: 'CREATE GAME',
+                                description: _multiplayerAvailable
+                                    ? 'Host a multiplayer game'
+                                    : 'Multiplayer requires Firebase configuration',
+                                onPressed: _multiplayerAvailable
+                                    ? _createMultiplayerGame
+                                    : _showMultiplayerUnavailable,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildMenuButton(
+                                icon: Icons.group,
+                                label: 'JOIN GAME',
+                                description: _multiplayerAvailable
+                                    ? 'Join an existing game'
+                                    : 'Multiplayer requires Firebase configuration',
+                                onPressed: _multiplayerAvailable
+                                    ? _joinMultiplayerGame
+                                    : _showMultiplayerUnavailable,
+                              ),
+                              const SizedBox(height: 40),
+                              _buildInfoButton(),
+                              const SizedBox(height: 16),
+                              _buildGitHubButton(),
+                              if (widget.isWeb) ...[
+                                const SizedBox(height: 16),
+                                _buildIosAppStoreButton(),
+                                const SizedBox(height: 16),
+                                _buildInstallButton(),
+                              ],
+                              const SizedBox(height: 16),
+                              _buildPrivacyButton(),
+                              ListenableBuilder(
+                                listenable: AdsService.instance,
+                                builder: (context, _) {
+                                  if (!AdsService
+                                      .instance
+                                      .shouldShowPrivacyOptions) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    children: [
+                                      const SizedBox(height: 8),
+                                      _buildPrivacyOptionsButton(),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                       ],
                     ),
                   ),
-
-                  // Menu Options
-                  if (_isLoading)
-                    const CircularProgressIndicator(
-                      color: BalatroTheme.neonBlue,
-                    )
-                  else
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Continue button (only shown if saved single player game exists)
-                        if (_hasSavedSinglePlayerGame) ...[
-                          _buildMenuButton(
-                            icon: Icons.play_arrow,
-                            label: 'CONTINUE',
-                            description: 'Resume your saved game',
-                            onPressed: _continueSavedGame,
-                            isPrimary: true,
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                        if (_rejoinableGame != null &&
-                            _multiplayerAvailable) ...[
-                          _buildMenuButton(
-                            icon: Icons.wifi,
-                            label: 'REJOIN GAME',
-                            description:
-                                'Reconnect to ${_rejoinableGame!['gameId']}',
-                            onPressed: _rejoinMultiplayerGame,
-                            isPrimary: true,
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                        _buildMenuButton(
-                          icon: Icons.person,
-                          label: 'PLAY SOLO',
-                          description: 'Play against AI opponents',
-                          onPressed: _startSoloGame,
-                          onSettingsPressed: _openSoloGameSettings,
-                        ),
-                        const SizedBox(height: 20),
-                        _buildMenuButton(
-                          icon: Icons.school,
-                          label: 'LEARN TO PLAY',
-                          description: 'Guided lesson for rules and controls',
-                          onPressed: _startLearnToPlay,
-                        ),
-                        const SizedBox(height: 20),
-                        _buildMenuButton(
-                          icon: Icons.group_add,
-                          label: 'CREATE GAME',
-                          description: _multiplayerAvailable
-                              ? 'Host a multiplayer game'
-                              : 'Multiplayer requires Firebase configuration',
-                          onPressed: _multiplayerAvailable
-                              ? _createMultiplayerGame
-                              : _showMultiplayerUnavailable,
-                        ),
-                        const SizedBox(height: 20),
-                        _buildMenuButton(
-                          icon: Icons.group,
-                          label: 'JOIN GAME',
-                          description: _multiplayerAvailable
-                              ? 'Join an existing game'
-                              : 'Multiplayer requires Firebase configuration',
-                          onPressed: _multiplayerAvailable
-                              ? _joinMultiplayerGame
-                              : _showMultiplayerUnavailable,
-                        ),
-                        const SizedBox(height: 40),
-                        _buildInfoButton(),
-                        const SizedBox(height: 16),
-                        _buildGitHubButton(),
-                        if (widget.isWeb) ...[
-                          const SizedBox(height: 16),
-                          _buildIosAppStoreButton(),
-                          const SizedBox(height: 16),
-                          _buildInstallButton(),
-                        ],
-                        const SizedBox(height: 16),
-                        _buildPrivacyButton(),
-                      ],
-                    ),
-                ],
+                ),
               ),
-            ),
+              const AdsBanner(),
+            ],
           ),
         ),
       ),
@@ -547,6 +572,32 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           const SizedBox(width: 8),
           Text(
             'Privacy Policy',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivacyOptionsButton() {
+    return TextButton(
+      onPressed: () {
+        AdsService.instance.showPrivacyOptions();
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.tune,
+            color: Colors.white.withValues(alpha: 0.55),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Privacy options',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.55),
               fontSize: 14,

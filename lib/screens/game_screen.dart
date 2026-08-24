@@ -52,6 +52,7 @@ import '../tutorial/learn_to_play_coordinator.dart';
 import '../tutorial/learn_to_play_session.dart';
 import '../tutorial/learn_to_play_step.dart';
 import '../widgets/learn_to_play_coach_banner.dart';
+import '../ads/ads_service.dart';
 
 /// Shared bot configurations live in [kBotConfigurations].
 
@@ -146,6 +147,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     ref.read(soundEventListenerProvider); // Initialize sound effects
     if (_isLearnToPlay) {
       _learnCoordinator = LearnToPlayCoordinator();
+    } else {
+      AdsService.instance.preloadInterstitial();
     }
     _initializeGame();
   }
@@ -795,6 +798,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       await _dialogManager.showRoundEndScoreboard();
       if (_disposed || !mounted) {
         return;
+      }
+
+      if (!_isLearnToPlay) {
+        await AdsService.instance.showInterstitialIfEligible(
+          isSolo: true,
+          isLearnToPlay: false,
+        );
+        if (_disposed || !mounted) {
+          return;
+        }
       }
 
       controller.recoverGameEndIfNeeded();

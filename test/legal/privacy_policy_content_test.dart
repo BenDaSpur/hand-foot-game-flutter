@@ -20,6 +20,7 @@ void main() {
     );
     expect(titles, contains('Third-party services'));
     expect(titles, contains('Your choices and rights'));
+    expect(titles, contains('Advertising on native apps'));
     expect(titles, contains('Children'));
     expect(titles, contains('Contact'));
 
@@ -30,6 +31,21 @@ void main() {
     expect(fullText, contains('Firebase'));
     expect(fullText, contains('Vercel'));
     expect(fullText, contains('GitHub'));
+    expect(fullText, contains('AdMob'));
+    final autoSection = PrivacyPolicyContent.sections
+        .firstWhere((s) => s.title == 'Information collected automatically')
+        .body;
+    final firebaseOff = autoSection.indexOf(
+      'If Firebase is not configured (typical for a local development build), '
+      'these network analytics are not sent.',
+    );
+    final admob = autoSection.indexOf('Google AdMob');
+    expect(firebaseOff, greaterThanOrEqualTo(0));
+    expect(
+      admob,
+      greaterThan(firebaseOff),
+      reason: 'AdMob disclosure must stay visible when Firebase is off',
+    );
     expect(fullText, contains('do not sell'));
     expect(fullText, contains('Security Policy'));
     expect(fullText, contains(ProjectLinks.securityPolicy));
@@ -60,6 +76,21 @@ void main() {
     expect(
       html.toLowerCase(),
       isNot(contains('open a github issue on the project')),
+    );
+
+    final firebaseOffAt = html.indexOf(
+      'If Firebase is not configured (typical for a local development build)',
+    );
+    final analyticsOffAt = html.indexOf(
+      'these network analytics are not sent.',
+    );
+    final admobAt = html.indexOf('Google AdMob');
+    expect(firebaseOffAt, greaterThanOrEqualTo(0));
+    expect(analyticsOffAt, greaterThan(firebaseOffAt));
+    expect(
+      admobAt,
+      greaterThan(analyticsOffAt),
+      reason: 'AdMob disclosure must stay visible when Firebase is off',
     );
   });
 
