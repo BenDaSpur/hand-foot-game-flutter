@@ -32,6 +32,20 @@ void main() {
     expect(fullText, contains('Vercel'));
     expect(fullText, contains('GitHub'));
     expect(fullText, contains('AdMob'));
+    final autoSection = PrivacyPolicyContent.sections
+        .firstWhere((s) => s.title == 'Information collected automatically')
+        .body;
+    final firebaseOff = autoSection.indexOf(
+      'If Firebase is not configured (typical for a local development build), '
+      'these network analytics are not sent.',
+    );
+    final admob = autoSection.indexOf('Google AdMob');
+    expect(firebaseOff, greaterThanOrEqualTo(0));
+    expect(
+      admob,
+      greaterThan(firebaseOff),
+      reason: 'AdMob disclosure must stay visible when Firebase is off',
+    );
     expect(fullText, contains('do not sell'));
     expect(fullText, contains('Security Policy'));
     expect(fullText, contains(ProjectLinks.securityPolicy));

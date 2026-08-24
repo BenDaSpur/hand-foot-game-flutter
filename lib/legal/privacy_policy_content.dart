@@ -4,7 +4,7 @@ import '../config/project_links.dart';
 /// https://playhandfoot.com/privacy.html
 abstract final class PrivacyPolicyContent {
   static const String title = 'Privacy Policy';
-  static const String lastUpdated = 'August 21, 2026';
+  static const String lastUpdated = 'August 24, 2026';
   static const String website = 'https://playhandfoot.com';
   static const String publicUrl = '$website/privacy.html';
 
@@ -50,14 +50,15 @@ abstract final class PrivacyPolicyContent {
           '• Firebase Analytics events (for example app start, game created, game '
           'joined). Google may process device and network metadata such as '
           'approximate location derived from IP address, browser type, and similar '
-          'technical data as described in Google’s privacy policy.\n'
-          '• On native iOS and Android apps, Google AdMob may collect a device '
+          'technical data as described in Google’s privacy policy.\n\n'
+          'If Firebase is not configured (typical for a local development build), '
+          'these network analytics are not sent.\n\n'
+          'On native iOS and Android apps, Google AdMob may collect a device '
           'advertising identifier, IP address, approximate location, device and '
           'ad interaction data, and similar technical information in order to '
-          'show ads. This does not apply to playhandfoot.com in a browser or as '
-          'a progressive web app.\n\n'
-          'If Firebase is not configured (typical for a local development build), '
-          'these network analytics are not sent.',
+          'show ads. That collection happens when native ads are enabled, even if '
+          'Firebase is not configured. This does not apply to playhandfoot.com in '
+          'a browser or as a progressive web app.',
     ),
     PrivacyPolicySection(
       title: 'Information stored on your device',

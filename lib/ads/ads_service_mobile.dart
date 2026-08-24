@@ -14,6 +14,7 @@ class MobileAdsService extends AdsService {
   bool _initialized = false;
   bool _initializing = false;
   bool _sdkReady = false;
+  bool _sdkStarting = false;
   bool _canRequestAds = false;
   bool _privacyOptionsRequired = false;
   bool _interstitialLoadInFlight = false;
@@ -36,11 +37,7 @@ class MobileAdsService extends AdsService {
       await _loadPersistedCooldown();
       await _gatherConsent();
       await _refreshConsentFlags();
-      if (_canRequestAds) {
-        await MobileAds.instance.initialize();
-        _sdkReady = true;
-        preloadInterstitial();
-      }
+      await _ensureSdkStarted();
       _initialized = true;
       notifyListeners();
     } catch (e) {
@@ -52,6 +49,17 @@ class MobileAdsService extends AdsService {
 
   Future<void> _gatherConsent() async {
     final completer = Completer<void>();
+    var timedOut = false;
+
+    void finishConsent() {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+      if (timedOut) {
+        unawaited(_applyLateConsent());
+      }
+    }
+
     try {
       ConsentInformation.instance.requestConsentInfoUpdate(
         ConsentRequestParameters(),
@@ -63,32 +71,64 @@ class MobileAdsService extends AdsService {
                 '${formError.message}',
               );
             }
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
+            finishConsent();
           });
         },
         (FormError error) {
           DebugLogger.warning(
             'UMP consent update failed ${error.errorCode}: ${error.message}',
           );
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
+          finishConsent();
         },
       );
     } catch (e) {
       DebugLogger.warning('UMP consent request failed: $e');
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
+      finishConsent();
     }
     await completer.future.timeout(
       AdsConfig.consentGatherTimeout,
       onTimeout: () {
+        timedOut = true;
         DebugLogger.warning('UMP consent timed out');
       },
     );
+  }
+
+  Future<void> _applyLateConsent() async {
+    try {
+      final couldRequest = _canRequestAds;
+      final sdkReady = _sdkReady;
+      final privacyRequired = _privacyOptionsRequired;
+      await _refreshConsentFlags();
+      await _ensureSdkStarted();
+      if (!_initialized) {
+        return;
+      }
+      if (couldRequest == _canRequestAds &&
+          sdkReady == _sdkReady &&
+          privacyRequired == _privacyOptionsRequired) {
+        return;
+      }
+      notifyListeners();
+    } catch (e) {
+      DebugLogger.warning('Late UMP consent handling failed: $e');
+    }
+  }
+
+  Future<void> _ensureSdkStarted() async {
+    if (_sdkReady || _sdkStarting || !_canRequestAds) {
+      return;
+    }
+    _sdkStarting = true;
+    try {
+      await MobileAds.instance.initialize();
+      _sdkReady = true;
+      preloadInterstitial();
+    } catch (e) {
+      DebugLogger.warning('Mobile Ads SDK init failed: $e');
+    } finally {
+      _sdkStarting = false;
+    }
   }
 
   Future<void> _refreshConsentFlags() async {
@@ -271,11 +311,7 @@ class MobileAdsService extends AdsService {
       });
       await completer.future;
       await _refreshConsentFlags();
-      if (_canRequestAds && !_sdkReady) {
-        await MobileAds.instance.initialize();
-        _sdkReady = true;
-        preloadInterstitial();
-      }
+      await _ensureSdkStarted();
       notifyListeners();
     } catch (e) {
       DebugLogger.warning('Privacy options failed: $e');
@@ -287,21 +323,36 @@ class MobileAdsService extends AdsService {
     if (!isBannerAvailable) {
       return const SizedBox.shrink();
     }
-    return _MobileMenuBanner(adUnitId: AdsConfig.bannerUnitId);
+    return MobileMenuBanner(adUnitId: AdsConfig.bannerUnitId);
   }
 }
 
-class _MobileMenuBanner extends StatefulWidget {
-  const _MobileMenuBanner({required this.adUnitId});
+/// Test seams so widget tests can skip AdMob platform channels.
+@visibleForTesting
+class MobileMenuBannerDebug {
+  static Future<AdSize?> Function(int width)? resolveSize;
+  static Future<void> Function(BannerAd ad)? loadAd;
+
+  static void reset() {
+    resolveSize = null;
+    loadAd = null;
+  }
+}
+
+/// Anchored menu banner used by [MobileAdsService.buildBanner].
+@visibleForTesting
+class MobileMenuBanner extends StatefulWidget {
+  const MobileMenuBanner({super.key, required this.adUnitId});
 
   final String adUnitId;
 
   @override
-  State<_MobileMenuBanner> createState() => _MobileMenuBannerState();
+  State<MobileMenuBanner> createState() => _MobileMenuBannerState();
 }
 
-class _MobileMenuBannerState extends State<_MobileMenuBanner> {
+class _MobileMenuBannerState extends State<MobileMenuBanner> {
   BannerAd? _banner;
+  BannerAd? _pendingBanner;
   bool _loaded = false;
   bool _loadInFlight = false;
 
@@ -309,6 +360,13 @@ class _MobileMenuBannerState extends State<_MobileMenuBanner> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _loadAd();
+  }
+
+  void _clearInFlight(BannerAd? ad) {
+    if (ad != null && identical(_pendingBanner, ad)) {
+      _pendingBanner = null;
+    }
+    _loadInFlight = false;
   }
 
   Future<void> _loadAd() async {
@@ -319,19 +377,26 @@ class _MobileMenuBannerState extends State<_MobileMenuBanner> {
     try {
       final width = MediaQuery.sizeOf(context).width.truncate();
       if (width <= 0) {
+        _loadInFlight = false;
         return;
       }
       AdSize? size;
       try {
-        size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
+        final resolveSize = MobileMenuBannerDebug.resolveSize;
+        size = resolveSize != null
+            ? await resolveSize(width)
+            : await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
       } catch (e) {
         DebugLogger.warning('Adaptive banner size failed: $e');
+        _loadInFlight = false;
         return;
       }
       if (!mounted) {
+        _loadInFlight = false;
         return;
       }
       if (size == null) {
+        _loadInFlight = false;
         return;
       }
 
@@ -341,18 +406,26 @@ class _MobileMenuBannerState extends State<_MobileMenuBanner> {
         request: const AdRequest(),
         listener: BannerAdListener(
           onAdLoaded: (ad) {
+            final loaded = ad as BannerAd;
+            _clearInFlight(loaded);
             if (!mounted) {
-              ad.dispose();
+              loaded.dispose();
               return;
             }
+            final previous = _banner;
             setState(() {
-              _banner = ad as BannerAd;
+              _banner = loaded;
               _loaded = true;
             });
+            if (previous != null && !identical(previous, loaded)) {
+              previous.dispose();
+            }
           },
           onAdFailedToLoad: (ad, error) {
             DebugLogger.debug('Banner failed to load: $error');
-            ad.dispose();
+            final failed = ad as BannerAd;
+            _clearInFlight(failed);
+            failed.dispose();
             if (mounted) {
               setState(() {
                 _loaded = false;
@@ -362,24 +435,32 @@ class _MobileMenuBannerState extends State<_MobileMenuBanner> {
           },
         ),
       );
+      _pendingBanner = banner;
       try {
-        await banner.load();
+        final loadAd = MobileMenuBannerDebug.loadAd;
+        if (loadAd != null) {
+          await loadAd(banner);
+        } else {
+          await banner.load();
+        }
       } catch (e) {
         DebugLogger.warning('Banner load threw: $e');
         banner.dispose();
+        _clearInFlight(banner);
         return;
       }
-      if (!mounted) {
-        banner.dispose();
-        return;
-      }
-    } finally {
+      // load() returning does not mean the load callback ran. Keep
+      // _loadInFlight true until onAdLoaded / onAdFailedToLoad.
+    } catch (e) {
+      DebugLogger.warning('Banner load failed: $e');
       _loadInFlight = false;
     }
   }
 
   @override
   void dispose() {
+    _pendingBanner?.dispose();
+    _pendingBanner = null;
     _banner?.dispose();
     _banner = null;
     super.dispose();
