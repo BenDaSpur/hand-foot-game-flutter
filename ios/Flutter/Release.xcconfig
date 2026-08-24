@@ -3,3 +3,5 @@
 // No sample AdMob app ID. Release archives need a real app ID:
 //   ADMOB_IOS_APP_ID = ca-app-pub-8788020871095245~YOUR_APP
 // or pass it to xcodebuild. See docs/ADMOB.md.
+// google_mobile_ads 9.1.0 imports GoogleMobileAds_Beta.h (private/non-modular).
+CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES

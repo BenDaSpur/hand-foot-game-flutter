@@ -31,7 +31,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+build/
 
 # Flutter SDK clone used by Vercel install step (scripts/vercel_build.sh)
 /flutter/
