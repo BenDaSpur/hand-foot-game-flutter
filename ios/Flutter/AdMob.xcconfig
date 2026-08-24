@@ -1,3 +1,4 @@
-// Google sample AdMob app ID for debug and profile. Release does not include
-// this fallback; set ADMOB_IOS_APP_ID when archiving (see docs/ADMOB.md).
+// Default AdMob iOS app ID (Google sample). Included by Debug, Profile, and
+// Release so GADApplicationIdentifier is never empty. Override production with
+// ios/Flutter/AdMob.release.xcconfig (see docs/ADMOB.md).
 ADMOB_IOS_APP_ID = ca-app-pub-3940256099942544~1458002511

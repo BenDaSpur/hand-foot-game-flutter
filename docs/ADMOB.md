@@ -38,10 +38,20 @@ not flagged for invalid traffic.
 
 Android sets `com.google.android.gms.ads.APPLICATION_ID` in
 `AndroidManifest.xml` from the Gradle property `ADMOB_ANDROID_APP_ID`. iOS
-sets `GADApplicationIdentifier` from `ADMOB_IOS_APP_ID`. Debug and profile
-default to Google sample app IDs. Release builds require a real app ID
-(`-PADMOB_ANDROID_APP_ID=...` / `ADMOB_IOS_APP_ID=...`), or the SDK will not
-serve production ads.
+sets `GADApplicationIdentifier` from `ADMOB_IOS_APP_ID`. Debug, profile, and
+Release default to Google's sample iOS app ID via `ios/Flutter/AdMob.xcconfig`
+so the Mobile Ads SDK never launches with an empty ID (that aborts the process
+with `GADApplicationVerifyPublisherInitializedCorrectly`).
+
+For production ads on TestFlight / App Store, create an iOS app in AdMob and
+put its app ID in `ios/Flutter/AdMob.release.xcconfig` (gitignored):
+
+```
+ADMOB_IOS_APP_ID = ca-app-pub-8788020871095245~YOUR_IOS_APP
+```
+
+Then archive again (`flutter build ipa`). `--dart-define` only overrides **unit**
+IDs, not `GADApplicationIdentifier`.
 
 Release Dart builds use the production unit IDs above. Override per platform
 only if you later create separate Android/iOS units:
@@ -65,10 +75,8 @@ Android app ID override at Gradle time (required for release):
 Store CI can set the same value as secret `ADMOB_ANDROID_APP_ID` (`ORG_GRADLE_PROJECT_ADMOB_ANDROID_APP_ID`). Debug/profile keep the Google sample app ID if the property is omitted.
 
 iOS app ID: `Info.plist` reads `GADApplicationIdentifier` from
-`ADMOB_IOS_APP_ID`. Debug and profile set the Google sample ID via
-`ios/Flutter/AdMob.xcconfig`. Release archives do not include that fallback —
-pass a real `ADMOB_IOS_APP_ID` to `xcodebuild` or set it in the Release
-configuration.
+`ADMOB_IOS_APP_ID`. All configurations include `AdMob.xcconfig` (sample ID).
+Override Release with `ios/Flutter/AdMob.release.xcconfig` as above.
 
 AdMob app and unit IDs are public in the binary. Do not put them in `.env`.
 

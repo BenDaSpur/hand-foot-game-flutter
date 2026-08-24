@@ -1,7 +1,9 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
-// No sample AdMob app ID. Release archives need a real app ID:
-//   ADMOB_IOS_APP_ID = ca-app-pub-8788020871095245~YOUR_APP
-// or pass it to xcodebuild. See docs/ADMOB.md.
+#include "AdMob.xcconfig"
+// Optional production override (gitignored). Without it, Release uses the
+// Google sample app ID so GADApplicationIdentifier is never empty — an empty
+// value makes the Mobile Ads SDK abort on launch.
+#include? "AdMob.release.xcconfig"
 // google_mobile_ads 9.1.0 imports GoogleMobileAds_Beta.h (private/non-modular).
 CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES
