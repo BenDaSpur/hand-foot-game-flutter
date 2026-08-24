@@ -1,0 +1,44 @@
+# Dependabot version updates for Dart/Flutter (pub) and GitHub Actions.
+# Pub is a first-class ecosystem; no enable-beta-ecosystems flag is required.
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      dart-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Skip only the known-bad FlutterFire releases. Later compatible
+      # and security updates can still be proposed.
+      - dependency-name: "firebase_core"
+        versions: ["4.12.0"]
+      - dependency-name: "cloud_firestore"
+        versions: ["6.7.0"]
+      - dependency-name: "firebase_auth"
+        versions: ["6.5.5"]
+      - dependency-name: "firebase_analytics"
+        versions: ["12.4.4"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -4,7 +4,7 @@ To ensure code quality and prevent direct pushes to main branches, set up branch
 
 ## Automated Setup
 
-The repository includes a GitHub Action (`.github/workflows/setup-branch-protection.yml`) that automatically configures branch protection when code is pushed to main/master branches.
+The repository includes a GitHub Action (`.github/workflows/setup-branch-protection.yml`) that *attempts* to configure branch protection when that workflow file is pushed to main. The default `GITHUB_TOKEN` only has read permissions and no administration scope, so the job logs `Resource not accessible by integration` and does not change live rules. Configure protection in the GitHub UI (below), or run the workflow with an admin PAT.
 
 ## Manual Setup (Repository Admin)
 
@@ -29,9 +29,9 @@ main
 - ✅ **Require status checks to pass before merging**
   - ✅ Require branches to be up to date before merging
   - Required status checks:
-    - `quality-checks`
-    - `e2e-tests`
-    - `claude-review`
+    - `quality-checks / quality-checks` (reusable workflow job name used by live protection)
+    - `e2e-tests` (optional)
+    - `claude-review` (optional)
 
 - ❌ **Require conversation resolution before merging** (optional)
 - ❌ **Require signed commits** (optional)

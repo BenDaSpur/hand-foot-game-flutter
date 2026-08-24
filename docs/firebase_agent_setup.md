@@ -78,7 +78,7 @@ Node analytics scripts prefer **service account** auth (`hand-foot-flutter-fireb
 
 | Field | Collections | Values |
 |-------|-------------|--------|
-| `appVersion` | all | e.g. `1.0.0` (from package metadata at runtime) |
+| `appVersion` | all | e.g. `2026.8.22+1` (from package metadata at runtime) |
 | `botAiVersion` | all | e.g. `2026.07-hand-foot-rush` — bump when bot AI changes |
 | `drawSource` | `game_events`, `bot_decisions` | `deck`, `discard`, `unlock` |
 | `actionCount`, `drawSources`, `meldsCreated`, `discardedRank` | `turn_summaries` | per completed turn |

@@ -1023,6 +1023,103 @@ class BotMeldAnalyzer {
     return []; // No combination meets requirement
   }
 
+  /// Greedy disjoint packing when the limited combination search misses a
+  /// legal play-down. Uses identity-then-value removal so overlapping meld
+  /// candidates cannot double-spend the same card.
+  List<List<PlayingCard>> findGreedyPlayDownCombination(
+    Player bot,
+    GameController controller,
+    int requirement,
+  ) {
+    final possibleMelds = getPossibleMelds(bot, controller);
+    if (possibleMelds.isEmpty) {
+      return [];
+    }
+
+    final sorted = List<List<PlayingCard>>.from(possibleMelds)
+      ..sort((a, b) {
+        final valueA = calculateTotalMeldValue([a]);
+        final valueB = calculateTotalMeldValue([b]);
+        if (valueB != valueA) {
+          return valueB.compareTo(valueA);
+        }
+        return b.length.compareTo(a.length);
+      });
+
+    final remaining = List<PlayingCard>.from(bot.currentHand);
+    final chosen = <List<PlayingCard>>[];
+    for (final meld in sorted) {
+      if (!_removeMeldFromRemaining(remaining, meld)) {
+        continue;
+      }
+      chosen.add(meld);
+      if (calculateTotalMeldValue(chosen) >= requirement) {
+        return chosen;
+      }
+    }
+    return [];
+  }
+
+  /// True when [combination] can be taken from [hand] without reuse.
+  bool combinationFitsHand(
+    List<PlayingCard> hand,
+    List<List<PlayingCard>> combination,
+  ) {
+    final remaining = List<PlayingCard>.from(hand);
+    for (final meld in combination) {
+      if (!_removeMeldFromRemaining(remaining, meld)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _removeMeldFromRemaining(
+    List<PlayingCard> remaining,
+    List<PlayingCard> meld,
+  ) {
+    final takenIndexes = <int>[];
+    for (final card in meld) {
+      var index = _firstUnusedIndex(
+        remaining,
+        takenIndexes,
+        (candidate) => identical(candidate, card),
+      );
+      if (index < 0) {
+        index = _firstUnusedIndex(
+          remaining,
+          takenIndexes,
+          (candidate) => candidate == card,
+        );
+      }
+      if (index < 0) {
+        return false;
+      }
+      takenIndexes.add(index);
+    }
+    takenIndexes.sort((a, b) => b.compareTo(a));
+    for (final index in takenIndexes) {
+      remaining.removeAt(index);
+    }
+    return true;
+  }
+
+  int _firstUnusedIndex(
+    List<PlayingCard> remaining,
+    List<int> takenIndexes,
+    bool Function(PlayingCard candidate) matches,
+  ) {
+    for (var i = 0; i < remaining.length; i++) {
+      if (takenIndexes.contains(i)) {
+        continue;
+      }
+      if (matches(remaining[i])) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   /// Calculate efficiency for play-down meld selection
   /// Higher efficiency = better choice for conservative play-down
   double _calculateMeldPlayDownEfficiency(

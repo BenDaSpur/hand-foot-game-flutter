@@ -119,6 +119,26 @@ To test with production Firebase locally, use [`scripts/setup_local_firebase.sh`
 - The web app polls `version.json` and shows a **Reload** banner when a newer deploy is detected.
 - Flutter's service worker still handles offline caching and asset hash upgrades.
 
+## App version
+
+The bump workflow stamps `version` in [`pubspec.yaml`](../pubspec.yaml) onto the **PR branch** when that PR is about to merge: auto-merge is enabled, or the PR is added to a GitHub merge queue.
+
+GitHub's merge queue cannot inject commits into its temporary `gh-readonly-queue/` snapshot, and `GITHUB_TOKEN` cannot push through protected `main`. Pushing to the unprotected PR head works with the workflow's `contents: write` permission and does not need **Allow GitHub Actions to create and approve pull requests**.
+
+Format: **`YYYY.M.D+N`** (UTC calendar date, no leading zeros).
+
+- First merge on 22 Aug 2026 → `2026.8.22+1`
+- Second merge that same UTC day → `2026.8.22+2`
+- First merge the next UTC day → `2026.8.23+1`
+
+The next number is computed from `main`'s current `pubspec.yaml`, so two PRs do not invent versions while you work. If a second PR is still open after the first merges, enable auto-merge (or re-enqueue) so it is restamped against the new `main`.
+
+Use **Enable auto-merge** on feature PRs (the repo already allows it). A GitHub merge queue is optional; if you turn on **Require merge queue**, keep CI listening for `merge_group` (already in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) and use a batch size of 1 so two PRs do not share one version.
+
+Do not set the version by hand in feature PRs. Bump jobs run one at a time and skip stamping if another open PR already has that `YYYY.M.D+N`. After that PR merges, enable auto-merge (or re-enqueue) so this one restamps from the new `main`. After the bot pushes a stamp, it dispatches CI on that commit because `GITHUB_TOKEN` pushes do not start `pull_request` workflows.
+
+Flutter maps the part before `+` to the version name and `N` to the build number. The in-app session menu and analytics `appVersion` field show the full `YYYY.M.D+N` string.
+
 ## Native releases (Android, Windows, macOS, Linux)
 
 Desktop and mobile builds are published via GitHub Releases. See [`.github/workflows/build-and-release.yml`](../.github/workflows/build-and-release.yml).

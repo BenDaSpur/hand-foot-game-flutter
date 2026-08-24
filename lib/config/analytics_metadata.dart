@@ -1,5 +1,7 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'build_version.dart';
+
 /// Analytics version metadata loaded at runtime from package info.
 class AnalyticsMetadata {
   static String? _appVersion;
@@ -8,7 +10,10 @@ class AnalyticsMetadata {
   static Future<void> initialize() async {
     try {
       final info = await PackageInfo.fromPlatform();
-      _appVersion = info.version;
+      _appVersion = BuildVersion.formatAppVersion(
+        version: info.version,
+        buildNumber: info.buildNumber,
+      );
     } catch (_) {
       _appVersion = null;
     }
