@@ -1,3 +1,4 @@
+import '../config/game_config.dart';
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/meld.dart';
@@ -219,6 +220,38 @@ class BotDiscardAnalyzer {
           BotConfig.liveTopKeyHoldExtraPenalty;
     }
 
+    // Contestable farm: never toss 4–8/K/A if the bot cannot take this top.
+    // Production humans unlocked exactly those ranks after bot discards.
+    final pileSize = gameState.discardPile.length;
+    final contestable = pileSize >= BotConfig.postPlayDownHardTakePileSize;
+    final top = gameState.topDiscard;
+    final matchingTopNaturals = top == null || top.isWild || top.isThree
+        ? 0
+        : bot.currentHand.where((c) => !c.isWild && c.rank == top.rank).length;
+    final canUnlock =
+        bot.hasPlayedDown &&
+        !gameState.discardPileFrozen &&
+        matchingTopNaturals >= GameConfig.minNaturalCardsForMeld;
+    if (contestable &&
+        !canUnlock &&
+        !card.isWild &&
+        !card.isThree &&
+        _isUnlockFeedRank(card.rank)) {
+      score -= BotConfig.contestableUnlockFeedPenalty;
+    }
+
+    final wantsPile =
+        bot.hasPlayedDown &&
+        !bot.hasPickedUpFoot &&
+        pileSize >= BotConfig.pileFarmForcePlayDownPileSize;
+    if (wantsPile &&
+        protected != null &&
+        protected.contains(card.rank) &&
+        !card.isThree &&
+        !card.isWild) {
+      score -= BotConfig.liveTopKeyHoldExtraPenalty;
+    }
+
     return score;
   }
 
@@ -368,6 +401,13 @@ class BotDiscardAnalyzer {
   /// Ranks humans discard most while trimming large hands (analytics).
   bool _isHumanPreferredDiscardRank(CardRank rank) {
     return BotMeldAnalyzer.isHumanUnlockKeyRank(rank);
+  }
+
+  /// Ranks humans used as unlock tops after bot discards (4–8 plus K/A).
+  bool _isUnlockFeedRank(CardRank rank) {
+    return BotMeldAnalyzer.isHumanUnlockKeyRank(rank) ||
+        rank == CardRank.king ||
+        rank == CardRank.ace;
   }
 
   /// Check if a card can be added to a meld.

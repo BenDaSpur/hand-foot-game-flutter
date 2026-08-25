@@ -1,3 +1,4 @@
+import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../models/player.dart';
 import '../bot_decision.dart';
@@ -69,11 +70,13 @@ class TurnPlanner {
       toxicThrees: skipThrees,
     );
 
+    // Spend keys while melding to empty the hand pile, but keep them on
+    // discard so a 4-card leftover does not toss the live unlock pair.
     final forceSpendKeys =
         gameState.discardPileFrozen ||
         liveTop == null ||
         (canUnlock && goOutThisTurn) ||
-        emptyHandPile;
+        (emptyHandPile && context.turnPhase != TurnPhase.discard);
 
     final candidates = _generator.generate(
       bot,
@@ -91,6 +94,12 @@ class TurnPlanner {
         chosen: 'fallback',
         pickupThrees: pickupThrees,
         threeDumpTurns: threeDumpTurns,
+        emptyHandPile: emptyHandPile,
+        forceSpendKeys: forceSpendKeys,
+        leftoverUnmeldable: emptyHandPile,
+        candidateKinds: const [],
+        liveTop: liveTop?.name,
+        humanCanUnlock: humanCanUnlock,
       );
       return _withAnalytics(_fallback(context.turnPhase), lastAnalytics);
     }
@@ -121,6 +130,16 @@ class TurnPlanner {
     }
 
     final chosen = best?.candidate ?? candidates.first;
+    final emptyingKinds = {
+      LegalActionKind.addToMeld,
+      LegalActionKind.createMeld,
+      LegalActionKind.maximalBurst,
+      LegalActionKind.playDown,
+    };
+    final leftoverUnmeldable =
+        emptyHandPile &&
+        context.turnPhase == TurnPhase.meld &&
+        !candidates.any((candidate) => emptyingKinds.contains(candidate.kind));
     lastAnalytics = _analytics(
       couldUnlock: canUnlock,
       keyCount: keyCount,
@@ -128,6 +147,14 @@ class TurnPlanner {
       chosen: chosen.kind.name,
       pickupThrees: pickupThrees,
       threeDumpTurns: threeDumpTurns,
+      emptyHandPile: emptyHandPile,
+      forceSpendKeys: forceSpendKeys,
+      leftoverUnmeldable: leftoverUnmeldable,
+      candidateKinds: candidates
+          .map((candidate) => candidate.kind.name)
+          .toList(),
+      liveTop: liveTop?.name,
+      humanCanUnlock: humanCanUnlock,
     );
     return _withAnalytics(chosen.decision, lastAnalytics);
   }
@@ -143,6 +170,16 @@ class TurnPlanner {
   }) {
     if (context.turnPhase == TurnPhase.draw) {
       if (canUnlock && !goOutThisTurn && !skipThrees) {
+        final take = candidates
+            .where((candidate) => candidate.kind == LegalActionKind.drawDiscard)
+            .toList();
+        if (take.isNotEmpty) {
+          return take;
+        }
+      }
+      // Leftover hand-pile trap: if the bot can legally unlock, take the
+      // farm instead of drawing +2 / discarding −1 forever.
+      if (canUnlock && emptyHandPile) {
         final take = candidates
             .where((candidate) => candidate.kind == LegalActionKind.drawDiscard)
             .toList();
@@ -206,6 +243,12 @@ class TurnPlanner {
     required String chosen,
     required int pickupThrees,
     required int threeDumpTurns,
+    required bool emptyHandPile,
+    required bool forceSpendKeys,
+    required bool leftoverUnmeldable,
+    required List<String> candidateKinds,
+    required String? liveTop,
+    required bool humanCanUnlock,
   }) {
     return {
       'couldUnlock': couldUnlock,
@@ -214,6 +257,12 @@ class TurnPlanner {
       'chosenKind': chosen,
       'pickupThrees': pickupThrees,
       'threeDumpTurns': threeDumpTurns,
+      'emptyHandPile': emptyHandPile,
+      'forceSpendKeys': forceSpendKeys,
+      'leftoverUnmeldable': leftoverUnmeldable,
+      'candidateKinds': candidateKinds,
+      if (liveTop != null) 'liveTop': liveTop,
+      'humanCanUnlock': humanCanUnlock,
     };
   }
 
@@ -221,11 +270,23 @@ class TurnPlanner {
     BotDecision decision,
     Map<String, dynamic> analytics,
   ) {
+    final discarded = _discardedCardFields(decision);
     return BotDecision(
       action: decision.action,
       data: decision.data,
       skipPlayDownCheck: decision.skipPlayDownCheck,
-      analyticsContext: analytics,
+      analyticsContext: {...analytics, ...discarded},
     );
+  }
+
+  Map<String, dynamic> _discardedCardFields(BotDecision decision) {
+    if (decision.action != 'discard') {
+      return const {};
+    }
+    final card = decision.data;
+    if (card is! PlayingCard) {
+      return const {};
+    }
+    return {'discardedRank': card.rank.name, 'discardedCard': card.compactName};
   }
 }

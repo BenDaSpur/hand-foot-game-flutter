@@ -348,8 +348,15 @@ class BotConfig {
   /// Bonus for discarding low ranks (4–8 are top human discard targets)
   static const int humanLowRankDiscardBonus = 25;
 
+  /// After play-down, do not start another meld rank once this many exist
+  /// without a book (analytics: 4–6 dirty 3-card piles, then noKey leftovers).
+  static const int handPileNewMeldCap = 4;
+
+  /// Penalty for discarding 4–8/K/A onto a contestable pile the bot cannot take.
+  static const int contestableUnlockFeedPenalty = 90;
+
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.08-planner-pressure';
+  static const String botAiVersion = '2026.08-hand-pile-empty';
 
   // Prevent instantiation
   BotConfig._();

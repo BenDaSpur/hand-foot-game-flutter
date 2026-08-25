@@ -169,12 +169,20 @@ class LegalActionGenerator {
         preferLarger: true,
       );
       if (best.isNotEmpty && BotEndGameManager.isSafeCreateMeld(bot, best)) {
-        actions.add(
-          LegalCandidate(
-            decision: BotDecision(action: 'createMeld', data: best),
-            kind: LegalActionKind.createMeld,
-          ),
-        );
+        final emptiesHand = best.length >= bot.currentHand.length - 1;
+        final capNewMeld =
+            !bot.hasPickedUpFoot &&
+            bot.melds.length >= BotConfig.handPileNewMeldCap &&
+            bot.bookCount == 0 &&
+            !emptiesHand;
+        if (!capNewMeld) {
+          actions.add(
+            LegalCandidate(
+              decision: BotDecision(action: 'createMeld', data: best),
+              kind: LegalActionKind.createMeld,
+            ),
+          );
+        }
       }
     }
 

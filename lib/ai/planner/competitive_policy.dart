@@ -20,7 +20,10 @@ class CompetitivePolicy {
   static const int contestablePileSize = 6;
 
   /// Play down even on a quiet pile once the hand is this large.
-  static const int latePlayDownHandSize = 14;
+  static const int latePlayDownHandSize = 12;
+
+  /// Pile large enough that an on-foot bot should take despite buried 3s.
+  static const int hugeFarmPileSize = 20;
 
   /// How many recent discard cards (besides the top) seed live key ranks.
   static const int recentDiscardLookback = 8;
@@ -207,6 +210,12 @@ class CompetitivePolicy {
     if (pickupThrees <= usefulPickupThreeCount) {
       return false;
     }
+    // Session 17874536912221222: skipped a 27-card pile on foot with keys
+    // because four extras were 3s. The farm is worth the dump once huge.
+    if (bot.hasPickedUpFoot &&
+        gameState.discardPile.length >= hugeFarmPileSize) {
+      return false;
+    }
     final pickupRedThrees = extras.where((card) => card.isRedThree).length;
     final handThrees = bot.currentHand.where((card) => card.isThree).length;
     final dumpTurns = handThrees + pickupThrees;
@@ -313,20 +322,22 @@ class CompetitivePolicy {
       return false;
     }
 
+    // Any leftover in the foot-completion window empties — do not sit on
+    // 1–5 cards "holding strategically" (seeds 194022 / 956319).
+    if (handSize <= BotConfig.handPileFootCompletionMaxHand) {
+      return true;
+    }
+
+    // Bookless bots empty through 8 even on a thin pile. Requiring a fat
+    // farm left 6–8 card hands stalling while humans unlocked 25+ cards.
+    if (bot.bookCount == 0 &&
+        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
+      return true;
+    }
+
     final hasBook = bot.bookCount >= 1;
-    final farm = fatDiscardFarm(gameState) && bot.bookCount == 0;
     final opponentFoot = opponentOnFoot(gameState, bot.id);
 
-    if (handSize <= BotConfig.handToFootCriticalHandSize &&
-        (hasBook || farm || opponentFoot)) {
-      return true;
-    }
-    if (handSize <= BotConfig.handPileFootCompletionMaxHand && hasBook) {
-      return true;
-    }
-    if (farm && handSize <= BotConfig.booklessFarmForceFootMaxHand) {
-      return true;
-    }
     if (opponentFoot &&
         hasBook &&
         handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
@@ -357,8 +368,7 @@ class CompetitivePolicy {
         fatDiscardFarm(gameState)) {
       return true;
     }
-    if (humanAlreadyPlayedDown(gameState, bot.id) &&
-        gameState.discardPile.length >= contestablePileSize) {
+    if (humanAlreadyPlayedDown(gameState, bot.id)) {
       return true;
     }
     if (gameState.round >= 3 &&
