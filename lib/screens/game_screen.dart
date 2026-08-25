@@ -2830,8 +2830,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _analyticsSessionId == null) {
       return;
     }
-    final gameState =
-        _gameController?.gameState ?? ref.read(currentGameStateProvider);
+    // dispose() cannot read Riverpod providers; use the cached controller.
+    GameState? gameState = _gameController?.gameState;
+    if (gameState == null && !_disposed) {
+      gameState = ref.read(currentGameStateProvider);
+    }
     if (gameState == null) {
       return;
     }
