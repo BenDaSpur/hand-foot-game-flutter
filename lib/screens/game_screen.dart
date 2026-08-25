@@ -80,9 +80,24 @@ class GameScreen extends ConsumerStatefulWidget {
 
 class _GameScreenState extends ConsumerState<GameScreen>
     with WidgetsBindingObserver {
-  // Use providers instead of local state - accessed via ref
-  GameController? get _gameController =>
-      ref.read(gameControllerProvider)?.controller;
+  // Cached so dispose/abandon can read game state without Riverpod.
+  GameController? _cachedController;
+
+  GameController? get _gameController {
+    if (_disposed) {
+      return _cachedController;
+    }
+    final controller = ref.read(gameControllerProvider)?.controller;
+    if (controller != null) {
+      _cachedController = controller;
+    }
+    return controller ?? _cachedController;
+  }
+
+  void _bindGameController(GameController controller) {
+    _cachedController = controller;
+  }
+
   EnhancedBotAI get _botAI => ref.read(botAIProvider);
 
   /// Turn owner read straight off the controller, which is the same source
@@ -338,6 +353,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ref
             .read(gameControllerProvider.notifier)
             .setController(newController, eventBus);
+        _bindGameController(newController);
 
         // Restore saved bot personalities or assign new ones
         if (botPersonalities.isNotEmpty) {
@@ -376,6 +392,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       ref
           .read(gameControllerProvider.notifier)
           .setController(widget.gameController!, eventBus);
+      _bindGameController(widget.gameController!);
       _initializeManagers();
 
       // Continue must restore personalities — autosave previously left them
@@ -501,6 +518,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     // Store in Riverpod provider for reactive access
     controllerNotifier.setController(newController, eventBus);
+    _bindGameController(newController);
 
     // Assign bot personalities from setup settings
     final botAI = ref.read(botAIProvider);
@@ -1119,6 +1137,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ref
             .read(gameControllerProvider.notifier)
             .setController(savedController, eventBus);
+        _bindGameController(savedController);
 
         _initializeManagers();
         _restorePersonalitiesForContinuedGame(savedController);
@@ -2810,8 +2829,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _analyticsSessionId == null) {
       return;
     }
-    final gameState =
-        _gameController?.gameState ?? ref.read(currentGameStateProvider);
+    GameState? gameState = _cachedController?.gameState;
+    if (gameState == null && !_disposed) {
+      gameState = ref.read(currentGameStateProvider);
+    }
     if (gameState == null) {
       return;
     }
@@ -2831,7 +2852,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       return;
     }
     // dispose() cannot read Riverpod providers; use the cached controller.
-    GameState? gameState = _gameController?.gameState;
+    GameState? gameState = _cachedController?.gameState;
     if (gameState == null && !_disposed) {
       gameState = ref.read(currentGameStateProvider);
     }

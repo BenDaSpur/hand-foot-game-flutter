@@ -45,6 +45,12 @@ void main() {
       );
       expect(find.byType(GameScreen), findsOneWidget);
 
+      // Match e2e teardown: init + analytics session must start first.
+      // Immediate dispose skips that path and hides the ref.read crash.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+
       await tester.pumpWidget(
         const ProviderScope(child: MaterialApp(home: SizedBox.shrink())),
       );
