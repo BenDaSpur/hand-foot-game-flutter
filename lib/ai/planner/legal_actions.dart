@@ -169,12 +169,15 @@ class LegalActionGenerator {
         preferLarger: true,
       );
       if (best.isNotEmpty && BotEndGameManager.isSafeCreateMeld(bot, best)) {
-        actions.add(
-          LegalCandidate(
-            decision: BotDecision(action: 'createMeld', data: best),
-            kind: LegalActionKind.createMeld,
-          ),
-        );
+        final emptiesHand = best.length >= bot.currentHand.length - 1;
+        if (!_capsNewHandPileMeld(bot, emptiesHand: emptiesHand)) {
+          actions.add(
+            LegalCandidate(
+              decision: BotDecision(action: 'createMeld', data: best),
+              kind: LegalActionKind.createMeld,
+            ),
+          );
+        }
       }
     }
 
@@ -218,6 +221,9 @@ class LegalActionGenerator {
 
     final usedCards = filtered.expand((meld) => meld).toList();
     final emptiesHand = usedCards.length >= bot.currentHand.length - 1;
+    if (_capsNewHandPileMeld(bot, emptiesHand: emptiesHand)) {
+      return;
+    }
     if (!forceSpendKeys &&
         !emptiesHand &&
         _burnsLiveKeys(bot, liveTop, usedCards: usedCards, allowBook: true)) {
@@ -369,6 +375,15 @@ class LegalActionGenerator {
     return possibleMelds
         .where((meld) => meld.length >= GameConfig.bookSize)
         .toList();
+  }
+
+  /// After play-down, do not open another rank on a bookless hand pile
+  /// unless the meld/burst empties (or leaves one discard).
+  bool _capsNewHandPileMeld(Player bot, {required bool emptiesHand}) {
+    return !bot.hasPickedUpFoot &&
+        bot.melds.length >= BotConfig.handPileNewMeldCap &&
+        bot.bookCount == 0 &&
+        !emptiesHand;
   }
 
   bool _burnsLiveKeys(

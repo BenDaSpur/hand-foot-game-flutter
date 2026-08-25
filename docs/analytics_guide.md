@@ -62,7 +62,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   },
   gameSeed: 123456, // For reproducible game analysis
   appVersion: "2026.8.22+1",
-  botAiVersion: "2026.07-hand-foot-rush",
+  botAiVersion: "2026.08-hand-pile-empty",
   finalScores: [1250, 980, 750],
   winnerId: "player_1",
   sessionDuration: 1800,
@@ -88,9 +88,18 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   decision: "takePile",
   drawSource: "discard",
   appVersion: "2026.8.22+1",
-  botAiVersion: "2026.07-hand-foot-rush",
+  botAiVersion: "2026.08-hand-pile-empty",
+  discardedRank: "five",
+  discardedCard: "5 ♥",
   reasoning: "Pile contains valuable cards for book completion",
   confidence: 0.8,
+  decisionContext: {
+    emptyHandPile: true,
+    leftoverUnmeldable: false,
+    candidateKinds: ["noMeld", "addToMeld"],
+    liveTop: "king",
+    humanCanUnlock: true
+  },
   gameSeed: 123456, // Same seed for reproducible analysis
   gameContext: {
     round: 2,
@@ -110,7 +119,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   playerType: "human",
   drawSource: "deck",  // deck | discard | unlock (when applicable)
   appVersion: "2026.8.22+1",
-  botAiVersion: "2026.07-hand-foot-rush",
+  botAiVersion: "2026.08-hand-pile-empty",
   success: true,
   eventData: {
     cardCount: 5,
@@ -121,9 +130,12 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
 
 ### turn_summaries
 
-> **Not currently written by the client.** Production sessions since mid-2026
-> have empty `turn_summaries` / `decision_outcomes`. Prefer `bot_decisions` +
-> `game_events` for turn-level analysis.
+> Written on `TurnEndedEvent`. Bot discards use action `discard` (also counted
+> as a discard for `decision_outcomes`). Human discards use `discardCard`.
+> Both expose top-level `discardedRank`. Sessions that close the tab are marked
+> `status: abandoned` with `lastProgress` (scores, foot, books) so incomplete
+> games are still analyzable. Round-end `performance_metrics` rows with
+> `recordType: round` snapshot every player.
 >
 > Human `game_events` with `eventType: unlockDiscardPile` nest unlock fields
 > under `eventData.context`: `pileSizeBefore`, `cardsActuallyTaken`, and
@@ -146,7 +158,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
   handSizeAtEnd: 11,
   nextPlayerId: "bot_1",
   appVersion: "2026.8.22+1",
-  botAiVersion: "2026.07-hand-foot-rush"
+  botAiVersion: "2026.08-hand-pile-empty"
 }
 ```
 
@@ -166,7 +178,7 @@ Map<String, dynamic> privacyInfo = AnalyticsConfigService.getPrivacyInfo();
     takerId: "player_1"
   },
   appVersion: "2026.8.22+1",
-  botAiVersion: "2026.07-hand-foot-rush"
+  botAiVersion: "2026.08-hand-pile-empty"
 }
 ```
 

@@ -46,6 +46,7 @@ class _MoveScores {
   static const addToMeldFlat = 40.0;
   static const completeCleanBookAdd = 400.0;
   static const completeDirtyBookAdd = 280.0;
+  static const handPileExtraMeldPenalty = 160.0;
 }
 
 /// Scores legal actions with personality-weighted features.
@@ -100,6 +101,11 @@ class MoveScorer {
           value += _createMeldScore(candidate, bot, weights);
           if (nearFoot) {
             value += _MoveScores.footCreateBonus * weights.footTransition;
+          }
+          if (!bot.hasPickedUpFoot &&
+              bot.melds.length >= BotConfig.handPileNewMeldCap &&
+              bot.bookCount == 0) {
+            value -= _MoveScores.handPileExtraMeldPenalty;
           }
         }
       case LegalActionKind.maximalBurst:

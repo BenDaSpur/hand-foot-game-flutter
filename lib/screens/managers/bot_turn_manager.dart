@@ -276,6 +276,11 @@ class BotTurnManager {
                 context: {
                   ...?decision.analyticsContext,
                   if (decision.data != null) 'data': decision.data.toString(),
+                  if (decision.action == 'discard' &&
+                      decision.data is PlayingCard) ...{
+                    'discardedRank': (decision.data as PlayingCard).rank.name,
+                    'discardedCard': (decision.data as PlayingCard).compactName,
+                  },
                 },
                 gameStateSnapshot: gameStateSnapshot,
               );

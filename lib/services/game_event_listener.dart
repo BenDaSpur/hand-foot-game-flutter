@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../game/events/game_event.dart';
 import '../game/events/game_event_bus.dart';
+import '../models/player.dart';
 import '../utils/debug_logger.dart';
 import 'game_analytics_logger.dart';
 import 'analytics_batcher.dart';
@@ -43,6 +44,9 @@ class GameEventListener {
       _eventBus.subscribeToType<DiscardPileUnlockedEvent>(
         _handleDiscardPileUnlocked,
       ),
+    );
+    _subscriptions.add(
+      _eventBus.subscribeToType<CardDiscardedEvent>(_handleCardDiscarded),
     );
   }
 
@@ -104,6 +108,30 @@ class GameEventListener {
           (sum, card) => sum + card.pointValue,
         ),
         'player_name': event.player?.name ?? 'unknown',
+      },
+    );
+  }
+
+  /// Safety-net discard log for bots (humans already emit discardCard).
+  ///
+  /// Keep [eventType] as `CardDiscarded` so turn tracking is skipped —
+  /// successful bot discards are already recorded from the planner decision.
+  void _handleCardDiscarded(CardDiscardedEvent event) {
+    if (_isDisposed) {
+      return;
+    }
+    final player = event.player;
+    if (player == null || player.type != PlayerType.bot) {
+      return;
+    }
+    GameAnalyticsLogger.logGameEvent(
+      eventType: 'CardDiscarded',
+      playerId: player.id,
+      playerType: player.type,
+      eventData: {
+        'card': event.card.compactName,
+        'cardRank': event.card.rank.name,
+        'player_name': player.name,
       },
     );
   }

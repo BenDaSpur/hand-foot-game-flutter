@@ -172,8 +172,8 @@ void main() {
       expect(botAI.shouldRushHandToFoot(bot, context()), isFalse);
     });
 
-    test('botAiVersion bumped for this analytics fix', () {
-      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
+    test('botAiVersion is hand-pile-empty', () {
+      expect(BotConfig.botAiVersion, '2026.08-hand-pile-empty');
     });
   });
 }

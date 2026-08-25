@@ -33,9 +33,10 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is planner-pressure', () {
-      expect(BotConfig.botAiVersion, '2026.08-planner-pressure');
+    test('botAiVersion is hand-pile-empty', () {
+      expect(BotConfig.botAiVersion, '2026.08-hand-pile-empty');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
+      expect(CompetitivePolicy.latePlayDownHandSize, 12);
     }, tags: ['competitive_planner']);
 
     test(
@@ -202,7 +203,7 @@ void main() {
           _book(CardRank.queen, dirty: true),
         ]);
 
-        _setPile(controller, size: 20, top: CardRank.king);
+        _setPile(controller, size: 16, top: CardRank.king);
         _replaceUnderTopWithThrees(controller, 3);
         controller.gameState.turnPhase = TurnPhase.draw;
         controller.gameState.hasDrawnFromDeck = false;
@@ -539,6 +540,276 @@ void main() {
       },
       tags: ['competitive_planner'],
     );
+
+    test(
+      'bookless leftover of 7 empties even when the pile is thin',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.three),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.three),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 4, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 5, dirty: true),
+          _sizedMeld(CardRank.eight, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 4, dirty: true),
+        ]);
+        _setPile(controller, size: 4, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        expect(bot.bookCount, 0);
+        expect(
+          CompetitivePolicy.shouldEmptyHandPile(bot, controller.gameState),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'noMeld');
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+        expect(decision.analyticsContext?['leftoverUnmeldable'], isTrue);
+        expect(decision.analyticsContext?['liveTop'], 'queen');
+        expect(
+          decision.analyticsContext?['candidateKinds'],
+          contains('noMeld'),
+        );
+        expect(decision.analyticsContext?['humanCanUnlock'], isA<bool>());
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'on foot, takes a huge farm even with four buried 3s',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          ]);
+        bot.melds.add(_book(CardRank.ten, dirty: false));
+        _setPile(controller, size: 27, top: CardRank.seven);
+        _replaceUnderTopWithThrees(controller, 4);
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
+        expect(
+          CompetitivePolicy.shouldSkipUnlockForThrees(
+            bot,
+            controller.gameState,
+          ),
+          isFalse,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'drawFromDiscard');
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'greedy play-down fires below 12 cards once the human is already down',
+      () {
+        bot.hasPlayedDown = false;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+          ]);
+        expect(bot.currentHand.length, 11);
+        human.hasPlayedDown = false;
+        _setPile(controller, size: 4, top: CardRank.nine);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.round = 2;
+
+        expect(
+          CompetitivePolicy.shouldSearchGreedyPlayDown(
+            bot,
+            controller.gameState,
+          ),
+          isFalse,
+        );
+        human.hasPlayedDown = true;
+        expect(
+          CompetitivePolicy.shouldSearchGreedyPlayDown(
+            bot,
+            controller.gameState,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, anyOf('createMeld', 'createMultipleMelds'));
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'freezes a contestable pile with a 3 instead of feeding a five',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.three),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+          ]);
+        bot.melds.add(_book(CardRank.ten, dirty: true));
+        _setPile(controller, size: 18, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.discard;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.discardPileFrozen = false;
+        human.hasPlayedDown = true;
+
+        final discarded = BotDiscardAnalyzer().chooseCardToDiscard(
+          bot,
+          controller.gameState,
+        );
+        expect(discarded.rank, CardRank.three);
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'discard');
+        expect((decision.data as PlayingCard).rank, CardRank.three);
+        expect(decision.analyticsContext?['discardedRank'], 'three');
+        expect(decision.analyticsContext?['liveTop'], 'queen');
+        expect(decision.analyticsContext?['humanCanUnlock'], isTrue);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'does not start meld #5 on a bookless hand pile when a 6-card add exists',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 6, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 3, dirty: true),
+        ]);
+        expect(bot.bookCount, 0);
+        expect(bot.melds.length, 4);
+        _setPile(controller, size: 12, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'addToMeld');
+        final data = decision.data as Map<String, dynamic>;
+        expect(data['meldIndex'], 0);
+        expect((data['card'] as PlayingCard).rank, CardRank.ten);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'does not burst new ranks on a bookless hand pile at the meld cap',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 4, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 3, dirty: true),
+        ]);
+        expect(bot.bookCount, 0);
+        expect(bot.melds.length, BotConfig.handPileNewMeldCap);
+        _setPile(controller, size: 12, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, isNot(equals('createMultipleMelds')));
+        expect(decision.action, isNot(equals('createMeld')));
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'still bursts two new ranks on a bookless hand pile when they empty',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 4, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 3, dirty: true),
+        ]);
+        _setPile(controller, size: 12, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'createMultipleMelds');
+        final melds = decision.data as List<List<PlayingCard>>;
+        expect(melds.length, greaterThanOrEqualTo(2));
+      },
+      tags: ['competitive_planner'],
+    );
   });
 
   group('Production seed snapshots', () {
@@ -716,6 +987,92 @@ void main() {
       expect(controller.drawFromDiscardPile(), isTrue);
       expect(controller.gameState.discardPile.length, 29);
     }, tags: ['competitive_planner']);
+
+    test(
+      'seed 194022: bookless 7-card leftover on pile 29 is leftoverUnmeldable',
+      () {
+        final botAI = EnhancedBotAI(seed: 194022);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final bot = Player(id: '2', name: 'Adaptive', type: PlayerType.bot);
+        final controller = GameController(players: [human, bot], seed: 194022);
+        controller.initializeGame();
+        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+        controller.gameState.currentPlayerIndex = 1;
+
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.three),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 6, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 5, dirty: true),
+          _sizedMeld(CardRank.eight, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 4, dirty: true),
+        ]);
+        _setPile(controller, size: 29, top: CardRank.seven);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        expect(bot.bookCount, 0);
+        expect(
+          CompetitivePolicy.shouldEmptyHandPile(bot, controller.gameState),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+        expect(decision.analyticsContext?['leftoverUnmeldable'], isTrue);
+        expect(decision.analyticsContext?['liveTop'], 'seven');
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'seed 956319: 1-card leftover empties the hand pile',
+      () {
+        final botAI = EnhancedBotAI(seed: 956319);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final bot = Player(id: '2', name: 'BookBuilder', type: PlayerType.bot);
+        final controller = GameController(players: [human, bot], seed: 956319);
+        controller.initializeGame();
+        botAI.assignPersonality(bot.id, BotPersonality.bookBuilder);
+        controller.gameState.currentPlayerIndex = 1;
+
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([const PlayingCard(suit: Suit.hearts, rank: CardRank.jack)]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ace, size: 4, dirty: true),
+          _sizedMeld(CardRank.king, size: 3, dirty: true),
+        ]);
+        _setPile(controller, size: 17, top: CardRank.seven);
+        controller.gameState.turnPhase = TurnPhase.discard;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(
+          CompetitivePolicy.shouldEmptyHandPile(bot, controller.gameState),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'discard');
+        expect((decision.data as PlayingCard).rank, CardRank.jack);
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+        expect(decision.analyticsContext?['discardedRank'], 'jack');
+      },
+      tags: ['competitive_planner'],
+    );
   });
 }
 
@@ -747,17 +1104,17 @@ void _replaceUnderTopWithThrees(GameController controller, int count) {
 }
 
 Meld _book(CardRank rank, {required bool dirty}) {
-  final cards = <PlayingCard>[
-    PlayingCard(suit: Suit.hearts, rank: rank),
-    PlayingCard(suit: Suit.spades, rank: rank),
-    PlayingCard(suit: Suit.clubs, rank: rank),
-    PlayingCard(suit: Suit.diamonds, rank: rank),
-    PlayingCard(suit: Suit.hearts, rank: rank),
-    PlayingCard(suit: Suit.spades, rank: rank),
-    if (dirty)
-      const PlayingCard(suit: Suit.clubs, rank: CardRank.two)
-    else
-      PlayingCard(suit: Suit.clubs, rank: rank),
-  ];
+  return _sizedMeld(rank, size: 7, dirty: dirty);
+}
+
+Meld _sizedMeld(CardRank rank, {required int size, required bool dirty}) {
+  final cards = <PlayingCard>[];
+  final naturalCount = dirty ? size - 1 : size;
+  for (var i = 0; i < naturalCount; i++) {
+    cards.add(PlayingCard(suit: Suit.values[i % 4], rank: rank));
+  }
+  if (dirty) {
+    cards.add(const PlayingCard(suit: Suit.clubs, rank: CardRank.two));
+  }
   return Meld.createMeld(cards)!;
 }

@@ -36,5 +36,26 @@ void main() {
       // If we get here without hanging, recursion protection is working
       expect(find.byType(GameScreen), findsOneWidget);
     });
+
+    testWidgets('GameScreen dispose does not read Riverpod providers', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(child: MaterialApp(home: GameScreen(testSeed: 12345))),
+      );
+      expect(find.byType(GameScreen), findsOneWidget);
+
+      // Match e2e teardown: init + analytics session must start first.
+      // Immediate dispose skips that path and hides the ref.read crash.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+
+      await tester.pumpWidget(
+        const ProviderScope(child: MaterialApp(home: SizedBox.shrink())),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
   });
 }
