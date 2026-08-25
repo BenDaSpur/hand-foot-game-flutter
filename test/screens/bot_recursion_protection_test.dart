@@ -36,5 +36,20 @@ void main() {
       // If we get here without hanging, recursion protection is working
       expect(find.byType(GameScreen), findsOneWidget);
     });
+
+    testWidgets('GameScreen dispose does not read Riverpod providers', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        ProviderScope(child: MaterialApp(home: GameScreen(testSeed: 12345))),
+      );
+      expect(find.byType(GameScreen), findsOneWidget);
+
+      await tester.pumpWidget(
+        const ProviderScope(child: MaterialApp(home: SizedBox.shrink())),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
   });
 }
