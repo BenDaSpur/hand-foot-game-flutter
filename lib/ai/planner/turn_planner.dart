@@ -177,9 +177,10 @@ class TurnPlanner {
           return take;
         }
       }
-      // Leftover hand-pile trap: if the bot can legally unlock, take the
-      // farm instead of drawing +2 / discarding −1 forever.
-      if (canUnlock && emptyHandPile) {
+      // Leftover hand-pile trap: take a legal unlock instead of drawing +2
+      // / discarding −1 forever. Still honor toxic-3 skips; huge on-foot
+      // farms already clear skipThrees in CompetitivePolicy.
+      if (canUnlock && emptyHandPile && !skipThrees) {
         final take = candidates
             .where((candidate) => candidate.kind == LegalActionKind.drawDiscard)
             .toList();
