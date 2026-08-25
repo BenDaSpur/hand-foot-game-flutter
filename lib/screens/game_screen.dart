@@ -78,7 +78,8 @@ class GameScreen extends ConsumerStatefulWidget {
   ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends ConsumerState<GameScreen> {
+class _GameScreenState extends ConsumerState<GameScreen>
+    with WidgetsBindingObserver {
   // Use providers instead of local state - accessed via ref
   GameController? get _gameController =>
       ref.read(gameControllerProvider)?.controller;
@@ -103,6 +104,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   int _totalTurns = 0;
   int _actionSequenceNumber = 0; // Track action sequence within game
   Map<String, BotPersonality> _sessionBotPersonalities = {};
+  bool _analyticsClosed = false;
+  int _lastHeartbeatTurn = 0;
 
   // Manager instances for better code organization
   late BotTurnManager _botTurnManager;
@@ -142,6 +145,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Initialize event listeners via Riverpod
     ref.read(gameEventListenerProvider);
     ref.read(soundEventListenerProvider); // Initialize sound effects
@@ -156,10 +160,28 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   @override
   void dispose() {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_abandonAnalyticsIfNeeded('disposed'));
     _handScrollController.dispose();
     // Dispose event-based manager to clean up subscriptions
     _eventBasedGameStateManager?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        unawaited(_heartbeatAnalytics());
+        break;
+      case AppLifecycleState.detached:
+        unawaited(_abandonAnalyticsIfNeeded('tab_hidden'));
+        break;
+      case AppLifecycleState.resumed:
+        break;
+    }
   }
 
   /// Helper method to assign bot personalities consistently
@@ -258,6 +280,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         // Only trigger turn processing when a turn actually ends
         // This prevents infinite loops from state changes during a turn
         _totalTurns++; // Track total turns for analytics
+        if (_totalTurns - _lastHeartbeatTurn >= 3) {
+          unawaited(_heartbeatAnalytics());
+        }
         if (mounted && !_isBotTurnInProgress) {
           processCurrentPlayerTurn();
         }
@@ -2555,6 +2580,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
       _actionSequenceNumber = 0; // Reset sequence counter for new game
       _totalTurns = 0;
+      _lastHeartbeatTurn = 0;
+      _analyticsClosed = false;
       _sessionBotPersonalities = botPersonalities;
       _analyticsSessionId = await GameAnalyticsLogger.startGameSession(
         players: gameState.players,
@@ -2744,19 +2771,70 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             'roundScore': player.score.toDouble(),
             'handSize': player.currentHand.length.toDouble(),
             'meldCount': player.melds.length.toDouble(),
+            'bookCount': player.melds
+                .where((meld) => meld.cards.length >= 7)
+                .length
+                .toDouble(),
+            'hasPickedUpFoot': player.hasPickedUpFoot ? 1.0 : 0.0,
           },
         );
       }
 
+      await GameAnalyticsLogger.logRoundSummary(
+        gameState: gameState,
+        botPersonalities: personalities,
+      );
+      await GameAnalyticsLogger.heartbeatSessionProgress(gameState: gameState);
       await AnalyticsBatcher.flushAllBatches();
     } catch (e) {
       DebugLogger.warning('Failed to log round-end analytics: $e');
     }
   }
 
+  Future<void> _heartbeatAnalytics() async {
+    if (_analyticsClosed || _analyticsSessionId == null) {
+      return;
+    }
+    final gameState =
+        _gameController?.gameState ?? ref.read(currentGameStateProvider);
+    if (gameState == null) {
+      return;
+    }
+    _lastHeartbeatTurn = _totalTurns;
+    try {
+      await GameAnalyticsLogger.heartbeatSessionProgress(gameState: gameState);
+      await AnalyticsBatcher.flushAllBatches();
+    } catch (e) {
+      DebugLogger.warning('Failed to heartbeat analytics session: $e');
+    }
+  }
+
+  Future<void> _abandonAnalyticsIfNeeded(String endReason) async {
+    if (_analyticsClosed || _analyticsSessionId == null) {
+      return;
+    }
+    final gameState =
+        _gameController?.gameState ?? ref.read(currentGameStateProvider);
+    if (gameState == null) {
+      return;
+    }
+    _analyticsClosed = true;
+    try {
+      await GameAnalyticsLogger.abandonGameSession(
+        gameState: gameState,
+        endReason: endReason,
+        totalTurns: _totalTurns,
+        botPersonalities: _sessionBotPersonalities,
+      );
+      _analyticsSessionId = null;
+    } catch (e) {
+      DebugLogger.warning('Failed to abandon analytics session: $e');
+    }
+  }
+
   /// End analytics session when the game completes.
   Future<void> _endAnalyticsSession() async {
-    if (_analyticsSessionId == null) {
+    if (_analyticsClosed || _analyticsSessionId == null) {
       return;
     }
 
@@ -2773,6 +2851,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ? _sessionBotPersonalities
           : GameAnalyticsLogger.sessionBotPersonalities;
 
+      _analyticsClosed = true;
       await GameAnalyticsLogger.endGameSession(
         gameState: gameState,
         winnerId: winner?.id,

@@ -205,6 +205,8 @@ class GameAnalyticsLogger {
         'totalTurns': totalTurns,
         'botPerformance': botPerformance,
         'status': 'completed',
+        'endReason': 'completed',
+        'lastProgress': _progressSnapshot(gameState),
       };
 
       final fs = firestore;
@@ -235,6 +237,184 @@ class GameAnalyticsLogger {
     }
   }
 
+  /// Write mid-game scores/foot/books so abandoned sessions are still readable.
+  static Future<void> heartbeatSessionProgress({
+    required GameState gameState,
+  }) async {
+    if (!_analyticsEnabled || _currentSessionId == null) {
+      return;
+    }
+
+    try {
+      final fs = firestore;
+      if (fs == null) {
+        return;
+      }
+      await fs
+          .collection(gameSessionsCollection)
+          .doc(_currentSessionId!)
+          .update({
+            'lastHeartbeatAt': FieldValue.serverTimestamp(),
+            'lastProgress': _progressSnapshot(gameState),
+          });
+    } catch (e) {
+      _logger.warning('Failed to heartbeat analytics session: $e');
+    }
+  }
+
+  /// Mark the session abandoned when the tab closes or the screen is disposed.
+  static Future<void> abandonGameSession({
+    required GameState gameState,
+    required String endReason,
+    int? totalTurns,
+    Map<String, BotPersonality>? botPersonalities,
+  }) async {
+    if (!_analyticsEnabled || _currentSessionId == null) {
+      return;
+    }
+
+    try {
+      final personalities = botPersonalities ?? _sessionBotPersonalities;
+      final botPerformance = _botPerformanceFromState(gameState, personalities);
+      final durationSeconds = _sessionStartTime == null
+          ? null
+          : DateTime.now().difference(_sessionStartTime!).inSeconds;
+      final fs = firestore;
+      if (fs != null) {
+        await fs
+            .collection(gameSessionsCollection)
+            .doc(_currentSessionId!)
+            .update({
+              'endTime': FieldValue.serverTimestamp(),
+              if (durationSeconds != null) 'sessionDuration': durationSeconds,
+              'finalRound': gameState.round,
+              'finalScores': gameState.players.map((p) => p.score).toList(),
+              'gamePhase': gameState.phase.name,
+              if (totalTurns != null) 'totalTurns': totalTurns,
+              'botPerformance': botPerformance,
+              'status': 'abandoned',
+              'endReason': endReason,
+              'lastProgress': _progressSnapshot(gameState),
+              'lastHeartbeatAt': FieldValue.serverTimestamp(),
+            });
+      }
+      await AnalyticsBatcher.flushAllBatches();
+      _logger.info(
+        '📊 Abandoned game analytics session: $_currentSessionId ($endReason)',
+      );
+      _currentSessionId = null;
+      _sessionStartTime = null;
+      _sessionBotPersonalities = {};
+      _turnTracker.reset();
+      _discardTracker.clear();
+    } catch (e) {
+      _logger.warning('Failed to abandon analytics session: $e');
+    }
+  }
+
+  /// Per-player snapshot at round end so incomplete games still have scores.
+  static Future<void> logRoundSummary({
+    required GameState gameState,
+    Map<String, BotPersonality>? botPersonalities,
+  }) async {
+    if (!_analyticsEnabled || _currentSessionId == null) {
+      return;
+    }
+
+    try {
+      final personalities = botPersonalities ?? _sessionBotPersonalities;
+      final summaryData = {
+        'sessionId': _currentSessionId,
+        'timestamp': FieldValue.serverTimestamp(),
+        'recordType': 'round',
+        'round': gameState.round,
+        'players': _progressSnapshot(gameState)['players'],
+        'scores': gameState.players.map((p) => p.score).toList(),
+        'botPersonalities': {
+          for (final entry in personalities.entries)
+            entry.key: entry.value.name,
+        },
+        ..._versionFields(),
+      };
+      await AnalyticsBatcher.addToBatch(
+        collection: performanceMetricsCollection,
+        data: summaryData,
+        priority: true,
+      );
+    } catch (e) {
+      _logger.warning('Failed to log round summary: $e');
+    }
+  }
+
+  static Map<String, dynamic> _progressSnapshot(GameState gameState) {
+    return {
+      'round': gameState.round,
+      'phase': gameState.phase.name,
+      'scores': gameState.players.map((player) => player.score).toList(),
+      'players': gameState.players
+          .map(
+            (player) => {
+              'id': player.id,
+              'name': player.name,
+              'type': player.type.name,
+              'score': player.score,
+              'hasPlayedDown': player.hasPlayedDown,
+              'hasPickedUpFoot': player.hasPickedUpFoot,
+              'bookCount': player.bookCount,
+              'meldCount': player.melds.length,
+              'handSize': player.currentHand.length,
+            },
+          )
+          .toList(),
+    };
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic> progressSnapshotForTest(GameState gameState) {
+    return _progressSnapshot(gameState);
+  }
+
+  @visibleForTesting
+  static String? discardedRankFromDecisionForTest(
+    String decision,
+    Map<String, dynamic>? decisionContext,
+  ) {
+    return _discardedRankFromDecision(decision, decisionContext);
+  }
+
+  @visibleForTesting
+  static String? discardedRankFromEventDataForTest(
+    String eventType,
+    Map<String, dynamic>? eventData,
+  ) {
+    return _extractDiscardedRankFromEventData(eventType, eventData);
+  }
+
+  static Map<String, Map<String, dynamic>> _botPerformanceFromState(
+    GameState gameState,
+    Map<String, BotPersonality> personalities,
+  ) {
+    final botPerformance = <String, Map<String, dynamic>>{};
+    for (final player in gameState.players.where(
+      (p) => p.type == PlayerType.bot,
+    )) {
+      final personality = personalities[player.id] ?? BotPersonality.adaptive;
+      botPerformance[player.id] = {
+        'personality': personality.name,
+        'finalScore': player.score,
+        'hasPickedUpFoot': player.hasPickedUpFoot,
+        'hasPlayedDown': player.hasPlayedDown,
+        'meldCount': player.melds.length,
+        'bookCount': player.melds.where((m) => m.cards.length >= 7).length,
+        'cleanBookCount': player.melds
+            .where((m) => m.cards.length >= 7 && m.isClean)
+            .length,
+        'cardsInHand': player.currentHand.length,
+      };
+    }
+    return botPerformance;
+  }
+
   /// Bot personalities for the active session (for round-end metrics).
   static Map<String, BotPersonality> get sessionBotPersonalities {
     return Map<String, BotPersonality>.unmodifiable(_sessionBotPersonalities);
@@ -257,6 +437,10 @@ class GameAnalyticsLogger {
 
     try {
       final botPlayer = gameState.playerById(botId);
+      final discardedRank = _discardedRankFromDecision(
+        decision,
+        decisionContext,
+      );
 
       final decisionData = {
         'sessionId': _currentSessionId,
@@ -341,6 +525,9 @@ class GameAnalyticsLogger {
 
         // Additional context
         'decisionContext': decisionContext,
+        if (discardedRank != null) 'discardedRank': discardedRank,
+        if (decisionContext?['discardedCard'] is String)
+          'discardedCard': decisionContext!['discardedCard'],
       };
 
       // Use batching for bot decisions (high frequency)
@@ -358,10 +545,7 @@ class GameAnalyticsLogger {
         handSize: botPlayer.currentHand.length,
         round: gameState.round,
         turnNumber: (decisionContext?['turnNumber'] as num?)?.toInt(),
-        discardedCardRank:
-            isDiscardAction(decision) && gameState.discardPile.isNotEmpty
-            ? gameState.discardPile.last.rank.name
-            : null,
+        discardedCardRank: discardedRank,
       );
 
       if (kDebugMode) {
@@ -392,6 +576,10 @@ class GameAnalyticsLogger {
           ? _sanitizeAnalyticsData(eventData)
           : null;
 
+      final discardedRank = _extractDiscardedRankFromEventData(
+        eventType,
+        sanitizedEventData,
+      );
       final eventLogData = {
         'sessionId': _currentSessionId,
         'timestamp': FieldValue.serverTimestamp(),
@@ -402,6 +590,7 @@ class GameAnalyticsLogger {
         'success': success,
         'errorMessage': errorMessage,
         'eventData': sanitizedEventData,
+        if (discardedRank != null) 'discardedRank': discardedRank,
         ..._versionFields(),
       };
 
@@ -415,10 +604,7 @@ class GameAnalyticsLogger {
 
       final handSize = _extractHandSizeFromEventData(sanitizedEventData);
       final round = _extractRoundFromEventData(sanitizedEventData);
-      final discardedCardRank = _extractDiscardedRankFromEventData(
-        eventType,
-        sanitizedEventData,
-      );
+      final discardedCardRank = discardedRank;
 
       if (!shouldSkipEventBusTurnTracking(eventType)) {
         await _recordActionForTracking(
@@ -744,6 +930,10 @@ class GameAnalyticsLogger {
     if (cardRank is String) {
       return cardRank;
     }
+    final topLevelCard = eventData['card'];
+    if (topLevelCard is String && topLevelCard.isNotEmpty) {
+      return topLevelCard.split(' ').first;
+    }
 
     final context = eventData['context'];
     if (context is Map<String, dynamic>) {
@@ -757,6 +947,24 @@ class GameAnalyticsLogger {
       }
     }
 
+    return null;
+  }
+
+  static String? _discardedRankFromDecision(
+    String decision,
+    Map<String, dynamic>? decisionContext,
+  ) {
+    if (!isDiscardAction(decision)) {
+      return null;
+    }
+    final fromContext = decisionContext?['discardedRank'];
+    if (fromContext is String && fromContext.isNotEmpty) {
+      return fromContext;
+    }
+    final discardedCard = decisionContext?['discardedCard'];
+    if (discardedCard is String && discardedCard.isNotEmpty) {
+      return discardedCard.split(' ').first;
+    }
     return null;
   }
 

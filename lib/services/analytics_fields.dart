@@ -30,12 +30,15 @@ bool isMeldCreationAction(String action) {
 
 /// Whether an action/event type represents a discard.
 bool isDiscardAction(String action) {
-  return action == 'discardCard';
+  return action == 'discardCard' ||
+      action == 'discard' ||
+      action == 'CardDiscarded';
 }
 
 /// Event-bus events already tracked via human/bot decision logs.
 bool shouldSkipEventBusTurnTracking(String eventType) {
   return eventType == 'card_drawn' ||
       eventType == 'meld_created' ||
-      eventType == 'discard_pile_unlocked';
+      eventType == 'discard_pile_unlocked' ||
+      eventType == 'CardDiscarded';
 }
