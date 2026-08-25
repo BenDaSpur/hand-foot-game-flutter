@@ -105,6 +105,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   int _actionSequenceNumber = 0; // Track action sequence within game
   Map<String, BotPersonality> _sessionBotPersonalities = {};
   bool _analyticsClosed = false;
+  bool _analyticsCloseInProgress = false;
   int _lastHeartbeatTurn = 0;
 
   // Manager instances for better code organization
@@ -2593,6 +2594,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _totalTurns = 0;
       _lastHeartbeatTurn = 0;
       _analyticsClosed = false;
+      _analyticsCloseInProgress = false;
       _sessionBotPersonalities = botPersonalities;
       _analyticsSessionId = await GameAnalyticsLogger.startGameSession(
         players: gameState.players,
@@ -2803,7 +2805,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _heartbeatAnalytics() async {
-    if (_analyticsClosed || _analyticsSessionId == null) {
+    if (_analyticsClosed ||
+        _analyticsCloseInProgress ||
+        _analyticsSessionId == null) {
       return;
     }
     final gameState =
@@ -2821,7 +2825,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _abandonAnalyticsIfNeeded(String endReason) async {
-    if (_analyticsClosed || _analyticsSessionId == null) {
+    if (_analyticsClosed ||
+        _analyticsCloseInProgress ||
+        _analyticsSessionId == null) {
       return;
     }
     final gameState =
@@ -2829,7 +2835,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (gameState == null) {
       return;
     }
-    _analyticsClosed = true;
+    _analyticsCloseInProgress = true;
     try {
       await GameAnalyticsLogger.abandonGameSession(
         gameState: gameState,
@@ -2837,32 +2843,37 @@ class _GameScreenState extends ConsumerState<GameScreen>
         totalTurns: _totalTurns,
         botPersonalities: _sessionBotPersonalities,
       );
+      _analyticsClosed = true;
       _analyticsSessionId = null;
     } catch (e) {
       DebugLogger.warning('Failed to abandon analytics session: $e');
+    } finally {
+      _analyticsCloseInProgress = false;
     }
   }
 
   /// End analytics session when the game completes.
   Future<void> _endAnalyticsSession() async {
-    if (_analyticsClosed || _analyticsSessionId == null) {
+    if (_analyticsClosed ||
+        _analyticsCloseInProgress ||
+        _analyticsSessionId == null) {
       return;
     }
 
+    final controller = _gameController;
+    final gameState =
+        controller?.gameState ?? ref.read(currentGameStateProvider);
+    if (gameState == null) {
+      return;
+    }
+
+    final winner = ref.read(gameWinnerProvider);
+    final personalities = _sessionBotPersonalities.isNotEmpty
+        ? _sessionBotPersonalities
+        : GameAnalyticsLogger.sessionBotPersonalities;
+
+    _analyticsCloseInProgress = true;
     try {
-      final controller = _gameController;
-      final gameState =
-          controller?.gameState ?? ref.read(currentGameStateProvider);
-      if (gameState == null) {
-        return;
-      }
-
-      final winner = ref.read(gameWinnerProvider);
-      final personalities = _sessionBotPersonalities.isNotEmpty
-          ? _sessionBotPersonalities
-          : GameAnalyticsLogger.sessionBotPersonalities;
-
-      _analyticsClosed = true;
       await GameAnalyticsLogger.endGameSession(
         gameState: gameState,
         winnerId: winner?.id,
@@ -2870,11 +2881,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
         botPersonalities: personalities,
       );
       await AnalyticsBatcher.flushAllBatches();
-
+      _analyticsClosed = true;
       _analyticsSessionId = null;
       _sessionBotPersonalities = {};
     } catch (e) {
       DebugLogger.warning('Failed to end analytics session: $e');
+    } finally {
+      _analyticsCloseInProgress = false;
     }
   }
 }
