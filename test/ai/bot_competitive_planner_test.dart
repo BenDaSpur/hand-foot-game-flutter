@@ -740,6 +740,76 @@ void main() {
       },
       tags: ['competitive_planner'],
     );
+
+    test(
+      'does not burst new ranks on a bookless hand pile at the meld cap',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 4, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 3, dirty: true),
+        ]);
+        expect(bot.bookCount, 0);
+        expect(bot.melds.length, BotConfig.handPileNewMeldCap);
+        _setPile(controller, size: 12, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, isNot(equals('createMultipleMelds')));
+        expect(decision.action, isNot(equals('createMeld')));
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'still bursts two new ranks on a bookless hand pile when they empty',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ten, size: 4, dirty: true),
+          _sizedMeld(CardRank.king, size: 4, dirty: true),
+          _sizedMeld(CardRank.jack, size: 4, dirty: true),
+          _sizedMeld(CardRank.ace, size: 3, dirty: true),
+        ]);
+        _setPile(controller, size: 12, top: CardRank.queen);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'createMultipleMelds');
+        final melds = decision.data as List<List<PlayingCard>>;
+        expect(melds.length, greaterThanOrEqualTo(2));
+      },
+      tags: ['competitive_planner'],
+    );
   });
 
   group('Production seed snapshots', () {

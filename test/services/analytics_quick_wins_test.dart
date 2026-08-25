@@ -35,6 +35,7 @@ void main() {
       expect(shouldSkipEventBusTurnTracking('meld_created'), isTrue);
       expect(shouldSkipEventBusTurnTracking('discard_pile_unlocked'), isTrue);
       expect(shouldSkipEventBusTurnTracking('CardDiscarded'), isTrue);
+      expect(shouldSkipEventBusTurnTracking('discardCard'), isFalse);
       expect(shouldSkipEventBusTurnTracking('player_went_out'), isFalse);
     });
   });

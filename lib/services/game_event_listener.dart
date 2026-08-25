@@ -113,6 +113,9 @@ class GameEventListener {
   }
 
   /// Safety-net discard log for bots (humans already emit discardCard).
+  ///
+  /// Keep [eventType] as `CardDiscarded` so turn tracking is skipped —
+  /// successful bot discards are already recorded from the planner decision.
   void _handleCardDiscarded(CardDiscardedEvent event) {
     if (_isDisposed) {
       return;
@@ -122,7 +125,7 @@ class GameEventListener {
       return;
     }
     GameAnalyticsLogger.logGameEvent(
-      eventType: 'discardCard',
+      eventType: 'CardDiscarded',
       playerId: player.id,
       playerType: player.type,
       eventData: {

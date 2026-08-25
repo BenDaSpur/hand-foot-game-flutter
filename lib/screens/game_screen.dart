@@ -172,15 +172,26 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
-        unawaited(_heartbeatAnalytics());
-        break;
+        {
+          unawaited(_heartbeatAnalytics());
+        }
+      case AppLifecycleState.hidden:
+        {
+          if (kIsWeb) {
+            unawaited(_abandonAnalyticsIfNeeded('tab_hidden'));
+          } else {
+            unawaited(_heartbeatAnalytics());
+          }
+        }
       case AppLifecycleState.detached:
-        unawaited(_abandonAnalyticsIfNeeded('tab_hidden'));
-        break;
+        {
+          unawaited(_abandonAnalyticsIfNeeded('tab_hidden'));
+        }
       case AppLifecycleState.resumed:
-        break;
+        {
+          break;
+        }
     }
   }
 
