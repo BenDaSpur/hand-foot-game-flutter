@@ -36,6 +36,7 @@ import '../services/analytics/bot_decision_snapshot_mapper.dart';
 import '../services/analytics_batcher.dart';
 import '../services/analytics_fields.dart';
 import 'main_menu_screen.dart';
+import 'settings_screen.dart';
 import 'solo_game_setup_screen.dart';
 import '../utils/debug_logger.dart';
 import 'managers/bot_turn_manager.dart';
@@ -165,6 +166,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // Initialize event listeners via Riverpod
     ref.read(gameEventListenerProvider);
     ref.read(soundEventListenerProvider); // Initialize sound effects
+    ref.read(hapticEventListenerProvider); // Initialize haptic feedback
     if (_isLearnToPlay) {
       _learnCoordinator = LearnToPlayCoordinator();
     } else {
@@ -2101,6 +2103,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
                       },
                 onHowToPlay: () {
                   _dialogManager.showHowToPlayDialog();
+                },
+                onSettings: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
                 },
               ),
               body: CardAnimationHost(

@@ -15,6 +15,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onExportGame;
   final VoidCallback? onLoadGame;
   final VoidCallback? onHowToPlay;
+  final VoidCallback? onSettings;
   final VoidCallback? onLeaveGame;
   final VoidCallback? onEndGameForEveryone;
   final VoidCallback? onReturnToMainMenu;
@@ -33,6 +34,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onExportGame,
     this.onLoadGame,
     this.onHowToPlay,
+    this.onSettings,
     this.onLeaveGame,
     this.onEndGameForEveryone,
     this.onReturnToMainMenu,
@@ -146,6 +148,9 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
               case 'how_to_play':
                 onHowToPlay?.call();
                 break;
+              case 'settings':
+                onSettings?.call();
+                break;
               case 'leave_game':
                 onLeaveGame?.call();
                 break;
@@ -217,22 +222,34 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ],
                   ),
                 ),
-              if (onHowToPlay != null) ...[
+              if (onHowToPlay != null || onSettings != null) ...[
                 if (onCopySeed != null ||
                     onExportGame != null ||
                     onLoadGame != null ||
                     onNewGame != null)
                   const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'how_to_play',
-                  child: Row(
-                    children: [
-                      Icon(Icons.help_outline, color: Colors.purple),
-                      SizedBox(width: 8),
-                      Text('How to Play'),
-                    ],
+                if (onHowToPlay != null)
+                  const PopupMenuItem<String>(
+                    value: 'how_to_play',
+                    child: Row(
+                      children: [
+                        Icon(Icons.help_outline, color: Colors.purple),
+                        SizedBox(width: 8),
+                        Text('How to Play'),
+                      ],
+                    ),
                   ),
-                ),
+                if (onSettings != null)
+                  const PopupMenuItem<String>(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings, color: BalatroTheme.neonGreen),
+                        SizedBox(width: 8),
+                        Text('Settings'),
+                      ],
+                    ),
+                  ),
                 const PopupMenuDivider(),
               ],
             ] else ...[
@@ -255,6 +272,17 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
                       const Icon(Icons.exit_to_app, color: Colors.orange),
                       const SizedBox(width: 8),
                       Text(isHost ? 'Leave & End Game' : 'Leave Game'),
+                    ],
+                  ),
+                ),
+              if (onSettings != null)
+                const PopupMenuItem<String>(
+                  value: 'settings',
+                  child: Row(
+                    children: [
+                      Icon(Icons.settings, color: BalatroTheme.neonGreen),
+                      SizedBox(width: 8),
+                      Text('Settings'),
                     ],
                   ),
                 ),
