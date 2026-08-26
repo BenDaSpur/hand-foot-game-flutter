@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -64,25 +66,25 @@ class HapticService {
 
   /// Tiny click — card selection, action buttons, mini-game card deals.
   void selectionClick() {
-    _play(HapticKind.selection);
+    unawaited(_play(HapticKind.selection));
   }
 
   /// Soft bump — turn start, miss, invalid action.
   void lightImpact() {
-    _play(HapticKind.light);
+    unawaited(_play(HapticKind.light));
   }
 
   /// Medium bump — play-down, foot pickup, discard-pile unlock.
   void mediumImpact() {
-    _play(HapticKind.medium);
+    unawaited(_play(HapticKind.medium));
   }
 
   /// Strong bump — book complete, going out, victory, mini-game success.
   void heavyImpact() {
-    _play(HapticKind.heavy);
+    unawaited(_play(HapticKind.heavy));
   }
 
-  void _play(HapticKind kind) {
+  Future<void> _play(HapticKind kind) async {
     if (!_initialized) {
       return;
     }
@@ -96,16 +98,16 @@ class HapticService {
     try {
       switch (kind) {
         case HapticKind.selection:
-          HapticFeedback.selectionClick();
+          await HapticFeedback.selectionClick();
           break;
         case HapticKind.light:
-          HapticFeedback.lightImpact();
+          await HapticFeedback.lightImpact();
           break;
         case HapticKind.medium:
-          HapticFeedback.mediumImpact();
+          await HapticFeedback.mediumImpact();
           break;
         case HapticKind.heavy:
-          HapticFeedback.heavyImpact();
+          await HapticFeedback.heavyImpact();
           break;
       }
     } catch (e) {

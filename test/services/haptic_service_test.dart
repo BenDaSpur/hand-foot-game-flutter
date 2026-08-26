@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/haptic_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -100,6 +101,26 @@ void main() {
       await service.setHapticsEnabled(true);
 
       expect(service.debugPlayed, [HapticKind.light]);
+    });
+
+    test('swallows platform-channel failures from HapticFeedback', () async {
+      service.suppressPlatformHaptics = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            throw PlatformException(
+              code: 'unavailable',
+              message: 'no haptic motor',
+            );
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
+      service.selectionClick();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.debugPlayed, [HapticKind.selection]);
     });
   });
 }
