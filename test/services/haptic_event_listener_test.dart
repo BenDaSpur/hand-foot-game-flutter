@@ -174,6 +174,68 @@ void main() {
       expect(hapticService.debugPlayed, isEmpty);
     });
 
+    test(
+      'localPlayerId ignores other humans but keeps round-end global',
+      () async {
+        listener.dispose();
+        final otherHuman = Player(
+          id: 'p3',
+          name: 'Pat',
+          type: PlayerType.human,
+        );
+        listener = HapticEventListener(
+          eventBus: eventBus,
+          hapticService: hapticService,
+          localPlayerId: human.id,
+        );
+
+        eventBus.publish(
+          MeldCreatedEvent(
+            meld: kingMeld(),
+            cards: kingMeld().cards,
+            player: otherHuman,
+          ),
+        );
+        eventBus.publish(
+          TurnEndedEvent(turnNumber: 2, nextPlayer: otherHuman, player: human),
+        );
+        eventBus.publish(
+          GameEndedEvent(winner: otherHuman, finalScores: {otherHuman: 500}),
+        );
+        eventBus.publish(RoundEndedEvent(roundNumber: 1, roundScores: {}));
+        await flush();
+
+        expect(hapticService.debugPlayed, [
+          HapticKind.light,
+          HapticKind.medium,
+        ]);
+      },
+    );
+
+    test('localPlayerId plays for the matching player and winner', () async {
+      listener.dispose();
+      listener = HapticEventListener(
+        eventBus: eventBus,
+        hapticService: hapticService,
+        localPlayerId: human.id,
+      );
+
+      eventBus.publish(FootPickedUpEvent(player: human));
+      eventBus.publish(
+        TurnEndedEvent(turnNumber: 3, nextPlayer: human, player: bot),
+      );
+      eventBus.publish(
+        GameEndedEvent(winner: human, finalScores: {human: 1000}),
+      );
+      await flush();
+
+      expect(hapticService.debugPlayed, [
+        HapticKind.medium,
+        HapticKind.light,
+        HapticKind.heavy,
+      ]);
+    });
+
     test('does not play when haptics are disabled', () async {
       await hapticService.setHapticsEnabled(false);
       hapticService.debugPlayed.clear();

@@ -83,6 +83,9 @@ class HapticService {
   }
 
   void _play(HapticKind kind) {
+    if (!_initialized) {
+      return;
+    }
     if (!_hapticsEnabled) {
       return;
     }

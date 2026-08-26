@@ -13,17 +13,27 @@ import 'haptic_service.dart';
 class HapticEventListener {
   final GameEventBus eventBus;
   final HapticService hapticService;
+
+  /// When set (multiplayer), player / next-player / winner pulses are limited
+  /// to this identity. Solo games omit it and match [PlayerType.human].
+  /// Round-end stays global either way.
+  final String? localPlayerId;
+
   final List<StreamSubscription> _subscriptions = [];
   bool _disposed = false;
 
-  HapticEventListener({required this.eventBus, required this.hapticService}) {
+  HapticEventListener({
+    required this.eventBus,
+    required this.hapticService,
+    this.localPlayerId,
+  }) {
     _subscribeToEvents();
   }
 
   void _subscribeToEvents() {
     _subscriptions.add(
       eventBus.subscribeToType<MeldCreatedEvent>((event) {
-        if (_disposed || !_isHuman(event.player)) {
+        if (_disposed || !_isLocalActor(event.player)) {
           return;
         }
         if (event.meld.isBook) {
@@ -36,7 +46,7 @@ class HapticEventListener {
 
     _subscriptions.add(
       eventBus.subscribeToType<CardAddedToMeldEvent>((event) {
-        if (_disposed || !_isHuman(event.player)) {
+        if (_disposed || !_isLocalActor(event.player)) {
           return;
         }
         if (event.meld.isBook && event.meld.cards.length == 7) {
@@ -49,7 +59,7 @@ class HapticEventListener {
 
     _subscriptions.add(
       eventBus.subscribeToType<DiscardPileUnlockedEvent>((event) {
-        if (_disposed || !_isHuman(event.player)) {
+        if (_disposed || !_isLocalActor(event.player)) {
           return;
         }
         hapticService.mediumImpact();
@@ -61,7 +71,7 @@ class HapticEventListener {
         if (_disposed) {
           return;
         }
-        if (event.nextPlayer?.type == PlayerType.human) {
+        if (_isLocalActor(event.nextPlayer)) {
           hapticService.lightImpact();
         }
       }),
@@ -81,7 +91,7 @@ class HapticEventListener {
         if (_disposed) {
           return;
         }
-        if (event.winner.type == PlayerType.human) {
+        if (_isLocalActor(event.winner)) {
           hapticService.heavyImpact();
         } else {
           hapticService.lightImpact();
@@ -91,7 +101,7 @@ class HapticEventListener {
 
     _subscriptions.add(
       eventBus.subscribeToType<FootPickedUpEvent>((event) {
-        if (_disposed || !_isHuman(event.player)) {
+        if (_disposed || !_isLocalActor(event.player)) {
           return;
         }
         hapticService.mediumImpact();
@@ -100,7 +110,7 @@ class HapticEventListener {
 
     _subscriptions.add(
       eventBus.subscribeToType<PlayerWentOutEvent>((event) {
-        if (_disposed || !_isHuman(event.player)) {
+        if (_disposed || !_isLocalActor(event.player)) {
           return;
         }
         hapticService.heavyImpact();
@@ -108,7 +118,15 @@ class HapticEventListener {
     );
   }
 
-  bool _isHuman(Player? player) => player?.type == PlayerType.human;
+  bool _isLocalActor(Player? player) {
+    if (player == null) {
+      return false;
+    }
+    if (localPlayerId != null) {
+      return player.id == localPlayerId;
+    }
+    return player.type == PlayerType.human;
+  }
 
   /// Cancel all subscriptions.
   void dispose() {

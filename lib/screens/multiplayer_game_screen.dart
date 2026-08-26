@@ -90,6 +90,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     _hapticEventListener = HapticEventListener(
       eventBus: gameEventBus,
       hapticService: HapticService(),
+      localPlayerId: _gameController.userId,
     );
     _lastCurrentPlayerIdForHighlight =
         _gameController.gameState.currentPlayer.id;

@@ -45,6 +45,17 @@ void main() {
       expect(service.hapticsEnabled, isFalse);
     });
 
+    test('does not play before initialize', () {
+      service.resetForTest(initialized: false);
+
+      service.selectionClick();
+      service.lightImpact();
+      service.mediumImpact();
+      service.heavyImpact();
+
+      expect(service.debugPlayed, isEmpty);
+    });
+
     test('records selection, light, medium, and heavy when enabled', () {
       service.selectionClick();
       service.lightImpact();
