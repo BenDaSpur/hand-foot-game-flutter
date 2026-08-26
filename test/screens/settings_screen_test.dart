@@ -83,8 +83,7 @@ void main() {
     expect(find.byType(SettingsScreen), findsOneWidget);
 
     await tester.tap(find.byTooltip('Back'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsNothing);
     expect(find.text('Open'), findsOneWidget);
   });

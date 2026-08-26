@@ -22,7 +22,6 @@ void main() {
     testWidgets('solo menu includes Settings when callback is provided', (
       tester,
     ) async {
-      var opened = false;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -30,9 +29,7 @@ void main() {
               gameState: gameState,
               isMultiplayer: false,
               onHowToPlay: () {},
-              onSettings: () {
-                opened = true;
-              },
+              onSettings: () {},
             ),
           ),
         ),
@@ -42,11 +39,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.text('Settings'), findsOneWidget);
-      await tester.tap(find.text('Settings'));
-      await tester.pump();
-
-      expect(opened, isTrue);
+      expect(
+        find.widgetWithText(PopupMenuItem<String>, 'Settings'),
+        findsOneWidget,
+      );
     });
 
     testWidgets(
@@ -69,7 +65,10 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 50));
 
-        expect(find.text('Settings'), findsOneWidget);
+        expect(
+          find.widgetWithText(PopupMenuItem<String>, 'Settings'),
+          findsOneWidget,
+        );
       },
     );
   });

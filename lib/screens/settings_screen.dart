@@ -120,34 +120,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return Container(
+    return Material(
       key: key,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: BalatroTheme.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: BalatroTheme.neonPink.withValues(alpha: 0.3)),
-      ),
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        secondary: Icon(icon, color: BalatroTheme.neonGreen),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
+      color: BalatroTheme.cardBackground,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: BalatroTheme.neonPink.withValues(alpha: 0.3),
           ),
         ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            color: BalatroTheme.primaryText.withValues(alpha: 0.7),
-            fontSize: 13,
+        child: SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(icon, color: BalatroTheme.neonGreen),
+          title: Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(
+              color: BalatroTheme.primaryText.withValues(alpha: 0.7),
+              fontSize: 13,
+            ),
+          ),
+          value: value,
+          activeThumbColor: BalatroTheme.neonPink,
+          onChanged: onChanged,
         ),
-        value: value,
-        activeThumbColor: BalatroTheme.neonPink,
-        onChanged: onChanged,
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/services/haptic_event_listener.dart';
 import 'package:hand_foot_game_flutter/services/haptic_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +28,7 @@ void main() {
   }
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     eventBus = GameEventBus();
     hapticService = HapticService();
     hapticService.resetForTest();
