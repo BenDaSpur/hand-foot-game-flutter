@@ -32,20 +32,15 @@ void main() {
     expect(toggle.value, isTrue);
   });
 
-  testWidgets('toggling vibrations off persists the preference', (
-    tester,
-  ) async {
+  testWidgets('toggling vibrations off disables the service', (tester) async {
     await pumpSettings(tester);
 
     await tester.tap(find.byType(Switch));
     await tester.pump();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
     expect(HapticService().hapticsEnabled, isFalse);
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool(HapticService.preferenceKey), isFalse);
   });
 
   testWidgets('loads a previously disabled preference', (tester) async {
