@@ -144,6 +144,20 @@ void main() {
       },
     );
 
+    test(
+      'setHapticsEnabled updates hapticsEnabled before persist finishes',
+      () async {
+        await service.initialize();
+
+        final setFuture = service.setHapticsEnabled(false);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(service.hapticsEnabled, isFalse);
+        await setFuture;
+        expect(service.hapticsEnabled, isFalse);
+      },
+    );
+
     test('overlapping setHapticsEnabled writes apply in order', () async {
       final first = service.setHapticsEnabled(false);
       final second = service.setHapticsEnabled(true);

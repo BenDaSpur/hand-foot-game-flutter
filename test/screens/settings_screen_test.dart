@@ -39,7 +39,7 @@ void main() {
 
     await tester.tap(find.byType(Switch));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
 
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
     expect(HapticService().hapticsEnabled, isFalse);

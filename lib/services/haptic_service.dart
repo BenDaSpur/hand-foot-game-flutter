@@ -19,6 +19,7 @@ class HapticService {
   bool _initialized = false;
   bool _hapticsEnabled = true;
   bool _recordPlayedForTest = false;
+  int _epoch = 0;
   Future<void>? _initialization;
   Future<void> _preferenceWrites = Future<void>.value();
 
@@ -47,11 +48,18 @@ class HapticService {
   }
 
   Future<void> _loadPreference() async {
+    final epoch = _epoch;
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (epoch != _epoch) {
+        return;
+      }
       _hapticsEnabled = prefs.getBool(preferenceKey) ?? true;
     } catch (e) {
       debugPrint('HapticService initialization failed: $e');
+    }
+    if (epoch != _epoch) {
+      return;
     }
     _initialized = true;
   }
@@ -61,14 +69,22 @@ class HapticService {
 
   /// Enable or disable vibrations and persist the choice.
   ///
-  /// Waits for any in-flight [initialize] and serializes preference writes
-  /// so a stale init cannot overwrite a newer session value.
+  /// Updates in-memory state as soon as [initialize] finishes so toggles take
+  /// effect immediately. Preference writes stay serialized so a stale init
+  /// cannot overwrite a newer session value.
   Future<void> setHapticsEnabled(bool enabled) async {
     await initialize();
+    _hapticsEnabled = enabled;
+    final epoch = _epoch;
     final write = _preferenceWrites.then((_) async {
-      _hapticsEnabled = enabled;
+      if (epoch != _epoch) {
+        return;
+      }
       try {
         final prefs = await SharedPreferences.getInstance();
+        if (epoch != _epoch) {
+          return;
+        }
         await prefs.setBool(preferenceKey, enabled);
       } catch (e) {
         debugPrint('Failed to save haptic preference: $e');
@@ -137,6 +153,7 @@ class HapticService {
   /// Reset in-memory state for tests. Does not clear SharedPreferences.
   @visibleForTesting
   void resetForTest({bool enabled = true, bool initialized = true}) {
+    _epoch++;
     _initialized = initialized;
     _hapticsEnabled = enabled;
     _initialization = null;
