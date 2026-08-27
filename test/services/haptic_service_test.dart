@@ -1,3 +1,6 @@
+@Tags(['haptics'])
+library;
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/services/haptic_service.dart';
@@ -121,6 +124,34 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(service.debugPlayed, [HapticKind.selection]);
+    });
+
+    test(
+      'setHapticsEnabled waits for initialize and keeps the new value',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          HapticService.preferenceKey: true,
+        });
+        service.resetForTest(initialized: false, enabled: true);
+
+        final init = service.initialize();
+        final set = service.setHapticsEnabled(false);
+        await Future.wait<void>([init, set]);
+
+        expect(service.hapticsEnabled, isFalse);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getBool(HapticService.preferenceKey), isFalse);
+      },
+    );
+
+    test('overlapping setHapticsEnabled writes apply in order', () async {
+      final first = service.setHapticsEnabled(false);
+      final second = service.setHapticsEnabled(true);
+      await Future.wait<void>([first, second]);
+
+      expect(service.hapticsEnabled, isTrue);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool(HapticService.preferenceKey), isTrue);
     });
   });
 }

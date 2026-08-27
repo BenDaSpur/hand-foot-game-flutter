@@ -18,6 +18,9 @@ class HapticService {
 
   bool _initialized = false;
   bool _hapticsEnabled = true;
+  bool _recordPlayedForTest = false;
+  Future<void>? _initialization;
+  Future<void> _preferenceWrites = Future<void>.value();
 
   /// Preference key stored in SharedPreferences.
   static const String preferenceKey = 'haptics_enabled';
@@ -27,38 +30,52 @@ class HapticService {
   @visibleForTesting
   bool suppressPlatformHaptics = false;
 
-  /// Sequence of haptic kinds requested since the last [resetForTest].
+  /// Sequence of haptic kinds recorded after [resetForTest].
+  /// Empty in production — requests are not retained at runtime.
   @visibleForTesting
   final List<HapticKind> debugPlayed = [];
 
   /// Initialize and load the persisted preference.
-  Future<void> initialize() async {
+  ///
+  /// Concurrent callers share one load so a later [setHapticsEnabled] can
+  /// wait for it before writing.
+  Future<void> initialize() {
     if (_initialized) {
-      return;
+      return Future<void>.value();
     }
+    return _initialization ??= _loadPreference();
+  }
 
+  Future<void> _loadPreference() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _hapticsEnabled = prefs.getBool(preferenceKey) ?? true;
-      _initialized = true;
     } catch (e) {
       debugPrint('HapticService initialization failed: $e');
-      _initialized = true;
     }
+    _initialized = true;
   }
 
   /// Whether vibrations are currently enabled.
   bool get hapticsEnabled => _hapticsEnabled;
 
   /// Enable or disable vibrations and persist the choice.
+  ///
+  /// Waits for any in-flight [initialize] and serializes preference writes
+  /// so a stale init cannot overwrite a newer session value.
   Future<void> setHapticsEnabled(bool enabled) async {
-    _hapticsEnabled = enabled;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(preferenceKey, enabled);
-    } catch (e) {
-      debugPrint('Failed to save haptic preference: $e');
-    }
+    await initialize();
+    final write = _preferenceWrites.then((_) async {
+      _hapticsEnabled = enabled;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(preferenceKey, enabled);
+      } catch (e) {
+        debugPrint('Failed to save haptic preference: $e');
+      }
+    });
+    _preferenceWrites = write.catchError((_) {});
+    await write;
     if (enabled) {
       lightImpact();
     }
@@ -91,7 +108,9 @@ class HapticService {
     if (!_hapticsEnabled) {
       return;
     }
-    debugPlayed.add(kind);
+    if (_recordPlayedForTest) {
+      debugPlayed.add(kind);
+    }
     if (suppressPlatformHaptics) {
       return;
     }
@@ -120,6 +139,9 @@ class HapticService {
   void resetForTest({bool enabled = true, bool initialized = true}) {
     _initialized = initialized;
     _hapticsEnabled = enabled;
+    _initialization = null;
+    _preferenceWrites = Future<void>.value();
+    _recordPlayedForTest = true;
     suppressPlatformHaptics = true;
     debugPlayed.clear();
   }
