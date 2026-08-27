@@ -10,6 +10,7 @@ import 'game_screen.dart';
 import 'learn_to_play_screen.dart';
 import 'multiplayer_lobby_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'settings_screen.dart';
 import 'solo_game_setup_screen.dart';
 import 'multiplayer_game_screen.dart';
 import '../ads/ads_banner.dart';
@@ -293,6 +294,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                                     : _showMultiplayerUnavailable,
                               ),
                               const SizedBox(height: 40),
+                              _buildSettingsButton(),
+                              const SizedBox(height: 16),
                               _buildInfoButton(),
                               const SizedBox(height: 16),
                               _buildGitHubButton(),
@@ -513,6 +516,27 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
   }
 
+  Widget _buildSettingsButton() {
+    return TextButton(
+      onPressed: _openSettings,
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.settings, color: BalatroTheme.glowColor, size: 16),
+          SizedBox(width: 8),
+          Text(
+            'Settings',
+            style: TextStyle(
+              color: BalatroTheme.glowColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoButton() {
     return TextButton(
       onPressed: _showGameInfo,
@@ -606,6 +630,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ],
       ),
     );
+  }
+
+  void _openSettings() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
   }
 
   void _openPrivacyPolicy() {

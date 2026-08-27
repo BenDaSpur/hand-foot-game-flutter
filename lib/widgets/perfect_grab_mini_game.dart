@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../config/game_config.dart';
+import '../services/haptic_service.dart';
 import '../models/perfect_grab_deal_profile.dart';
 import '../theme/balatro_theme.dart';
 import 'card_back_widget.dart';
@@ -116,8 +116,10 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
         setState(() {
           _countdown--;
         });
+        HapticService().selectionClick();
         _scheduleCountdownTick();
       } else {
+        HapticService().lightImpact();
         _beginDealing();
       }
     });
@@ -163,7 +165,7 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
       setState(() {
         _cardCount++;
       });
-      HapticFeedback.selectionClick();
+      HapticService().selectionClick();
       _scheduleNextCard();
     });
   }
@@ -176,9 +178,9 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
       _earnedBonus = success;
     });
     if (success) {
-      HapticFeedback.heavyImpact();
+      HapticService().heavyImpact();
     } else {
-      HapticFeedback.lightImpact();
+      HapticService().lightImpact();
     }
     _timer = Timer(const Duration(milliseconds: 2200), () {
       if (mounted) {

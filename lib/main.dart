@@ -9,6 +9,7 @@ import 'ads/ads_service.dart';
 import 'screens/main_menu_screen.dart';
 import 'services/firebase_service.dart';
 import 'services/analytics_config_service.dart';
+import 'services/haptic_service.dart';
 import 'services/web_deploy_version_service.dart';
 import 'theme/balatro_theme.dart';
 import 'widgets/web_app_update_banner.dart';
@@ -70,6 +71,7 @@ void main() async {
 
   // Consent + ads init must not block first frame. No-op on web/desktop.
   unawaited(AdsService.instance.initialize());
+  unawaited(HapticService().initialize());
 
   runApp(const ProviderScope(child: HandAndFootApp()));
 }

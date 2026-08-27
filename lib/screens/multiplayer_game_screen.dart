@@ -20,6 +20,8 @@ import '../widgets/turn_timer.dart';
 import '../game/go_out_guards.dart';
 import '../widgets/card_animation_host.dart';
 import '../game/events/game_event_bus.dart';
+import '../services/haptic_event_listener.dart';
+import '../services/haptic_service.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../models/multiplayer_lifecycle.dart';
 import '../widgets/game_keyboard_shortcuts.dart';
@@ -27,6 +29,7 @@ import '../widgets/keyboard_shortcuts_overlay.dart';
 import '../utils/game_responsive_layout.dart';
 import '../theme/balatro_theme.dart';
 import 'multiplayer_exit_flow.dart';
+import 'settings_screen.dart';
 
 /// Multiplayer game screen that reuses single-player components for consistency
 class MultiplayerGameScreen extends StatefulWidget {
@@ -77,11 +80,18 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   bool _earlyEndAlertInFlight = false;
   StreamSubscription<GameState>? _gameStateSubscription;
   StreamSubscription<MultiplayerLifecycleEvent>? _lifecycleSubscription;
+  HapticEventListener? _hapticEventListener;
 
   @override
   void initState() {
     super.initState();
     _gameController = widget.gameController;
+    unawaited(HapticService().initialize());
+    _hapticEventListener = HapticEventListener(
+      eventBus: gameEventBus,
+      hapticService: HapticService(),
+      localPlayerId: _gameController.userId,
+    );
     _lastCurrentPlayerIdForHighlight =
         _gameController.gameState.currentPlayer.id;
     _gameStateSubscription = _gameController.gameStateStream.listen(
@@ -118,6 +128,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   @override
   void dispose() {
+    _hapticEventListener?.dispose();
     _gameStateSubscription?.cancel();
     _lifecycleSubscription?.cancel();
     _handScrollController.dispose();
@@ -866,6 +877,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                       gameId: _gameController.gameId,
                       playerId: _gameController.userId,
                     ),
+                    onSettings: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      );
+                    },
                     onLeaveGame: _confirmLeaveGame,
                     onEndGameForEveryone: _gameController.isHost
                         ? _confirmEndGameForEveryone

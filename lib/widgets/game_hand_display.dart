@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/ui_constants.dart';
 import '../models/player.dart';
 import '../models/card.dart';
+import '../services/haptic_service.dart';
 import '../theme/balatro_theme.dart';
 import '../utils/game_responsive_layout.dart';
 import 'card_animation_host.dart';
@@ -136,13 +137,19 @@ class GameHandDisplay extends StatelessWidget {
                               onCardTap != null &&
                                   !hideDuringAnimation &&
                                   !animationActive
-                              ? () => onCardTap!(index)
+                              ? () {
+                                  HapticService().selectionClick();
+                                  onCardTap!(index);
+                                }
                               : null,
                           onDoubleTap:
                               onCardDoubleTap != null &&
                                   !hideDuringAnimation &&
                                   !animationActive
-                              ? () => onCardDoubleTap!(index)
+                              ? () {
+                                  HapticService().selectionClick();
+                                  onCardDoubleTap!(index);
+                                }
                               : null,
                           // Avoid wrapping visible cards in Opacity:
                           // Opacity creates a compositing layer that clips

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../constants/keyboard_shortcuts.dart';
+import '../services/haptic_service.dart';
 import '../theme/balatro_theme.dart';
 import '../utils/game_responsive_layout.dart';
 import 'card_animation_host.dart';
@@ -549,7 +550,7 @@ class GameActionButtons extends StatelessWidget {
         : '$text${KeyboardShortcuts.tooltipSuffix(shortcutHint)}';
 
     final button = ElevatedButton(
-      onPressed: onPressed,
+      onPressed: _withHaptic(onPressed),
       style: ElevatedButton.styleFrom(
         backgroundColor: backgroundColor,
         disabledBackgroundColor: Colors.grey.shade800,
@@ -578,5 +579,16 @@ class GameActionButtons extends StatelessWidget {
     }
 
     return Tooltip(message: label, child: button);
+  }
+
+  /// Tiny vibration on press so mobile taps feel like Perfect Grab card deals.
+  VoidCallback? _withHaptic(VoidCallback? callback) {
+    if (callback == null) {
+      return null;
+    }
+    return () {
+      HapticService().selectionClick();
+      callback();
+    };
   }
 }

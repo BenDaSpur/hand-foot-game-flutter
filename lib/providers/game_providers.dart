@@ -12,6 +12,8 @@ import '../game/events/game_event.dart';
 import '../services/game_event_listener.dart';
 import '../services/sound_service.dart';
 import '../services/sound_event_listener.dart';
+import '../services/haptic_service.dart';
+import '../services/haptic_event_listener.dart';
 import '../utils/debug_logger.dart';
 
 /// Provider for the global game event bus
@@ -383,6 +385,31 @@ final soundEventListenerProvider = Provider.autoDispose<SoundEventListener>((
   final listener = SoundEventListener(
     eventBus: eventBus,
     soundService: soundService,
+  );
+
+  ref.onDispose(() {
+    listener.dispose();
+  });
+
+  return listener;
+});
+
+/// Provider for haptic service singleton
+final hapticServiceProvider = Provider<HapticService>((ref) {
+  final service = HapticService();
+  service.initialize();
+  return service;
+});
+
+/// Provider for haptic event listener service
+final hapticEventListenerProvider = Provider.autoDispose<HapticEventListener>((
+  ref,
+) {
+  final eventBus = ref.watch(gameEventBusProvider);
+  final hapticService = ref.watch(hapticServiceProvider);
+  final listener = HapticEventListener(
+    eventBus: eventBus,
+    hapticService: hapticService,
   );
 
   ref.onDispose(() {

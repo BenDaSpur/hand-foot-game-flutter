@@ -5,6 +5,7 @@ import '../models/player.dart';
 import '../models/meld.dart';
 import '../widgets/playing_card_widget.dart';
 import '../config/game_config.dart';
+import '../services/haptic_service.dart';
 import '../utils/game_responsive_layout.dart';
 
 /// Advanced meld selection widget for multi-meld play-downs with wild card assignment control
@@ -941,18 +942,22 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
 
     // Prevent selection of 3s
     if (card.isThree) {
+      HapticService().lightImpact();
       _showError('3s cannot be melded');
       return;
     }
 
     setState(() {
       if (selectedAvailableIndices.contains(availableIndex)) {
+        HapticService().selectionClick();
         selectedAvailableIndices.remove(availableIndex);
       } else {
         // Check if this card can be added to current selection
         if (_canAddCardToSelection(card)) {
+          HapticService().selectionClick();
           selectedAvailableIndices.add(availableIndex);
         } else {
+          HapticService().lightImpact();
           _showError(
             'Cannot mix different ranks in a meld (except wild cards)',
           );
@@ -1035,6 +1040,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
     }
 
     if (validMeldIndices.isEmpty) {
+      HapticService().lightImpact();
       _showError('No valid melds created');
       return;
     }
@@ -1049,6 +1055,7 @@ class _AdvancedMeldSelectorState extends State<AdvancedMeldSelector> {
           .fold<int>(0, (sum, card) => sum + card.pointValue);
 
       if (totalPoints < widget.playDownRequirement) {
+        HapticService().lightImpact();
         _showError(
           'Total points ($totalPoints) do not meet requirement (${widget.playDownRequirement})',
         );

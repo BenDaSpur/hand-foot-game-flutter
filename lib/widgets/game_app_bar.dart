@@ -15,6 +15,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onExportGame;
   final VoidCallback? onLoadGame;
   final VoidCallback? onHowToPlay;
+  final VoidCallback? onSettings;
   final VoidCallback? onLeaveGame;
   final VoidCallback? onEndGameForEveryone;
   final VoidCallback? onReturnToMainMenu;
@@ -33,6 +34,7 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onExportGame,
     this.onLoadGame,
     this.onHowToPlay,
+    this.onSettings,
     this.onLeaveGame,
     this.onEndGameForEveryone,
     this.onReturnToMainMenu,
@@ -132,150 +134,235 @@ class GameAppBar extends StatelessWidget implements PreferredSizeWidget {
           onSelected: (String value) {
             switch (value) {
               case 'new_game':
-                onNewGame?.call();
-                break;
+                {
+                  onNewGame?.call();
+                  break;
+                }
               case 'copy_seed':
-                onCopySeed?.call();
-                break;
+                {
+                  onCopySeed?.call();
+                  break;
+                }
               case 'export_game':
-                onExportGame?.call();
-                break;
+                {
+                  onExportGame?.call();
+                  break;
+                }
               case 'load_game':
-                onLoadGame?.call();
-                break;
+                {
+                  onLoadGame?.call();
+                  break;
+                }
               case 'how_to_play':
-                onHowToPlay?.call();
-                break;
+                {
+                  onHowToPlay?.call();
+                  break;
+                }
+              case 'settings':
+                {
+                  onSettings?.call();
+                  break;
+                }
               case 'leave_game':
-                onLeaveGame?.call();
-                break;
+                {
+                  onLeaveGame?.call();
+                  break;
+                }
               case 'end_game_for_everyone':
-                onEndGameForEveryone?.call();
-                break;
+                {
+                  onEndGameForEveryone?.call();
+                  break;
+                }
               case GameSessionInfoMenu.copyValue:
-                if (sessionInfo != null) {
-                  GameSessionInfoMenu.copyToClipboard(context, sessionInfo!);
+                {
+                  if (sessionInfo != null) {
+                    GameSessionInfoMenu.copyToClipboard(context, sessionInfo!);
+                  }
+                  break;
                 }
-                break;
               case 'main_menu':
-                if (isMultiplayer && onReturnToMainMenu != null) {
-                  onReturnToMainMenu!();
-                } else {
-                  _returnToMainMenu(context);
+                {
+                  if (isMultiplayer && onReturnToMainMenu != null) {
+                    onReturnToMainMenu!();
+                  } else {
+                    _returnToMainMenu(context);
+                  }
+                  break;
                 }
-                break;
             }
           },
-          itemBuilder: (BuildContext context) => [
-            if (!isMultiplayer) ...[
-              if (onNewGame != null)
-                const PopupMenuItem<String>(
-                  value: 'new_game',
-                  child: Row(
-                    children: [
-                      Icon(Icons.refresh, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('New Game'),
-                    ],
-                  ),
-                ),
-              if (onNewGame != null ||
-                  onCopySeed != null ||
-                  onExportGame != null ||
-                  onLoadGame != null)
-                const PopupMenuDivider(),
-              if (onCopySeed != null)
-                const PopupMenuItem<String>(
-                  value: 'copy_seed',
-                  child: Row(
-                    children: [
-                      Icon(Icons.copy, color: Colors.orange),
-                      SizedBox(width: 8),
-                      Text('Copy Seed'),
-                    ],
-                  ),
-                ),
-              if (onExportGame != null)
-                const PopupMenuItem<String>(
-                  value: 'export_game',
-                  child: Row(
-                    children: [
-                      Icon(Icons.download, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('Export Game'),
-                    ],
-                  ),
-                ),
-              if (onLoadGame != null)
-                const PopupMenuItem<String>(
-                  value: 'load_game',
-                  child: Row(
-                    children: [
-                      Icon(Icons.upload, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text('Load Game'),
-                    ],
-                  ),
-                ),
-              if (onHowToPlay != null) ...[
-                if (onCopySeed != null ||
-                    onExportGame != null ||
-                    onLoadGame != null ||
-                    onNewGame != null)
-                  const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'how_to_play',
-                  child: Row(
-                    children: [
-                      Icon(Icons.help_outline, color: Colors.purple),
-                      SizedBox(width: 8),
-                      Text('How to Play'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-              ],
-            ] else ...[
-              if (isHost && onEndGameForEveryone != null)
-                const PopupMenuItem<String>(
-                  value: 'end_game_for_everyone',
-                  child: Row(
-                    children: [
-                      Icon(Icons.stop_circle_outlined, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('End Game for Everyone'),
-                    ],
-                  ),
-                ),
-              if (onLeaveGame != null)
-                PopupMenuItem<String>(
-                  value: 'leave_game',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.exit_to_app, color: Colors.orange),
-                      const SizedBox(width: 8),
-                      Text(isHost ? 'Leave & End Game' : 'Leave Game'),
-                    ],
-                  ),
-                ),
-              const PopupMenuDivider(),
-            ],
-            const PopupMenuItem<String>(
-              value: 'main_menu',
-              child: Row(
-                children: [
-                  Icon(Icons.home, color: BalatroTheme.neonBlue),
-                  SizedBox(width: 8),
-                  Text('Main Menu'),
-                ],
-              ),
-            ),
-            if (sessionInfo != null)
-              ...GameSessionInfoMenu.buildItems(sessionInfo!),
-          ],
+          itemBuilder: (BuildContext context) => _buildMenuEntries(),
         ),
       ],
     );
+  }
+
+  List<PopupMenuEntry<String>> _buildMenuEntries() {
+    final items = <PopupMenuEntry<String>>[];
+
+    if (!isMultiplayer) {
+      if (onNewGame != null) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'new_game',
+            child: Row(
+              children: [
+                Icon(Icons.refresh, color: Colors.red),
+                SizedBox(width: 8),
+                Text('New Game'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (onNewGame != null ||
+          onCopySeed != null ||
+          onExportGame != null ||
+          onLoadGame != null) {
+        items.add(const PopupMenuDivider());
+      }
+      if (onCopySeed != null) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'copy_seed',
+            child: Row(
+              children: [
+                Icon(Icons.copy, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Copy Seed'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (onExportGame != null) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'export_game',
+            child: Row(
+              children: [
+                Icon(Icons.download, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Export Game'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (onLoadGame != null) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'load_game',
+            child: Row(
+              children: [
+                Icon(Icons.upload, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Load Game'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (onHowToPlay != null || onSettings != null) {
+        if (onCopySeed != null ||
+            onExportGame != null ||
+            onLoadGame != null ||
+            onNewGame != null) {
+          items.add(const PopupMenuDivider());
+        }
+        if (onHowToPlay != null) {
+          items.add(
+            const PopupMenuItem<String>(
+              value: 'how_to_play',
+              child: Row(
+                children: [
+                  Icon(Icons.help_outline, color: Colors.purple),
+                  SizedBox(width: 8),
+                  Text('How to Play'),
+                ],
+              ),
+            ),
+          );
+        }
+        if (onSettings != null) {
+          items.add(
+            const PopupMenuItem<String>(
+              value: 'settings',
+              child: Row(
+                children: [
+                  Icon(Icons.settings, color: BalatroTheme.neonGreen),
+                  SizedBox(width: 8),
+                  Text('Settings'),
+                ],
+              ),
+            ),
+          );
+        }
+        items.add(const PopupMenuDivider());
+      }
+    } else {
+      if (isHost && onEndGameForEveryone != null) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'end_game_for_everyone',
+            child: Row(
+              children: [
+                Icon(Icons.stop_circle_outlined, color: Colors.red),
+                SizedBox(width: 8),
+                Text('End Game for Everyone'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (onLeaveGame != null) {
+        items.add(
+          PopupMenuItem<String>(
+            value: 'leave_game',
+            child: Row(
+              children: [
+                const Icon(Icons.exit_to_app, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(isHost ? 'Leave & End Game' : 'Leave Game'),
+              ],
+            ),
+          ),
+        );
+      }
+      if (onSettings != null) {
+        items.add(
+          const PopupMenuItem<String>(
+            value: 'settings',
+            child: Row(
+              children: [
+                Icon(Icons.settings, color: BalatroTheme.neonGreen),
+                SizedBox(width: 8),
+                Text('Settings'),
+              ],
+            ),
+          ),
+        );
+      }
+      items.add(const PopupMenuDivider());
+    }
+
+    items.add(
+      const PopupMenuItem<String>(
+        value: 'main_menu',
+        child: Row(
+          children: [
+            Icon(Icons.home, color: BalatroTheme.neonBlue),
+            SizedBox(width: 8),
+            Text('Main Menu'),
+          ],
+        ),
+      ),
+    );
+    if (sessionInfo != null) {
+      items.addAll(GameSessionInfoMenu.buildItems(sessionInfo!));
+    }
+
+    return items;
   }
 
   void _returnToMainMenu(BuildContext context) {
