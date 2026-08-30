@@ -18,9 +18,9 @@ dependencies:
   # Pin below broken FlutterFire 6.7/6.5.5/12.4.4 releases that extend
   # `FirebasePlugin` before firebase_core_platform_interface publishes it.
   firebase_core: ^4.13.0
-  cloud_firestore: ^6.8.0
+  cloud_firestore: ^6.9.0
   firebase_auth: ^6.5.7
-  firebase_analytics: ^12.4.6
+  firebase_analytics: ^12.5.0
   device_info_plus: ^13.2.0
   package_info_plus: ^10.2.0
   uuid: ^4.5.3
