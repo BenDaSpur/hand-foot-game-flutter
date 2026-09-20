@@ -349,14 +349,23 @@ class BotConfig {
   static const int humanLowRankDiscardBonus = 25;
 
   /// After play-down, do not start another meld rank once this many exist
-  /// without a book (analytics: 4–6 dirty 3-card piles, then noKey leftovers).
+  /// (analytics 2026.09: bots opened 5–7 dirty piles after the first book).
   static const int handPileNewMeldCap = 4;
 
   /// Penalty for discarding 4–8/K/A onto a contestable pile the bot cannot take.
   static const int contestableUnlockFeedPenalty = 90;
 
+  /// Hold 2+ naturals of the live discard top regardless of pile size / play-down.
+  /// Must beat extra-copy dump bonuses — session 17899333117151715 discarded
+  /// 4♦ onto 4♦ at pile 4 while holding three fours.
+  static const int liveTopNaturalHoldPenalty = 400;
+
+  /// Prefer freezing the pile with a wild when the human can unlock and the
+  /// bot cannot (humans discarded 152 wilds vs bots 8 in recent games).
+  static const int wildFreezeDiscardBonus = 180;
+
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.08-hand-pile-empty';
+  static const String botAiVersion = '2026.09-compact-books';
 
   // Prevent instantiation
   BotConfig._();

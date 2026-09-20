@@ -84,6 +84,8 @@ class TurnPlanner {
       liveKeyRanks: liveKeys,
       liveTop: liveTop,
       forceSpendKeys: forceSpendKeys,
+      allowWildFreeze:
+          humanCanUnlock && !canUnlock && !goOutThisTurn && !skipThrees,
     );
 
     if (candidates.isEmpty) {

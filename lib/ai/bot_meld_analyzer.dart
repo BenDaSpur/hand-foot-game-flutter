@@ -1004,16 +1004,20 @@ class BotMeldAnalyzer {
       }
     }
 
-    // Try progressively larger combinations (1, 2, 3, 4, 5 melds)
+    // Try progressively larger combinations. Large hands in late rounds
+    // often need 6–8 compact rank piles to hit 150+.
+    final maxCombinationSize = handSize >= 18 ? 8 : 5;
     for (
       int combinationSize = 1;
-      combinationSize <= 5 && combinationSize <= possibleMelds.length;
+      combinationSize <= maxCombinationSize &&
+          combinationSize <= possibleMelds.length;
       combinationSize++
     ) {
       final bestCombination = _findBestCombinationOfSize(
         possibleMelds,
         requirement,
         combinationSize,
+        hand: bot.currentHand,
       );
       if (bestCombination.isNotEmpty) {
         return bestCombination;
@@ -1036,28 +1040,77 @@ class BotMeldAnalyzer {
       return [];
     }
 
-    final sorted = List<List<PlayingCard>>.from(possibleMelds)
-      ..sort((a, b) {
-        final valueA = calculateTotalMeldValue([a]);
-        final valueB = calculateTotalMeldValue([b]);
-        if (valueB != valueA) {
-          return valueB.compareTo(valueA);
+    final comparators = <int Function(List<PlayingCard>, List<PlayingCard>)>[
+      (a, b) {
+        final valueCmp = calculateTotalMeldValue([
+          b,
+        ]).compareTo(calculateTotalMeldValue([a]));
+        if (valueCmp != 0) {
+          return valueCmp;
         }
         return b.length.compareTo(a.length);
-      });
+      },
+      (a, b) {
+        final sizeCmp = b.length.compareTo(a.length);
+        if (sizeCmp != 0) {
+          return sizeCmp;
+        }
+        return calculateTotalMeldValue([
+          b,
+        ]).compareTo(calculateTotalMeldValue([a]));
+      },
+      (a, b) {
+        final wildA = a.where((card) => card.isWild).length;
+        final wildB = b.where((card) => card.isWild).length;
+        final wildCmp = wildA.compareTo(wildB);
+        if (wildCmp != 0) {
+          return wildCmp;
+        }
+        return calculateTotalMeldValue([
+          b,
+        ]).compareTo(calculateTotalMeldValue([a]));
+      },
+    ];
 
-    final remaining = List<PlayingCard>.from(bot.currentHand);
+    List<List<PlayingCard>> best = const [];
+    for (final compare in comparators) {
+      final packed = _packDisjointMelds(
+        bot.currentHand,
+        possibleMelds,
+        compare,
+        requirement: requirement,
+      );
+      if (calculateTotalMeldValue(packed) < requirement) {
+        continue;
+      }
+      if (best.isEmpty || packed.length < best.length) {
+        best = packed;
+      }
+    }
+    return best;
+  }
+
+  List<List<PlayingCard>> _packDisjointMelds(
+    List<PlayingCard> hand,
+    List<List<PlayingCard>> possibleMelds,
+    int Function(List<PlayingCard>, List<PlayingCard>) compare, {
+    int? requirement,
+  }) {
+    final sorted = List<List<PlayingCard>>.from(possibleMelds)..sort(compare);
+    final remaining = List<PlayingCard>.from(hand);
     final chosen = <List<PlayingCard>>[];
+    var packedValue = 0;
     for (final meld in sorted) {
+      if (requirement != null && packedValue >= requirement) {
+        break;
+      }
       if (!_removeMeldFromRemaining(remaining, meld)) {
         continue;
       }
       chosen.add(meld);
-      if (calculateTotalMeldValue(chosen) >= requirement) {
-        return chosen;
-      }
+      packedValue += calculateTotalMeldValue([meld]);
     }
-    return [];
+    return chosen;
   }
 
   /// True when [combination] can be taken from [hand] without reuse.
@@ -1167,8 +1220,9 @@ class BotMeldAnalyzer {
   List<List<PlayingCard>> _findBestCombinationOfSize(
     List<List<PlayingCard>> possibleMelds,
     int requirement,
-    int combinationSize,
-  ) {
+    int combinationSize, {
+    List<PlayingCard>? hand,
+  }) {
     if (combinationSize == 1) {
       // Single meld - find the most EFFICIENT option for play-down
       List<PlayingCard>? bestMeld;
@@ -1203,6 +1257,9 @@ class BotMeldAnalyzer {
           final combination = [possibleMelds[i], possibleMelds[j]];
           final combinedValue = calculateTotalMeldValue(combination);
           if (combinedValue >= requirement) {
+            if (hand != null && !combinationFitsHand(hand, combination)) {
+              continue;
+            }
             // Calculate combined efficiency of both melds
             final efficiency1 = _calculateMeldPlayDownEfficiency(
               possibleMelds[i],
@@ -1239,12 +1296,15 @@ class BotMeldAnalyzer {
       );
 
       // Limit combinations checked to prevent performance issues
-      final maxCombinationsToCheck = (combinationSize <= 3) ? 50 : 20;
+      final maxCombinationsToCheck = (combinationSize <= 3) ? 80 : 40;
       final limitedCombinations = combinations
           .take(maxCombinationsToCheck)
           .toList();
 
       for (final combination in limitedCombinations) {
+        if (hand != null && !combinationFitsHand(hand, combination)) {
+          continue;
+        }
         final combinedValue = calculateTotalMeldValue(combination);
         if (combinedValue >= requirement) {
           return combination;

@@ -172,8 +172,8 @@ void main() {
       expect(botAI.shouldRushHandToFoot(bot, context()), isFalse);
     });
 
-    test('botAiVersion is hand-pile-empty', () {
-      expect(BotConfig.botAiVersion, '2026.08-hand-pile-empty');
+    test('botAiVersion is compact-books', () {
+      expect(BotConfig.botAiVersion, '2026.09-compact-books');
     });
   });
 }

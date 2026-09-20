@@ -103,8 +103,7 @@ class MoveScorer {
             value += _MoveScores.footCreateBonus * weights.footTransition;
           }
           if (!bot.hasPickedUpFoot &&
-              bot.melds.length >= BotConfig.handPileNewMeldCap &&
-              bot.bookCount == 0) {
+              bot.melds.length >= BotConfig.handPileNewMeldCap) {
             value -= _MoveScores.handPileExtraMeldPenalty;
           }
         }
