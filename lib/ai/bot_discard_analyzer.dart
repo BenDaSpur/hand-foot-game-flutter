@@ -28,10 +28,16 @@ class BotDiscardAnalyzer {
   ///
   /// Wilds are only spendable once the hand is down to
   /// [BotConfig.wildDiscardDesperationHandSize], and never while the bot is in
-  /// foot still missing a required go-out book.
-  static bool shouldProtectWilds(Player bot) {
-    return mustProtectWildsInFoot(bot) ||
-        bot.currentHand.length > BotConfig.wildDiscardDesperationHandSize;
+  /// foot still missing a required go-out book. [allowWildFreeze] lets the
+  /// planner freeze a farm the human can take and the bot cannot.
+  static bool shouldProtectWilds(Player bot, {bool allowWildFreeze = false}) {
+    if (mustProtectWildsInFoot(bot)) {
+      return true;
+    }
+    if (allowWildFreeze) {
+      return false;
+    }
+    return bot.currentHand.length > BotConfig.wildDiscardDesperationHandSize;
   }
 
   /// Choose the best card to discard considering multiple factors.
@@ -44,6 +50,7 @@ class BotDiscardAnalyzer {
     BotGameAnalyzer? analyzer,
     bool preserveUnlockKeys = true,
     Set<CardRank>? extraProtectedRanks,
+    bool allowWildFreeze = false,
   }) {
     if (bot.currentHand.isEmpty) {
       throw StateError('Cannot discard from empty hand');
@@ -53,7 +60,7 @@ class BotDiscardAnalyzer {
     // opponent-feed penalties stack past -400, so a merely-discouraged wild
     // still wins the sort whenever every natural matches an opponent meld.
     var candidates = bot.currentHand;
-    if (shouldProtectWilds(bot)) {
+    if (shouldProtectWilds(bot, allowWildFreeze: allowWildFreeze)) {
       final nonWilds = candidates.where((card) => !card.isWild).toList();
       if (nonWilds.isNotEmpty) {
         candidates = nonWilds;
@@ -71,6 +78,7 @@ class BotDiscardAnalyzer {
         analyzer,
         preserveUnlockKeys: preserveUnlockKeys,
         extraProtectedRanks: extraProtectedRanks,
+        allowWildFreeze: allowWildFreeze,
       );
     }
 
@@ -90,6 +98,7 @@ class BotDiscardAnalyzer {
     BotGameAnalyzer? analyzer, {
     bool preserveUnlockKeys = true,
     Set<CardRank>? extraProtectedRanks,
+    bool allowWildFreeze = false,
   }) {
     int score = 0;
 
@@ -168,9 +177,8 @@ class BotDiscardAnalyzer {
       }
     }
 
-    // 7. UNLOCK KEYS: Keep 2+ matching naturals for an attractive discard pile
-    // (also before play-down — keys are needed immediately after playing down).
-    // Skip when caller force-spends keys (pile frozen / declined / useless top).
+    // 7. UNLOCK KEYS: never feed the live top when holding 2+ matching
+    // naturals, even before play-down and even on a 2–4 card pile.
     if (preserveUnlockKeys &&
         !gameState.discardPileFrozen &&
         !card.isWild &&
@@ -181,28 +189,25 @@ class BotDiscardAnalyzer {
         final matchingNaturals = bot.currentHand
             .where((c) => c.rank == top.rank && !c.isWild)
             .length;
-        final pileSize = gameState.discardPile.length;
-        final minPile = bot.hasPlayedDown
-            ? BotConfig.preserveUnlockKeysMeldPileSize
-            : BotConfig.preserveUnlockKeysPileSize;
-        if (matchingNaturals >= 2 && pileSize >= minPile) {
-          // Preserve unlock ability — humans unlock ~12% of draws
-          score -= 80;
-          if (pileSize >= 10) {
+        if (matchingNaturals >= GameConfig.minNaturalCardsForMeld) {
+          score -= BotConfig.liveTopNaturalHoldPenalty;
+          if (gameState.discardPile.length >= 10) {
             score -= 40;
           }
         }
       }
     }
 
-    // Generic 4–8 pair hold: even when the current top is a different rank,
-    // keep the last unlock-rank pair so the next 4/5/6 discard is contestable.
+    // Generic 4–8 pair hold: keep 2+ of a key rank while the pile is
+    // contestable so the next 4/5/6 discard is still unlockable.
+    final pileSizeForHold = gameState.discardPile.length;
     if (preserveUnlockKeys &&
         !gameState.discardPileFrozen &&
         !card.isWild &&
         !card.isThree &&
         _isHumanPreferredDiscardRank(card.rank) &&
-        sameRankCount == 2 &&
+        sameRankCount >= 2 &&
+        pileSizeForHold >= BotConfig.postPlayDownHardTakePileSize &&
         !_hasOtherGenericUnlockPair(bot, card.rank)) {
       score -= BotConfig.genericUnlockKeyHoldPenalty;
     }
@@ -214,7 +219,7 @@ class BotDiscardAnalyzer {
         protected.contains(card.rank) &&
         !card.isWild &&
         !card.isThree &&
-        sameRankCount == 2) {
+        sameRankCount >= 2) {
       score -=
           BotConfig.genericUnlockKeyHoldPenalty +
           BotConfig.liveTopKeyHoldExtraPenalty;
@@ -250,6 +255,10 @@ class BotDiscardAnalyzer {
         !card.isThree &&
         !card.isWild) {
       score -= BotConfig.liveTopKeyHoldExtraPenalty;
+    }
+
+    if (allowWildFreeze && card.isWild && !gameState.discardPileFrozen) {
+      score += BotConfig.wildFreezeDiscardBonus;
     }
 
     return score;

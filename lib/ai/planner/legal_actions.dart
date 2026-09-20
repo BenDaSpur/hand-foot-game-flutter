@@ -50,6 +50,7 @@ class LegalActionGenerator {
     required Set<CardRank> liveKeyRanks,
     required CardRank? liveTop,
     required bool forceSpendKeys,
+    bool allowWildFreeze = false,
   }) {
     switch (context.turnPhase) {
       case TurnPhase.draw:
@@ -67,6 +68,7 @@ class LegalActionGenerator {
           context,
           liveKeyRanks: liveKeyRanks,
           forceSpendKeys: forceSpendKeys,
+          allowWildFreeze: allowWildFreeze,
         );
     }
   }
@@ -170,7 +172,18 @@ class LegalActionGenerator {
       );
       if (best.isNotEmpty && BotEndGameManager.isSafeCreateMeld(bot, best)) {
         final emptiesHand = best.length >= bot.currentHand.length - 1;
-        if (!_capsNewHandPileMeld(bot, emptiesHand: emptiesHand)) {
+        final capped = _capsNewHandPileMeld(
+          bot,
+          emptiesHand: emptiesHand,
+          incomingMelds: [best],
+        );
+        final preferExisting = _shouldSkipNewRankForExistingPiles(
+          bot,
+          newMeld: best,
+          hasAdditions: additions.isNotEmpty,
+          emptiesHand: emptiesHand,
+        );
+        if (!capped && !preferExisting) {
           actions.add(
             LegalCandidate(
               decision: BotDecision(action: 'createMeld', data: best),
@@ -221,7 +234,11 @@ class LegalActionGenerator {
 
     final usedCards = filtered.expand((meld) => meld).toList();
     final emptiesHand = usedCards.length >= bot.currentHand.length - 1;
-    if (_capsNewHandPileMeld(bot, emptiesHand: emptiesHand)) {
+    if (_capsNewHandPileMeld(
+      bot,
+      emptiesHand: emptiesHand,
+      incomingMelds: filtered,
+    )) {
       return;
     }
     if (!forceSpendKeys &&
@@ -243,6 +260,7 @@ class LegalActionGenerator {
     BotGameContext context, {
     required Set<CardRank> liveKeyRanks,
     required bool forceSpendKeys,
+    required bool allowWildFreeze,
   }) {
     if (bot.currentHand.isEmpty) {
       if (bot.canGoOut) {
@@ -275,6 +293,7 @@ class LegalActionGenerator {
       context.gameState,
       preserveUnlockKeys: !forceSpendKeys,
       extraProtectedRanks: forceSpendKeys ? null : liveKeyRanks,
+      allowWildFreeze: allowWildFreeze,
     );
     return [
       LegalCandidate(
@@ -377,13 +396,63 @@ class LegalActionGenerator {
         .toList();
   }
 
-  /// After play-down, do not open another rank on a bookless hand pile
-  /// unless the meld/burst empties (or leaves one discard).
-  bool _capsNewHandPileMeld(Player bot, {required bool emptiesHand}) {
-    return !bot.hasPickedUpFoot &&
-        bot.melds.length >= BotConfig.handPileNewMeldCap &&
-        bot.bookCount == 0 &&
-        !emptiesHand;
+  /// After play-down, do not open ranks past [BotConfig.handPileNewMeldCap]
+  /// unless the play empties, is already a book, or is the missing go-out lane.
+  bool _capsNewHandPileMeld(
+    Player bot, {
+    required bool emptiesHand,
+    List<List<PlayingCard>> incomingMelds = const [],
+  }) {
+    if (bot.hasPickedUpFoot || emptiesHand) {
+      return false;
+    }
+    final projected = bot.melds.length + incomingMelds.length;
+    if (projected <= BotConfig.handPileNewMeldCap) {
+      return false;
+    }
+    if (incomingMelds.isEmpty) {
+      return bot.melds.length >= BotConfig.handPileNewMeldCap;
+    }
+    return !incomingMelds.every((meld) => _isExemptNewMeld(bot, meld));
+  }
+
+  /// Prefer growing existing piles to 7 over opening a leftover pair rank.
+  bool _shouldSkipNewRankForExistingPiles(
+    Player bot, {
+    required List<PlayingCard> newMeld,
+    required bool hasAdditions,
+    required bool emptiesHand,
+  }) {
+    if (!hasAdditions || emptiesHand) {
+      return false;
+    }
+    if (_isExemptNewMeld(bot, newMeld)) {
+      return false;
+    }
+    return bot.melds.any((meld) => meld.cards.length < GameConfig.bookSize);
+  }
+
+  bool _isExemptNewMeld(Player bot, List<PlayingCard> meld) {
+    if (meld.length >= GameConfig.bookSize) {
+      return true;
+    }
+    if (meld.isEmpty) {
+      return false;
+    }
+    // Only a near-complete missing go-out book may open past the rank cap.
+    // A 3-card leftover pair is how bots spread into 5–7 dirty piles.
+    final isClean = !meld.any((card) => card.isWild);
+    final nearBook = meld.length >= GameConfig.bookSize - 1;
+    if (!nearBook) {
+      return false;
+    }
+    if (!bot.hasCleanBook && isClean) {
+      return true;
+    }
+    if (bot.hasCleanBook && !bot.hasDirtyBook && !isClean) {
+      return true;
+    }
+    return false;
   }
 
   bool _burnsLiveKeys(
