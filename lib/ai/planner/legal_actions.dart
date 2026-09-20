@@ -398,6 +398,7 @@ class LegalActionGenerator {
 
   /// After play-down, do not open ranks past [BotConfig.handPileNewMeldCap]
   /// unless the play empties, is already a book, or is the missing go-out lane.
+  /// Same-rank incoming groups extend an existing pile and do not count.
   bool _capsNewHandPileMeld(
     Player bot, {
     required bool emptiesHand,
@@ -406,14 +407,23 @@ class LegalActionGenerator {
     if (bot.hasPickedUpFoot || emptiesHand) {
       return false;
     }
-    final projected = bot.melds.length + incomingMelds.length;
+    final existingRanks = {for (final meld in bot.melds) meld.rank};
+    final newIncoming = incomingMelds.where((meld) {
+      final rank = _naturalRank(meld);
+      return rank != null && !existingRanks.contains(rank);
+    }).toList();
+    final newRanks = {for (final meld in newIncoming) _naturalRank(meld)!};
+    final projected = existingRanks.length + newRanks.length;
     if (projected <= BotConfig.handPileNewMeldCap) {
       return false;
     }
     if (incomingMelds.isEmpty) {
-      return bot.melds.length >= BotConfig.handPileNewMeldCap;
+      return existingRanks.length >= BotConfig.handPileNewMeldCap;
     }
-    return !incomingMelds.every((meld) => _isExemptNewMeld(bot, meld));
+    if (newIncoming.isEmpty) {
+      return false;
+    }
+    return !newIncoming.every((meld) => _isExemptNewMeld(bot, meld));
   }
 
   /// Prefer growing existing piles to 7 over opening a leftover pair rank.
@@ -426,10 +436,23 @@ class LegalActionGenerator {
     if (!hasAdditions || emptiesHand) {
       return false;
     }
+    final rank = _naturalRank(newMeld);
+    if (rank != null && bot.melds.any((meld) => meld.rank == rank)) {
+      return false;
+    }
     if (_isExemptNewMeld(bot, newMeld)) {
       return false;
     }
     return bot.melds.any((meld) => meld.cards.length < GameConfig.bookSize);
+  }
+
+  CardRank? _naturalRank(List<PlayingCard> meld) {
+    for (final card in meld) {
+      if (!card.isWild && !card.isThree) {
+        return card.rank;
+      }
+    }
+    return null;
   }
 
   bool _isExemptNewMeld(Player bot, List<PlayingCard> meld) {

@@ -1078,6 +1078,7 @@ class BotMeldAnalyzer {
         bot.currentHand,
         possibleMelds,
         compare,
+        requirement: requirement,
       );
       if (calculateTotalMeldValue(packed) < requirement) {
         continue;
@@ -1092,16 +1093,22 @@ class BotMeldAnalyzer {
   List<List<PlayingCard>> _packDisjointMelds(
     List<PlayingCard> hand,
     List<List<PlayingCard>> possibleMelds,
-    int Function(List<PlayingCard>, List<PlayingCard>) compare,
-  ) {
+    int Function(List<PlayingCard>, List<PlayingCard>) compare, {
+    int? requirement,
+  }) {
     final sorted = List<List<PlayingCard>>.from(possibleMelds)..sort(compare);
     final remaining = List<PlayingCard>.from(hand);
     final chosen = <List<PlayingCard>>[];
+    var packedValue = 0;
     for (final meld in sorted) {
+      if (requirement != null && packedValue >= requirement) {
+        break;
+      }
       if (!_removeMeldFromRemaining(remaining, meld)) {
         continue;
       }
       chosen.add(meld);
+      packedValue += calculateTotalMeldValue([meld]);
     }
     return chosen;
   }

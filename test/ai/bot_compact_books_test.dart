@@ -168,9 +168,53 @@ void main() {
           botAI.meldAnalyzer.calculateTotalMeldValue(greedy),
           greaterThanOrEqualTo(150),
         );
+        expect(
+          greedy.length,
+          lessThan(8),
+          reason: 'stop packing once the 150-point requirement is met',
+        );
 
         final decision = botAI.makeDecision(bot, controller);
         expect(decision.action, anyOf('createMeld', 'createMultipleMelds'));
+        if (decision.action == 'createMultipleMelds') {
+          expect((decision.data as List).length, lessThan(8));
+        }
+      },
+    );
+
+    test(
+      'same-rank extra cards at the pile cap still add instead of opening a fifth rank',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ace, size: 7, dirty: false),
+          _sizedMeld(CardRank.queen, size: 5, dirty: true),
+          _sizedMeld(CardRank.seven, size: 4, dirty: true),
+          _sizedMeld(CardRank.five, size: 3, dirty: true),
+        ]);
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          ]);
+
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+        _setPile(controller, size: 12, top: CardRank.jack);
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, anyOf('addToMeld', 'createMeld'));
+        if (decision.action == 'addToMeld') {
+          final data = decision.data as Map<String, dynamic>;
+          expect((data['card'] as PlayingCard).rank, CardRank.queen);
+        } else {
+          final cards = decision.data as List<PlayingCard>;
+          expect(cards.every((card) => card.rank == CardRank.queen), isTrue);
+        }
       },
     );
 
