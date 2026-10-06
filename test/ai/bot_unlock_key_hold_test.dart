@@ -29,8 +29,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.09-compact-books');
+    test('botAiVersion is unstick-hand', () {
+      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
     });
 
     test('emergency hand size still hard-takes unlockable fat pile in draw', () {

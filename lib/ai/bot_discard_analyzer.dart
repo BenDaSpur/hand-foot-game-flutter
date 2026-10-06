@@ -261,6 +261,30 @@ class BotDiscardAnalyzer {
       score += BotConfig.wildFreezeDiscardBonus;
     }
 
+    // Stuck hand pile (played down, <= 8 cards): humans discard 4–8
+    // singletons and unlock the 9–Q bots were dumping instead. 3s already
+    // return above, so a live-top 9 cannot beat a 3.
+    final stuckHand =
+        bot.hasPlayedDown && handSize <= BotConfig.booklessFarmForceFootMaxHand;
+    if (stuckHand && !card.isWild && !card.isThree) {
+      final topRank = top == null || top.isWild || top.isThree
+          ? null
+          : top.rank;
+      final isLiveTop = topRank != null && card.rank == topRank;
+      if (sameRankCount == 1 &&
+          _isHumanPreferredDiscardRank(card.rank) &&
+          !isLiveTop) {
+        score += BotConfig.stuckLowSingletonDiscardBonus;
+      }
+      if (sameRankCount >= 2 && _isHighBookRank(card.rank)) {
+        final fitsMeld = bot.melds.any((meld) => _cardFitsMeld(card, meld));
+        final lowSingleton = _hasStuckLowSingleton(bot);
+        if (fitsMeld || !lowSingleton) {
+          score -= BotConfig.genericUnlockKeyHoldPenalty;
+        }
+      }
+    }
+
     return score;
   }
 
@@ -405,6 +429,30 @@ class BotDiscardAnalyzer {
       }
     }
     return false;
+  }
+
+  /// True when the hand has a singleton 4–8 that should be discarded first.
+  bool _hasStuckLowSingleton(Player bot) {
+    final counts = <CardRank, int>{};
+    for (final held in bot.currentHand) {
+      if (held.isWild ||
+          held.isThree ||
+          !_isHumanPreferredDiscardRank(held.rank)) {
+        continue;
+      }
+      counts[held.rank] = (counts[held.rank] ?? 0) + 1;
+    }
+    return counts.values.any((count) => count == 1);
+  }
+
+  /// 9–A. These were the ranks bots dumped while holding 4–8 pairs.
+  bool _isHighBookRank(CardRank rank) {
+    return rank == CardRank.nine ||
+        rank == CardRank.ten ||
+        rank == CardRank.jack ||
+        rank == CardRank.queen ||
+        rank == CardRank.king ||
+        rank == CardRank.ace;
   }
 
   /// Ranks humans discard most while trimming large hands (analytics).

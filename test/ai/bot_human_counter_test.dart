@@ -35,7 +35,7 @@ void main() {
     });
 
     test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.09-compact-books');
+      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
       expect(BotConfig.booklessFarmForceFootMaxHand, 8);

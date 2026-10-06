@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.09-compact-books');
+    test('botAiVersion is unstick-hand', () {
+      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
     });
 
     test(
