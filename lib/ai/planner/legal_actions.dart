@@ -2,6 +2,7 @@ import '../../config/game_config.dart';
 import '../../game/game_controller.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
+import '../../models/meld.dart';
 import '../../models/player.dart';
 import '../bot_config.dart';
 import '../bot_decision.dart';
@@ -50,6 +51,7 @@ class LegalActionGenerator {
     required Set<CardRank> liveKeyRanks,
     required CardRank? liveTop,
     required bool forceSpendKeys,
+    required bool emptyHandPile,
     bool allowWildFreeze = false,
   }) {
     switch (context.turnPhase) {
@@ -61,6 +63,7 @@ class LegalActionGenerator {
           context,
           liveTop: liveTop,
           forceSpendKeys: forceSpendKeys,
+          emptyHandPile: emptyHandPile,
         );
       case TurnPhase.discard:
         return _discardActions(
@@ -96,6 +99,7 @@ class LegalActionGenerator {
     BotGameContext context, {
     required CardRank? liveTop,
     required bool forceSpendKeys,
+    required bool emptyHandPile,
   }) {
     final actions = <LegalCandidate>[
       LegalCandidate(
@@ -153,7 +157,10 @@ class LegalActionGenerator {
     if (additions.isNotEmpty) {
       actions.add(
         LegalCandidate(
-          decision: BotDecision(action: 'addToMeld', data: additions.first),
+          decision: BotDecision(
+            action: 'addToMeld',
+            data: _chooseBookBuildingAddition(bot, additions),
+          ),
           kind: LegalActionKind.addToMeld,
         ),
       );
@@ -164,6 +171,7 @@ class LegalActionGenerator {
     if (!forceSpendKeys) {
       possible = _filterLiveKeyMelds(bot, possible, liveTop);
     }
+    List<PlayingCard>? createMeld;
     if (possible.isNotEmpty) {
       final best = meldAnalyzer.findBestMeld(
         possible,
@@ -184,14 +192,26 @@ class LegalActionGenerator {
           emptiesHand: emptiesHand,
         );
         if (!capped && !preferExisting) {
-          actions.add(
-            LegalCandidate(
-              decision: BotDecision(action: 'createMeld', data: best),
-              kind: LegalActionKind.createMeld,
-            ),
-          );
+          createMeld = best;
         }
       }
+    }
+    // Stuck hand pile: the rank cap left no legal add, so open one natural
+    // pair that is not the live discard top. Analytics: 3,466 leftover
+    // noMeld turns at 5–8 cards after compact-books.
+    if (createMeld == null && emptyHandPile && additions.isEmpty) {
+      final rescue = _unstickNaturalPair(bot, possible, liveTop);
+      if (rescue != null && BotEndGameManager.isSafeCreateMeld(bot, rescue)) {
+        createMeld = rescue;
+      }
+    }
+    if (createMeld != null) {
+      actions.add(
+        LegalCandidate(
+          decision: BotDecision(action: 'createMeld', data: createMeld),
+          kind: LegalActionKind.createMeld,
+        ),
+      );
     }
 
     _addMaximalBurstCandidate(
@@ -394,6 +414,92 @@ class LegalActionGenerator {
     return possibleMelds
         .where((meld) => meld.length >= GameConfig.bookSize)
         .toList();
+  }
+
+  /// Prefer an add that finishes the missing clean or dirty book, then any
+  /// add onto a 5–6 card pile, over a leftover card on a short meld.
+  Map<String, dynamic> _chooseBookBuildingAddition(
+    Player bot,
+    List<Map<String, dynamic>> additions,
+  ) {
+    Map<String, dynamic>? completesMissing;
+    Map<String, dynamic>? growsNearBook;
+    for (final addition in additions) {
+      final card = addition['card'] as PlayingCard?;
+      final index = addition['meldIndex'] as int?;
+      if (card == null ||
+          index == null ||
+          index < 0 ||
+          index >= bot.melds.length) {
+        continue;
+      }
+      final meld = bot.melds[index];
+      if (meld.cards.length >= 5 && meld.cards.length < GameConfig.bookSize) {
+        growsNearBook ??= addition;
+      }
+      if (meld.cards.length == GameConfig.bookSize - 1 &&
+          _completesMissingGoOutBook(bot, meld, card)) {
+        completesMissing ??= addition;
+      }
+    }
+    return completesMissing ?? growsNearBook ?? additions.first;
+  }
+
+  /// A wild may finish a dirty book once a clean book exists. Naturals finish
+  /// the clean book. Do not dirty a 6-card natural pile while a dirty pile
+  /// can still take the wild.
+  bool _completesMissingGoOutBook(Player bot, Meld meld, PlayingCard card) {
+    final naturalOnly = !meld.cards.any((held) => held.isWild);
+    if (!bot.hasCleanBook && naturalOnly && !card.isWild) {
+      return true;
+    }
+    if (!bot.hasCleanBook || bot.hasDirtyBook) {
+      return false;
+    }
+    if (!naturalOnly) {
+      return true;
+    }
+    if (!card.isWild) {
+      return false;
+    }
+    final dirtyLaneCanTakeWild = bot.melds.any(
+      (other) =>
+          !identical(other, meld) &&
+          other.cards.any((held) => held.isWild) &&
+          other.cards.length >= 5 &&
+          other.cards.length < GameConfig.bookSize &&
+          other.canAddCard(card),
+    );
+    return !dirtyLaneCanTakeWild;
+  }
+
+  /// One new natural rank when the hand pile cannot add to anything.
+  /// Never spends the live discard top — that pair is the unlock key.
+  List<PlayingCard>? _unstickNaturalPair(
+    Player bot,
+    List<List<PlayingCard>> possibleMelds,
+    CardRank? liveTop,
+  ) {
+    final existingRanks = {for (final meld in bot.melds) meld.rank};
+    final candidates = possibleMelds.where((meld) {
+      if (meld.any((card) => card.isWild || card.isThree)) {
+        return false;
+      }
+      final rank = _naturalRank(meld);
+      if (rank == null || existingRanks.contains(rank)) {
+        return false;
+      }
+      if (liveTop != null && rank == liveTop) {
+        return false;
+      }
+      final naturals = meld.where((card) => card.rank == rank).length;
+      return naturals >= GameConfig.minNaturalCardsForMeld;
+    }).toList();
+    if (candidates.isEmpty) {
+      return null;
+    }
+    candidates.sort((a, b) => b.length.compareTo(a.length));
+    return candidates.first;
   }
 
   /// After play-down, do not open ranks past [BotConfig.handPileNewMeldCap]

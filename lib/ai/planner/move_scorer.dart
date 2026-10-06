@@ -1,5 +1,6 @@
 import '../../config/game_config.dart';
 import '../../models/card.dart';
+import '../../models/meld.dart';
 import '../../models/player.dart';
 import '../bot_config.dart';
 import '../bot_game_context.dart';
@@ -47,6 +48,10 @@ class _MoveScores {
   static const completeCleanBookAdd = 400.0;
   static const completeDirtyBookAdd = 280.0;
   static const handPileExtraMeldPenalty = 160.0;
+  static const nearBookAdd = 220.0;
+  static const missingGoOutBookAdd = 260.0;
+  static const footMissingCleanCreate = 180.0;
+  static const footMissingDirtyCreate = 160.0;
 }
 
 /// Scores legal actions with personality-weighted features.
@@ -58,6 +63,7 @@ class MoveScorer {
     required ScorerWeights weights,
     required bool humanCanUnlock,
     required bool goOutThisTurn,
+    bool waiveHandPileCapPenalty = false,
   }) {
     var value = 0.0;
     final pileSize = context.discardPileSize;
@@ -102,7 +108,8 @@ class MoveScorer {
           if (nearFoot) {
             value += _MoveScores.footCreateBonus * weights.footTransition;
           }
-          if (!bot.hasPickedUpFoot &&
+          if (!waiveHandPileCapPenalty &&
+              !bot.hasPickedUpFoot &&
               bot.melds.length >= BotConfig.handPileNewMeldCap) {
             value -= _MoveScores.handPileExtraMeldPenalty;
           }
@@ -208,6 +215,18 @@ class MoveScorer {
           ? _MoveScores.cleanBookComplete * weights.cleanBook
           : _MoveScores.dirtyBookComplete * weights.bookProgress;
     }
+    if (bot.hasPickedUpFoot &&
+        bot.bookCount == 0 &&
+        isClean &&
+        !bot.hasCleanBook) {
+      score += _MoveScores.footMissingCleanCreate * weights.cleanBook;
+    }
+    if (bot.hasPickedUpFoot &&
+        bot.hasCleanBook &&
+        !bot.hasDirtyBook &&
+        !isClean) {
+      score += _MoveScores.footMissingDirtyCreate * weights.bookProgress;
+    }
     return score;
   }
 
@@ -229,6 +248,9 @@ class MoveScorer {
     if (meldIndex != null && meldIndex >= 0 && meldIndex < bot.melds.length) {
       final meld = bot.melds[meldIndex];
       final nextSize = meld.cards.length + 1;
+      if (meld.cards.length >= 5 && meld.cards.length < GameConfig.bookSize) {
+        score += _MoveScores.nearBookAdd * weights.bookProgress;
+      }
       if (nextSize >= GameConfig.bookSize &&
           meld.cards.length < GameConfig.bookSize) {
         // Award clean-book only when the completed book stays natural.
@@ -240,8 +262,32 @@ class MoveScorer {
         score += completesCleanBook
             ? _MoveScores.completeCleanBookAdd * weights.cleanBook
             : _MoveScores.completeDirtyBookAdd * weights.bookProgress;
+        if (_completesMissingGoOutBook(
+          bot,
+          meld,
+          card is PlayingCard ? card : null,
+        )) {
+          score += _MoveScores.missingGoOutBookAdd * weights.bookProgress;
+        }
       }
     }
     return score;
+  }
+
+  bool _completesMissingGoOutBook(Player bot, Meld meld, PlayingCard? card) {
+    if (card == null) {
+      return false;
+    }
+    final naturalOnly = !meld.cards.any((held) => held.isWild);
+    if (!bot.hasCleanBook && naturalOnly && !card.isWild) {
+      return true;
+    }
+    if (bot.hasCleanBook && !bot.hasDirtyBook && !naturalOnly) {
+      return true;
+    }
+    if (bot.hasCleanBook && !bot.hasDirtyBook && card.isWild && naturalOnly) {
+      return true;
+    }
+    return false;
   }
 }

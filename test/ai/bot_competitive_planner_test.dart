@@ -34,7 +34,7 @@ void main() {
     });
 
     test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.09-compact-books');
+      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(CompetitivePolicy.latePlayDownHandSize, 12);
     }, tags: ['competitive_planner']);
@@ -772,7 +772,16 @@ void main() {
 
         final decision = botAI.makeDecision(bot, controller);
         expect(decision.action, isNot(equals('createMultipleMelds')));
-        expect(decision.action, isNot(equals('createMeld')));
+        expect(decision.action, 'createMeld');
+        final cards = decision.data as List<PlayingCard>;
+        expect(
+          cards.every(
+            (card) => card.rank == CardRank.four || card.rank == CardRank.five,
+          ),
+          isTrue,
+        );
+        final ranks = cards.map((card) => card.rank).toSet();
+        expect(ranks.length, 1);
         expect(decision.analyticsContext?['emptyHandPile'], isTrue);
       },
       tags: ['competitive_planner'],

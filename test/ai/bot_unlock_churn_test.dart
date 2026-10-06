@@ -30,7 +30,7 @@ void main() {
     });
 
     test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.09-compact-books');
+      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
       expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });

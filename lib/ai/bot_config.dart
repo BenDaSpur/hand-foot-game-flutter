@@ -360,12 +360,18 @@ class BotConfig {
   /// 4♦ onto 4♦ at pile 4 while holding three fours.
   static const int liveTopNaturalHoldPenalty = 400;
 
+  /// On a played-down hand at or below [booklessFarmForceFootMaxHand], dump a
+  /// singleton 4–8 before a singleton 9–A. Must beat
+  /// [contestableUnlockFeedPenalty], which was protecting 4–8 and leaving
+  /// 9/10/J/Q as the card humans then unlocked.
+  static const int stuckLowSingletonDiscardBonus = 160;
+
   /// Prefer freezing the pile with a wild when the human can unlock and the
   /// bot cannot (humans discarded 152 wilds vs bots 8 in recent games).
   static const int wildFreezeDiscardBonus = 180;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.09-compact-books';
+  static const String botAiVersion = '2026.10-unstick-hand';
 
   // Prevent instantiation
   BotConfig._();

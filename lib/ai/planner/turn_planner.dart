@@ -84,6 +84,7 @@ class TurnPlanner {
       liveKeyRanks: liveKeys,
       liveTop: liveTop,
       forceSpendKeys: forceSpendKeys,
+      emptyHandPile: emptyHandPile,
       allowWildFreeze:
           humanCanUnlock && !canUnlock && !goOutThisTurn && !skipThrees,
     );
@@ -116,6 +117,9 @@ class TurnPlanner {
       emptyHandPile: emptyHandPile,
     );
 
+    final hasAddCandidate = constrained.any(
+      (candidate) => candidate.kind == LegalActionKind.addToMeld,
+    );
     ScoredCandidate? best;
     for (final candidate in constrained) {
       final scored = _scorer.score(
@@ -125,6 +129,7 @@ class TurnPlanner {
         weights: weights,
         humanCanUnlock: humanCanUnlock,
         goOutThisTurn: goOutThisTurn,
+        waiveHandPileCapPenalty: emptyHandPile && !hasAddCandidate,
       );
       if (best == null || scored.score > best.score) {
         best = scored;
