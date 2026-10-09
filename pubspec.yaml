@@ -12,7 +12,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.9
+  cupertino_icons: ^2.0.0
   shared_preferences: ^2.5.5
   logging: ^1.3.0
   # firebase_auth 6.7.0 calls migrateCurrentUser; that named arg is
