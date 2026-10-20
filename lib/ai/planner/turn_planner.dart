@@ -70,13 +70,16 @@ class TurnPlanner {
       toxicThrees: skipThrees,
     );
 
-    // Spend keys while melding to empty the hand pile, but keep them on
-    // discard so a 4-card leftover does not toss the live unlock pair.
+    // Spend keys while melding to empty the hand pile. Keep them on discard
+    // for bookless leftovers so a thin hand does not toss the live unlock
+    // pair — but once books exist, pitch the key to reach foot (analytics
+    // 2026.10: booked bots stalled at handSize 1–5 off foot).
     final forceSpendKeys =
         gameState.discardPileFrozen ||
         liveTop == null ||
         (canUnlock && goOutThisTurn) ||
-        (emptyHandPile && context.turnPhase != TurnPhase.discard);
+        (emptyHandPile && context.turnPhase != TurnPhase.discard) ||
+        (emptyHandPile && bot.bookCount >= 1);
 
     final candidates = _generator.generate(
       bot,

@@ -34,10 +34,11 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
+    test('botAiVersion is force-foot', () {
+      expect(BotConfig.botAiVersion, '2026.10-force-foot');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
+      expect(BotConfig.handPileForceFootMaxHand, 8);
       expect(BotConfig.booklessFarmForceFootMaxHand, 8);
     });
 

@@ -30,8 +30,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is unstick-hand', () {
-      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
+    test('botAiVersion is force-foot', () {
+      expect(BotConfig.botAiVersion, '2026.10-force-foot');
     });
 
     test(

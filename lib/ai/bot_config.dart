@@ -44,11 +44,15 @@ class BotConfig {
   /// e.g. 5-card hands qualify). Opponent-on-foot pressure may extend the limit.
   static const int handPileFootCompletionMaxHand = 5;
 
-  /// Bookless bots still empty the hand pile at or below this size when the
-  /// discard is being farmed (incomplete unlock-churn: adaptive 6 cards /
-  /// 0 books / pile 38). Opponent-on-foot without a fat pile still requires
-  /// books above [handToFootCriticalHandSize].
-  static const int booklessFarmForceFootMaxHand = 8;
+  /// After play-down, empty the hand pile at or below this size regardless of
+  /// book count. Booked bots used to stop at [handPileFootCompletionMaxHand],
+  /// so a mandatory deck draw (+2) escaped the window and left 6–7 card
+  /// leftovers off foot with books already built (analytics 2026.10:
+  /// ~20% of bot end-states).
+  static const int handPileForceFootMaxHand = 8;
+
+  /// Alias of [handPileForceFootMaxHand] — historically bookless-only.
+  static const int booklessFarmForceFootMaxHand = handPileForceFootMaxHand;
 
   /// Extra hand-size margin for aggressive bots racing foot under opponent pressure
   static const int handToFootRushAggressiveOpponentPressureMargin = 2;
@@ -360,7 +364,7 @@ class BotConfig {
   /// 4♦ onto 4♦ at pile 4 while holding three fours.
   static const int liveTopNaturalHoldPenalty = 400;
 
-  /// On a played-down hand at or below [booklessFarmForceFootMaxHand], dump a
+  /// On a played-down hand at or below [handPileForceFootMaxHand], dump a
   /// singleton 4–8 before a singleton 9–A. Must beat
   /// [contestableUnlockFeedPenalty], which was protecting 4–8 and leaving
   /// 9/10/J/Q as the card humans then unlocked.
@@ -370,8 +374,13 @@ class BotConfig {
   /// bot cannot (humans discarded 152 wilds vs bots 8 in recent games).
   static const int wildFreezeDiscardBonus = 180;
 
+  /// Extra scorer weight for adds that grow a 4–6 card pile toward a book
+  /// when the bot is already on foot with fewer than two books (analytics
+  /// 2026.10: humans avg 3.6 books, bots 2.0).
+  static const int onFootBookCatchUpBonus = 140;
+
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.10-unstick-hand';
+  static const String botAiVersion = '2026.10-force-foot';
 
   // Prevent instantiation
   BotConfig._();

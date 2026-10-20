@@ -33,10 +33,10 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is compact-books', () {
-      expect(BotConfig.botAiVersion, '2026.10-unstick-hand');
+    test('botAiVersion is force-foot', () {
+      expect(BotConfig.botAiVersion, '2026.10-force-foot');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
-      expect(CompetitivePolicy.latePlayDownHandSize, 12);
+      expect(CompetitivePolicy.latePlayDownHandSize, 10);
     }, tags: ['competitive_planner']);
 
     test(
@@ -623,7 +623,7 @@ void main() {
     );
 
     test(
-      'greedy play-down fires below 12 cards once the human is already down',
+      'greedy play-down fires below latePlayDownHandSize once the human is already down',
       () {
         bot.hasPlayedDown = false;
         bot.hasPickedUpFoot = false;
@@ -639,10 +639,12 @@ void main() {
             const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
             const PlayingCard(suit: Suit.spades, rank: CardRank.five),
             const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
           ]);
-        expect(bot.currentHand.length, 11);
+        expect(bot.currentHand.length, 9);
+        expect(
+          bot.currentHand.length < CompetitivePolicy.latePlayDownHandSize,
+          isTrue,
+        );
         human.hasPlayedDown = false;
         _setPile(controller, size: 4, top: CardRank.nine);
         controller.gameState.turnPhase = TurnPhase.meld;
@@ -816,6 +818,149 @@ void main() {
         expect(decision.action, 'createMultipleMelds');
         final melds = decision.data as List<List<PlayingCard>>;
         expect(melds.length, greaterThanOrEqualTo(2));
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'booked bot spends live unlock key on discard to reach foot',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.queen, dirty: true),
+        ]);
+        expect(bot.bookCount, 2);
+        _setPile(controller, size: 12, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.discard;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(
+          CompetitivePolicy.shouldEmptyHandPile(bot, controller.gameState),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'discard');
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+        expect(decision.analyticsContext?['forceSpendKeys'], isTrue);
+        expect((decision.data as PlayingCard).rank, CardRank.king);
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'bookless leftover still preserves live unlock key on discard',
+      () {
+        // P3 unlock discipline: force-foot must not make bookless bots feed
+        // the live top while emptying a thin hand pile.
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ace, size: 4, dirty: true),
+          _sizedMeld(CardRank.queen, size: 3, dirty: true),
+        ]);
+        expect(bot.bookCount, 0);
+        _setPile(controller, size: 14, top: CardRank.king);
+        controller.gameState.turnPhase = TurnPhase.discard;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.discardPileFrozen = false;
+
+        expect(
+          CompetitivePolicy.shouldEmptyHandPile(bot, controller.gameState),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'discard');
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
+        expect(decision.analyticsContext?['forceSpendKeys'], isFalse);
+        expect((decision.data as PlayingCard).rank, isNot(CardRank.king));
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'greedy play-down fires at latePlayDownHandSize without human down',
+      () {
+        bot.hasPlayedDown = false;
+        bot.hasPickedUpFoot = false;
+        human.hasPlayedDown = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          ]);
+        expect(bot.currentHand.length, CompetitivePolicy.latePlayDownHandSize);
+        _setPile(controller, size: 4, top: CardRank.nine);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+        controller.gameState.round = 1;
+
+        expect(
+          CompetitivePolicy.shouldSearchGreedyPlayDown(
+            bot,
+            controller.gameState,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, anyOf('createMeld', 'createMultipleMelds'));
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'on-foot bot prefers growing a 4-card pile toward a book',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = true;
+        bot.foot
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          ]);
+        bot.melds.addAll([
+          _sizedMeld(CardRank.king, size: 4, dirty: false),
+          _sizedMeld(CardRank.ace, size: 3, dirty: true),
+        ]);
+        expect(bot.bookCount, 0);
+        _setPile(controller, size: 6, top: CardRank.ten);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'addToMeld');
+        final data = decision.data as Map<String, dynamic>;
+        expect((data['card'] as PlayingCard).rank, CardRank.king);
       },
       tags: ['competitive_planner'],
     );
@@ -1079,6 +1224,56 @@ void main() {
         expect((decision.data as PlayingCard).rank, CardRank.jack);
         expect(decision.analyticsContext?['emptyHandPile'], isTrue);
         expect(decision.analyticsContext?['discardedRank'], 'jack');
+      },
+      tags: ['competitive_planner'],
+    );
+
+    test(
+      'seed 591909: booked 7-card leftover forces emptyHandPile',
+      () {
+        // Analytics blowout: bot had 3 books, hand 1–7, never picked up foot.
+        final botAI = EnhancedBotAI(seed: 591909);
+        final human = Player(id: '1', name: 'You', type: PlayerType.human);
+        final bot = Player(id: '2', name: 'Sue', type: PlayerType.bot);
+        final controller = GameController(players: [human, bot], seed: 591909);
+        controller.initializeGame();
+        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+        controller.gameState.currentPlayerIndex = 1;
+
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        human.hasPickedUpFoot = false;
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.jack),
+          ]);
+        bot.melds.addAll([
+          _book(CardRank.ace, dirty: false),
+          _book(CardRank.king, dirty: true),
+          _book(CardRank.queen, dirty: true),
+        ]);
+        expect(bot.bookCount, 3);
+        _setPile(controller, size: 8, top: CardRank.ten);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+
+        expect(
+          CompetitivePolicy.shouldEmptyHandPile(
+            bot,
+            controller.gameState,
+            personality: BotPersonality.adaptive,
+          ),
+          isTrue,
+        );
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.analyticsContext?['emptyHandPile'], isTrue);
       },
       tags: ['competitive_planner'],
     );

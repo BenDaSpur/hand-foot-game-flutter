@@ -1133,8 +1133,7 @@ class BotTurnManager {
           if (!bot.hasPlayedDown) {
             return '$personality bot waiting for better play-down opportunity ($handSize cards)';
           } else if (!bot.hasPickedUpFoot &&
-              handSize <=
-                  ai_bot_config.BotConfig.handPileFootCompletionMaxHand) {
+              handSize <= ai_bot_config.BotConfig.handPileForceFootMaxHand) {
             return '$personality bot completing hand pile for foot (no meld available, $handSize cards)';
           } else if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
             return '$personality bot seeking missing go-out book ($handSize cards, $hasBooks books)';

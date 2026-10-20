@@ -20,7 +20,9 @@ class CompetitivePolicy {
   static const int contestablePileSize = 6;
 
   /// Play down even on a quiet pile once the hand is this large.
-  static const int latePlayDownHandSize = 12;
+  /// Analytics 2026.10: many noMeld "waiting for better play-down" turns at
+  /// 12–18 cards; waive unlock-key preservation earlier so greedy dumps fire.
+  static const int latePlayDownHandSize = 10;
 
   /// Pile large enough that an on-foot bot should take despite buried 3s.
   static const int hugeFarmPileSize = 20;
@@ -322,30 +324,36 @@ class CompetitivePolicy {
       return false;
     }
 
-    // Any leftover in the foot-completion window empties — do not sit on
-    // 1–5 cards "holding strategically" (seeds 194022 / 956319).
+    // Soft window (1–5): always empty — do not sit "holding strategically"
+    // (seeds 194022 / 956319).
     if (handSize <= BotConfig.handPileFootCompletionMaxHand) {
       return true;
     }
 
-    // Bookless bots empty through 8 even on a thin pile. Requiring a fat
-    // farm left 6–8 card hands stalling while humans unlocked 25+ cards.
-    if (bot.bookCount == 0 &&
-        handSize <= BotConfig.booklessFarmForceFootMaxHand) {
+    // Force window through 8 for every played-down bot. Bookless bots already
+    // used this band; booked bots previously stopped at 5, so draw(+2) left
+    // them stranded at 6–7 with books and never on foot (seeds 591909 /
+    // 247081 / 474144).
+    if (handSize <= BotConfig.handPileForceFootMaxHand) {
       return true;
     }
 
     final hasBook = bot.bookCount >= 1;
     final opponentFoot = opponentOnFoot(gameState, bot.id);
 
+    // Rush past the force window when an opponent is already racing on foot.
     if (opponentFoot &&
         hasBook &&
-        handSize <= BotConfig.handToFootRushOpponentOnFootThreshold) {
+        handSize <=
+            BotConfig.handToFootRushOpponentOnFootThreshold +
+                (personality == BotPersonality.aggressive
+                    ? BotConfig.handToFootRushAggressiveOpponentPressureMargin
+                    : 0)) {
       return true;
     }
     if (personality == BotPersonality.aggressive &&
         hasBook &&
-        handSize <= BotConfig.handToFootRushAggressiveThreshold) {
+        handSize <= BotConfig.aggressiveFootTransitionThreshold) {
       return true;
     }
     return false;
