@@ -130,7 +130,12 @@ class MoveScorer {
         {
           value += _MoveScores.noMeldBase;
           if (!bot.hasPlayedDown) {
-            value += _MoveScores.noMeldPrePlayDown;
+            // Large hands should not prefer stalling once a play-down
+            // candidate exists (hard constraints usually force play-down;
+            // this keeps scoring consistent if both remain).
+            if (handSize < CompetitivePolicy.latePlayDownHandSize) {
+              value += _MoveScores.noMeldPrePlayDown;
+            }
           }
         }
       case LegalActionKind.goOut:
@@ -248,8 +253,13 @@ class MoveScorer {
     if (meldIndex != null && meldIndex >= 0 && meldIndex < bot.melds.length) {
       final meld = bot.melds[meldIndex];
       final nextSize = meld.cards.length + 1;
-      if (meld.cards.length >= 5 && meld.cards.length < GameConfig.bookSize) {
+      // Grow from 4+ toward a book (was 5+). Bots trailed humans by ~1.6
+      // books/game after the 2026.10 unstick ship.
+      if (meld.cards.length >= 4 && meld.cards.length < GameConfig.bookSize) {
         score += _MoveScores.nearBookAdd * weights.bookProgress;
+        if (bot.hasPickedUpFoot && bot.bookCount < 2) {
+          score += BotConfig.onFootBookCatchUpBonus * weights.bookProgress;
+        }
       }
       if (nextSize >= GameConfig.bookSize &&
           meld.cards.length < GameConfig.bookSize) {
@@ -268,6 +278,9 @@ class MoveScorer {
           card is PlayingCard ? card : null,
         )) {
           score += _MoveScores.missingGoOutBookAdd * weights.bookProgress;
+        }
+        if (bot.hasPickedUpFoot && bot.bookCount < 2) {
+          score += BotConfig.onFootBookCatchUpBonus * weights.bookProgress;
         }
       }
     }

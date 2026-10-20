@@ -1005,8 +1005,14 @@ class BotMeldAnalyzer {
     }
 
     // Try progressively larger combinations. Large hands in late rounds
-    // often need 6–8 compact rank piles to hit 150+.
-    final maxCombinationSize = handSize >= 18 ? 8 : 5;
+    // often need 6–8 compact rank piles to hit 150+. Hands of 12+ that have
+    // not played down also need a wider search — analytics 2026.10 still
+    // showed long noMeld "waiting for better play-down" stalls.
+    final maxCombinationSize = !bot.hasPlayedDown && handSize >= 12
+        ? 7
+        : handSize >= 18
+        ? 8
+        : 5;
     for (
       int combinationSize = 1;
       combinationSize <= maxCombinationSize &&

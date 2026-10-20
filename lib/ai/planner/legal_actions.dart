@@ -183,6 +183,7 @@ class LegalActionGenerator {
         final capped = _capsNewHandPileMeld(
           bot,
           emptiesHand: emptiesHand,
+          emptyHandPile: emptyHandPile,
           incomingMelds: [best],
         );
         final preferExisting = _shouldSkipNewRankForExistingPiles(
@@ -220,6 +221,7 @@ class LegalActionGenerator {
       controller,
       liveTop: liveTop,
       forceSpendKeys: forceSpendKeys,
+      emptyHandPile: emptyHandPile,
     );
 
     return actions;
@@ -231,6 +233,7 @@ class LegalActionGenerator {
     GameController controller, {
     required CardRank? liveTop,
     required bool forceSpendKeys,
+    bool emptyHandPile = false,
   }) {
     if (bot.hasPickedUpFoot &&
         bot.currentHand.length <
@@ -257,6 +260,7 @@ class LegalActionGenerator {
     if (_capsNewHandPileMeld(
       bot,
       emptiesHand: emptiesHand,
+      emptyHandPile: emptyHandPile,
       incomingMelds: filtered,
     )) {
       return;
@@ -417,7 +421,7 @@ class LegalActionGenerator {
   }
 
   /// Prefer an add that finishes the missing clean or dirty book, then any
-  /// add onto a 5–6 card pile, over a leftover card on a short meld.
+  /// add onto a 4–6 card pile, over a leftover card on a short meld.
   Map<String, dynamic> _chooseBookBuildingAddition(
     Player bot,
     List<Map<String, dynamic>> additions,
@@ -434,7 +438,8 @@ class LegalActionGenerator {
         continue;
       }
       final meld = bot.melds[index];
-      if (meld.cards.length >= 5 && meld.cards.length < GameConfig.bookSize) {
+      if (meld.cards.length >= BotConfig.nearBookThreshold - 2 &&
+          meld.cards.length < GameConfig.bookSize) {
         growsNearBook ??= addition;
       }
       if (meld.cards.length == GameConfig.bookSize - 1 &&
@@ -508,9 +513,15 @@ class LegalActionGenerator {
   bool _capsNewHandPileMeld(
     Player bot, {
     required bool emptiesHand,
+    bool emptyHandPile = false,
     List<List<PlayingCard>> incomingMelds = const [],
   }) {
     if (bot.hasPickedUpFoot || emptiesHand) {
+      return false;
+    }
+    // Force-foot: waive the rank cap so booked leftovers can open a natural
+    // pair instead of stalling behind four incomplete piles.
+    if (emptyHandPile && bot.bookCount >= 1) {
       return false;
     }
     final existingRanks = {for (final meld in bot.melds) meld.rank};
