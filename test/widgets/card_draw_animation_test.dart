@@ -1,7 +1,7 @@
 @Tags(['card_animation'])
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
 import 'package:hand_foot_game_flutter/game/events/game_event.dart';

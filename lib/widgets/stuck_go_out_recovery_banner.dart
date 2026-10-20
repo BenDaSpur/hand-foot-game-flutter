@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../game/game_action_feedback.dart';
 import '../models/player.dart';

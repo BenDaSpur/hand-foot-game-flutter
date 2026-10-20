@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../services/web_deploy_version_service.dart';
 import '../theme/balatro_theme.dart';

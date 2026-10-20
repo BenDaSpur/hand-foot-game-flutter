@@ -14,6 +14,10 @@ linter:
     prefer_const_constructors: true
     prefer_const_declarations: true
     prefer_const_literals_to_create_immutables: true
+
+    # Fail if package:flutter/material.dart or package:flutter/cupertino.dart
+    # is imported. Design widgets live in material_ui and cupertino_ui.
+    migrate_design_widgets: true
     
     # Documentation rules
     public_member_api_docs: false # Set to true if you want to enforce API docs
@@ -39,3 +43,4 @@ analyzer:
     # Dart 3.13 style suggestions — keep non-blocking in CI
     prefer_initializing_formals: ignore
     use_null_aware_elements: ignore
+    migrate_design_widgets: error

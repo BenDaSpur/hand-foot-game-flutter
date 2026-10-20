@@ -62,6 +62,7 @@ This is a Flutter implementation of the Hand & Foot card game with sophisticated
 **UI Theme** (`lib/theme/balatro_theme.dart`):
 - Complete Balatro-inspired dark theme with neon colors
 - Glow effects, gradients, and holographic wild card treatments
+- `ThemeData` / `TextTheme` come from `package:material_ui` (google_fonts 9 `*TextTheme()` matches that type). Import `package:material_ui/material_ui.dart` and `package:cupertino_ui/cupertino_ui.dart`. The `migrate_design_widgets` lint is an error — do not import `package:flutter/material.dart` or `package:flutter/cupertino.dart`.
 - Responsive design supporting different card sizes
 
 ### Game Rules Implementation

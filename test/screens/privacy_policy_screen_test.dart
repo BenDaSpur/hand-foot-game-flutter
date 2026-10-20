@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/legal/privacy_policy_content.dart';
 import 'package:hand_foot_game_flutter/screens/privacy_policy_screen.dart';

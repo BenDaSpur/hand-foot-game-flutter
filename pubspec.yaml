@@ -33,6 +33,8 @@ dependencies:
   url_launcher: ^6.3.3
   web: ^1.1.1
   google_mobile_ads: ^9.1.0
+  material_ui: ^1.7.0
+  cupertino_ui: ^1.1.3
 
 dev_dependencies:
   flutter_test:

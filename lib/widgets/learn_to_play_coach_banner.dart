@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../theme/balatro_theme.dart';
 import '../tutorial/learn_to_play_step.dart';
