@@ -49,14 +49,13 @@ void main() {
         botAI: botAI,
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          gameStateSnapshot,
+        }) {},
       );
       return (manager: manager, botAI: botAI);
     }

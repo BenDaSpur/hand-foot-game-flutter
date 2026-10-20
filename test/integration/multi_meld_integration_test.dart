@@ -306,197 +306,184 @@ void main() {
       },
     );
 
-    test(
-      'should handle simultaneous multi-meld creation without index shifting bugs',
-      () {
-        // This test reproduces the specific bug from the UI where creating multiple melds
-        // simultaneously failed due to index shifting after the first meld was created
+    test('should handle simultaneous multi-meld creation without index shifting bugs', () {
+      // This test reproduces the specific bug from the UI where creating multiple melds
+      // simultaneously failed due to index shifting after the first meld was created
 
-        humanPlayer.hand.clear();
-        humanPlayer.hasPlayedDown =
-            true; // Already played down to avoid play-down validation
+      humanPlayer.hand.clear();
+      humanPlayer.hasPlayedDown =
+          true; // Already played down to avoid play-down validation
 
-        // Set up hand similar to the bug scenario: cards at various indices
-        humanPlayer.hand.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight), // 0
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine), // 1
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine), // 2
-          const PlayingCard(
-            suit: Suit.clubs,
-            rank: CardRank.ten,
-          ), // 3 - first meld
-          const PlayingCard(
-            suit: Suit.clubs,
-            rank: CardRank.ten,
-          ), // 4 - first meld
-          const PlayingCard(
-            suit: Suit.clubs,
-            rank: CardRank.ten,
-          ), // 5 - first meld
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten), // 6
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack), // 7
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack), // 8
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen), // 9
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen), // 10
-          const PlayingCard(
-            suit: Suit.spades,
-            rank: CardRank.ace,
-          ), // 11 - second meld
-          const PlayingCard(
-            suit: Suit.diamonds,
-            rank: CardRank.ace,
-          ), // 12 - second meld
-          const PlayingCard(
-            suit: Suit.clubs,
-            rank: CardRank.ace,
-          ), // 13 - second meld
-        ]);
+      // Set up hand similar to the bug scenario: cards at various indices
+      humanPlayer.hand.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.eight), // 0
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine), // 1
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine), // 2
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.ten,
+        ), // 3 - first meld
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.ten,
+        ), // 4 - first meld
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.ten,
+        ), // 5 - first meld
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten), // 6
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.jack), // 7
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.jack), // 8
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen), // 9
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen), // 10
+        const PlayingCard(
+          suit: Suit.spades,
+          rank: CardRank.ace,
+        ), // 11 - second meld
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.ace,
+        ), // 12 - second meld
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.ace,
+        ), // 13 - second meld
+      ]);
 
-        expect(humanPlayer.hand.length, 14);
-        expect(humanPlayer.melds.length, 0);
+      expect(humanPlayer.hand.length, 14);
+      expect(humanPlayer.melds.length, 0);
 
-        // Simulate the advanced meld selector creating two melds simultaneously:
-        // Meld 1: tens at indices [3, 4, 5]
-        // Meld 2: aces at indices [11, 12, 13]
-        // The bug was that after creating the tens meld, the aces would be at different indices
+      // Simulate the advanced meld selector creating two melds simultaneously:
+      // Meld 1: tens at indices [3, 4, 5]
+      // Meld 2: aces at indices [11, 12, 13]
+      // The bug was that after creating the tens meld, the aces would be at different indices
 
-        // Create first meld (tens) - this will shift subsequent indices
-        bool firstMeldSuccess = controller.createMeldByIndices([
-          3,
-          4,
-          5,
-        ], skipPlayDownCheck: true);
-        expect(firstMeldSuccess, true);
-        expect(humanPlayer.hand.length, 11); // 14 - 3 = 11
-        expect(humanPlayer.melds.length, 1);
-        expect(humanPlayer.melds[0].rank, CardRank.ten);
+      // Create first meld (tens) - this will shift subsequent indices
+      bool firstMeldSuccess = controller.createMeldByIndices([
+        3,
+        4,
+        5,
+      ], skipPlayDownCheck: true);
+      expect(firstMeldSuccess, true);
+      expect(humanPlayer.hand.length, 11); // 14 - 3 = 11
+      expect(humanPlayer.melds.length, 1);
+      expect(humanPlayer.melds[0].rank, CardRank.ten);
 
-        // Now hand indices have shifted. The aces that were at [11, 12, 13] are now at [8, 9, 10]
-        // Verify the aces are now at the expected shifted indices
-        expect(humanPlayer.hand[8].rank, CardRank.ace); // Was index 11
-        expect(humanPlayer.hand[9].rank, CardRank.ace); // Was index 12
-        expect(humanPlayer.hand[10].rank, CardRank.ace); // Was index 13
+      // Now hand indices have shifted. The aces that were at [11, 12, 13] are now at [8, 9, 10]
+      // Verify the aces are now at the expected shifted indices
+      expect(humanPlayer.hand[8].rank, CardRank.ace); // Was index 11
+      expect(humanPlayer.hand[9].rank, CardRank.ace); // Was index 12
+      expect(humanPlayer.hand[10].rank, CardRank.ace); // Was index 13
 
-        // Create second meld (aces) using the NEW indices after the shift
-        bool secondMeldSuccess = controller.createMeldByIndices([
-          8,
-          9,
-          10,
-        ], skipPlayDownCheck: true);
-        expect(secondMeldSuccess, true);
-        expect(humanPlayer.hand.length, 8); // 11 - 3 = 8
-        expect(humanPlayer.melds.length, 2);
-        expect(humanPlayer.melds[1].rank, CardRank.ace);
+      // Create second meld (aces) using the NEW indices after the shift
+      bool secondMeldSuccess = controller.createMeldByIndices([
+        8,
+        9,
+        10,
+      ], skipPlayDownCheck: true);
+      expect(secondMeldSuccess, true);
+      expect(humanPlayer.hand.length, 8); // 11 - 3 = 8
+      expect(humanPlayer.melds.length, 2);
+      expect(humanPlayer.melds[1].rank, CardRank.ace);
 
-        // Verify both melds were created correctly
-        expect(humanPlayer.melds[0].cards.length, 3); // tens meld
-        expect(humanPlayer.melds[1].cards.length, 3); // aces meld
+      // Verify both melds were created correctly
+      expect(humanPlayer.melds[0].cards.length, 3); // tens meld
+      expect(humanPlayer.melds[1].cards.length, 3); // aces meld
 
-        // Verify the specific cards in each meld
-        expect(
-          humanPlayer.melds[0].cards.every((card) => card.rank == CardRank.ten),
-          true,
+      // Verify the specific cards in each meld
+      expect(
+        humanPlayer.melds[0].cards.every((card) => card.rank == CardRank.ten),
+        true,
+      );
+      expect(
+        humanPlayer.melds[1].cards.every((card) => card.rank == CardRank.ace),
+        true,
+      );
+    });
+
+    test('should process multiple simultaneous melds in descending index order to prevent shifting bugs', () {
+      // This test verifies the fix: when creating multiple melds simultaneously,
+      // they should be processed in descending index order to prevent index shifting issues
+
+      humanPlayer.hand.clear();
+      humanPlayer.hasPlayedDown = true;
+
+      humanPlayer.hand.addAll([
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.four,
+        ), // 0 - low index meld
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.four,
+        ), // 1 - low index meld
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.four,
+        ), // 2 - low index meld
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five), // 3
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.six), // 4
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.seven,
+        ), // 5 - high index meld
+        const PlayingCard(
+          suit: Suit.diamonds,
+          rank: CardRank.seven,
+        ), // 6 - high index meld
+        const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.seven,
+        ), // 7 - high index meld
+      ]);
+
+      // Create melds in the order they would be submitted by the UI:
+      // Low index meld first: [0, 1, 2] (fours)
+      // High index meld second: [5, 6, 7] (sevens)
+
+      // But our fix should process them in descending order:
+      // 1. High index meld: [5, 6, 7] (processed first to avoid index shifting)
+      // 2. Low index meld: [0, 1, 2] (processed second, indices still valid)
+
+      List<List<int>> meldIndices = [
+        [0, 1, 2], // fours (low indices - should be processed SECOND)
+        [5, 6, 7], // sevens (high indices - should be processed FIRST)
+      ];
+
+      // Process both melds - the implementation should reorder them
+      int meldsCreated = 0;
+
+      // Sort by highest index first (simulating the fix)
+      meldIndices.sort((a, b) {
+        final maxA = a.reduce((max, current) => current > max ? current : max);
+        final maxB = b.reduce((max, current) => current > max ? current : max);
+        return maxB.compareTo(maxA); // Descending
+      });
+
+      // Now meldIndices should be [[5, 6, 7], [0, 1, 2]]
+      expect(meldIndices[0], [5, 6, 7]); // sevens processed first
+      expect(meldIndices[1], [0, 1, 2]); // fours processed second
+
+      // Create melds in the reordered sequence
+      for (final indices in meldIndices) {
+        bool success = controller.createMeldByIndices(
+          indices,
+          skipPlayDownCheck: true,
         );
-        expect(
-          humanPlayer.melds[1].cards.every((card) => card.rank == CardRank.ace),
-          true,
-        );
-      },
-    );
+        expect(success, true);
+        meldsCreated++;
+      }
 
-    test(
-      'should process multiple simultaneous melds in descending index order to prevent shifting bugs',
-      () {
-        // This test verifies the fix: when creating multiple melds simultaneously,
-        // they should be processed in descending index order to prevent index shifting issues
+      expect(meldsCreated, 2);
+      expect(humanPlayer.melds.length, 2);
+      expect(humanPlayer.hand.length, 2); // 8 - 6 = 2 cards remaining
 
-        humanPlayer.hand.clear();
-        humanPlayer.hasPlayedDown = true;
-
-        humanPlayer.hand.addAll([
-          const PlayingCard(
-            suit: Suit.hearts,
-            rank: CardRank.four,
-          ), // 0 - low index meld
-          const PlayingCard(
-            suit: Suit.diamonds,
-            rank: CardRank.four,
-          ), // 1 - low index meld
-          const PlayingCard(
-            suit: Suit.clubs,
-            rank: CardRank.four,
-          ), // 2 - low index meld
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five), // 3
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.six), // 4
-          const PlayingCard(
-            suit: Suit.hearts,
-            rank: CardRank.seven,
-          ), // 5 - high index meld
-          const PlayingCard(
-            suit: Suit.diamonds,
-            rank: CardRank.seven,
-          ), // 6 - high index meld
-          const PlayingCard(
-            suit: Suit.clubs,
-            rank: CardRank.seven,
-          ), // 7 - high index meld
-        ]);
-
-        // Create melds in the order they would be submitted by the UI:
-        // Low index meld first: [0, 1, 2] (fours)
-        // High index meld second: [5, 6, 7] (sevens)
-
-        // But our fix should process them in descending order:
-        // 1. High index meld: [5, 6, 7] (processed first to avoid index shifting)
-        // 2. Low index meld: [0, 1, 2] (processed second, indices still valid)
-
-        List<List<int>> meldIndices = [
-          [0, 1, 2], // fours (low indices - should be processed SECOND)
-          [5, 6, 7], // sevens (high indices - should be processed FIRST)
-        ];
-
-        // Process both melds - the implementation should reorder them
-        int meldsCreated = 0;
-
-        // Sort by highest index first (simulating the fix)
-        meldIndices.sort((a, b) {
-          final maxA = a.reduce(
-            (max, current) => current > max ? current : max,
-          );
-          final maxB = b.reduce(
-            (max, current) => current > max ? current : max,
-          );
-          return maxB.compareTo(maxA); // Descending
-        });
-
-        // Now meldIndices should be [[5, 6, 7], [0, 1, 2]]
-        expect(meldIndices[0], [5, 6, 7]); // sevens processed first
-        expect(meldIndices[1], [0, 1, 2]); // fours processed second
-
-        // Create melds in the reordered sequence
-        for (final indices in meldIndices) {
-          bool success = controller.createMeldByIndices(
-            indices,
-            skipPlayDownCheck: true,
-          );
-          expect(success, true);
-          meldsCreated++;
-        }
-
-        expect(meldsCreated, 2);
-        expect(humanPlayer.melds.length, 2);
-        expect(humanPlayer.hand.length, 2); // 8 - 6 = 2 cards remaining
-
-        // Verify both melds were created with correct ranks
-        expect(
-          humanPlayer.melds.any((meld) => meld.rank == CardRank.seven),
-          true,
-        );
-        expect(
-          humanPlayer.melds.any((meld) => meld.rank == CardRank.four),
-          true,
-        );
-      },
-    );
+      // Verify both melds were created with correct ranks
+      expect(
+        humanPlayer.melds.any((meld) => meld.rank == CardRank.seven),
+        true,
+      );
+      expect(humanPlayer.melds.any((meld) => meld.rank == CardRank.four), true);
+    });
   });
 }

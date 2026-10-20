@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../game/game_action_feedback.dart';
 import '../theme/balatro_theme.dart';
 
@@ -53,9 +54,8 @@ class LastCallDialog {
             Expanded(
               child: Text(
                 title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: BalatroTheme.neonOrange,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(color: BalatroTheme.neonOrange),
               ),
             ),
           ],

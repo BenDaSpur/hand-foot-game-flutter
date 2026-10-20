@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/foundation.dart';
+
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/deck.dart';

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/balatro_theme.dart';
 
 /// Comprehensive error handling widget for multiplayer games

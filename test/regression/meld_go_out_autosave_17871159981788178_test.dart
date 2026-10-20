@@ -26,168 +26,156 @@ void main() {
     GameSaveService.debugBlockAfterSaveWrite = null;
   });
 
-  test(
-    'multi-meld go-out starts the bot final turn and autosaves so resume keeps it',
-    () async {
-      final eventBus = GameEventBus();
-      final turnEndedEvents = <TurnEndedEvent>[];
-      final subscription = eventBus.subscribe((event) {
-        if (event is TurnEndedEvent) {
-          turnEndedEvents.add(event);
-        }
-      });
-      addTearDown(subscription.cancel);
-
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
-      final controller = GameController(
-        players: [human, rita],
-        seed: 771212,
-        eventBus: eventBus,
-        soloSettings: SoloGameSettings(
-          botCount: 1,
-          botPersonalities: [BotPersonality.aggressive],
-          enableGoingOutBonus: true,
-          enableFinalTurnAfterGoingOut: true,
-        ),
-      );
-      controller.autosaveEnabled = false;
-      controller.initializeGame();
-      controller.autosaveEnabled = true;
-
-      _setupHumanReadyToMeldOut(human);
-      rita.hasPlayedDown = true;
-      controller.gameState.phase = GamePhase.playing;
-      controller.gameState.turnPhase = TurnPhase.meld;
-      controller.gameState.hasDrawnFromDeck = true;
-      controller.gameState.currentPlayerIndex = 0;
-
-      expect(human.currentHand.length, 3);
-      expect(human.canGoOutWithBooks, isTrue);
-
-      final success = controller.createMultipleMeldsFromIndices([
-        [0, 1, 2],
-      ], skipPlayDownCheck: true);
-      expect(success, isTrue);
-      expect(human.currentHand, isEmpty);
-      expect(controller.gameState.phase, GamePhase.playing);
-      expect(controller.gameState.finalTurnPhaseActive, isTrue);
-      expect(controller.gameState.playerWhoWentOutIndex, 0);
-      expect(controller.gameState.currentPlayerIndex, 1);
-      expect(controller.gameState.currentPlayer.id, rita.id);
-
-      await Future<void>.delayed(Duration.zero);
-      expect(turnEndedEvents, isNotEmpty);
-      expect(turnEndedEvents.last.player?.id, human.id);
-      expect(turnEndedEvents.last.nextPlayer?.id, rita.id);
-
-      var saved = false;
-      for (var i = 0; i < 20 && !saved; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        saved = await GameController.hasSavedGame();
+  test('multi-meld go-out starts the bot final turn and autosaves so resume keeps it', () async {
+    final eventBus = GameEventBus();
+    final turnEndedEvents = <TurnEndedEvent>[];
+    final subscription = eventBus.subscribe((event) {
+      if (event is TurnEndedEvent) {
+        turnEndedEvents.add(event);
       }
-      expect(saved, isTrue, reason: 'Meld-phase go-out must autosave');
+    });
+    addTearDown(subscription.cancel);
 
-      final restored = await GameController.loadSavedGame();
-      expect(restored, isNotNull);
-      expect(restored!.gameState.finalTurnPhaseActive, isTrue);
-      expect(restored.gameState.playerWhoWentOutIndex, 0);
-      expect(restored.gameState.playersAwaitingFinalTurn, {1});
-      expect(restored.gameState.currentPlayerIndex, 1);
-      expect(restored.gameState.players.first.currentHand, isEmpty);
-      expect(restored.gameState.players.first.canGoOut, isTrue);
-      expect(restored.gameState.players.first.hasCleanBook, isTrue);
-      expect(restored.gameState.players.first.hasDirtyBook, isTrue);
-    },
-    tags: ['regression'],
-  );
+    final human = Player(id: '1', name: 'You', type: PlayerType.human);
+    final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+    final controller = GameController(
+      players: [human, rita],
+      seed: 771212,
+      eventBus: eventBus,
+      soloSettings: SoloGameSettings(
+        botCount: 1,
+        botPersonalities: [BotPersonality.aggressive],
+        enableGoingOutBonus: true,
+        enableFinalTurnAfterGoingOut: true,
+      ),
+    );
+    controller.autosaveEnabled = false;
+    controller.initializeGame();
+    controller.autosaveEnabled = true;
 
-  test(
-    'queued clear after an in-flight save leaves no autosave',
-    () async {
-      final writeStarted = Completer<void>();
-      final releaseWrite = Completer<void>();
-      addTearDown(() {
-        if (!releaseWrite.isCompleted) {
-          releaseWrite.complete();
-        }
-        GameSaveService.debugBlockAfterSaveWrite = null;
-      });
-      GameSaveService.debugBlockAfterSaveWrite = () {
-        if (!writeStarted.isCompleted) {
-          writeStarted.complete();
-        }
-        return releaseWrite.future;
-      };
+    _setupHumanReadyToMeldOut(human);
+    rita.hasPlayedDown = true;
+    controller.gameState.phase = GamePhase.playing;
+    controller.gameState.turnPhase = TurnPhase.meld;
+    controller.gameState.hasDrawnFromDeck = true;
+    controller.gameState.currentPlayerIndex = 0;
 
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
-      final controller = GameController(players: [human, rita], seed: 771212);
-      controller.autosaveEnabled = false;
-      controller.initializeGame();
-      controller.autosaveEnabled = true;
+    expect(human.currentHand.length, 3);
+    expect(human.canGoOutWithBooks, isTrue);
 
-      final save = controller.saveGame();
-      await writeStarted.future;
-      expect(
-        await GameController.hasSavedGame(),
-        isTrue,
-        reason: 'In-flight save must commit the key before clear is queued',
-      );
+    final success = controller.createMultipleMeldsFromIndices([
+      [0, 1, 2],
+    ], skipPlayDownCheck: true);
+    expect(success, isTrue);
+    expect(human.currentHand, isEmpty);
+    expect(controller.gameState.phase, GamePhase.playing);
+    expect(controller.gameState.finalTurnPhaseActive, isTrue);
+    expect(controller.gameState.playerWhoWentOutIndex, 0);
+    expect(controller.gameState.currentPlayerIndex, 1);
+    expect(controller.gameState.currentPlayer.id, rita.id);
 
-      final clear = GameController.clearSavedGame();
-      releaseWrite.complete();
-      await save;
-      await clear;
+    await Future<void>.delayed(Duration.zero);
+    expect(turnEndedEvents, isNotEmpty);
+    expect(turnEndedEvents.last.player?.id, human.id);
+    expect(turnEndedEvents.last.nextPlayer?.id, rita.id);
 
-      expect(await GameController.hasSavedGame(), isFalse);
-    },
-    tags: ['regression'],
-  );
+    var saved = false;
+    for (var i = 0; i < 20 && !saved; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      saved = await GameController.hasSavedGame();
+    }
+    expect(saved, isTrue, reason: 'Meld-phase go-out must autosave');
 
-  test(
-    'queued save persists the GameState captured at enqueue time',
-    () async {
-      final writeStarted = Completer<void>();
-      final releaseWrite = Completer<void>();
-      addTearDown(() {
-        if (!releaseWrite.isCompleted) {
-          releaseWrite.complete();
-        }
-        GameSaveService.debugBlockAfterSaveWrite = null;
-      });
-      GameSaveService.debugBlockAfterSaveWrite = () {
-        if (!writeStarted.isCompleted) {
-          writeStarted.complete();
-        }
-        return releaseWrite.future;
-      };
+    final restored = await GameController.loadSavedGame();
+    expect(restored, isNotNull);
+    expect(restored!.gameState.finalTurnPhaseActive, isTrue);
+    expect(restored.gameState.playerWhoWentOutIndex, 0);
+    expect(restored.gameState.playersAwaitingFinalTurn, {1});
+    expect(restored.gameState.currentPlayerIndex, 1);
+    expect(restored.gameState.players.first.currentHand, isEmpty);
+    expect(restored.gameState.players.first.canGoOut, isTrue);
+    expect(restored.gameState.players.first.hasCleanBook, isTrue);
+    expect(restored.gameState.players.first.hasDirtyBook, isTrue);
+  }, tags: ['regression']);
 
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
-      final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
-      final controller = GameController(players: [human, rita], seed: 771212);
-      controller.autosaveEnabled = false;
-      controller.initializeGame();
-      controller.autosaveEnabled = true;
-
-      final blockingSave = controller.saveGame();
-      await writeStarted.future;
-
-      controller.gameState.round = 3;
-      final queuedSave = controller.saveGame();
-      controller.gameState.round = 99;
-
+  test('queued clear after an in-flight save leaves no autosave', () async {
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    addTearDown(() {
+      if (!releaseWrite.isCompleted) {
+        releaseWrite.complete();
+      }
       GameSaveService.debugBlockAfterSaveWrite = null;
-      releaseWrite.complete();
-      await blockingSave;
-      await queuedSave;
+    });
+    GameSaveService.debugBlockAfterSaveWrite = () {
+      if (!writeStarted.isCompleted) {
+        writeStarted.complete();
+      }
+      return releaseWrite.future;
+    };
 
-      final restored = await GameController.loadSavedGame();
-      expect(restored, isNotNull);
-      expect(restored!.gameState.round, 3);
-    },
-    tags: ['regression'],
-  );
+    final human = Player(id: '1', name: 'You', type: PlayerType.human);
+    final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+    final controller = GameController(players: [human, rita], seed: 771212);
+    controller.autosaveEnabled = false;
+    controller.initializeGame();
+    controller.autosaveEnabled = true;
+
+    final save = controller.saveGame();
+    await writeStarted.future;
+    expect(
+      await GameController.hasSavedGame(),
+      isTrue,
+      reason: 'In-flight save must commit the key before clear is queued',
+    );
+
+    final clear = GameController.clearSavedGame();
+    releaseWrite.complete();
+    await save;
+    await clear;
+
+    expect(await GameController.hasSavedGame(), isFalse);
+  }, tags: ['regression']);
+
+  test('queued save persists the GameState captured at enqueue time', () async {
+    final writeStarted = Completer<void>();
+    final releaseWrite = Completer<void>();
+    addTearDown(() {
+      if (!releaseWrite.isCompleted) {
+        releaseWrite.complete();
+      }
+      GameSaveService.debugBlockAfterSaveWrite = null;
+    });
+    GameSaveService.debugBlockAfterSaveWrite = () {
+      if (!writeStarted.isCompleted) {
+        writeStarted.complete();
+      }
+      return releaseWrite.future;
+    };
+
+    final human = Player(id: '1', name: 'You', type: PlayerType.human);
+    final rita = Player(id: '2', name: 'Rita', type: PlayerType.bot);
+    final controller = GameController(players: [human, rita], seed: 771212);
+    controller.autosaveEnabled = false;
+    controller.initializeGame();
+    controller.autosaveEnabled = true;
+
+    final blockingSave = controller.saveGame();
+    await writeStarted.future;
+
+    controller.gameState.round = 3;
+    final queuedSave = controller.saveGame();
+    controller.gameState.round = 99;
+
+    GameSaveService.debugBlockAfterSaveWrite = null;
+    releaseWrite.complete();
+    await blockingSave;
+    await queuedSave;
+
+    final restored = await GameController.loadSavedGame();
+    expect(restored, isNotNull);
+    expect(restored!.gameState.round, 3);
+  }, tags: ['regression']);
 }
 
 void _setupHumanReadyToMeldOut(Player player) {

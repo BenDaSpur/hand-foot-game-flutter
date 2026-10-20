@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:hand_foot_game_flutter/firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:hand_foot_game_flutter/services/game_analytics_logger.dart';
@@ -97,9 +98,8 @@ Future<void> main(List<String> args) async {
 
     if (args.contains('--save-report')) {
       final reportFile = 'analytics_health_report.json';
-      await File(
-        reportFile,
-      ).writeAsString(JsonEncoder.withIndent('  ').convert(report));
+      await File(reportFile)
+          .writeAsString(JsonEncoder.withIndent('  ').convert(report));
       print('\n💾 Health report saved to: $reportFile');
     }
 

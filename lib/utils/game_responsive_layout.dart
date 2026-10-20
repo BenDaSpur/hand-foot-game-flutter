@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../config/game_config.dart';
 
 /// Responsive card dimensions for in-game UI elements.

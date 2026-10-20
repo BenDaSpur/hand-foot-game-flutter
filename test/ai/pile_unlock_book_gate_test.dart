@@ -34,48 +34,44 @@ void main() {
       gameController.gameState.discardPileFrozen = false;
     });
 
-    test(
-      'accumulation window does not skip drawFromDiscard when pile is unlockable',
-      () {
-        // Hand size 10 = inside human accumulation window (8–14)
-        bot.hand
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-          ]);
-        expect(bot.currentHand.length, BotConfig.humanAccumulationMinHand + 2);
+    test('accumulation window does not skip drawFromDiscard when pile is unlockable', () {
+      // Hand size 10 = inside human accumulation window (8–14)
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+        ]);
+      expect(bot.currentHand.length, BotConfig.humanAccumulationMinHand + 2);
 
-        gameController.gameState.discardPile
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          ]);
+      gameController.gameState.discardPile
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        ]);
 
-        expect(gameController.gameState.canUnlockDiscard(), isTrue);
+      expect(gameController.gameState.canUnlockDiscard(), isTrue);
 
-        final decision = botAI.makeDecision(bot, gameController);
+      final decision = botAI.makeDecision(bot, gameController);
 
-        expect(
-          decision.action,
-          equals('drawFromDiscard'),
-          reason:
-              'unlockable valuable pile must beat accumulation deck short-circuit',
-        );
-      },
-    );
+      expect(
+        decision.action,
+        equals('drawFromDiscard'),
+        reason: 'unlockable valuable pile must beat accumulation deck short-circuit',
+      );
+    });
 
     test(
       'accumulation window still draws from deck when pile is not unlockable',

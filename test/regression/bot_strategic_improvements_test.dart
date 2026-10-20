@@ -34,32 +34,28 @@ void main() {
       gameController.initializeGame();
     });
 
-    test(
-      'bot should go out immediately when opponent is close to winning and hand is empty',
-      () {
-        // Setup: Human player close to winning (7500+ points)
-        humanPlayer.score = 7800; // Close to 8500 win condition
+    test('bot should go out immediately when opponent is close to winning and hand is empty', () {
+      // Setup: Human player close to winning (7500+ points)
+      humanPlayer.score = 7800; // Close to 8500 win condition
 
-        // Setup: Bot with books and ability to go out (empty hand)
-        _setupBotReadyToGoOut(botPlayer);
+      // Setup: Bot with books and ability to go out (empty hand)
+      _setupBotReadyToGoOut(botPlayer);
 
-        // Bot should have empty hand to test immediate going out
-        botPlayer.hand.clear();
+      // Bot should have empty hand to test immediate going out
+      botPlayer.hand.clear();
 
-        gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.turnPhase = TurnPhase.meld;
 
-        // Act: Bot makes decision
-        final decision = botAI.makeDecision(botPlayer, gameController);
+      // Act: Bot makes decision
+      final decision = botAI.makeDecision(botPlayer, gameController);
 
-        // Assert: Bot should go out immediately when opponent is close to winning and bot has no cards
-        expect(
-          decision.action,
-          equals('goOut'),
-          reason:
-              'Bot should go out immediately when opponent is close to winning (7800 points) and bot has empty hand',
-        );
-      },
-    );
+      // Assert: Bot should go out immediately when opponent is close to winning and bot has no cards
+      expect(
+        decision.action,
+        equals('goOut'),
+        reason: 'Bot should go out immediately when opponent is close to winning (7800 points) and bot has empty hand',
+      );
+    });
 
     test(
       'BookBuilder should not accumulate beyond 22 cards when under pressure',
@@ -86,8 +82,7 @@ void main() {
         expect(
           decision.action,
           anyOf(['createMeld', 'createMultipleMelds']),
-          reason:
-              'BookBuilder should not accumulate beyond 22 cards under competitive pressure',
+          reason: 'BookBuilder should not accumulate beyond 22 cards under competitive pressure',
         );
       },
     );
@@ -114,8 +109,7 @@ void main() {
       expect(
         decision.action,
         equals('addToMeld'),
-        reason:
-            'Bot with 2 cards and required books should meld playable cards before discarding to go out',
+        reason: 'Bot with 2 cards and required books should meld playable cards before discarding to go out',
       );
     });
 
@@ -154,29 +148,31 @@ void main() {
       );
     });
 
-    test('bot should detect going out opportunity before other meld actions', () {
-      // Setup: Bot that can go out but also has other meld opportunities
-      _setupBotReadyToGoOut(botPlayer);
+    test(
+      'bot should detect going out opportunity before other meld actions',
+      () {
+        // Setup: Bot that can go out but also has other meld opportunities
+        _setupBotReadyToGoOut(botPlayer);
 
-      // Add one more ace that could be added to existing ace meld
-      botPlayer.addCardToHand(
-        PlayingCard(rank: CardRank.ace, suit: Suit.clubs),
-      );
+        // Add one more ace that could be added to existing ace meld
+        botPlayer.addCardToHand(
+          PlayingCard(rank: CardRank.ace, suit: Suit.clubs),
+        );
 
-      // Give bot existing meld of aces they could add to
-      gameController.gameState.turnPhase = TurnPhase.meld;
+        // Give bot existing meld of aces they could add to
+        gameController.gameState.turnPhase = TurnPhase.meld;
 
-      // Act: Bot makes decision
-      final decision = botAI.makeDecision(botPlayer, gameController);
+        // Act: Bot makes decision
+        final decision = botAI.makeDecision(botPlayer, gameController);
 
-      // Assert: Meld last card into existing meld to empty hand (round ends via engine)
-      expect(
-        decision.action,
-        equals('addToMeld'),
-        reason:
-            'Bot with 1 meldable card and required books should meld it to go out (empty hand required)',
-      );
-    });
+        // Assert: Meld last card into existing meld to empty hand (round ends via engine)
+        expect(
+          decision.action,
+          equals('addToMeld'),
+          reason: 'Bot with 1 meldable card and required books should meld it to go out (empty hand required)',
+        );
+      },
+    );
 
     test('competitive urgency should override normal BookBuilder patience', () {
       // Setup: BookBuilder under competitive pressure in Round 3
@@ -204,8 +200,7 @@ void main() {
       expect(
         decision.action,
         anyOf(['createMeld', 'createMultipleMelds']),
-        reason:
-            'BookBuilder should play down immediately under competitive pressure even without excess points',
+        reason: 'BookBuilder should play down immediately under competitive pressure even without excess points',
       );
     });
   });

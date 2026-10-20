@@ -100,40 +100,37 @@ void main() {
       },
     );
 
-    test(
-      'should make strategic melds to reduce hand size even with moderate opportunities',
-      () {
-        // Give bot a decent meld that doesn't exceed the strong threshold
-        bot.dealHand([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen), // 10
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen), // 10
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen), // 10
-          // Total: 30 points, play-down requirement is 60, so not strong enough
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
-        ]);
+    test('should make strategic melds to reduce hand size even with moderate opportunities', () {
+      // Give bot a decent meld that doesn't exceed the strong threshold
+      bot.dealHand([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen), // 10
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen), // 10
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen), // 10
+        // Total: 30 points, play-down requirement is 60, so not strong enough
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
+      ]);
 
-        bot.hasPlayedDown = true; // Already played down
-        bot.hasPickedUpFoot = false; // Still on hand pile
-        gameController.gameState.currentPlayerIndex = 1;
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        gameController.gameState.hasDrawnFromDeck = true;
+      bot.hasPlayedDown = true; // Already played down
+      bot.hasPickedUpFoot = false; // Still on hand pile
+      gameController.gameState.currentPlayerIndex = 1;
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
 
-        final decision = botAI.makeDecision(bot, gameController);
+      final decision = botAI.makeDecision(bot, gameController);
 
-        // Bot should still make strategic melds even if they're not super strong
-        // The new AI is smarter about reducing hand size while still being conservative
-        expect(decision.action, equals('createMeld'));
+      // Bot should still make strategic melds even if they're not super strong
+      // The new AI is smarter about reducing hand size while still being conservative
+      expect(decision.action, equals('createMeld'));
 
-        // Should create the Queens meld since it reduces hand size strategically
-        final meldCards = decision.data as List<PlayingCard>;
-        expect(meldCards.length, equals(3));
-        expect(meldCards.every((card) => card.rank == CardRank.queen), isTrue);
-      },
-    );
+      // Should create the Queens meld since it reduces hand size strategically
+      final meldCards = decision.data as List<PlayingCard>;
+      expect(meldCards.length, equals(3));
+      expect(meldCards.every((card) => card.rank == CardRank.queen), isTrue);
+    });
 
     test(
       'should only meld on hand when close to foot transition (1-2 cards)',

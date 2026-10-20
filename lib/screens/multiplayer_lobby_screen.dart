@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'dart:async';
+
 import '../theme/balatro_theme.dart';
 import '../services/firebase_service.dart';
 import '../services/firebase_constants.dart';

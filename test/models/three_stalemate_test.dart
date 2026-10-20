@@ -507,8 +507,7 @@ void main() {
         expect(
           hasWarningFirstRotation,
           isTrue,
-          reason:
-              'Warning should appear after first full rotation when conditions are met',
+          reason: 'Warning should appear after first full rotation when conditions are met',
         );
 
         // Continue for SECOND full rotation to test if stalemate is properly triggered

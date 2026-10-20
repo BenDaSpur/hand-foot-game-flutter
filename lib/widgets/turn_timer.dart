@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../theme/balatro_theme.dart';
 
 /// A visual turn timer that counts down during a player's turn.

@@ -604,9 +604,8 @@ void main() {
       expect(isAnimating, isTrue);
       expect(find.text('Clara took the discard'), findsOneWidget);
       expect(
-        CardAnimationScope.maybeOf(
-          tester.element(find.text('board')),
-        )?.hiddenHandIndices,
+        CardAnimationScope.maybeOf(tester.element(find.text('board')))
+            ?.hiddenHandIndices,
         isEmpty,
       );
 

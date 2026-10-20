@@ -94,9 +94,8 @@ class GameCode {
     }
 
     if (isShortCode(trimmed)) {
-      return RegExp(
-        '^[A-Z0-9]{${trimmed.length}}\$',
-      ).hasMatch(trimmed.toUpperCase());
+      return RegExp('^[A-Z0-9]{${trimmed.length}}\$')
+          .hasMatch(trimmed.toUpperCase());
     }
 
     if (trimmed.length < FirebaseConstants.minGameIdLength) {

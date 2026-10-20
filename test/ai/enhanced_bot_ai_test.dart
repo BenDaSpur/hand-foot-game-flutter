@@ -74,10 +74,7 @@ void main() {
     group('Strategic Constants', () {
       test('should have appropriate strategic constants in BotConfig', () {
         // All constants now centralized in BotConfig
-        expect(
-          BotConfig.maxTurnsBeforeForcePlayDown,
-          equals(4),
-        ); // EMERGENCY FIX - reduced further to prevent catastrophic accumulation
+        expect(BotConfig.maxTurnsBeforeForcePlayDown, equals(4)); // EMERGENCY FIX - reduced further to prevent catastrophic accumulation
         expect(
           BotConfig.strongPlayDownBuffer,
           equals(5),

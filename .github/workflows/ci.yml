@@ -14,7 +14,7 @@ jobs:
     with:
       setup_firebase_android: true
       run_e2e_tests: false
-      flutter_version: "3.44.6"
+      flutter_version: "3.47.6"
     secrets: inherit
 
   e2e-tests:
@@ -32,7 +32,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 

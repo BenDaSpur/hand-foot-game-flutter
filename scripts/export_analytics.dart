@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:hand_foot_game_flutter/firebase_options.dart';
@@ -257,17 +258,12 @@ class AnalyticsExporter {
       'context': {
         'purpose':
             'Bot performance analysis for Hand & Foot card game AI improvement',
-        'gameDescription':
-            'Multi-player card game with AI bots of different personalities competing against human players',
+        'gameDescription': 'Multi-player card game with AI bots of different personalities competing against human players',
         'personalities': {
-          'conservative':
-              'Cautious play style - avoids risks, higher strategic buffer, waits for safer opportunities',
-          'aggressive':
-              'Fast aggressive play - takes more risks, lower thresholds, prioritizes speed over optimization',
-          'bookBuilder':
-              'Focuses on completing books (7+ card melds) for bonus points, more patient with meld building',
-          'adaptive':
-              'Adjusts strategy dynamically based on game state, opponent behavior, and round progression',
+          'conservative': 'Cautious play style - avoids risks, higher strategic buffer, waits for safer opportunities',
+          'aggressive': 'Fast aggressive play - takes more risks, lower thresholds, prioritizes speed over optimization',
+          'bookBuilder': 'Focuses on completing books (7+ card melds) for bonus points, more patient with meld building',
+          'adaptive': 'Adjusts strategy dynamically based on game state, opponent behavior, and round progression',
         },
         'keyMetrics': {
           'winRate': 'Percentage of games won by this personality (0.0 to 1.0)',
@@ -278,8 +274,7 @@ class AnalyticsExporter {
               'Rate of successfully transitioning from hand to foot cards',
           'averageBooksPerGame':
               'Average number of books (7+ card melds) completed per game',
-          'challengingScenarios':
-              'Game seeds where this personality performs poorly (for improvement focus)',
+          'challengingScenarios': 'Game seeds where this personality performs poorly (for improvement focus)',
         },
         'analysisQuestions': [
           'Which personalities perform best overall and why?',

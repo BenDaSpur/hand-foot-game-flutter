@@ -113,156 +113,144 @@ void main() {
       tags: ['clean_book_first'],
     );
 
-    test(
-      'hard-blocks wild onto only natural near-book without clean book',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.add(dirtyBook());
-        botPlayer.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          ])!,
+    test('hard-blocks wild onto only natural near-book without clean book', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+        ])!,
+      );
+
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.add(
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+      );
+
+      expect(botPlayer.hasCleanBook, isFalse);
+
+      final options = analyzer.findCardsToAddToExistingMelds(
+        botPlayer,
+        gameController,
+      );
+      final wildOntoNatural = options.where((o) {
+        final card = o['card'] as PlayingCard;
+        final meld = o['meld'] as Meld;
+        return card.isWild && BotMeldAnalyzer.isAllNatural(meld);
+      }).toList();
+
+      expect(wildOntoNatural, isNotEmpty);
+      for (final option in wildOntoNatural) {
+        expect(
+          option['priority'] as int,
+          lessThanOrEqualTo(-50000),
+          reason: 'Must not contaminate natural pile before clean book',
         );
+      }
 
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.add(
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-        );
+      // Wild onto already-dirty book remains allowed (not hard-blocked)
+      final wildOntoDirty = options.where((o) {
+        final card = o['card'] as PlayingCard;
+        final meld = o['meld'] as Meld;
+        return card.isWild && !BotMeldAnalyzer.isAllNatural(meld);
+      }).toList();
+      expect(wildOntoDirty, isNotEmpty);
+      expect(wildOntoDirty.first['priority'] as int, greaterThan(-50000));
+    }, tags: ['clean_book_first']);
 
-        expect(botPlayer.hasCleanBook, isFalse);
+    test('refuses last-card discard on foot without go-out books', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.melds.add(
+        Meld(
+          rank: CardRank.ten,
+          cards: [
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          ],
+          type: MeldType.mixed,
+        ),
+      );
 
-        final options = analyzer.findCardsToAddToExistingMelds(
-          botPlayer,
-          gameController,
-        );
-        final wildOntoNatural = options.where((o) {
-          final card = o['card'] as PlayingCard;
-          final meld = o['meld'] as Meld;
-          return card.isWild && BotMeldAnalyzer.isAllNatural(meld);
-        }).toList();
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.add(
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+      );
 
-        expect(wildOntoNatural, isNotEmpty);
-        for (final option in wildOntoNatural) {
-          expect(
-            option['priority'] as int,
-            lessThanOrEqualTo(-50000),
-            reason: 'Must not contaminate natural pile before clean book',
-          );
-        }
+      expect(botPlayer.hasDirtyBook, isTrue);
+      expect(botPlayer.hasCleanBook, isFalse);
+      expect(botPlayer.canGoOutWithBooks, isFalse);
 
-        // Wild onto already-dirty book remains allowed (not hard-blocked)
-        final wildOntoDirty = options.where((o) {
-          final card = o['card'] as PlayingCard;
-          final meld = o['meld'] as Meld;
-          return card.isWild && !BotMeldAnalyzer.isAllNatural(meld);
-        }).toList();
-        expect(wildOntoDirty, isNotEmpty);
-        expect(wildOntoDirty.first['priority'] as int, greaterThan(-50000));
-      },
-      tags: ['clean_book_first'],
-    );
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      gameController.gameState.hasDrawnFromDeck = true;
 
-    test(
-      'refuses last-card discard on foot without go-out books',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.add(dirtyBook());
-        botPlayer.melds.add(
-          Meld(
-            rank: CardRank.ten,
-            cards: [
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-            ],
-            type: MeldType.mixed,
+      final endDecision = endGameManager.handleEndGame(
+        botPlayer,
+        gameController,
+      );
+      expect(endDecision, isNotNull);
+      expect(endDecision!.action, equals('endTurn'));
+      expect(endDecision.action, isNot('discard'));
+
+      final aiDecision = botAI.makeDecision(botPlayer, gameController);
+      expect(aiDecision.action, isNot('discard'));
+      expect(aiDecision.action, anyOf(equals('endTurn'), equals('error')));
+    }, tags: ['clean_book_first']);
+
+    test('does not strategic-hold with both books and tiny foot hand', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.addAll([cleanBook(), dirtyBook()]);
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+      ]);
+
+      expect(botPlayer.canGoOutWithBooks, isTrue);
+      expect(botPlayer.currentHand.length, equals(2));
+
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
+
+      final decision = botAI.makeDecision(botPlayer, gameController);
+
+      // Finish path: noMeld (then discard) or direct meld/discard — never
+      // a long strategic hold that blocks going out.
+      expect(decision.action, isNot('error'));
+      if (decision.action == 'noMeld') {
+        // noMeld is OK when preparing to discard for go-out
+        expect(botPlayer.canGoOutWithBooks, isTrue);
+      } else {
+        expect(
+          decision.action,
+          anyOf(
+            equals('discard'),
+            equals('addToMeld'),
+            equals('createMeld'),
+            equals('goOut'),
           ),
         );
+      }
 
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.add(
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        );
-
-        expect(botPlayer.hasDirtyBook, isTrue);
-        expect(botPlayer.hasCleanBook, isFalse);
-        expect(botPlayer.canGoOutWithBooks, isFalse);
-
-        gameController.gameState.turnPhase = TurnPhase.discard;
-        gameController.gameState.hasDrawnFromDeck = true;
-
-        final endDecision = endGameManager.handleEndGame(
-          botPlayer,
-          gameController,
-        );
-        expect(endDecision, isNotNull);
-        expect(endDecision!.action, equals('endTurn'));
-        expect(endDecision.action, isNot('discard'));
-
-        final aiDecision = botAI.makeDecision(botPlayer, gameController);
-        expect(aiDecision.action, isNot('discard'));
-        expect(aiDecision.action, anyOf(equals('endTurn'), equals('error')));
-      },
-      tags: ['clean_book_first'],
-    );
-
-    test(
-      'does not strategic-hold with both books and tiny foot hand',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.addAll([cleanBook(), dirtyBook()]);
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-        ]);
-
-        expect(botPlayer.canGoOutWithBooks, isTrue);
-        expect(botPlayer.currentHand.length, equals(2));
-
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        gameController.gameState.hasDrawnFromDeck = true;
-
-        final decision = botAI.makeDecision(botPlayer, gameController);
-
-        // Finish path: noMeld (then discard) or direct meld/discard — never
-        // a long strategic hold that blocks going out.
-        expect(decision.action, isNot('error'));
-        if (decision.action == 'noMeld') {
-          // noMeld is OK when preparing to discard for go-out
-          expect(botPlayer.canGoOutWithBooks, isTrue);
-        } else {
-          expect(
-            decision.action,
-            anyOf(
-              equals('discard'),
-              equals('addToMeld'),
-              equals('createMeld'),
-              equals('goOut'),
-            ),
-          );
-        }
-
-        // Explicitly: holding reasoning should not apply via makeDecision
-        // when eligible to finish — discard phase should discard.
-        gameController.gameState.turnPhase = TurnPhase.discard;
-        final discardDecision = botAI.makeDecision(botPlayer, gameController);
-        expect(discardDecision.action, equals('discard'));
-      },
-      tags: ['clean_book_first'],
-    );
+      // Explicitly: holding reasoning should not apply via makeDecision
+      // when eligible to finish — discard phase should discard.
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      final discardDecision = botAI.makeDecision(botPlayer, gameController);
+      expect(discardDecision.action, equals('discard'));
+    }, tags: ['clean_book_first']);
 
     test(
       'completes six-card natural pile into clean book before dirty inflation',

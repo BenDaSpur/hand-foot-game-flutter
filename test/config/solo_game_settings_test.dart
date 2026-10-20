@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+
 import 'dart:math';
+
 import 'package:hand_foot_game_flutter/ai/bot_personality.dart';
 import 'package:hand_foot_game_flutter/config/solo_game_settings.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';

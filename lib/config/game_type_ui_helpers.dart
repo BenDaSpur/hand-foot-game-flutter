@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'game_type_config.dart';
 import '../theme/balatro_theme.dart';
 

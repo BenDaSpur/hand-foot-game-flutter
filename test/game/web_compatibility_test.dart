@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
@@ -182,9 +183,8 @@ void main() {
         'additionalInfo': 'This is extra verbose data for testing',
       };
 
-      final verboseJson = const JsonEncoder.withIndent(
-        '  ',
-      ).convert(verboseData);
+      final verboseJson = const JsonEncoder.withIndent('  ')
+          .convert(verboseData);
 
       print('=== WEB COMPATIBILITY COMPRESSION ===');
       print('Verbose JSON: ${verboseJson.length} bytes');

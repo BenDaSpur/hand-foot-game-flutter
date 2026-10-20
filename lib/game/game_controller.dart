@@ -1,5 +1,7 @@
 import 'dart:math';
+
 import 'package:logging/logging.dart';
+
 import '../config/game_config.dart';
 import '../models/card.dart';
 import '../models/deck.dart';

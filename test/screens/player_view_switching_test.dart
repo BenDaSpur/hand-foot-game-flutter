@@ -62,48 +62,42 @@ void main() {
         expect(viewingPlayerMelds?.name, equals('Bot 1'));
       });
 
-      test(
-        'switching from bot view back to human should set viewingPlayerMelds to null',
-        () {
-          // Start viewing a bot's melds
-          Player? viewingPlayerMelds = bot1Player;
-          expect(viewingPlayerMelds, equals(bot1Player));
+      test('switching from bot view back to human should set viewingPlayerMelds to null', () {
+        // Start viewing a bot's melds
+        Player? viewingPlayerMelds = bot1Player;
+        expect(viewingPlayerMelds, equals(bot1Player));
 
-          // Now click on human player
-          final tappedPlayer = humanPlayer;
-          final foundHumanPlayer = players.firstWhere(
-            (p) => p.type == PlayerType.human,
-          );
+        // Now click on human player
+        final tappedPlayer = humanPlayer;
+        final foundHumanPlayer = players.firstWhere(
+          (p) => p.type == PlayerType.human,
+        );
 
-          viewingPlayerMelds = tappedPlayer == foundHumanPlayer
-              ? null
-              : tappedPlayer;
+        viewingPlayerMelds = tappedPlayer == foundHumanPlayer
+            ? null
+            : tappedPlayer;
 
-          expect(viewingPlayerMelds, isNull);
-        },
-      );
+        expect(viewingPlayerMelds, isNull);
+      });
 
-      test(
-        'switching from one bot to another bot should update viewingPlayerMelds',
-        () {
-          // Start viewing bot1's melds
-          Player? viewingPlayerMelds = bot1Player;
-          expect(viewingPlayerMelds, equals(bot1Player));
+      test('switching from one bot to another bot should update viewingPlayerMelds', () {
+        // Start viewing bot1's melds
+        Player? viewingPlayerMelds = bot1Player;
+        expect(viewingPlayerMelds, equals(bot1Player));
 
-          // Now click on bot2 player
-          final tappedPlayer = bot2Player;
-          final foundHumanPlayer = players.firstWhere(
-            (p) => p.type == PlayerType.human,
-          );
+        // Now click on bot2 player
+        final tappedPlayer = bot2Player;
+        final foundHumanPlayer = players.firstWhere(
+          (p) => p.type == PlayerType.human,
+        );
 
-          viewingPlayerMelds = tappedPlayer == foundHumanPlayer
-              ? null
-              : tappedPlayer;
+        viewingPlayerMelds = tappedPlayer == foundHumanPlayer
+            ? null
+            : tappedPlayer;
 
-          expect(viewingPlayerMelds, equals(bot2Player));
-          expect(viewingPlayerMelds?.name, equals('Bot 2'));
-        },
-      );
+        expect(viewingPlayerMelds, equals(bot2Player));
+        expect(viewingPlayerMelds?.name, equals('Bot 2'));
+      });
     });
 
     group('Multiplayer Mode', () {
@@ -139,22 +133,19 @@ void main() {
         },
       );
 
-      test(
-        'switching from other player view back to current user should set viewingPlayerMelds to null',
-        () {
-          // Start viewing another player's melds
-          Player? viewingPlayerMelds = bot1Player;
-          expect(viewingPlayerMelds, equals(bot1Player));
+      test('switching from other player view back to current user should set viewingPlayerMelds to null', () {
+        // Start viewing another player's melds
+        Player? viewingPlayerMelds = bot1Player;
+        expect(viewingPlayerMelds, equals(bot1Player));
 
-          // Now click on current user
-          final tappedPlayer = humanPlayer;
-          viewingPlayerMelds = tappedPlayer.id == currentUserId
-              ? null
-              : tappedPlayer;
+        // Now click on current user
+        final tappedPlayer = humanPlayer;
+        viewingPlayerMelds = tappedPlayer.id == currentUserId
+            ? null
+            : tappedPlayer;
 
-          expect(viewingPlayerMelds, isNull);
-        },
-      );
+        expect(viewingPlayerMelds, isNull);
+      });
     });
 
     group('Back to Yours Button Visibility Logic', () {

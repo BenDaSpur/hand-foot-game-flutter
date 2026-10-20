@@ -116,57 +116,54 @@ void main() {
       },
     );
 
-    test(
-      'hand pile completion defers discard in meld phase when no melds available',
-      () {
-        carl.hasPlayedDown = true;
-        carl.hasPickedUpFoot = false;
-        carl.melds
-          ..clear()
-          ..add(
-            Meld.createMeld([
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-            ])!,
-          )
-          // Critical hand-pile completion requires a book or clear-all path
-          // (2026.08-unlock-churn).
-          ..add(
-            Meld.createMeld([
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-            ])!,
-          );
-        carl.hand
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.six),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-          ]);
-        setCurrentPlayer(carl);
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        gameController.gameState.hasDrawnFromDeck = true;
-
-        expect(botAI.shouldCompleteHandPileForFoot(carl, context()), isTrue);
-
-        final meldDecision = botAI.makeCompleteHandPileForFootDecision(
-          carl,
-          context(),
+    test('hand pile completion defers discard in meld phase when no melds available', () {
+      carl.hasPlayedDown = true;
+      carl.hasPickedUpFoot = false;
+      carl.melds
+        ..clear()
+        ..add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          ])!,
+        )
+        // Critical hand-pile completion requires a book or clear-all path
+        // (2026.08-unlock-churn).
+        ..add(
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+          ])!,
         );
-        expect(meldDecision?.action, 'noMeld');
+      carl.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+        ]);
+      setCurrentPlayer(carl);
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
 
-        gameController.gameState.turnPhase = TurnPhase.discard;
-        final discardDecision = botAI.makeDecision(carl, gameController);
-        expect(discardDecision.action, 'discard');
-      },
-    );
+      expect(botAI.shouldCompleteHandPileForFoot(carl, context()), isTrue);
+
+      final meldDecision = botAI.makeCompleteHandPileForFootDecision(
+        carl,
+        context(),
+      );
+      expect(meldDecision?.action, 'noMeld');
+
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      final discardDecision = botAI.makeDecision(carl, gameController);
+      expect(discardDecision.action, 'discard');
+    });
 
     test(
       'Alex adaptive uses multi-meld rush at hand=7 with opponent on foot',

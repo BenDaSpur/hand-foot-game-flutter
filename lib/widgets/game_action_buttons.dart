@@ -1,5 +1,7 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../constants/keyboard_shortcuts.dart';
@@ -384,10 +386,8 @@ class GameActionButtons extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${bot.name}\'s Turn',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Colors.amber,
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: Colors.amber, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
             phaseChip,

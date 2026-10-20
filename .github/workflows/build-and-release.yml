@@ -21,7 +21,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 
@@ -59,7 +59,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 
@@ -134,7 +134,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 
@@ -184,7 +184,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 
@@ -235,7 +235,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 
@@ -319,7 +319,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.44.6"
+          flutter-version: "3.47.6"
           channel: "stable"
           cache: true
 

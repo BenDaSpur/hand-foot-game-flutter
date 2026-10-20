@@ -61,30 +61,26 @@ void main() {
       tags: ['meld'],
     );
 
-    test(
-      'marks wilds playable when findPossibleMelds only returns clean 3+',
-      () {
-        // Three kings → clean-only candidate; wild still legal for a dirty meld.
-        human.hand
-          ..clear()
-          ..addAll([
-            PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-            PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-            PlayingCard(suit: Suit.spades, rank: CardRank.two),
-          ]);
+    test('marks wilds playable when findPossibleMelds only returns clean 3+', () {
+      // Three kings → clean-only candidate; wild still legal for a dirty meld.
+      human.hand
+        ..clear()
+        ..addAll([
+          PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+          PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          PlayingCard(suit: Suit.spades, rank: CardRank.two),
+        ]);
 
-        final melds = controller.findPossibleMelds(human);
-        expect(melds.any((m) => m.any((c) => c.isWild)), isFalse);
+      final melds = controller.findPossibleMelds(human);
+      expect(melds.any((m) => m.any((c) => c.isWild)), isFalse);
 
-        final indices = controller.getPlayableCardIndices(human);
-        expect(indices, equals({0, 1, 2, 4, 5}));
-        expect(indices.contains(3), isFalse, reason: 'lone ace not playable');
-      },
-      tags: ['meld'],
-    );
+      final indices = controller.getPlayableCardIndices(human);
+      expect(indices, equals({0, 1, 2, 4, 5}));
+      expect(indices.contains(3), isFalse, reason: 'lone ace not playable');
+    }, tags: ['meld']);
 
     test('returns empty set outside meld phase', () {
       human.hand.addAll([

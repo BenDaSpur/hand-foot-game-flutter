@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'dart:async';
+
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
@@ -1132,9 +1134,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                   ),
                   child: Text(
                     'Start Next Round',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.headlineMedium?.copyWith(color: Colors.white),
+                    style: Theme.of(context).textTheme.headlineMedium
+                        ?.copyWith(color: Colors.white),
                   ),
                 )
               else
@@ -1191,9 +1192,8 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
               const SizedBox(height: 8),
               Text(
                 'Final Score: ${gameState.winner?.score ?? 0} points',
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineMedium?.copyWith(color: Colors.white),
+                style: Theme.of(context).textTheme.headlineMedium
+                    ?.copyWith(color: Colors.white),
               ),
               const SizedBox(height: 32),
 

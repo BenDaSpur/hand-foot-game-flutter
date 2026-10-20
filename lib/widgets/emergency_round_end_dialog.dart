@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/game_state.dart';
 
 /// Shared dialog for emergency round end scenarios
@@ -14,9 +15,8 @@ class EmergencyRoundEndDialog {
       builder: (context) => AlertDialog(
         title: Text(
           'Round Ended',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineLarge?.copyWith(color: Colors.orange),
+          style: Theme.of(context).textTheme.headlineLarge
+              ?.copyWith(color: Colors.orange),
         ),
         content: Text(_contentForReason(reason, autoAdvance: autoAdvance)),
         actions: [

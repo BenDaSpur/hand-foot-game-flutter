@@ -96,27 +96,24 @@ void main() {
       );
     });
 
-    test(
-      '3-player opening draw leaves 147 cards, matching the reported screenshot',
-      () {
-        final players = [
-          Player(id: '1', name: 'You', type: PlayerType.human),
-          Player(id: '2', name: 'Carl', type: PlayerType.bot),
-          Player(id: '3', name: 'Alex', type: PlayerType.bot),
-        ];
-        final controller = GameController(players: players, seed: 864877);
-        controller.initializeGame();
+    test('3-player opening draw leaves 147 cards, matching the reported screenshot', () {
+      final players = [
+        Player(id: '1', name: 'You', type: PlayerType.human),
+        Player(id: '2', name: 'Carl', type: PlayerType.bot),
+        Player(id: '3', name: 'Alex', type: PlayerType.bot),
+      ];
+      final controller = GameController(players: players, seed: 864877);
+      controller.initializeGame();
 
-        // 4 decks * 54 = 216; 3*(11+11)+1 = 67 dealt; 149 remain.
-        expect(controller.gameState.deck.size, 149);
-        expect(controller.drawFromDeck(), isTrue);
-        expect(controller.gameState.deck.size, 147);
-        expect(players.first.currentHand, hasLength(13));
-        expect(
-          players.first.newlyDrawnCardIndices,
-          hasLength(GameConfig.requiredDrawCount),
-        );
-      },
-    );
+      // 4 decks * 54 = 216; 3*(11+11)+1 = 67 dealt; 149 remain.
+      expect(controller.gameState.deck.size, 149);
+      expect(controller.drawFromDeck(), isTrue);
+      expect(controller.gameState.deck.size, 147);
+      expect(players.first.currentHand, hasLength(13));
+      expect(
+        players.first.newlyDrawnCardIndices,
+        hasLength(GameConfig.requiredDrawCount),
+      );
+    });
   });
 }

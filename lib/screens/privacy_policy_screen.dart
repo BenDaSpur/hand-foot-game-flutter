@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../legal/privacy_policy_content.dart';
 import '../theme/balatro_theme.dart';
 

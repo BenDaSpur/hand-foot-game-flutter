@@ -254,72 +254,69 @@ void main() {
         ]);
       });
 
-      test(
-        'should handle multiple players with individual interaction states',
-        () {
-          // Add another human player to test individual flag management
-          final humanPlayer2 = Player(
-            id: '3',
-            name: 'Human2',
-            type: PlayerType.human,
-          );
+      test('should handle multiple players with individual interaction states', () {
+        // Add another human player to test individual flag management
+        final humanPlayer2 = Player(
+          id: '3',
+          name: 'Human2',
+          type: PlayerType.human,
+        );
 
-          final multiGameController = GameController(
-            players: [humanPlayer, botPlayer, humanPlayer2],
-          );
-          multiGameController.initializeGame();
+        final multiGameController = GameController(
+          players: [humanPlayer, botPlayer, humanPlayer2],
+        );
+        multiGameController.initializeGame();
 
-          // Each human player should have their own interaction state
-          // This test verifies that the fix works for multiple human players
+        // Each human player should have their own interaction state
+        // This test verifies that the fix works for multiple human players
 
-          final playerStates = <String, bool>{};
+        final playerStates = <String, bool>{};
 
-          // Cycle through players
-          for (int turn = 0; turn < 6; turn++) {
-            // 2 turns each
-            final currentPlayer = multiGameController.gameState.currentPlayer;
+        // Cycle through players
+        for (int turn = 0; turn < 6; turn++) {
+          // 2 turns each
+          final currentPlayer = multiGameController.gameState.currentPlayer;
 
-            if (currentPlayer.type == PlayerType.human) {
-              // Human turn - test interaction guard
-              if (multiGameController.gameState.turnPhase == TurnPhase.draw) {
-                expect(multiGameController.drawFromDeck(), isTrue);
+          if (currentPlayer.type == PlayerType.human) {
+            // Human turn - test interaction guard
+            if (multiGameController.gameState.turnPhase == TurnPhase.draw) {
+              expect(multiGameController.drawFromDeck(), isTrue);
 
-                // Each human has their own interaction flag
-                playerStates[currentPlayer.id] = false; // Flag reset after draw
+              // Each human has their own interaction flag
+              playerStates[currentPlayer.id] = false; // Flag reset after draw
 
-                // Simulate user interaction for this specific player
-                playerStates[currentPlayer.id] = true;
+              // Simulate user interaction for this specific player
+              playerStates[currentPlayer.id] = true;
 
-                expect(
-                  playerStates[currentPlayer.id],
-                  isTrue,
-                  reason:
-                      'Player ${currentPlayer.name} should have interaction flag set',
-                );
-              }
+              expect(
+                playerStates[currentPlayer.id],
+                isTrue,
+                reason:
+                    'Player ${currentPlayer.name} should have interaction flag set',
+              );
+            }
 
-              // Complete human turn
-              if (currentPlayer.currentHand.isNotEmpty) {
-                final card = currentPlayer.currentHand.first;
-                multiGameController.discardCard(card);
-              }
-            } else {
-              // Bot turn - complete quickly
-              if (multiGameController.gameState.turnPhase == TurnPhase.draw) {
-                multiGameController.drawFromDeck();
-              }
-              if (currentPlayer.currentHand.isNotEmpty) {
-                final card = currentPlayer.currentHand.first;
-                multiGameController.discardCard(card);
-              }
+            // Complete human turn
+            if (currentPlayer.currentHand.isNotEmpty) {
+              final card = currentPlayer.currentHand.first;
+              multiGameController.discardCard(card);
+            }
+          } else {
+            // Bot turn - complete quickly
+            if (multiGameController.gameState.turnPhase == TurnPhase.draw) {
+              multiGameController.drawFromDeck();
+            }
+            if (currentPlayer.currentHand.isNotEmpty) {
+              final card = currentPlayer.currentHand.first;
+              multiGameController.discardCard(card);
             }
           }
+        }
 
-          // Verify both human players had proper interaction management
-          expect(playerStates.containsKey(humanPlayer.id), isTrue);
-          expect(playerStates.containsKey(humanPlayer2.id), isTrue);
-        },
-      );
+        // Verify both human players had proper interaction management
+        expect(playerStates.containsKey(humanPlayer.id), isTrue);
+        expect(playerStates.containsKey(humanPlayer2.id), isTrue);
+      });
     });
   });
 }

@@ -32,58 +32,48 @@ void main() {
     expect(find.textContaining('insufficient cards'), findsNothing);
   }, tags: ['widget']);
 
-  testWidgets(
-    'stalemate warning is distinct from the empty-deck last call',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) {
-              return TextButton(
-                onPressed: () {
-                  LastCallDialog.showStalemateWarning(context);
-                },
-                child: const Text('Open'),
-              );
-            },
-          ),
+  testWidgets('stalemate warning is distinct from the empty-deck last call', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            return TextButton(
+              onPressed: () {
+                LastCallDialog.showStalemateWarning(context);
+              },
+              child: const Text('Open'),
+            );
+          },
         ),
-      );
+      ),
+    );
 
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text(GameActionFeedback.stalemateWarningTitle),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Only 3s are being discarded'),
-        findsOneWidget,
-      );
-      expect(find.text(GameActionFeedback.lastCallTitle), findsNothing);
-      expect(find.textContaining('insufficient cards'), findsNothing);
-    },
-    tags: ['widget'],
-  );
+    expect(find.text(GameActionFeedback.stalemateWarningTitle), findsOneWidget);
+    expect(find.textContaining('Only 3s are being discarded'), findsOneWidget);
+    expect(find.text(GameActionFeedback.lastCallTitle), findsNothing);
+    expect(find.textContaining('insufficient cards'), findsNothing);
+  }, tags: ['widget']);
 
-  testWidgets(
-    'last-call banner stays visible after the modal is dismissed',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: LastCallBanner(isLocalPlayerTurn: true)),
-        ),
-      );
+  testWidgets('last-call banner stays visible after the modal is dismissed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: LastCallBanner(isLocalPlayerTurn: true)),
+      ),
+    );
 
-      expect(
-        find.text(
-          GameActionFeedback.lastCallBannerHeadline(isLocalPlayerTurn: true),
-        ),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Deck is empty'), findsOneWidget);
-    },
-    tags: ['widget'],
-  );
+    expect(
+      find.text(
+        GameActionFeedback.lastCallBannerHeadline(isLocalPlayerTurn: true),
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Deck is empty'), findsOneWidget);
+  }, tags: ['widget']);
 }

@@ -35,8 +35,8 @@ Available for: **Web** ([playhandfoot.com](https://playhandfoot.com)) | Android 
 
 ### Prerequisites
 
-- Flutter SDK 3.44.6
-- Dart SDK 3.12.2 (bundled with Flutter 3.44.6)
+- Flutter SDK 3.47.6
+- Dart SDK 3.13.5 (bundled with Flutter 3.47.6)
 
 ### Build from Source
 

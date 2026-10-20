@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../services/firebase_constants.dart';
@@ -286,7 +288,7 @@ class MultiplayerResumeService {
       final gameId = opportunity['gameId'] as String;
       final playerName = opportunity['playerName'] as String;
 
-      return rejoinGameWithStatus(gameId: gameId, playerName: playerName);
+      return await rejoinGameWithStatus(gameId: gameId, playerName: playerName);
     } catch (e) {
       DebugLogger.error('Failed to auto-resume multiplayer game: $e');
       return null;

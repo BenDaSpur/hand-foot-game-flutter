@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'game_event.dart';
 
 /// Central event bus for game events.

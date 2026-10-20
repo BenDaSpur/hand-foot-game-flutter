@@ -158,8 +158,7 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
                             _buildRuleToggle(
                               title:
                                   '+${GameConfig.goingOutBonus} pts to first player out',
-                              subtitle:
-                                  'Bonus for the player who goes out first each round',
+                              subtitle: 'Bonus for the player who goes out first each round',
                               value: _settings.enableGoingOutBonus,
                               onChanged: (value) {
                                 setState(() {
@@ -172,8 +171,7 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
                             const SizedBox(height: 16),
                             _buildRuleToggle(
                               title: 'One more turn after going out',
-                              subtitle:
-                                  'Other players each get one final turn after someone goes out',
+                              subtitle: 'Other players each get one final turn after someone goes out',
                               value: _settings.enableFinalTurnAfterGoingOut,
                               onChanged: (value) {
                                 setState(() {

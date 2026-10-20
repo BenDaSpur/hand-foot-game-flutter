@@ -526,59 +526,53 @@ void main() {
       expect(player.currentHand.first.suit, equals(Suit.diamonds));
     });
 
-    test(
-      'should allow going out with books that become mixed through wild card addition',
-      () {
-        // Set up player using foot with empty hand/foot
-        player.hasPickedUpFoot = true;
-        player.hand.clear();
-        player.foot.clear();
+    test('should allow going out with books that become mixed through wild card addition', () {
+      // Set up player using foot with empty hand/foot
+      player.hasPickedUpFoot = true;
+      player.hand.clear();
+      player.foot.clear();
 
-        // Create a clean book (natural, 7+ cards)
-        final cleanBookCards = List.generate(
-          7,
-          (i) => const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
-        );
-        final cleanBook = Meld.createMeld(cleanBookCards)!;
-        player.melds.add(cleanBook);
+      // Create a clean book (natural, 7+ cards)
+      final cleanBookCards = List.generate(
+        7,
+        (i) => const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+      );
+      final cleanBook = Meld.createMeld(cleanBookCards)!;
+      player.melds.add(cleanBook);
 
-        expect(player.hasCleanBook, isTrue);
-        expect(player.hasDirtyBook, isFalse);
-        expect(player.canGoOutWithBooks, isFalse); // Needs both clean AND dirty
-        expect(player.canGoOut, isFalse);
+      expect(player.hasCleanBook, isTrue);
+      expect(player.hasDirtyBook, isFalse);
+      expect(player.canGoOutWithBooks, isFalse); // Needs both clean AND dirty
+      expect(player.canGoOut, isFalse);
 
-        // Create another natural book that will become dirty
-        final initialNaturalCards = List.generate(
-          7,
-          (i) => const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-        );
-        final bookToBeDirty = Meld.createMeld(initialNaturalCards)!;
-        player.melds.add(bookToBeDirty);
+      // Create another natural book that will become dirty
+      final initialNaturalCards = List.generate(
+        7,
+        (i) => const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+      );
+      final bookToBeDirty = Meld.createMeld(initialNaturalCards)!;
+      player.melds.add(bookToBeDirty);
 
-        // Still no dirty book
-        expect(player.hasCleanBook, isTrue);
-        expect(player.hasDirtyBook, isFalse);
-        expect(player.canGoOutWithBooks, isFalse);
-        expect(player.canGoOut, isFalse);
+      // Still no dirty book
+      expect(player.hasCleanBook, isTrue);
+      expect(player.hasDirtyBook, isFalse);
+      expect(player.canGoOutWithBooks, isFalse);
+      expect(player.canGoOut, isFalse);
 
-        // Add a wild card to the second book - should become dirty dynamically
-        final wildCard = const PlayingCard(
-          suit: Suit.hearts,
-          rank: CardRank.two,
-        );
-        final success = bookToBeDirty.addCard(wildCard);
+      // Add a wild card to the second book - should become dirty dynamically
+      final wildCard = const PlayingCard(suit: Suit.hearts, rank: CardRank.two);
+      final success = bookToBeDirty.addCard(wildCard);
 
-        expect(success, isTrue);
-        expect(bookToBeDirty.type, equals(MeldType.mixed));
-        expect(bookToBeDirty.isDirty, isTrue);
+      expect(success, isTrue);
+      expect(bookToBeDirty.type, equals(MeldType.mixed));
+      expect(bookToBeDirty.isDirty, isTrue);
 
-        // Now should be able to go out
-        expect(player.hasCleanBook, isTrue);
-        expect(player.hasDirtyBook, isTrue);
-        expect(player.canGoOutWithBooks, isTrue);
-        expect(player.canGoOut, isTrue);
-      },
-    );
+      // Now should be able to go out
+      expect(player.hasCleanBook, isTrue);
+      expect(player.hasDirtyBook, isTrue);
+      expect(player.canGoOutWithBooks, isTrue);
+      expect(player.canGoOut, isTrue);
+    });
 
     test('should track newly drawn cards correctly with duplicate cards', () {
       // Setup initial hand with Queen of Spades

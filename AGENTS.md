@@ -14,7 +14,7 @@
 This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and optional Firebase multiplayer. Standard dev/test/build commands live in `README.md`, `CLAUDE.md`, and `format_and_test.sh`; use those as the source of truth.
 
 ### Environment
-- Flutter SDK **3.44.6** (Dart 3.12.2) is the project target (and should be pre-installed at `/opt/flutter` in Cloud Agent workspaces). `PATH` and `CHROME_EXECUTABLE=/usr/local/bin/google-chrome` are exported in `~/.bashrc`. If `flutter` isn't on `PATH` in a fresh non-login shell, call it via `/opt/flutter/bin/flutter`.
+- Flutter SDK **3.47.6** (Dart 3.13.5) is the project target. Cloud Agent workspaces should ship matching `/opt/flutter` (rebuild the environment snapshot if `/opt/flutter` is older). `PATH` and `CHROME_EXECUTABLE=/usr/local/bin/google-chrome` are exported in `~/.bashrc`. If `flutter` isn't on `PATH` in a fresh non-login shell, call it via `/opt/flutter/bin/flutter`.
 - Only the **web (Chrome)** and headless test toolchains are set up. The Android and Linux-desktop toolchains are intentionally not installed, so `flutter doctor` reports them as missing — this is expected and does not affect web/test workflows.
 
 ### Running the app (dev mode)
