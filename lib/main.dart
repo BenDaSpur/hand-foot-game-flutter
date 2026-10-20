@@ -1,8 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -117,11 +118,17 @@ class _HandAndFootAppState extends State<HandAndFootApp> {
       debugShowCheckedModeBanner: false,
       theme: BalatroTheme.darkTheme,
       builder: (context, child) {
-        if (!_updateAvailable || child == null) {
-          return child ?? const SizedBox.shrink();
-        }
-
-        return Stack(children: [child, const WebAppUpdateBanner()]);
+        final content = child ?? const SizedBox.shrink();
+        final Widget body = !_updateAvailable
+            ? content
+            : Stack(children: [content, const WebAppUpdateBanner()]);
+        // Bridges are the supported path while plugins still read
+        // package:flutter/material.dart and package:flutter/cupertino.dart.
+        // ignore: deprecated_member_use
+        return MaterialUiCompatibilityBridge(
+          // ignore: deprecated_member_use
+          child: CupertinoUiCompatibilityBridge(child: body),
+        );
       },
       home: const MainMenuScreen(),
     );

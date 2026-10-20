@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class BalatroTheme {
@@ -119,11 +119,11 @@ class BalatroTheme {
     );
   }
 
-  /// Build the app [TextTheme], optionally applying Arimo via Google Fonts.
+  /// Build the app [TextTheme], optionally applying Arimo.
   ///
-  /// google_fonts 9.x returns `material_ui.TextTheme` from `*TextTheme()`
-  /// helpers, which is not assignable to Flutter's [ThemeData.textTheme].
-  /// Apply the family per-[TextStyle] instead so ThemeData stays typed.
+  /// [ThemeData] and [TextTheme] are `package:material_ui` types, which is
+  /// what google_fonts 9 `*TextTheme()` helpers return. Do not import
+  /// `package:flutter/material.dart` for these types.
   static TextTheme _buildTextTheme({required bool useGoogleFonts}) {
     const base = TextTheme(
       displayLarge: TextStyle(
@@ -179,23 +179,7 @@ class BalatroTheme {
       return base;
     }
 
-    return TextTheme(
-      displayLarge: GoogleFonts.arimo(textStyle: base.displayLarge),
-      displayMedium: GoogleFonts.arimo(textStyle: base.displayMedium),
-      displaySmall: GoogleFonts.arimo(textStyle: base.displaySmall),
-      headlineLarge: GoogleFonts.arimo(textStyle: base.headlineLarge),
-      headlineMedium: GoogleFonts.arimo(textStyle: base.headlineMedium),
-      headlineSmall: GoogleFonts.arimo(textStyle: base.headlineSmall),
-      titleLarge: GoogleFonts.arimo(textStyle: base.titleLarge),
-      titleMedium: GoogleFonts.arimo(textStyle: base.titleMedium),
-      titleSmall: GoogleFonts.arimo(textStyle: base.titleSmall),
-      bodyLarge: GoogleFonts.arimo(textStyle: base.bodyLarge),
-      bodyMedium: GoogleFonts.arimo(textStyle: base.bodyMedium),
-      bodySmall: GoogleFonts.arimo(textStyle: base.bodySmall),
-      labelLarge: GoogleFonts.arimo(textStyle: base.labelLarge),
-      labelMedium: GoogleFonts.arimo(textStyle: base.labelMedium),
-      labelSmall: GoogleFonts.arimo(textStyle: base.labelSmall),
-    );
+    return GoogleFonts.arimoTextTheme(base);
   }
 
   // Glow effect decoration

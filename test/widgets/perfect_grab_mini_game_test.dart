@@ -1,7 +1,7 @@
 @Tags(['perfect_grab'])
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/config/game_config.dart';
 import 'package:hand_foot_game_flutter/models/perfect_grab_deal_profile.dart';

@@ -1,7 +1,7 @@
 // Example integration showing how to use the GameType system with existing code.
 // This file demonstrates the changes needed to support multiple game variants.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../game/game_controller.dart';
 import '../models/player.dart';

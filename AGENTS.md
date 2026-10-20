@@ -15,6 +15,7 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 
 ### Environment
 - Flutter SDK **3.47.6** (Dart 3.13.5) is the project target. Cloud Agent workspaces should ship matching `/opt/flutter` (rebuild the environment snapshot if `/opt/flutter` is older). `PATH` and `CHROME_EXECUTABLE=/usr/local/bin/google-chrome` are exported in `~/.bashrc`. If `flutter` isn't on `PATH` in a fresh non-login shell, call it via `/opt/flutter/bin/flutter`.
+- UI imports are `package:material_ui/material_ui.dart` and `package:cupertino_ui/cupertino_ui.dart`. The `migrate_design_widgets` lint is an analyzer error, so `package:flutter/material.dart` and `package:flutter/cupertino.dart` must not be imported.
 - Only the **web (Chrome)** and headless test toolchains are set up. The Android and Linux-desktop toolchains are intentionally not installed, so `flutter doctor` reports them as missing — this is expected and does not affect web/test workflows.
 
 ### Running the app (dev mode)

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../models/multiplayer_lifecycle.dart';
 import '../services/multiplayer_resume_service.dart';

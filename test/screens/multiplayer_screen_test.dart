@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/screens/multiplayer_lobby_screen.dart';
 import 'package:hand_foot_game_flutter/theme/balatro_theme.dart';

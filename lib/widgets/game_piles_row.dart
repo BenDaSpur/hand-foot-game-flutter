@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../constants/hand_layout_constants.dart';
 import '../models/game_state.dart';

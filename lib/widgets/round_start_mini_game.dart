@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../models/perfect_grab_deal_profile.dart';
 import 'perfect_grab_mini_game.dart';
