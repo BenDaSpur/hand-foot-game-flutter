@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../ai/bot_config.dart';
 import '../config/analytics_metadata.dart';
 import '../services/firebase_constants.dart';

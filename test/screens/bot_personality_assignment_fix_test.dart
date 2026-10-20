@@ -7,45 +7,48 @@ import 'package:hand_foot_game_flutter/config/bot_configurations.dart';
 /// Simple test for the bot personality assignment functionality
 void main() {
   group('Bot Personality Assignment Fix', () {
-    test('should assign correct predefined personalities based on bot names', () {
-      // Create test bots with specific names that should get specific personalities
-      final botPlayers = [
-        Player(
-          id: '2',
-          name: 'Ben',
-          type: PlayerType.bot,
-        ), // Should be bookBuilder
-        Player(
-          id: '3',
-          name: 'Alex',
-          type: PlayerType.bot,
-        ), // Should be adaptive
-      ];
+    test(
+      'should assign correct predefined personalities based on bot names',
+      () {
+        // Create test bots with specific names that should get specific personalities
+        final botPlayers = [
+          Player(
+            id: '2',
+            name: 'Ben',
+            type: PlayerType.bot,
+          ), // Should be bookBuilder
+          Player(
+            id: '3',
+            name: 'Alex',
+            type: PlayerType.bot,
+          ), // Should be adaptive
+        ];
 
-      // Create personality mapping from the kBotConfigurations
-      final personalityMap = <String, BotPersonality>{};
-      for (final config in kBotConfigurations) {
-        personalityMap[config.name] = config.personality;
-      }
-
-      final botAI = EnhancedBotAI();
-
-      // Assign personalities based on bot names (simulate the fixed logic)
-      for (final bot in botPlayers) {
-        final predefinedPersonality = personalityMap[bot.name];
-        if (predefinedPersonality != null) {
-          botAI.assignPersonality(bot.id, predefinedPersonality);
+        // Create personality mapping from the kBotConfigurations
+        final personalityMap = <String, BotPersonality>{};
+        for (final config in kBotConfigurations) {
+          personalityMap[config.name] = config.personality;
         }
-      }
 
-      // Verify that Ben gets bookBuilder personality
-      final benPersonality = botAI.personalityManager.getPersonality('2');
-      expect(benPersonality, equals(BotPersonality.bookBuilder));
+        final botAI = EnhancedBotAI();
 
-      // Verify that Alex gets adaptive personality
-      final alexPersonality = botAI.personalityManager.getPersonality('3');
-      expect(alexPersonality, equals(BotPersonality.adaptive));
-    });
+        // Assign personalities based on bot names (simulate the fixed logic)
+        for (final bot in botPlayers) {
+          final predefinedPersonality = personalityMap[bot.name];
+          if (predefinedPersonality != null) {
+            botAI.assignPersonality(bot.id, predefinedPersonality);
+          }
+        }
+
+        // Verify that Ben gets bookBuilder personality
+        final benPersonality = botAI.personalityManager.getPersonality('2');
+        expect(benPersonality, equals(BotPersonality.bookBuilder));
+
+        // Verify that Alex gets adaptive personality
+        final alexPersonality = botAI.personalityManager.getPersonality('3');
+        expect(alexPersonality, equals(BotPersonality.adaptive));
+      },
+    );
 
     test(
       'should use fallback to hash-based assignment for unknown bot names',

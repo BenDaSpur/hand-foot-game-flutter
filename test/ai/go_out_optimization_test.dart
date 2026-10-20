@@ -89,8 +89,7 @@ void main() {
       expect(
         turnsToGoOut,
         equals(1),
-        reason:
-            'Ben should be able to go out in 1 turn by melding Q♦ and discarding 5♥',
+        reason: 'Ben should be able to go out in 1 turn by melding Q♦ and discarding 5♥',
       );
 
       // Test the optimization decision

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
@@ -210,9 +211,8 @@ void main() {
         },
       };
 
-      final verboseJson = const JsonEncoder.withIndent(
-        '  ',
-      ).convert(verboseExport);
+      final verboseJson = const JsonEncoder.withIndent('  ')
+          .convert(verboseExport);
       final compactVerboseJson = jsonEncode(verboseExport);
 
       // Decode our compressed export for comparison

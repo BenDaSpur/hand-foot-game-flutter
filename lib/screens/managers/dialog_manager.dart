@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../models/player.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
@@ -958,9 +959,7 @@ class _LoadGameSaveDialogState extends State<_LoadGameSaveDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isPhone
-                  ? 'Paste your game save (compact, base64, or JSON):'
-                  : 'Paste your game save (supports all formats: ultra-compact, base64, or JSON):',
+              isPhone ? 'Paste your game save (compact, base64, or JSON):' : 'Paste your game save (supports all formats: ultra-compact, base64, or JSON):',
               style: const TextStyle(color: Colors.white70),
             ),
             const SizedBox(height: 12),

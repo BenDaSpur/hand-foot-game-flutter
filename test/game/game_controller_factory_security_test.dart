@@ -294,33 +294,35 @@ void main() {
         expect(sanitized['malformedHtml'], equals('alertnestedsafe'));
       });
 
-      test('should preserve safe content while removing dangerous elements', () {
-        final mixedInput = {
-          'title': 'Game: Hand & Foot Tournament',
-          'description':
-              'Join us for a fun game! Rules: <script>steal()</script>No cheating allowed.',
-          'playerCount': 4,
-          'settings': {
-            'difficulty': 'Medium',
-            'timer': '30 minutes',
-            'notes': 'Have fun! <style>hide</style>Good luck!',
-          },
-        };
+      test(
+        'should preserve safe content while removing dangerous elements',
+        () {
+          final mixedInput = {
+            'title': 'Game: Hand & Foot Tournament',
+            'description': 'Join us for a fun game! Rules: <script>steal()</script>No cheating allowed.',
+            'playerCount': 4,
+            'settings': {
+              'difficulty': 'Medium',
+              'timer': '30 minutes',
+              'notes': 'Have fun! <style>hide</style>Good luck!',
+            },
+          };
 
-        final sanitized = adapter.sanitizeInput(mixedInput);
+          final sanitized = adapter.sanitizeInput(mixedInput);
 
-        expect(sanitized['title'], equals('Game: Hand  Foot Tournament'));
-        expect(
-          sanitized['description'],
-          equals('Join us for a fun game! Rules: No cheating allowed.'),
-        );
-        expect(sanitized['playerCount'], equals(4));
+          expect(sanitized['title'], equals('Game: Hand  Foot Tournament'));
+          expect(
+            sanitized['description'],
+            equals('Join us for a fun game! Rules: No cheating allowed.'),
+          );
+          expect(sanitized['playerCount'], equals(4));
 
-        final settings = sanitized['settings'] as Map<String, dynamic>;
-        expect(settings['difficulty'], equals('Medium'));
-        expect(settings['timer'], equals('30 minutes'));
-        expect(settings['notes'], equals('Have fun! Good luck!'));
-      });
+          final settings = sanitized['settings'] as Map<String, dynamic>;
+          expect(settings['difficulty'], equals('Medium'));
+          expect(settings['timer'], equals('30 minutes'));
+          expect(settings['notes'], equals('Have fun! Good luck!'));
+        },
+      );
     });
   });
 }

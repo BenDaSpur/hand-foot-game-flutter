@@ -22,38 +22,34 @@ void main() {
     });
 
     group('Race Condition Detection', () {
-      test(
-        'should detect when current player changes during bot action processing',
-        () {
-          // Set up scenario where bot1 is current player
-          while (gameController.gameState.currentPlayer.id != botPlayer1.id) {
-            gameController.gameState.nextPlayer();
-          }
+      test('should detect when current player changes during bot action processing', () {
+        // Set up scenario where bot1 is current player
+        while (gameController.gameState.currentPlayer.id != botPlayer1.id) {
+          gameController.gameState.nextPlayer();
+        }
 
-          final originalPlayer = gameController.gameState.currentPlayer;
-          expect(originalPlayer.id, botPlayer1.id);
-          expect(originalPlayer.type, PlayerType.bot);
+        final originalPlayer = gameController.gameState.currentPlayer;
+        expect(originalPlayer.id, botPlayer1.id);
+        expect(originalPlayer.type, PlayerType.bot);
 
-          // Simulate race condition: current player changes to human during processing
-          gameController.gameState.nextPlayer(); // Now human is current
-          gameController.gameState.nextPlayer(); // Now bot2 is current
+        // Simulate race condition: current player changes to human during processing
+        gameController.gameState.nextPlayer(); // Now human is current
+        gameController.gameState.nextPlayer(); // Now bot2 is current
 
-          final newPlayer = gameController.gameState.currentPlayer;
-          expect(newPlayer.id, isNot(originalPlayer.id));
+        final newPlayer = gameController.gameState.currentPlayer;
+        expect(newPlayer.id, isNot(originalPlayer.id));
 
-          // The race condition check should detect this mismatch
-          final raceConditionDetected =
-              gameController.gameState.currentPlayer.id != originalPlayer.id ||
-              gameController.gameState.currentPlayer.type != PlayerType.bot;
+        // The race condition check should detect this mismatch
+        final raceConditionDetected =
+            gameController.gameState.currentPlayer.id != originalPlayer.id ||
+            gameController.gameState.currentPlayer.type != PlayerType.bot;
 
-          expect(
-            raceConditionDetected,
-            isTrue,
-            reason:
-                'Should detect that current player changed during processing',
-          );
-        },
-      );
+        expect(
+          raceConditionDetected,
+          isTrue,
+          reason: 'Should detect that current player changed during processing',
+        );
+      });
 
       test('should detect when current player changes from bot to human', () {
         // Set bot as current player
@@ -180,8 +176,7 @@ void main() {
         expect(
           gameController.gameState.currentPlayer.type,
           PlayerType.human,
-          reason:
-              'Current player should still be human after race condition prevention',
+          reason: 'Current player should still be human after race condition prevention',
         );
       });
     });

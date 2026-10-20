@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+
 import 'game_analytics_logger.dart';
 
 /// Service for managing analytics configuration and privacy controls

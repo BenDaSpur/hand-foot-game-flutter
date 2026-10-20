@@ -86,20 +86,16 @@ void main() {
       );
     });
 
-    test(
-      'returns false when transitioning from human to bot turn',
-      () {
-        expect(
-          shouldResetHandHighlightOnTurnChange(
-            currentPlayerIndex: 1,
-            humanPlayerIndex: 0,
-            lastCurrentPlayerIndex: 0,
-          ),
-          isFalse,
-        );
-      },
-      tags: ['hand_focus_turn_transition'],
-    );
+    test('returns false when transitioning from human to bot turn', () {
+      expect(
+        shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: 1,
+          humanPlayerIndex: 0,
+          lastCurrentPlayerIndex: 0,
+        ),
+        isFalse,
+      );
+    }, tags: ['hand_focus_turn_transition']);
 
     test(
       'human bot human transition resets highlight when bot turn is tracked',

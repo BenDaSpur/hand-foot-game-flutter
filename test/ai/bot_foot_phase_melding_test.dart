@@ -107,29 +107,25 @@ void main() {
       tags: ['empty_hand_regression'],
     );
 
-    test(
-      'empty hand in meld phase returns noMeld without strategic hold',
-      () {
-        bot.hand.clear();
-        bot.foot.clear();
-        bot.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-          ])!,
-        );
+    test('empty hand in meld phase returns noMeld without strategic hold', () {
+      bot.hand.clear();
+      bot.foot.clear();
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
 
-        final decision = botAI.makeDecision(bot, gameController);
+      final decision = botAI.makeDecision(bot, gameController);
 
-        expect(decision.action, equals('noMeld'));
-      },
-      tags: ['empty_hand_regression'],
-    );
+      expect(decision.action, equals('noMeld'));
+    }, tags: ['empty_hand_regression']);
 
     test('conservative bot melds instead of holding with 10+ foot cards', () {
       dealBotFoot([
@@ -335,65 +331,61 @@ void main() {
       );
     });
 
-    test(
-      'Alex session regression: builds clean sevens instead of wilds on dirty queens',
-      () {
-        botAI.assignPersonality(bot.id, BotPersonality.adaptive);
+    test('Alex session regression: builds clean sevens instead of wilds on dirty queens', () {
+      botAI.assignPersonality(bot.id, BotPersonality.adaptive);
 
-        dealBotFoot([
+      dealBotFoot([
+        const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.three),
+      ]);
+
+      bot.melds.addAll([
+        Meld.createMeld([
           const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.three),
-        ]);
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.joker),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.joker),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        ])!,
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+        ])!,
+      ]);
 
-        bot.melds.addAll([
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
-          ])!,
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.joker),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          ])!,
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.joker),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          ])!,
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-          ])!,
-        ]);
+      expect(bot.hasDirtyBook, isTrue);
+      expect(bot.hasCleanBook, isFalse);
+      expect(bot.canGoOutWithBooks, isFalse);
 
-        expect(bot.hasDirtyBook, isTrue);
-        expect(bot.hasCleanBook, isFalse);
-        expect(bot.canGoOutWithBooks, isFalse);
+      final decision = botAI.makeDecision(bot, gameController);
 
-        final decision = botAI.makeDecision(bot, gameController);
-
-        expect(decision.action, equals('addToMeld'));
-        final addition = decision.data as Map<String, dynamic>;
-        final card = addition['card'] as PlayingCard;
-        expect(card.rank, equals(CardRank.seven));
-        expect(card.isWild, isFalse);
-      },
-      tags: ['clean_book_regression'],
-    );
+      expect(decision.action, equals('addToMeld'));
+      final addition = decision.data as Map<String, dynamic>;
+      final card = addition['card'] as PlayingCard;
+      expect(card.rank, equals(CardRank.seven));
+      expect(card.isWild, isFalse);
+    }, tags: ['clean_book_regression']);
   });
 }

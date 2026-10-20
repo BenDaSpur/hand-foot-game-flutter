@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../../models/player.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
@@ -910,8 +911,7 @@ class BotTurnManager {
       // If controller failed for all cards, log it but continue to emergency
       gameController.gameState.recentActions.add(
         GameAction(
-          message:
-              'all discard attempts failed - escalating to emergency completion',
+          message: 'all discard attempts failed - escalating to emergency completion',
           playerName: playerName,
         ),
       );

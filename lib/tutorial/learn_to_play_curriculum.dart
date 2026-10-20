@@ -15,8 +15,7 @@ abstract final class LearnToPlayCurriculum {
     LearnToPlayStep(
       id: 'draw',
       title: 'Draw',
-      coachMessage:
-          'Every turn starts by drawing 2 cards from the deck. Tap Draw from deck.',
+      coachMessage: 'Every turn starts by drawing 2 cards from the deck. Tap Draw from deck.',
       requiredAction: LearnToPlayAction.draw,
       phase: LearnToPlayPhase.basics,
     ),
@@ -41,16 +40,14 @@ abstract final class LearnToPlayCurriculum {
     LearnToPlayStep(
       id: 'foot',
       title: 'The Foot',
-      coachMessage:
-          'Nice — you picked up your Foot. Keep playing until both books and an empty Foot let you go out.',
+      coachMessage: 'Nice — you picked up your Foot. Keep playing until both books and an empty Foot let you go out.',
       requiredAction: LearnToPlayAction.continueInfo,
       phase: LearnToPlayPhase.basics,
     ),
     LearnToPlayStep(
       id: 'clean_book',
       title: 'Clean books',
-      coachMessage:
-          'A clean book is 7+ natural cards of one rank (no wilds). Clean books score a big bonus.',
+      coachMessage: 'A clean book is 7+ natural cards of one rank (no wilds). Clean books score a big bonus.',
       requiredAction: LearnToPlayAction.continueInfo,
       phase: LearnToPlayPhase.howToWin,
     ),

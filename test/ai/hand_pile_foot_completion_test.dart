@@ -36,31 +36,26 @@ void main() {
     BotGameContext context() =>
         BotGameContext(gameController.gameState, gameController);
 
-    test(
-      'shouldCompleteHandPileForFoot at critical 4 or soft 5 without books is false',
-      () {
-        bot.hand
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-          ]);
+    test('shouldCompleteHandPileForFoot at critical 4 or soft 5 without books is false', () {
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+        ]);
 
-        // Critical window also requires books or clear-all (unlock-churn).
-        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+      // Critical window also requires books or clear-all (unlock-churn).
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
 
-        bot.hand.add(
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.eight),
-        );
-        // Soft window (5) with 0 books and no clear-all — stay on normal meld scoring
-        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+      bot.hand.add(const PlayingCard(suit: Suit.hearts, rank: CardRank.eight));
+      // Soft window (5) with 0 books and no clear-all — stay on normal meld scoring
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
 
-        bot.hand.add(const PlayingCard(suit: Suit.spades, rank: CardRank.nine));
-        expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
-      },
-    );
+      bot.hand.add(const PlayingCard(suit: Suit.spades, rank: CardRank.nine));
+      expect(botAI.shouldCompleteHandPileForFoot(bot, context()), isFalse);
+    });
 
     test('shouldCompleteHandPileForFoot at 5 when bot already has a book', () {
       bot.melds.add(
@@ -182,47 +177,44 @@ void main() {
       },
     );
 
-    test(
-      'makeCompleteHandPileForFootDecision defers discard when no melds in meld phase',
-      () {
-        bot.hand
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.six),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
-          ]);
-        bot.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-          ])!,
-        );
-        bot.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
-          ])!,
-        );
+    test('makeCompleteHandPileForFootDecision defers discard when no melds in meld phase', () {
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+        ]);
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+        ])!,
+      );
+      bot.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two),
+        ])!,
+      );
 
-        final decision = botAI.makeCompleteHandPileForFootDecision(
-          bot,
-          context(),
-        );
+      final decision = botAI.makeCompleteHandPileForFootDecision(
+        bot,
+        context(),
+      );
 
-        expect(decision?.action, 'noMeld');
+      expect(decision?.action, 'noMeld');
 
-        gameController.gameState.turnPhase = TurnPhase.discard;
-        final discardDecision = botAI.makeDecision(bot, gameController);
-        expect(discardDecision.action, 'discard');
-      },
-    );
+      gameController.gameState.turnPhase = TurnPhase.discard;
+      final discardDecision = botAI.makeDecision(bot, gameController);
+      expect(discardDecision.action, 'discard');
+    });
 
     test(
       'conservative bot does not hold at 8 cards with melds but zero books',

@@ -60,58 +60,55 @@ void main() {
       },
     );
 
-    test(
-      'Edge Case 2: Should reshuffle discard pile when deck is insufficient for draw',
-      () {
-        final players = [
-          Player(id: '1', name: 'Player 1', type: PlayerType.human),
-          Player(id: '2', name: 'Player 2', type: PlayerType.bot),
-        ];
+    test('Edge Case 2: Should reshuffle discard pile when deck is insufficient for draw', () {
+      final players = [
+        Player(id: '1', name: 'Player 1', type: PlayerType.human),
+        Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+      ];
 
-        final deck = Deck(seed: 12345);
-        final gameState = GameState(players: players, deck: deck);
+      final deck = Deck(seed: 12345);
+      final gameState = GameState(players: players, deck: deck);
 
-        // Empty most of the deck, leaving only 1 card
-        while (gameState.deck.size > 1) {
-          gameState.deck.drawCard();
-        }
+      // Empty most of the deck, leaving only 1 card
+      while (gameState.deck.size > 1) {
+        gameState.deck.drawCard();
+      }
 
-        // Add several cards to discard pile for reshuffling
-        gameState.discardPile.clear();
-        gameState.discardPile.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.three),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
-          const PlayingCard(
-            suit: Suit.hearts,
-            rank: CardRank.five,
-          ), // This will be kept as top card
-        ]);
+      // Add several cards to discard pile for reshuffling
+      gameState.discardPile.clear();
+      gameState.discardPile.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.three),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.five,
+        ), // This will be kept as top card
+      ]);
 
-        expect(gameState.deck.size, equals(1));
-        expect(gameState.discardPile.length, equals(5));
+      expect(gameState.deck.size, equals(1));
+      expect(gameState.discardPile.length, equals(5));
 
-        final initialHandSize = gameState.currentPlayer.currentHand.length;
+      final initialHandSize = gameState.currentPlayer.currentHand.length;
 
-        // Try to draw from deck - should trigger reshuffle and succeed
-        final success = gameState.drawFromDeck();
-        expect(success, true);
+      // Try to draw from deck - should trigger reshuffle and succeed
+      final success = gameState.drawFromDeck();
+      expect(success, true);
 
-        // Player should have drawn 2 cards
-        expect(
-          gameState.currentPlayer.currentHand.length,
-          equals(initialHandSize + 2),
-        );
+      // Player should have drawn 2 cards
+      expect(
+        gameState.currentPlayer.currentHand.length,
+        equals(initialHandSize + 2),
+      );
 
-        // Discard pile should only have the top card left
-        expect(gameState.discardPile.length, equals(1));
-        expect(gameState.discardPile.first.rank, equals(CardRank.five));
+      // Discard pile should only have the top card left
+      expect(gameState.discardPile.length, equals(1));
+      expect(gameState.discardPile.first.rank, equals(CardRank.five));
 
-        // Deck should have the reshuffled cards minus what was drawn
-        expect(gameState.deck.size, greaterThan(0));
-      },
-    );
+      // Deck should have the reshuffled cards minus what was drawn
+      expect(gameState.deck.size, greaterThan(0));
+    });
 
     test('Edge Case 2: Should take available discard pile cards during unlock', () {
       final players = [
@@ -170,58 +167,55 @@ void main() {
       expect(gameState.deck.size, equals(1));
     });
 
-    test(
-      'Should draw 1 card, reshuffle, then draw 2nd card when deck has only 1 card',
-      () {
-        final players = [
-          Player(id: '1', name: 'Player 1', type: PlayerType.human),
-          Player(id: '2', name: 'Player 2', type: PlayerType.bot),
-        ];
+    test('Should draw 1 card, reshuffle, then draw 2nd card when deck has only 1 card', () {
+      final players = [
+        Player(id: '1', name: 'Player 1', type: PlayerType.human),
+        Player(id: '2', name: 'Player 2', type: PlayerType.bot),
+      ];
 
-        final deck = Deck(seed: 12345);
-        final gameState = GameState(players: players, deck: deck);
+      final deck = Deck(seed: 12345);
+      final gameState = GameState(players: players, deck: deck);
 
-        // Leave only 1 card in deck
-        while (gameState.deck.size > 1) {
-          gameState.deck.drawCard();
-        }
+      // Leave only 1 card in deck
+      while (gameState.deck.size > 1) {
+        gameState.deck.drawCard();
+      }
 
-        // Add several cards to discard pile for reshuffling
-        gameState.discardPile.clear();
-        gameState.discardPile.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.two),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.three),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
-          const PlayingCard(
-            suit: Suit.hearts,
-            rank: CardRank.five,
-          ), // This will be kept as top card
-        ]);
+      // Add several cards to discard pile for reshuffling
+      gameState.discardPile.clear();
+      gameState.discardPile.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.two),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.three),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.four),
+        const PlayingCard(
+          suit: Suit.hearts,
+          rank: CardRank.five,
+        ), // This will be kept as top card
+      ]);
 
-        expect(gameState.deck.size, equals(1));
-        expect(gameState.discardPile.length, equals(5));
+      expect(gameState.deck.size, equals(1));
+      expect(gameState.discardPile.length, equals(5));
 
-        final initialHandSize = gameState.currentPlayer.currentHand.length;
+      final initialHandSize = gameState.currentPlayer.currentHand.length;
 
-        // Try to draw from deck - should draw 1, reshuffle, then draw second card
-        final success = gameState.drawFromDeck();
-        expect(success, true);
+      // Try to draw from deck - should draw 1, reshuffle, then draw second card
+      final success = gameState.drawFromDeck();
+      expect(success, true);
 
-        // Player should have drawn 2 cards total
-        expect(
-          gameState.currentPlayer.currentHand.length,
-          equals(initialHandSize + 2),
-        );
+      // Player should have drawn 2 cards total
+      expect(
+        gameState.currentPlayer.currentHand.length,
+        equals(initialHandSize + 2),
+      );
 
-        // Discard pile should only have the top card left
-        expect(gameState.discardPile.length, equals(1));
-        expect(gameState.discardPile.first.rank, equals(CardRank.five));
+      // Discard pile should only have the top card left
+      expect(gameState.discardPile.length, equals(1));
+      expect(gameState.discardPile.first.rank, equals(CardRank.five));
 
-        // Deck should have the reshuffled cards minus what was drawn
-        expect(gameState.deck.size, greaterThan(0));
-      },
-    );
+      // Deck should have the reshuffled cards minus what was drawn
+      expect(gameState.deck.size, greaterThan(0));
+    });
 
     test('Should not reshuffle when discard pile has only 1 card', () {
       final players = [

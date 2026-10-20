@@ -44,14 +44,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 454749),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
     });
 
@@ -156,14 +155,13 @@ void main() {
           stateChangedCount++;
         },
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       turnManager.endRoundForBot(botPlayer);
@@ -252,14 +250,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 700168),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       final success = manager.executeBotDecision(
@@ -327,14 +324,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 700168),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       manager.forceCompleteBotTurn(ben);
@@ -386,14 +382,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 700168),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       final success = manager.executeBotDecision(
@@ -453,14 +448,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 700168),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       final advanced = manager.handlePostDiscardState(ben);
@@ -508,14 +502,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 700168),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       final success = manager.executeBotDecision(
@@ -577,14 +570,13 @@ void main() {
         botAI: EnhancedBotAI(seed: 700168),
         onStateChanged: () {},
         logHumanAction: (_) {},
-        logBotDecision:
-            ({
-              required String botId,
-              required String decision,
-              required String reasoning,
-              Map<String, dynamic>? context,
-              BotDecisionAnalyticsSnapshot? gameStateSnapshot,
-            }) {},
+        logBotDecision: ({
+          required String botId,
+          required String decision,
+          required String reasoning,
+          Map<String, dynamic>? context,
+          BotDecisionAnalyticsSnapshot? gameStateSnapshot,
+        }) {},
       );
 
       manager.forceCompleteBotTurn(alex);
@@ -606,28 +598,25 @@ void main() {
       );
     });
 
-    test(
-      'forceCompleteBotTurn is a no-op when the bot is no longer current player',
-      () {
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        botPlayer.dealHand([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
-        ]);
-        final handBefore = botPlayer.currentHand.length;
-        final discardBefore = gameController.gameState.discardPile.length;
+    test('forceCompleteBotTurn is a no-op when the bot is no longer current player', () {
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      botPlayer.dealHand([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+      ]);
+      final handBefore = botPlayer.currentHand.length;
+      final discardBefore = gameController.gameState.discardPile.length;
 
-        // Simulate continue-game / UI handoff back to the human mid-recovery.
-        gameController.gameState.currentPlayerIndex = 0;
+      // Simulate continue-game / UI handoff back to the human mid-recovery.
+      gameController.gameState.currentPlayerIndex = 0;
 
-        turnManager.forceCompleteBotTurn(botPlayer);
+      turnManager.forceCompleteBotTurn(botPlayer);
 
-        expect(botPlayer.currentHand.length, handBefore);
-        expect(gameController.gameState.discardPile.length, discardBefore);
-        expect(gameController.gameState.currentPlayerIndex, 0);
-        expect(gameController.gameState.turnPhase, TurnPhase.meld);
-      },
-    );
+      expect(botPlayer.currentHand.length, handBefore);
+      expect(gameController.gameState.discardPile.length, discardBefore);
+      expect(gameController.gameState.currentPlayerIndex, 0);
+      expect(gameController.gameState.turnPhase, TurnPhase.meld);
+    });
   });
 
   group('EnhancedBotAI error propagation', () {

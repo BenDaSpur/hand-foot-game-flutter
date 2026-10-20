@@ -111,51 +111,44 @@ void main() {
       expect(decision!.action, equals('goOut'));
     });
 
-    test(
-      'does not aggressively finish when only dirty books exist',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.add(dirtyBook());
-        botPlayer.melds.add(
-          Meld(
-            rank: CardRank.queen,
-            cards: [
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-            ],
-            type: MeldType.mixed,
-          ),
-        );
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-        ]);
+    test('does not aggressively finish when only dirty books exist', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.melds.add(
+        Meld(
+          rank: CardRank.queen,
+          cards: [
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+          ],
+          type: MeldType.mixed,
+        ),
+      );
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+      ]);
 
-        expect(botPlayer.hasDirtyBook, isTrue);
-        expect(botPlayer.hasCleanBook, isFalse);
-        expect(botPlayer.canGoOutWithBooks, isFalse);
+      expect(botPlayer.hasDirtyBook, isTrue);
+      expect(botPlayer.hasCleanBook, isFalse);
+      expect(botPlayer.canGoOutWithBooks, isFalse);
 
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        gameController.gameState.hasDrawnFromDeck = true;
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
 
-        final decision = endGameManager.handleEndGame(
-          botPlayer,
-          gameController,
-        );
+      final decision = endGameManager.handleEndGame(botPlayer, gameController);
 
-        expect(decision, isNotNull);
-        expect(decision!.action, isNot('discard'));
-        expect(decision.action, isNot('goOut'));
-      },
-      tags: ['clean_book_regression'],
-    );
+      expect(decision, isNotNull);
+      expect(decision!.action, isNot('discard'));
+      expect(decision.action, isNot('goOut'));
+    }, tags: ['clean_book_regression']);
 
     test(
       'builds clean book lane when dirty books exist but clean is missing',
@@ -195,82 +188,70 @@ void main() {
       tags: ['clean_book_regression'],
     );
 
-    test(
-      'rejects meld that leaves a single card without both book types',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.add(dirtyBook());
-        botPlayer.melds.add(
-          Meld.createMeld([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
-          ])!,
-        );
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.addAll([
+    test('rejects meld that leaves a single card without both book types', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.melds.add(
+        Meld.createMeld([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
           const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
-        ]);
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+        ])!,
+      );
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+      ]);
 
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        gameController.gameState.hasDrawnFromDeck = true;
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
 
-        final decision = botAI.makeDecision(botPlayer, gameController);
+      final decision = botAI.makeDecision(botPlayer, gameController);
 
-        expect(decision.action, isNot('addToMeld'));
-      },
-      tags: ['clean_book_regression'],
-    );
+      expect(decision.action, isNot('addToMeld'));
+    }, tags: ['clean_book_regression']);
 
-    test(
-      'rejects meld that empties hand without both book types',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.add(dirtyBook());
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
-        ]);
+    test('rejects meld that empties hand without both book types', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+      ]);
 
-        expect(botPlayer.canGoOutWithBooks, isFalse);
-        expect(
-          BotEndGameManager.isSafeCreateMeld(botPlayer, botPlayer.currentHand),
-          isFalse,
-        );
-      },
-      tags: ['clean_book_regression'],
-    );
+      expect(botPlayer.canGoOutWithBooks, isFalse);
+      expect(
+        BotEndGameManager.isSafeCreateMeld(botPlayer, botPlayer.currentHand),
+        isFalse,
+      );
+    }, tags: ['clean_book_regression']);
 
-    test(
-      'does not discard wild twos in foot when missing go-out books',
-      () {
-        botPlayer.melds.clear();
-        botPlayer.melds.add(dirtyBook());
-        botPlayer.hand.clear();
-        botPlayer.foot.clear();
-        botPlayer.foot.addAll([
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
-        ]);
+    test('does not discard wild twos in foot when missing go-out books', () {
+      botPlayer.melds.clear();
+      botPlayer.melds.add(dirtyBook());
+      botPlayer.hand.clear();
+      botPlayer.foot.clear();
+      botPlayer.foot.addAll([
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.two),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+      ]);
 
-        final discardAnalyzer = BotDiscardAnalyzer();
-        final discard = discardAnalyzer.chooseCardToDiscard(
-          botPlayer,
-          gameController.gameState,
-        );
+      final discardAnalyzer = BotDiscardAnalyzer();
+      final discard = discardAnalyzer.chooseCardToDiscard(
+        botPlayer,
+        gameController.gameState,
+      );
 
-        expect(discard.rank, equals(CardRank.five));
-        expect(discard.isWild, isFalse);
-      },
-      tags: ['clean_book_regression'],
-    );
+      expect(discard.rank, equals(CardRank.five));
+      expect(discard.isWild, isFalse);
+    }, tags: ['clean_book_regression']);
 
     test(
       'allows meld that completes clean book even when one card remains',

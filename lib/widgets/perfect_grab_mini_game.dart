@@ -233,9 +233,8 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
         Text(
           'Round ${widget.roundNumber} — grab exactly $_target cards',
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: BalatroTheme.secondaryText),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: BalatroTheme.secondaryText),
         ),
       ],
     );
@@ -266,10 +265,8 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
           'Cards will deal automatically — tap GRAB at exactly $_target cards '
           'to earn +${GameConfig.perfectGrabBonus} bonus points!',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: BalatroTheme.primaryText,
-            height: 1.4,
-          ),
+          style: Theme.of(context).textTheme.bodyLarge
+              ?.copyWith(color: BalatroTheme.primaryText, height: 1.4),
         ),
         const SizedBox(height: 24),
         SizedBox(
@@ -321,9 +318,8 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
         ),
         Text(
           'cards grabbed',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: BalatroTheme.secondaryText),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(color: BalatroTheme.secondaryText),
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -407,9 +403,8 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
               ? '+${GameConfig.perfectGrabBonus} bonus points added!'
               : 'You grabbed $_cardCount cards. Need exactly $_target.',
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge?.copyWith(color: BalatroTheme.primaryText),
+          style: Theme.of(context).textTheme.bodyLarge
+              ?.copyWith(color: BalatroTheme.primaryText),
         ),
       ],
     );
@@ -420,9 +415,8 @@ class _PerfectGrabMiniGameState extends State<PerfectGrabMiniGame>
       onPressed: _skipMiniGame,
       child: Text(
         'Skip (no bonus)',
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: BalatroTheme.secondaryText),
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: BalatroTheme.secondaryText),
       ),
     );
   }

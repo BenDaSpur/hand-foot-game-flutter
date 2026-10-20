@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../config/game_config.dart';
 import '../config/project_links.dart';
 import '../config/solo_game_settings.dart';
@@ -633,9 +634,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _openSettings() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
   }
 
   void _openPrivacyPolicy() {
@@ -778,8 +778,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   '3. Scroll down and tap "Add to Home Screen"',
                   '4. Tap "Add"',
                 ],
-                note:
-                    '⚠️ iOS only allows PWA installs from Safari.\nFirefox/Chrome cannot install apps on iOS.',
+                note: '⚠️ iOS only allows PWA installs from Safari.\nFirefox/Chrome cannot install apps on iOS.',
               ),
               const SizedBox(height: 16),
               _buildInstallSection('🤖 Android (Chrome)', [
@@ -1065,9 +1064,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         ),
         title: Text(
           'Hand & Foot Rules',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineLarge?.copyWith(color: BalatroTheme.neonBlue),
+          style: Theme.of(context).textTheme.headlineLarge
+              ?.copyWith(color: BalatroTheme.neonBlue),
         ),
         content: SizedBox(
           width: 300,

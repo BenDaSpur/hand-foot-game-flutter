@@ -33,63 +33,65 @@ void main() {
       expect(BotConfig.botAiVersion, '2026.10-force-foot');
     });
 
-    test('emergency hand size still hard-takes unlockable fat pile in draw', () {
-      bot.hasPlayedDown = true;
-      bot.hasPickedUpFoot = false;
-      // Hand ≥ emergency threshold (15) with unlock keys for kings
-      bot.hand
-        ..clear()
-        ..addAll([
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.five),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
-        ]);
-      expect(
-        bot.currentHand.length,
-        greaterThanOrEqualTo(BotConfig.emergencyHandSizeThreshold),
-      );
+    test(
+      'emergency hand size still hard-takes unlockable fat pile in draw',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        // Hand ≥ emergency threshold (15) with unlock keys for kings
+        bot.hand
+          ..clear()
+          ..addAll([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.jack),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.four),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.five),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.six),
+          ]);
+        expect(
+          bot.currentHand.length,
+          greaterThanOrEqualTo(BotConfig.emergencyHandSizeThreshold),
+        );
 
-      controller.gameState.discardPile
-        ..clear()
-        ..addAll(
-          List.generate(
-            BotConfig.postPlayDownHardTakePileSize - 1,
-            (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.ace),
-          ),
-        )
-        ..add(const PlayingCard(suit: Suit.clubs, rank: CardRank.king));
+        controller.gameState.discardPile
+          ..clear()
+          ..addAll(
+            List.generate(
+              BotConfig.postPlayDownHardTakePileSize - 1,
+              (i) => PlayingCard(suit: Suit.values[i % 4], rank: CardRank.ace),
+            ),
+          )
+          ..add(const PlayingCard(suit: Suit.clubs, rank: CardRank.king));
 
-      controller.gameState.turnPhase = TurnPhase.draw;
-      controller.gameState.hasDrawnFromDeck = false;
-      controller.gameState.discardPileFrozen = false;
+        controller.gameState.turnPhase = TurnPhase.draw;
+        controller.gameState.hasDrawnFromDeck = false;
+        controller.gameState.discardPileFrozen = false;
 
-      // Seed enough turns so early-game grace ends and emergency bypass activates
-      for (var i = 0; i < 12; i++) {
-        botAI.gameAnalyzer.incrementTurnCount(bot.id);
-      }
+        // Seed enough turns so early-game grace ends and emergency bypass activates
+        for (var i = 0; i < 12; i++) {
+          botAI.gameAnalyzer.incrementTurnCount(bot.id);
+        }
 
-      expect(controller.gameState.canUnlockDiscard(), isTrue);
+        expect(controller.gameState.canUnlockDiscard(), isTrue);
 
-      final decision = botAI.makeDecision(bot, controller);
-      expect(
-        decision.action,
-        'drawFromDiscard',
-        reason:
-            'hand ≥15 must still contest unlockable hard-take pile (not force deck)',
-      );
-    });
+        final decision = botAI.makeDecision(bot, controller);
+        expect(
+          decision.action,
+          'drawFromDiscard',
+          reason: 'hand ≥15 must still contest unlockable hard-take pile (not force deck)',
+        );
+      },
+    );
 
     test(
       'missing unlock keys forces deck even when pile at hard-take size',

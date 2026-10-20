@@ -95,9 +95,9 @@ void main() {
   });
 
   test('vercel.json sets no-cache headers for both privacy URL forms', () {
-    final config =
-        jsonDecode(File('vercel.json').readAsStringSync())
-            as Map<String, dynamic>;
+    final config = jsonDecode(
+      File('vercel.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
     final headers = (config['headers'] as List).cast<Map<String, dynamic>>();
 
     String? cacheControl(String source) {

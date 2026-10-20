@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
 import '../services/game_analytics_logger.dart';
 
 /// Debug helper for analytics data export and sharing
@@ -133,8 +135,7 @@ class AnalyticsDebugHelper {
     final claudeComparison = {
       'context': {
         'purpose': 'Personality performance comparison for bot balancing',
-        'question':
-            'How do different bot personalities compare? Which need improvement?',
+        'question': 'How do different bot personalities compare? Which need improvement?',
       },
       'comparison': comparison,
     };

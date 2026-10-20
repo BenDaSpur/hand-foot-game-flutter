@@ -384,29 +384,26 @@ void main() {
       },
     );
 
-    test(
-      'a leaky draw-pile unlock fill message from an old client is sanitized on read',
-      () {
-        final gameState = buildGameState(multiplayer: true);
-        expect(gameState.drawFromDeck(), isTrue);
+    test('a leaky draw-pile unlock fill message from an old client is sanitized on read', () {
+      final gameState = buildGameState(multiplayer: true);
+      expect(gameState.drawFromDeck(), isTrue);
 
-        final document = FirebaseService.gameStateToMapForTesting(gameState);
-        final actions = (document['recentActions'] as List<dynamic>)
-            .cast<Map<String, dynamic>>();
-        const leakyText =
-            'took 3 more cards from draw pile to complete unlock: 9 ♥, 4 ♣';
-        actions.last['message'] = leakyText;
+      final document = FirebaseService.gameStateToMapForTesting(gameState);
+      final actions = (document['recentActions'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+      const leakyText =
+          'took 3 more cards from draw pile to complete unlock: 9 ♥, 4 ♣';
+      actions.last['message'] = leakyText;
 
-        final restored = FirebaseService.gameStateFromMapForTesting(document);
+      final restored = FirebaseService.gameStateFromMapForTesting(document);
 
-        final received = restored.recentActions.last;
-        expect(
-          received.message,
-          'took 3 more cards from draw pile to complete unlock',
-        );
-        expect(received.displayMessage.contains('9 ♥'), isFalse);
-        expect(received.displayMessage.contains('4 ♣'), isFalse);
-      },
-    );
+      final received = restored.recentActions.last;
+      expect(
+        received.message,
+        'took 3 more cards from draw pile to complete unlock',
+      );
+      expect(received.displayMessage.contains('9 ♥'), isFalse);
+      expect(received.displayMessage.contains('4 ♣'), isFalse);
+    });
   });
 }

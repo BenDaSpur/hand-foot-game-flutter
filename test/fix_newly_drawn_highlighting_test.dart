@@ -71,41 +71,47 @@ void main() {
       expect(botPlayer.newlyDrawnCardIndices.isEmpty, true);
     });
 
-    test('should not affect valid newly drawn cards during normal gameplay', () {
-      final humanPlayer = Player(
-        id: '1',
-        name: 'Human',
-        type: PlayerType.human,
-      );
-      final botPlayer = Player(id: '2', name: 'Bot', type: PlayerType.bot);
+    test(
+      'should not affect valid newly drawn cards during normal gameplay',
+      () {
+        final humanPlayer = Player(
+          id: '1',
+          name: 'Human',
+          type: PlayerType.human,
+        );
+        final botPlayer = Player(id: '2', name: 'Bot', type: PlayerType.bot);
 
-      // Add some cards to hand
-      humanPlayer.hand.addAll([
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-      ]);
+        // Add some cards to hand
+        humanPlayer.hand.addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        ]);
 
-      // Add a newly drawn card through the proper method
-      final newCard = const PlayingCard(suit: Suit.clubs, rank: CardRank.queen);
-      humanPlayer.addNewlyDrawnCard(newCard);
+        // Add a newly drawn card through the proper method
+        final newCard = const PlayingCard(
+          suit: Suit.clubs,
+          rank: CardRank.queen,
+        );
+        humanPlayer.addNewlyDrawnCard(newCard);
 
-      // After auto-sorting, the hand will be: Queen(10), King(11), Ace(12)
-      // So Queen is at index 0, not index 2
-      expect(humanPlayer.currentHand[0], newCard);
-      expect(humanPlayer.isCardIndexNewlyDrawn(0), true);
+        // After auto-sorting, the hand will be: Queen(10), King(11), Ace(12)
+        // So Queen is at index 0, not index 2
+        expect(humanPlayer.currentHand[0], newCard);
+        expect(humanPlayer.isCardIndexNewlyDrawn(0), true);
 
-      // Create controller but don't clear (simulating normal gameplay)
-      final controller = GameController(players: [humanPlayer, botPlayer]);
+        // Create controller but don't clear (simulating normal gameplay)
+        final controller = GameController(players: [humanPlayer, botPlayer]);
 
-      // Verify the newly drawn card is still marked (until cleared by normal game flow)
-      expect(humanPlayer.isCardIndexNewlyDrawn(0), true);
+        // Verify the newly drawn card is still marked (until cleared by normal game flow)
+        expect(humanPlayer.isCardIndexNewlyDrawn(0), true);
 
-      // Clear all as would happen in the initialization
-      controller.clearAllNewlyDrawnCards();
+        // Clear all as would happen in the initialization
+        controller.clearAllNewlyDrawnCards();
 
-      // Now it should be cleared
-      expect(humanPlayer.isCardIndexNewlyDrawn(0), false);
-    });
+        // Now it should be cleared
+        expect(humanPlayer.isCardIndexNewlyDrawn(0), false);
+      },
+    );
 
     test('should handle export/import scenario with corrupted newly drawn indices', () {
       // Create a game controller with players who have existing melds (like the user's scenario)

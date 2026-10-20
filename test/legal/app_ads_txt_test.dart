@@ -68,9 +68,9 @@ void main() {
   });
 
   test('vercel.json sets no-cache headers for ads authorization files', () {
-    final config =
-        jsonDecode(File('vercel.json').readAsStringSync())
-            as Map<String, dynamic>;
+    final config = jsonDecode(
+      File('vercel.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
     final headers = (config['headers'] as List).cast<Map<String, dynamic>>();
 
     const expected = 'no-cache, no-store, must-revalidate';

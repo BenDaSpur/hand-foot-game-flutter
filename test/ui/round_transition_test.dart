@@ -239,73 +239,70 @@ void main() {
       ); // No phase change
     });
 
-    test(
-      'should transition to roundEnd when player goes out by adding to existing meld',
-      () {
-        // Set up human player ready to go out by adding cards to existing meld
-        humanPlayer.hasPlayedDown = true;
-        humanPlayer.hasPickedUpFoot = true;
+    test('should transition to roundEnd when player goes out by adding to existing meld', () {
+      // Set up human player ready to go out by adding cards to existing meld
+      humanPlayer.hasPlayedDown = true;
+      humanPlayer.hasPickedUpFoot = true;
 
-        // Give player required books
-        final cleanBook = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        ];
+      // Give player required books
+      final cleanBook = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ];
 
-        final dirtyBook = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-          const PlayingCard(suit: null, rank: CardRank.joker),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-        ];
+      final dirtyBook = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+        const PlayingCard(suit: null, rank: CardRank.joker),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.queen),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+      ];
 
-        // Create existing meld that can accept more cards
-        final existingMeld = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        ];
+      // Create existing meld that can accept more cards
+      final existingMeld = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ];
 
-        humanPlayer.melds.add(Meld.createMeld(cleanBook)!);
-        humanPlayer.melds.add(Meld.createMeld(dirtyBook)!);
-        humanPlayer.melds.add(Meld.createMeld(existingMeld)!);
+      humanPlayer.melds.add(Meld.createMeld(cleanBook)!);
+      humanPlayer.melds.add(Meld.createMeld(dirtyBook)!);
+      humanPlayer.melds.add(Meld.createMeld(existingMeld)!);
 
-        // Clear hand and leave one card in foot that can be added to existing meld
-        humanPlayer.hand.clear();
-        humanPlayer.foot.clear();
-        humanPlayer.foot.add(
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-        );
+      // Clear hand and leave one card in foot that can be added to existing meld
+      humanPlayer.hand.clear();
+      humanPlayer.foot.clear();
+      humanPlayer.foot.add(
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+      );
 
-        // Set it to be human player's turn in meld phase
-        gameController.gameState.currentPlayerIndex = 0;
-        gameController.gameState.turnPhase = TurnPhase.meld;
+      // Set it to be human player's turn in meld phase
+      gameController.gameState.currentPlayerIndex = 0;
+      gameController.gameState.turnPhase = TurnPhase.meld;
 
-        // Verify preconditions
-        expect(humanPlayer.foot.length, equals(1));
-        expect(humanPlayer.hasCleanBook, isTrue);
-        expect(humanPlayer.hasDirtyBook, isTrue);
-        expect(gameController.gameState.phase, equals(GamePhase.playing));
+      // Verify preconditions
+      expect(humanPlayer.foot.length, equals(1));
+      expect(humanPlayer.hasCleanBook, isTrue);
+      expect(humanPlayer.hasDirtyBook, isTrue);
+      expect(gameController.gameState.phase, equals(GamePhase.playing));
 
-        // Add the last card to existing meld (should cause going out)
-        final lastCard = humanPlayer.foot.first;
-        final meldIndex = 2; // The ace meld
-        final success = gameController.addCardToMeld(meldIndex, lastCard);
+      // Add the last card to existing meld (should cause going out)
+      final lastCard = humanPlayer.foot.first;
+      final meldIndex = 2; // The ace meld
+      final success = gameController.addCardToMeld(meldIndex, lastCard);
 
-        expect(success, isTrue);
-        expect(gameController.gameState.phase, equals(GamePhase.roundEnd));
-        expect(humanPlayer.foot.isEmpty, isTrue);
-        expect(humanPlayer.hand.isEmpty, isTrue);
-      },
-    );
+      expect(success, isTrue);
+      expect(gameController.gameState.phase, equals(GamePhase.roundEnd));
+      expect(humanPlayer.foot.isEmpty, isTrue);
+      expect(humanPlayer.hand.isEmpty, isTrue);
+    });
 
     test(
       'should transition to roundEnd when player goes out by creating new meld',
@@ -457,61 +454,58 @@ void main() {
       expect(humanPlayer.hand.isEmpty, isTrue);
     });
 
-    test(
-      'should refuse melding the last card when books requirement is not met',
-      () {
-        // Set up human player without proper book requirements
-        humanPlayer.hasPlayedDown = true;
-        humanPlayer.hasPickedUpFoot = true;
+    test('should refuse melding the last card when books requirement is not met', () {
+      // Set up human player without proper book requirements
+      humanPlayer.hasPlayedDown = true;
+      humanPlayer.hasPickedUpFoot = true;
 
-        // Only give clean book, no dirty book
-        final cleanBook = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-        ];
+      // Only give clean book, no dirty book
+      final cleanBook = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+      ];
 
-        humanPlayer.melds.add(Meld.createMeld(cleanBook)!);
+      humanPlayer.melds.add(Meld.createMeld(cleanBook)!);
 
-        // Create existing meld that can accept more cards
-        final existingMeld = [
-          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-        ];
-        humanPlayer.melds.add(Meld.createMeld(existingMeld)!);
+      // Create existing meld that can accept more cards
+      final existingMeld = [
+        const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+      ];
+      humanPlayer.melds.add(Meld.createMeld(existingMeld)!);
 
-        // Clear hand and leave one card in foot
-        humanPlayer.hand.clear();
-        humanPlayer.foot.clear();
-        humanPlayer.foot.add(
-          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-        );
+      // Clear hand and leave one card in foot
+      humanPlayer.hand.clear();
+      humanPlayer.foot.clear();
+      humanPlayer.foot.add(
+        const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+      );
 
-        // Set it to be human player's turn in meld phase
-        gameController.gameState.currentPlayerIndex = 0;
-        gameController.gameState.turnPhase = TurnPhase.meld;
+      // Set it to be human player's turn in meld phase
+      gameController.gameState.currentPlayerIndex = 0;
+      gameController.gameState.turnPhase = TurnPhase.meld;
 
-        // Verify preconditions
-        expect(humanPlayer.foot.length, equals(1));
-        expect(humanPlayer.hasCleanBook, isTrue);
-        expect(humanPlayer.hasDirtyBook, isFalse); // Missing dirty book
-        expect(gameController.gameState.phase, equals(GamePhase.playing));
+      // Verify preconditions
+      expect(humanPlayer.foot.length, equals(1));
+      expect(humanPlayer.hasCleanBook, isTrue);
+      expect(humanPlayer.hasDirtyBook, isFalse); // Missing dirty book
+      expect(gameController.gameState.phase, equals(GamePhase.playing));
 
-        // Adding the last card without both books is refused (prevents soft-lock)
-        final lastCard = humanPlayer.foot.first;
-        final meldIndex = 1; // The ace meld
-        final success = gameController.addCardToMeld(meldIndex, lastCard);
+      // Adding the last card without both books is refused (prevents soft-lock)
+      final lastCard = humanPlayer.foot.first;
+      final meldIndex = 1; // The ace meld
+      final success = gameController.addCardToMeld(meldIndex, lastCard);
 
-        expect(success, isFalse);
-        expect(gameController.gameState.phase, equals(GamePhase.playing));
-        expect(humanPlayer.foot.length, equals(1));
-        expect(humanPlayer.canGoOut, isFalse);
-      },
-    );
+      expect(success, isFalse);
+      expect(gameController.gameState.phase, equals(GamePhase.playing));
+      expect(humanPlayer.foot.length, equals(1));
+      expect(humanPlayer.canGoOut, isFalse);
+    });
   });
 }

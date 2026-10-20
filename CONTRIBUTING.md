@@ -15,7 +15,7 @@ Please read the [Code of Conduct](CODE_OF_CONDUCT.md). For security vulnerabilit
 
 ### Prerequisites
 
-- Flutter SDK **3.44.6** (Dart 3.12.2)
+- Flutter SDK **3.47.6** (Dart 3.13.5)
 - Git
 
 ### Clone and run

@@ -115,63 +115,86 @@ class BalatroTheme {
         actionTextColor: snackBarActionOnDark,
         behavior: SnackBarBehavior.floating,
       ),
-      textTheme:
-          (useGoogleFonts ? GoogleFonts.arimoTextTheme() : const TextTheme())
-              .copyWith(
-                displayLarge: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 48, // Game title size
-                ),
-                displayMedium: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24, // Dialog titles, subtitles
-                ),
-                displaySmall: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.w300,
-                  fontSize: 24, // Card game subtitle
-                ),
-                headlineLarge: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20, // Section headers, dialog headers
-                ),
-                headlineMedium: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18, // Large buttons, melds headers
-                ),
-                headlineSmall: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16, // Action buttons, status text
-                ),
-                titleLarge: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14, // Small buttons, round indicators
-                ),
-                titleMedium: const TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18, // Scoreboard totals
-                ),
-                titleSmall: TextStyle(
-                  color: secondaryText,
-                  fontWeight: FontWeight.w600,
-                ),
-                bodyLarge: TextStyle(color: primaryText),
-                bodyMedium: TextStyle(color: secondaryText),
-                bodySmall: TextStyle(color: secondaryText),
-                labelLarge: TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.bold,
-                ),
-                labelMedium: TextStyle(color: secondaryText),
-                labelSmall: TextStyle(color: secondaryText),
-              ),
+      textTheme: _buildTextTheme(useGoogleFonts: useGoogleFonts),
+    );
+  }
+
+  /// Build the app [TextTheme], optionally applying Arimo via Google Fonts.
+  ///
+  /// google_fonts 9.x returns `material_ui.TextTheme` from `*TextTheme()`
+  /// helpers, which is not assignable to Flutter's [ThemeData.textTheme].
+  /// Apply the family per-[TextStyle] instead so ThemeData stays typed.
+  static TextTheme _buildTextTheme({required bool useGoogleFonts}) {
+    const base = TextTheme(
+      displayLarge: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.bold,
+        fontSize: 48, // Game title size
+      ),
+      displayMedium: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.bold,
+        fontSize: 24, // Dialog titles, subtitles
+      ),
+      displaySmall: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.w300,
+        fontSize: 24, // Card game subtitle
+      ),
+      headlineLarge: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.bold,
+        fontSize: 20, // Section headers, dialog headers
+      ),
+      headlineMedium: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.bold,
+        fontSize: 18, // Large buttons, melds headers
+      ),
+      headlineSmall: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.bold,
+        fontSize: 16, // Action buttons, status text
+      ),
+      titleLarge: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.bold,
+        fontSize: 14, // Small buttons, round indicators
+      ),
+      titleMedium: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.w600,
+        fontSize: 18, // Scoreboard totals
+      ),
+      titleSmall: TextStyle(color: secondaryText, fontWeight: FontWeight.w600),
+      bodyLarge: TextStyle(color: primaryText),
+      bodyMedium: TextStyle(color: secondaryText),
+      bodySmall: TextStyle(color: secondaryText),
+      labelLarge: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
+      labelMedium: TextStyle(color: secondaryText),
+      labelSmall: TextStyle(color: secondaryText),
+    );
+
+    if (!useGoogleFonts) {
+      return base;
+    }
+
+    return TextTheme(
+      displayLarge: GoogleFonts.arimo(textStyle: base.displayLarge),
+      displayMedium: GoogleFonts.arimo(textStyle: base.displayMedium),
+      displaySmall: GoogleFonts.arimo(textStyle: base.displaySmall),
+      headlineLarge: GoogleFonts.arimo(textStyle: base.headlineLarge),
+      headlineMedium: GoogleFonts.arimo(textStyle: base.headlineMedium),
+      headlineSmall: GoogleFonts.arimo(textStyle: base.headlineSmall),
+      titleLarge: GoogleFonts.arimo(textStyle: base.titleLarge),
+      titleMedium: GoogleFonts.arimo(textStyle: base.titleMedium),
+      titleSmall: GoogleFonts.arimo(textStyle: base.titleSmall),
+      bodyLarge: GoogleFonts.arimo(textStyle: base.bodyLarge),
+      bodyMedium: GoogleFonts.arimo(textStyle: base.bodyMedium),
+      bodySmall: GoogleFonts.arimo(textStyle: base.bodySmall),
+      labelLarge: GoogleFonts.arimo(textStyle: base.labelLarge),
+      labelMedium: GoogleFonts.arimo(textStyle: base.labelMedium),
+      labelSmall: GoogleFonts.arimo(textStyle: base.labelSmall),
     );
   }
 

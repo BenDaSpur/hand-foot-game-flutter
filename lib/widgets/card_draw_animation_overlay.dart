@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import '../config/game_config.dart';
 import '../constants/hand_layout_constants.dart';
 import '../models/card.dart';

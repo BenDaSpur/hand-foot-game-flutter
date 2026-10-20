@@ -1,7 +1,9 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../models/card.dart';

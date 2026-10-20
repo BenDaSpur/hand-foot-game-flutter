@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
+
 import '../models/card.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
