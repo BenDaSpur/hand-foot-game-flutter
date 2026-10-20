@@ -65,7 +65,9 @@ void main() {
       // Give human 8 books (massive advantage)
       for (int i = 0; i < 8; i++) {
         final rank = CardRank.values[i % CardRank.values.length];
-        if (rank == CardRank.three) continue; // Skip 3s
+        if (rank == CardRank.three) {
+          continue; // Skip 3s
+        }
 
         final book = Meld(
           rank: rank,
@@ -230,7 +232,9 @@ void main() {
       // Give human 8 books (book threat scenario)
       for (int i = 0; i < 8; i++) {
         final rank = CardRank.values[(i + 2) % CardRank.values.length];
-        if (rank == CardRank.three) continue;
+        if (rank == CardRank.three) {
+          continue;
+        }
 
         final book = Meld(
           rank: rank,
