@@ -132,41 +132,17 @@ void main() {
       expect(hapticService.debugPlayed, [HapticKind.medium]);
     });
 
-    test('plays light impact when it becomes the human turn', () async {
+    test('does not pulse on turn or round start', () async {
       eventBus.publish(
         TurnEndedEvent(turnNumber: 2, nextPlayer: human, player: bot),
       );
-      await flush();
-
-      expect(hapticService.debugPlayed, [HapticKind.light]);
-    });
-
-    test('plays light impact when the human leads a round', () async {
       eventBus.publish(
         RoundStartedEvent(roundNumber: 1, startingPlayer: human),
       );
-      await flush();
-
-      expect(hapticService.debugPlayed, [HapticKind.light]);
-    });
-
-    test('ignores a round led by a bot', () async {
       eventBus.publish(RoundStartedEvent(roundNumber: 1, startingPlayer: bot));
       await flush();
 
       expect(hapticService.debugPlayed, isEmpty);
-    });
-
-    test('round start and the following turn signal pulse once', () async {
-      eventBus.publish(
-        RoundStartedEvent(roundNumber: 2, startingPlayer: human),
-      );
-      eventBus.publish(
-        TurnEndedEvent(turnNumber: 0, nextPlayer: human, player: bot),
-      );
-      await flush();
-
-      expect(hapticService.debugPlayed, [HapticKind.light]);
     });
 
     test('plays medium impact on foot pickup and round end', () async {
@@ -260,11 +236,7 @@ void main() {
       );
       await flush();
 
-      expect(hapticService.debugPlayed, [
-        HapticKind.medium,
-        HapticKind.light,
-        HapticKind.heavy,
-      ]);
+      expect(hapticService.debugPlayed, [HapticKind.medium, HapticKind.heavy]);
     });
 
     test('does not play when haptics are disabled', () async {

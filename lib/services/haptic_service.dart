@@ -35,6 +35,13 @@ class HapticService {
   /// Round start and the following turn notification can both fire together.
   static const Duration yourTurnCooldown = Duration(milliseconds: 600);
 
+  /// Gap between the two beats of [yourTurn].
+  ///
+  /// iOS builds a new impact generator and fires it immediately, and the
+  /// Taptic Engine often drops that first hit — especially a light one.
+  /// The second beat lands after the motor is awake.
+  static const Duration yourTurnBeatGap = Duration(milliseconds: 120);
+
   /// When true, skip [HapticFeedback] so unit tests can assert without
   /// depending on a device vibration motor.
   @visibleForTesting
@@ -111,13 +118,17 @@ class HapticService {
     unawaited(_play(HapticKind.selection));
   }
 
-  /// Soft bump — turn start, miss, invalid action.
+  /// Soft bump — miss, invalid action, settings confirmation.
   void lightImpact() {
     unawaited(_play(HapticKind.light));
   }
 
-  /// Pulse when play becomes the local player's turn, including the opening
-  /// lead of a round. Repeated calls inside [yourTurnCooldown] are ignored.
+  /// Two medium taps when play becomes the local player's turn, including
+  /// the opening lead of a round.
+  ///
+  /// A single light impact is the weakest Taptic tick and is easy to miss
+  /// while the phone is loose in the hand. Repeated calls inside
+  /// [yourTurnCooldown] are ignored.
   void yourTurn() {
     if (!_initialized) {
       unawaited(_yourTurnAfterInit());
@@ -145,7 +156,15 @@ class HapticService {
       return;
     }
     _lastYourTurnAt = currentTime;
-    lightImpact();
+    unawaited(_playYourTurnPattern());
+  }
+
+  Future<void> _playYourTurnPattern() async {
+    await _play(HapticKind.medium);
+    if (!suppressPlatformHaptics) {
+      await Future<void>.delayed(yourTurnBeatGap);
+    }
+    await _play(HapticKind.medium);
   }
 
   /// Medium bump — play-down, foot pickup, discard-pile unlock.

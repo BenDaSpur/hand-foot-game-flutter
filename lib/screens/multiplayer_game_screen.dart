@@ -144,7 +144,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     _scheduleEarlyRoundEndAlerts();
   }
 
-  /// Light pulse when this device's player leads or play comes back to them.
+  /// Pulse when this device's player leads or play comes back to them.
   /// Remote turns arrive as state snapshots, without a local turn-ended event.
   void _maybePulseForLocalTurn(GameState gameState) {
     if (gameState.players.isEmpty ||
