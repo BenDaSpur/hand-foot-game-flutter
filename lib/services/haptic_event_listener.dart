@@ -11,16 +11,17 @@ import 'haptic_service.dart';
 /// This listener covers moments that are not a direct button press, or that
 /// deserve a stronger pulse than a selection click.
 ///
-/// A light pulse plays when the local player leads a round and whenever play
-/// returns to them. Multiplayer clients that only see a synced state update
-/// pulse from the game screen instead.
+/// "Your turn" is not handled here. That event is published when a discard
+/// resolves, which is still inside the bot's card animation and the pause
+/// before the next player can act. The game screens pulse once the turn is
+/// actually ready.
 class HapticEventListener {
   final GameEventBus eventBus;
   final HapticService hapticService;
 
-  /// When set (multiplayer), player / next-player / winner pulses are limited
-  /// to this identity. Solo games omit it and match [PlayerType.human].
-  /// Round-end stays global either way.
+  /// When set (multiplayer), player and winner pulses are limited to this
+  /// identity. Solo games omit it and match [PlayerType.human]. Round-end
+  /// stays global either way.
   final String? localPlayerId;
 
   final List<StreamSubscription> _subscriptions = [];
@@ -67,26 +68,6 @@ class HapticEventListener {
           return;
         }
         hapticService.mediumImpact();
-      }),
-    );
-
-    _subscriptions.add(
-      eventBus.subscribeToType<RoundStartedEvent>((event) {
-        if (_disposed || !_isLocalActor(event.startingPlayer)) {
-          return;
-        }
-        hapticService.yourTurn();
-      }),
-    );
-
-    _subscriptions.add(
-      eventBus.subscribeToType<TurnEndedEvent>((event) {
-        if (_disposed) {
-          return;
-        }
-        if (_isLocalActor(event.nextPlayer)) {
-          hapticService.yourTurn();
-        }
       }),
     );
 

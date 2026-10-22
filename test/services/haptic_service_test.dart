@@ -158,22 +158,29 @@ void main() {
       },
     );
 
-    test('yourTurn plays one light pulse and ignores a quick repeat', () {
+    test('yourTurn plays two medium taps and ignores a quick repeat', () async {
       service.yourTurn();
       service.yourTurn();
+      await Future<void>.delayed(Duration.zero);
 
-      expect(service.debugPlayed, [HapticKind.light]);
+      expect(service.debugPlayed, [HapticKind.medium, HapticKind.medium]);
     });
 
-    test('yourTurn plays again after the cooldown', () {
+    test('yourTurn plays again after the cooldown', () async {
       final start = DateTime(2026, 1, 1);
       service.now = () => start;
       service.yourTurn();
 
       service.now = () => start.add(HapticService.yourTurnCooldown);
       service.yourTurn();
+      await Future<void>.delayed(Duration.zero);
 
-      expect(service.debugPlayed, [HapticKind.light, HapticKind.light]);
+      expect(service.debugPlayed, [
+        HapticKind.medium,
+        HapticKind.medium,
+        HapticKind.medium,
+        HapticKind.medium,
+      ]);
     });
 
     test('yourTurn does not play when vibrations are disabled', () async {
@@ -181,6 +188,7 @@ void main() {
       service.debugPlayed.clear();
 
       service.yourTurn();
+      await Future<void>.delayed(Duration.zero);
 
       expect(service.debugPlayed, isEmpty);
     });

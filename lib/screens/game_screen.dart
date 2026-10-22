@@ -706,6 +706,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void processCurrentPlayerTurn() {
     if (!_isInitialized || _disposed || !mounted) return;
     if (_isLearnToPlay) {
+      final learnState = _gameController?.gameState;
+      if (learnState != null &&
+          learnState.players.isNotEmpty &&
+          learnState.currentPlayerIndex >= 0 &&
+          learnState.currentPlayerIndex < learnState.players.length) {
+        _pulseIfLocalTurnBegan(learnState, learnState.currentPlayer);
+      }
       return;
     }
 
@@ -1823,8 +1830,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
     });
   }
 
-  /// Light pulse when this solo game's human leads a round or gets the turn
-  /// back. Resume has no round-start event, so the screen watches play itself.
+  /// Pulse when this solo game's human leads a round or gets the turn back.
+  /// Resume has no round-start event, so the screen watches play itself.
+  /// Called after bot animations finish, so the taps land when the hand is
+  /// actually playable.
   void _pulseIfLocalTurnBegan(GameState gameState, Player currentPlayer) {
     final humanIndex = gameState.players.indexWhere(
       (player) => player.type == PlayerType.human,

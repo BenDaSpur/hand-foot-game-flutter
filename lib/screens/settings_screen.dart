@@ -97,9 +97,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: Icons.vibration,
                           title: 'Vibrations',
                           subtitle:
-                              'Tiny taps when you select cards, play moves, '
-                              'and play Perfect Grab. Works on phones and '
-                              'tablets that support haptics.',
+                              'Taps when it is your turn, you select cards, '
+                              'play moves, and play Perfect Grab. Works on '
+                              'phones and tablets that support haptics.',
                           value: _hapticsEnabled,
                           onChanged: _setHapticsEnabled,
                         ),
