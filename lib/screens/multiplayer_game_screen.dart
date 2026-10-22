@@ -24,6 +24,7 @@ import '../widgets/card_animation_host.dart';
 import '../game/events/game_event_bus.dart';
 import '../services/haptic_event_listener.dart';
 import '../services/haptic_service.dart';
+import '../services/local_turn_haptic.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../models/multiplayer_lifecycle.dart';
 import '../widgets/game_keyboard_shortcuts.dart';
@@ -76,6 +77,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   int? _keyboardFocusedCardIndex;
   String? _lastCurrentPlayerIdForHighlight;
+  String? _lastObservedPlayerIdForHaptic;
+  GamePhase? _lastObservedPhaseForHaptic;
+  int? _lastObservedRoundForHaptic;
   bool _showKeyboardHelp = false;
   bool _isCardAnimationActive = false;
   bool _isExiting = false;
@@ -99,6 +103,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     _gameStateSubscription = _gameController.gameStateStream.listen(
       _onGameStateStreamUpdate,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _maybePulseForLocalTurn(_gameController.gameState);
+    });
     _lifecycleSubscription = _gameController.lifecycleStream.listen(
       _onLifecycleEvent,
     );
@@ -115,17 +125,48 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     if (!mounted) {
       return;
     }
+    if (gameState.players.isEmpty ||
+        gameState.currentPlayerIndex < 0 ||
+        gameState.currentPlayerIndex >= gameState.players.length) {
+      return;
+    }
     final userId = _gameController.userId;
     final currentPlayerId = gameState.currentPlayer.id;
     final becameMyTurn =
         currentPlayerId == userId &&
         _lastCurrentPlayerIdForHighlight != null &&
         _lastCurrentPlayerIdForHighlight != userId;
+    _maybePulseForLocalTurn(gameState);
     _lastCurrentPlayerIdForHighlight = currentPlayerId;
     if (becameMyTurn) {
       setState(_clearHandHighlightState);
     }
     _scheduleEarlyRoundEndAlerts();
+  }
+
+  /// Light pulse when this device's player leads or play comes back to them.
+  /// Remote turns arrive as state snapshots, without a local turn-ended event.
+  void _maybePulseForLocalTurn(GameState gameState) {
+    if (gameState.players.isEmpty ||
+        gameState.currentPlayerIndex < 0 ||
+        gameState.currentPlayerIndex >= gameState.players.length) {
+      return;
+    }
+    final currentPlayerId = gameState.currentPlayer.id;
+    if (shouldPulseForLocalTurn(
+      localPlayerId: _gameController.userId,
+      currentPlayerId: currentPlayerId,
+      previousPlayerId: _lastObservedPlayerIdForHaptic,
+      phase: gameState.phase,
+      previousPhase: _lastObservedPhaseForHaptic,
+      round: gameState.round,
+      previousRound: _lastObservedRoundForHaptic,
+    )) {
+      HapticService().yourTurn();
+    }
+    _lastObservedPlayerIdForHaptic = currentPlayerId;
+    _lastObservedPhaseForHaptic = gameState.phase;
+    _lastObservedRoundForHaptic = gameState.round;
   }
 
   @override

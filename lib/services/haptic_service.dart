@@ -20,11 +20,20 @@ class HapticService {
   bool _hapticsEnabled = true;
   bool _recordPlayedForTest = false;
   int _epoch = 0;
+  DateTime? _lastYourTurnAt;
   Future<void>? _initialization;
   Future<void> _preferenceWrites = Future<void>.value();
 
+  /// Clock used by [yourTurn] so tests can move past [yourTurnCooldown].
+  @visibleForTesting
+  DateTime Function() now = DateTime.now;
+
   /// Preference key stored in SharedPreferences.
   static const String preferenceKey = 'haptics_enabled';
+
+  /// Duplicate "your turn" signals inside this window collapse into one pulse.
+  /// Round start and the following turn notification can both fire together.
+  static const Duration yourTurnCooldown = Duration(milliseconds: 600);
 
   /// When true, skip [HapticFeedback] so unit tests can assert without
   /// depending on a device vibration motor.
@@ -107,6 +116,38 @@ class HapticService {
     unawaited(_play(HapticKind.light));
   }
 
+  /// Pulse when play becomes the local player's turn, including the opening
+  /// lead of a round. Repeated calls inside [yourTurnCooldown] are ignored.
+  void yourTurn() {
+    if (!_initialized) {
+      unawaited(_yourTurnAfterInit());
+      return;
+    }
+    _emitYourTurn();
+  }
+
+  Future<void> _yourTurnAfterInit() async {
+    final epoch = _epoch;
+    await initialize();
+    if (epoch != _epoch) {
+      return;
+    }
+    _emitYourTurn();
+  }
+
+  void _emitYourTurn() {
+    if (!_initialized || !_hapticsEnabled) {
+      return;
+    }
+    final currentTime = now();
+    final last = _lastYourTurnAt;
+    if (last != null && currentTime.difference(last) < yourTurnCooldown) {
+      return;
+    }
+    _lastYourTurnAt = currentTime;
+    lightImpact();
+  }
+
   /// Medium bump — play-down, foot pickup, discard-pile unlock.
   void mediumImpact() {
     unawaited(_play(HapticKind.medium));
@@ -161,5 +202,7 @@ class HapticService {
     _recordPlayedForTest = true;
     suppressPlatformHaptics = true;
     debugPlayed.clear();
+    _lastYourTurnAt = null;
+    now = DateTime.now;
   }
 }

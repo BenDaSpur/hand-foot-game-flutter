@@ -129,8 +129,24 @@ class GameController implements GameInterface {
       }
     }
 
-    _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
+    _publishRoundStarted();
     saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
+  }
+
+  /// Publish [RoundStartedEvent] with the player who leads this round.
+  void _publishRoundStarted() {
+    Player? startingPlayer;
+    final playerCount = _gameState.players.length;
+    final index = _gameState.currentPlayerIndex;
+    if (playerCount > 0 && index >= 0 && index < playerCount) {
+      startingPlayer = _gameState.currentPlayer;
+    }
+    _eventBus.publish(
+      RoundStartedEvent(
+        roundNumber: _gameState.round,
+        startingPlayer: startingPlayer,
+      ),
+    );
   }
 
   @override
@@ -505,7 +521,7 @@ class GameController implements GameInterface {
     if (_gameState.phase == GamePhase.roundEnd) {
       _gameState.resetForNewRound(dealCardsAfterReset: dealCards);
       if (dealCards) {
-        _eventBus.publish(RoundStartedEvent(roundNumber: _gameState.round));
+        _publishRoundStarted();
         saveGame().catchError((e) => DebugLogger.error('Auto-save failed: $e'));
       }
     }

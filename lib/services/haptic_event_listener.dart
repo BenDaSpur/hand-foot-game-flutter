@@ -10,6 +10,10 @@ import 'haptic_service.dart';
 /// Immediate tap feedback (card select, action buttons) lives in the widgets.
 /// This listener covers moments that are not a direct button press, or that
 /// deserve a stronger pulse than a selection click.
+///
+/// A light pulse plays when the local player leads a round and whenever play
+/// returns to them. Multiplayer clients that only see a synced state update
+/// pulse from the game screen instead.
 class HapticEventListener {
   final GameEventBus eventBus;
   final HapticService hapticService;
@@ -67,12 +71,21 @@ class HapticEventListener {
     );
 
     _subscriptions.add(
+      eventBus.subscribeToType<RoundStartedEvent>((event) {
+        if (_disposed || !_isLocalActor(event.startingPlayer)) {
+          return;
+        }
+        hapticService.yourTurn();
+      }),
+    );
+
+    _subscriptions.add(
       eventBus.subscribeToType<TurnEndedEvent>((event) {
         if (_disposed) {
           return;
         }
         if (_isLocalActor(event.nextPlayer)) {
-          hapticService.lightImpact();
+          hapticService.yourTurn();
         }
       }),
     );

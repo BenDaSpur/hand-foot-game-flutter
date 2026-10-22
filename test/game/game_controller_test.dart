@@ -3,6 +3,8 @@ import 'package:hand_foot_game_flutter/models/card.dart';
 import 'package:hand_foot_game_flutter/models/meld.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event.dart';
+import 'package:hand_foot_game_flutter/game/events/game_event_bus.dart';
 import 'package:hand_foot_game_flutter/game/game_controller.dart';
 
 void main() {
@@ -31,6 +33,26 @@ void main() {
       final controller = GameController(players: players, seed: testSeed);
 
       expect(controller.gameSeed, equals(testSeed));
+    });
+
+    test('round start names the player who leads', () async {
+      final eventBus = GameEventBus();
+      final controller = GameController(players: players, eventBus: eventBus);
+      final events = <RoundStartedEvent>[];
+      final subscription = eventBus.subscribeToType<RoundStartedEvent>(
+        events.add,
+      );
+
+      controller.initializeGame();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, hasLength(1));
+      expect(events.single.roundNumber, 1);
+      expect(events.single.startingPlayer?.id, players.first.id);
+      expect(events.single.player, isNull);
+
+      await subscription.cancel();
+      eventBus.dispose();
     });
 
     test('should initialize and deal cards', () {

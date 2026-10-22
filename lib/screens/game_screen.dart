@@ -32,6 +32,8 @@ import '../widgets/round_start_mini_game.dart';
 import '../game/go_out_guards.dart';
 import '../theme/balatro_theme.dart';
 import '../services/game_analytics_logger.dart';
+import '../services/haptic_service.dart';
+import '../services/local_turn_haptic.dart';
 import '../services/analytics/bot_decision_analytics_snapshot.dart';
 import '../services/analytics/bot_decision_snapshot_mapper.dart';
 import '../services/analytics_batcher.dart';
@@ -146,6 +148,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   // Keyboard shortcuts
   int? _keyboardFocusedCardIndex;
   int? _lastCurrentPlayerIndexForHighlight;
+  String? _lastObservedPlayerIdForHaptic;
+  GamePhase? _lastObservedPhaseForHaptic;
+  int? _lastObservedRoundForHaptic;
   bool _showKeyboardHelp = false;
 
   // Card draw animation anchors
@@ -408,6 +413,23 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
       _isInitialized = true;
       setState(() {});
+
+      // Learn to Play deals before this screen subscribes, so the round-start
+      // event is already gone. The first frame still needs a pulse when the
+      // human leads. Continued games use the same observation.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _disposed) {
+          return;
+        }
+        final gameState = _gameController?.gameState;
+        if (gameState == null ||
+            gameState.players.isEmpty ||
+            gameState.currentPlayerIndex < 0 ||
+            gameState.currentPlayerIndex >= gameState.players.length) {
+          return;
+        }
+        _pulseIfLocalTurnBegan(gameState, gameState.currentPlayer);
+      });
 
       // Start bot turns if needed (skipped in Learn to Play)
       if (!_isLearnToPlay) {
@@ -726,6 +748,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
       // Get current player directly from game state to avoid stale provider data
       final currentPlayer = gameState.currentPlayer;
+      _pulseIfLocalTurnBegan(gameState, currentPlayer);
 
       DebugLogger.debug(
         'processCurrentPlayerTurn: Current player is ${currentPlayer.name} (${currentPlayer.type})',
@@ -1794,6 +1817,31 @@ class _GameScreenState extends ConsumerState<GameScreen>
     setState(() {
       _clearHandHighlightState();
     });
+  }
+
+  /// Light pulse when this solo game's human leads a round or gets the turn
+  /// back. Resume has no round-start event, so the screen watches play itself.
+  void _pulseIfLocalTurnBegan(GameState gameState, Player currentPlayer) {
+    final humanIndex = gameState.players.indexWhere(
+      (player) => player.type == PlayerType.human,
+    );
+    final localPlayerId = humanIndex >= 0
+        ? gameState.players[humanIndex].id
+        : null;
+    if (shouldPulseForLocalTurn(
+      localPlayerId: localPlayerId,
+      currentPlayerId: currentPlayer.id,
+      previousPlayerId: _lastObservedPlayerIdForHaptic,
+      phase: gameState.phase,
+      previousPhase: _lastObservedPhaseForHaptic,
+      round: gameState.round,
+      previousRound: _lastObservedRoundForHaptic,
+    )) {
+      HapticService().yourTurn();
+    }
+    _lastObservedPlayerIdForHaptic = currentPlayer.id;
+    _lastObservedPhaseForHaptic = gameState.phase;
+    _lastObservedRoundForHaptic = gameState.round;
   }
 
   void _clearHandHighlightState() {
