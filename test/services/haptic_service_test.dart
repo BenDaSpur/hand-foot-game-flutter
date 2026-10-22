@@ -158,6 +158,33 @@ void main() {
       },
     );
 
+    test('yourTurn plays one light pulse and ignores a quick repeat', () {
+      service.yourTurn();
+      service.yourTurn();
+
+      expect(service.debugPlayed, [HapticKind.light]);
+    });
+
+    test('yourTurn plays again after the cooldown', () {
+      final start = DateTime(2026, 1, 1);
+      service.now = () => start;
+      service.yourTurn();
+
+      service.now = () => start.add(HapticService.yourTurnCooldown);
+      service.yourTurn();
+
+      expect(service.debugPlayed, [HapticKind.light, HapticKind.light]);
+    });
+
+    test('yourTurn does not play when vibrations are disabled', () async {
+      await service.setHapticsEnabled(false);
+      service.debugPlayed.clear();
+
+      service.yourTurn();
+
+      expect(service.debugPlayed, isEmpty);
+    });
+
     test('overlapping setHapticsEnabled writes apply in order', () async {
       final first = service.setHapticsEnabled(false);
       final second = service.setHapticsEnabled(true);

@@ -153,12 +153,19 @@ class RoundEndedEvent extends GameEvent {
   String get eventType => 'RoundEnded';
 }
 
-/// Event fired when a round starts
+/// Event fired when a round starts.
+///
+/// [startingPlayer] is who leads the round. It stays off [GameEvent.player]
+/// so round start remains a system event for analytics.
 class RoundStartedEvent extends GameEvent {
   final int roundNumber;
+  final Player? startingPlayer;
 
-  RoundStartedEvent({required this.roundNumber, super.timestamp})
-    : super(player: null); // Round start is a system event
+  RoundStartedEvent({
+    required this.roundNumber,
+    this.startingPlayer,
+    super.timestamp,
+  }) : super(player: null);
 
   @override
   String get eventType => 'RoundStarted';
