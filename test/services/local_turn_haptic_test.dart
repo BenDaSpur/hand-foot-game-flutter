@@ -67,6 +67,29 @@ void main() {
       );
     });
 
+    test('reset treats the same snapshot as a new game', () {
+      final observation = LocalTurnHapticObservation();
+      bool observe() {
+        final pulse = observation.shouldPulse(
+          localPlayerId: 'you',
+          currentPlayerId: 'you',
+          phase: GamePhase.playing,
+          round: 1,
+        );
+        observation.record(
+          currentPlayerId: 'you',
+          phase: GamePhase.playing,
+          round: 1,
+        );
+        return pulse;
+      }
+
+      expect(observe(), isTrue);
+      expect(observe(), isFalse);
+      observation.reset();
+      expect(observe(), isTrue);
+    });
+
     test('stays quiet on someone else\'s turn and outside play', () {
       expect(
         shouldPulseForLocalTurn(

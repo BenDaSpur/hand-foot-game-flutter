@@ -29,3 +29,48 @@ bool shouldPulseForLocalTurn({
   final playBeganWithMe = previousPhase != GamePhase.playing;
   return becameMyTurn || roundStartedWithMe || playBeganWithMe;
 }
+
+/// Remembers the last turn the screen observed so a later snapshot can tell
+/// a new arrival from the rest of the same turn.
+///
+/// [reset] when a different game is bound. An import can share the human id,
+/// phase, and round with the game already on screen, and those retained
+/// values would otherwise hide the new game's turn.
+class LocalTurnHapticObservation {
+  String? playerId;
+  GamePhase? phase;
+  int? round;
+
+  void reset() {
+    playerId = null;
+    phase = null;
+    round = null;
+  }
+
+  bool shouldPulse({
+    required String? localPlayerId,
+    required String currentPlayerId,
+    required GamePhase phase,
+    required int round,
+  }) {
+    return shouldPulseForLocalTurn(
+      localPlayerId: localPlayerId,
+      currentPlayerId: currentPlayerId,
+      previousPlayerId: playerId,
+      phase: phase,
+      previousPhase: this.phase,
+      round: round,
+      previousRound: this.round,
+    );
+  }
+
+  void record({
+    required String currentPlayerId,
+    required GamePhase phase,
+    required int round,
+  }) {
+    playerId = currentPlayerId;
+    this.phase = phase;
+    this.round = round;
+  }
+}

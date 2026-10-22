@@ -99,6 +99,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _bindGameController(GameController controller) {
+    if (!identical(_hapticBoundController, controller)) {
+      _turnHapticObservation.reset();
+      _hapticBoundController = controller;
+    }
     _cachedController = controller;
   }
 
@@ -148,9 +152,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   // Keyboard shortcuts
   int? _keyboardFocusedCardIndex;
   int? _lastCurrentPlayerIndexForHighlight;
-  String? _lastObservedPlayerIdForHaptic;
-  GamePhase? _lastObservedPhaseForHaptic;
-  int? _lastObservedRoundForHaptic;
+  final LocalTurnHapticObservation _turnHapticObservation =
+      LocalTurnHapticObservation();
+  GameController? _hapticBoundController;
   bool _showKeyboardHelp = false;
 
   // Card draw animation anchors
@@ -1828,20 +1832,19 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final localPlayerId = humanIndex >= 0
         ? gameState.players[humanIndex].id
         : null;
-    if (shouldPulseForLocalTurn(
+    if (_turnHapticObservation.shouldPulse(
       localPlayerId: localPlayerId,
       currentPlayerId: currentPlayer.id,
-      previousPlayerId: _lastObservedPlayerIdForHaptic,
       phase: gameState.phase,
-      previousPhase: _lastObservedPhaseForHaptic,
       round: gameState.round,
-      previousRound: _lastObservedRoundForHaptic,
     )) {
       HapticService().yourTurn();
     }
-    _lastObservedPlayerIdForHaptic = currentPlayer.id;
-    _lastObservedPhaseForHaptic = gameState.phase;
-    _lastObservedRoundForHaptic = gameState.round;
+    _turnHapticObservation.record(
+      currentPlayerId: currentPlayer.id,
+      phase: gameState.phase,
+      round: gameState.round,
+    );
   }
 
   void _clearHandHighlightState() {
