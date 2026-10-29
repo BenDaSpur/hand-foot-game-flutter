@@ -74,6 +74,21 @@ class GameFoldGeometry {
     return bounds.height >= bounds.width;
   }
 
+  /// Maps window-space [foldBounds] into the SafeArea child's local coordinates.
+  static Rect toSafeAreaLocal(
+    Rect foldBounds,
+    EdgeInsets padding,
+    Size safeSize,
+  ) {
+    final local = foldBounds.translate(-padding.left, -padding.top);
+    final safeRect = Offset.zero & safeSize;
+    final intersection = local.intersect(safeRect);
+    if (intersection.isEmpty) {
+      return local;
+    }
+    return intersection;
+  }
+
   /// Padding that keeps children clear of [bounds] inside [viewport].
   static EdgeInsets avoidInsets(Size viewport, Rect bounds) {
     if (isVerticalDivision(bounds)) {

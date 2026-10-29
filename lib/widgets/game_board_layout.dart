@@ -23,6 +23,8 @@ class GameBoardLayout extends StatelessWidget {
   static const Key foldBookKey = ValueKey('game-board-fold-book');
   static const Key foldLaptopKey = ValueKey('game-board-fold-laptop');
   static const Key bottomDockKey = ValueKey('game-board-bottom-dock');
+  static const Key foldPlaySurfaceKey = ValueKey('game-board-fold-play');
+  static const Key foldGapKey = ValueKey('game-board-fold-gap');
 
   final GameState gameState;
   final Player? viewingPlayerMelds;
@@ -70,18 +72,23 @@ class GameBoardLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
     final width = size.width;
     final isWide = width > UIConstants.smallScreenBreakpoint;
     final useWideBoard = GameResponsiveLayout.useWideBoardLayout(width);
-    final foldBounds = GameFoldGeometry.activeDivisionBounds(context);
+    // Convert fold bounds before SafeArea; padding is zeroed inside it.
+    final windowFold = GameFoldGeometry.activeDivisionBounds(context);
+    final safeSize = Size(
+      size.width - padding.horizontal,
+      size.height - padding.vertical,
+    );
+    final localFold = windowFold == null
+        ? null
+        : GameFoldGeometry.toSafeAreaLocal(windowFold, padding, safeSize);
 
     return SafeArea(
-      child: foldBounds != null
-          ? _buildFoldAwareBoard(
-              context,
-              foldBounds: foldBounds,
-              isWide: isWide,
-            )
+      child: localFold != null
+          ? _buildFoldAwareBoard(context, localFold: localFold, isWide: isWide)
           : useWideBoard
           ? _buildWideBoard(context, isWide: isWide)
           : _buildNarrowBoard(context, isWide: isWide),
@@ -90,50 +97,94 @@ class GameBoardLayout extends StatelessWidget {
 
   Widget _buildFoldAwareBoard(
     BuildContext context, {
-    required Rect foldBounds,
+    required Rect localFold,
     required bool isWide,
   }) {
-    if (GameFoldGeometry.isVerticalDivision(foldBounds)) {
-      // Book pose: melds/scores on the larger pane, hand+actions on the other.
-      final leftWider =
-          foldBounds.left >=
-          (MediaQuery.sizeOf(context).width - foldBounds.right);
-      final playSurface = _buildPlaySurface(context, isWide: isWide);
-      final dock = _BottomDock(
-        key: bottomDockKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [actionButtons, handDisplay],
-        ),
-      );
-      return Row(
-        key: foldBookKey,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: leftWider ? 6 : 4,
-            child: leftWider ? playSurface : dock,
-          ),
-          SizedBox(width: foldBounds.width.clamp(24.0, 56.0)),
-          Expanded(
-            flex: leftWider ? 4 : 6,
-            child: leftWider ? dock : playSurface,
-          ),
-        ],
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final safeWidth = constraints.maxWidth;
+        final safeHeight = constraints.maxHeight;
+        if (GameFoldGeometry.isVerticalDivision(localFold)) {
+          return _buildBookFold(
+            context,
+            localFold: localFold,
+            safeWidth: safeWidth,
+            isWide: isWide,
+          );
+        }
+        return _buildLaptopFold(
+          context,
+          localFold: localFold,
+          safeHeight: safeHeight,
+          isWide: isWide,
+        );
+      },
+    );
+  }
 
-    // Laptop pose: play surface above the crease, dock below.
+  /// Book pose: panes sized from physical fold left/width/right (no flex guess).
+  Widget _buildBookFold(
+    BuildContext context, {
+    required Rect localFold,
+    required double safeWidth,
+    required bool isWide,
+  }) {
+    final leftWidth = localFold.left.clamp(0.0, safeWidth);
+    final gapWidth = localFold.width.clamp(0.0, safeWidth - leftWidth);
+    final rightWidth = (safeWidth - leftWidth - gapWidth).clamp(0.0, safeWidth);
+    final leftWider = leftWidth >= rightWidth;
+    final playSurface = KeyedSubtree(
+      key: foldPlaySurfaceKey,
+      child: _buildPlaySurface(context, isWide: isWide),
+    );
+    final dock = _BottomDock(
+      key: bottomDockKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [actionButtons, handDisplay],
+      ),
+    );
+    return Row(
+      key: foldBookKey,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: leftWidth, child: leftWider ? playSurface : dock),
+        SizedBox(key: foldGapKey, width: gapWidth),
+        SizedBox(width: rightWidth, child: leftWider ? dock : playSurface),
+      ],
+    );
+  }
+
+  /// Laptop pose: play surface ends at fold top; dock sits below the crease.
+  Widget _buildLaptopFold(
+    BuildContext context, {
+    required Rect localFold,
+    required double safeHeight,
+    required bool isWide,
+  }) {
+    final topHeight = localFold.top.clamp(0.0, safeHeight);
+    final gapHeight = localFold.height.clamp(0.0, safeHeight - topHeight);
     return Column(
       key: foldLaptopKey,
       children: [
-        Expanded(child: _buildPlaySurface(context, isWide: isWide)),
-        SizedBox(height: foldBounds.height.clamp(24.0, 56.0)),
-        _BottomDock(
-          key: bottomDockKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [actionButtons, handDisplay],
+        SizedBox(
+          height: topHeight,
+          child: KeyedSubtree(
+            key: foldPlaySurfaceKey,
+            child: _buildPlaySurface(context, isWide: isWide),
+          ),
+        ),
+        SizedBox(key: foldGapKey, height: gapHeight),
+        Flexible(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _BottomDock(
+              key: bottomDockKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [actionButtons, handDisplay],
+              ),
+            ),
           ),
         ),
       ],

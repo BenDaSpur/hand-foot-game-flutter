@@ -88,5 +88,18 @@ void main() {
       final insets = GameFoldGeometry.avoidInsets(viewport, verticalFold);
       expect(insets.left + insets.right, 40);
     });
+
+    test('toSafeAreaLocal subtracts padding into local coordinates', () {
+      const fold = Rect.fromLTWH(455, 50, 40, 569);
+      final local = GameFoldGeometry.toSafeAreaLocal(
+        fold,
+        const EdgeInsets.only(top: 50),
+        const Size(951, 619),
+      );
+      expect(local.top, 0);
+      expect(local.left, 455);
+      expect(local.width, 40);
+      expect(local.height, 569);
+    });
   });
 }

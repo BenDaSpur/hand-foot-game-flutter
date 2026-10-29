@@ -126,12 +126,13 @@ void main() {
       testWidgets('partially open book pose splits around vertical fold', (
         tester,
       ) async {
+        const fold = Rect.fromLTWH(455, 0, 40, 669);
         await pumpBoard(
           tester,
           const Size(951, 669),
           displayFeatures: const [
             DisplayFeature(
-              bounds: Rect.fromLTWH(455, 0, 40, 669),
+              bounds: fold,
               type: DisplayFeatureType.fold,
               state: DisplayFeatureState.postureHalfOpened,
             ),
@@ -143,17 +144,28 @@ void main() {
         expect(find.byKey(GameBoardLayout.bottomDockKey), findsOneWidget);
         expect(find.text('Actions'), findsOneWidget);
         expect(find.text('Melds'), findsOneWidget);
+
+        final gap = tester.getRect(find.byKey(GameBoardLayout.foldGapKey));
+        final play = tester.getRect(
+          find.byKey(GameBoardLayout.foldPlaySurfaceKey),
+        );
+        final dock = tester.getRect(find.byKey(GameBoardLayout.bottomDockKey));
+        expect(gap.left, closeTo(fold.left, 0.5));
+        expect(gap.width, closeTo(fold.width, 0.5));
+        expect(play.overlaps(fold), isFalse);
+        expect(dock.overlaps(fold), isFalse);
       });
 
       testWidgets('partially open laptop pose splits around horizontal fold', (
         tester,
       ) async {
+        const fold = Rect.fromLTWH(0, 300, 951, 40);
         await pumpBoard(
           tester,
           const Size(951, 669),
           displayFeatures: const [
             DisplayFeature(
-              bounds: Rect.fromLTWH(0, 300, 951, 40),
+              bounds: fold,
               type: DisplayFeatureType.fold,
               state: DisplayFeatureState.postureHalfOpened,
             ),
@@ -163,6 +175,18 @@ void main() {
         expect(find.byKey(GameBoardLayout.bottomDockKey), findsOneWidget);
         expect(find.text('Hand'), findsOneWidget);
         expect(find.text('Melds'), findsOneWidget);
+
+        final gap = tester.getRect(find.byKey(GameBoardLayout.foldGapKey));
+        final play = tester.getRect(
+          find.byKey(GameBoardLayout.foldPlaySurfaceKey),
+        );
+        final dock = tester.getRect(find.byKey(GameBoardLayout.bottomDockKey));
+        expect(gap.top, closeTo(fold.top, 0.5));
+        expect(gap.height, closeTo(fold.height, 0.5));
+        expect(play.bottom, lessThanOrEqualTo(fold.top + 0.5));
+        expect(dock.top, greaterThanOrEqualTo(fold.bottom - 0.5));
+        expect(play.overlaps(fold), isFalse);
+        expect(dock.overlaps(fold), isFalse);
       });
     });
   });

@@ -85,7 +85,9 @@ class GameCompactHeader extends StatelessWidget {
     // Inner-class portrait (Duo open / iPad) keeps piles expanded for breathing room.
     final effectiveExpanded = isExpanded || (isInner && !isPhone);
     final double collapsedScale;
-    if (isPhone && isUltraShort) {
+    // Ultra-short applies even when width is tablet-tier (Duo cover landscape
+    // is 678×466: not phone width, but still needs densest piles).
+    if (isUltraShort) {
       collapsedScale = _ultraShortCollapsedPileScale;
     } else if (isPhone && isShortHeight) {
       collapsedScale = _shortCollapsedPileScale;
