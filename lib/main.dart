@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:foldable/foldable.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -113,24 +114,29 @@ class _HandAndFootAppState extends State<HandAndFootApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Hand & Foot Card Game',
-      debugShowCheckedModeBanner: false,
-      theme: BalatroTheme.darkTheme,
-      builder: (context, child) {
-        final content = child ?? const SizedBox.shrink();
-        final Widget body = !_updateAvailable
-            ? content
-            : Stack(children: [content, const WebAppUpdateBanner()]);
-        // Bridges are the supported path while plugins still read
-        // package:flutter/material.dart and package:flutter/cupertino.dart.
-        // ignore: deprecated_member_use
-        return MaterialUiCompatibilityBridge(
+    // cutoutsOnly: avoid camera occlusions without splitting Material dialogs
+    // across the Duo fold (full bridge would half-width every AlertDialog).
+    return FoldableProvider(
+      bridgeMode: DisplayFeatureBridgeMode.cutoutsOnly,
+      child: MaterialApp(
+        title: 'Hand & Foot Card Game',
+        debugShowCheckedModeBanner: false,
+        theme: BalatroTheme.darkTheme,
+        builder: (context, child) {
+          final content = child ?? const SizedBox.shrink();
+          final Widget body = !_updateAvailable
+              ? content
+              : Stack(children: [content, const WebAppUpdateBanner()]);
+          // Bridges are the supported path while plugins still read
+          // package:flutter/material.dart and package:flutter/cupertino.dart.
           // ignore: deprecated_member_use
-          child: CupertinoUiCompatibilityBridge(child: body),
-        );
-      },
-      home: const MainMenuScreen(),
+          return MaterialUiCompatibilityBridge(
+            // ignore: deprecated_member_use
+            child: CupertinoUiCompatibilityBridge(child: body),
+          );
+        },
+        home: const MainMenuScreen(),
+      ),
     );
   }
 }

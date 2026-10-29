@@ -12,6 +12,7 @@ import '../game/enhanced_multiplayer_controller.dart';
 import '../game/game_controller_factory.dart';
 import '../models/game_state.dart';
 import '../models/multiplayer_lifecycle.dart';
+import '../utils/game_responsive_layout.dart';
 import 'multiplayer_exit_flow.dart';
 import 'multiplayer_game_screen.dart';
 
@@ -199,41 +200,49 @@ class _MultiplayerLobbyScreenState extends State<MultiplayerLobbyScreen> {
   Widget _buildSetupForm() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Player Name Input
-          _buildInputField(
-            controller: _playerNameController,
-            label: 'Your Name',
-            hint: 'Enter your player name',
-            icon: Icons.person,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: GameResponsiveLayout.menuContentMaxWidth,
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Player Name Input
+              _buildInputField(
+                controller: _playerNameController,
+                label: 'Your Name',
+                hint: 'Enter your player name',
+                icon: Icons.person,
+              ),
 
-          const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-          if (widget.mode == LobbyMode.create) ...[
-            // Max Players Selector
-            _buildMaxPlayersSelector(),
-            const SizedBox(height: 40),
-          ] else ...[
-            // Game ID Input
-            _buildInputField(
-              controller: _gameIdController,
-              label: 'Game ID',
-              hint: 'Enter game ID to join',
-              icon: Icons.games,
-              inputFormatters: [
-                // Auto-convert short join codes to uppercase
-                _GameIdFormatter(),
+              if (widget.mode == LobbyMode.create) ...[
+                // Max Players Selector
+                _buildMaxPlayersSelector(),
+                const SizedBox(height: 40),
+              ] else ...[
+                // Game ID Input
+                _buildInputField(
+                  controller: _gameIdController,
+                  label: 'Game ID',
+                  hint: 'Enter game ID to join',
+                  icon: Icons.games,
+                  inputFormatters: [
+                    // Auto-convert short join codes to uppercase
+                    _GameIdFormatter(),
+                  ],
+                ),
+                const SizedBox(height: 40),
               ],
-            ),
-            const SizedBox(height: 40),
-          ],
 
-          // Action Button
-          _buildActionButton(),
-        ],
+              // Action Button
+              _buildActionButton(),
+            ],
+          ),
+        ),
       ),
     );
   }

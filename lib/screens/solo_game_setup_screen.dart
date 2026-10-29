@@ -5,6 +5,7 @@ import '../config/bot_configurations.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
+import '../utils/game_responsive_layout.dart';
 import 'game_screen.dart';
 
 /// Pre-game configuration screen for solo play.
@@ -146,44 +147,53 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
                     Expanded(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildBotCountSelector(),
-                            const SizedBox(height: 24),
-                            _buildBotPersonalitiesSection(),
-                            const SizedBox(height: 24),
-                            _buildSeedField(),
-                            const SizedBox(height: 24),
-                            _buildRuleToggle(
-                              title:
-                                  '+${GameConfig.goingOutBonus} pts to first player out',
-                              subtitle: 'Bonus for the player who goes out first each round',
-                              value: _settings.enableGoingOutBonus,
-                              onChanged: (value) {
-                                setState(() {
-                                  _settings = _settings.copyWith(
-                                    enableGoingOutBonus: value,
-                                  );
-                                });
-                              },
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              maxWidth:
+                                  GameResponsiveLayout.menuContentMaxWidth,
                             ),
-                            const SizedBox(height: 16),
-                            _buildRuleToggle(
-                              title: 'One more turn after going out',
-                              subtitle: 'Other players each get one final turn after someone goes out',
-                              value: _settings.enableFinalTurnAfterGoingOut,
-                              onChanged: (value) {
-                                setState(() {
-                                  _settings = _settings.copyWith(
-                                    enableFinalTurnAfterGoingOut: value,
-                                  );
-                                });
-                              },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildBotCountSelector(),
+                                const SizedBox(height: 24),
+                                _buildBotPersonalitiesSection(),
+                                const SizedBox(height: 24),
+                                _buildSeedField(),
+                                const SizedBox(height: 24),
+                                _buildRuleToggle(
+                                  title:
+                                      '+${GameConfig.goingOutBonus} pts to first player out',
+                                  subtitle: 'Bonus for the player who goes out first each round',
+                                  value: _settings.enableGoingOutBonus,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _settings = _settings.copyWith(
+                                        enableGoingOutBonus: value,
+                                      );
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _buildRuleToggle(
+                                  title: 'One more turn after going out',
+                                  subtitle: 'Other players each get one final turn after someone goes out',
+                                  value: _settings.enableFinalTurnAfterGoingOut,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _settings = _settings.copyWith(
+                                        enableFinalTurnAfterGoingOut: value,
+                                      );
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 32),
+                                _buildStartButton(),
+                              ],
                             ),
-                            const SizedBox(height: 32),
-                            _buildStartButton(),
-                          ],
+                          ),
                         ),
                       ),
                     ),

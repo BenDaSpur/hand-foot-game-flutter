@@ -18,6 +18,12 @@ This is a Flutter (Dart) app — the **Hand & Foot** card game with AI bots and 
 - UI imports are `package:material_ui/material_ui.dart` and `package:cupertino_ui/cupertino_ui.dart`. The `migrate_design_widgets` lint is an analyzer error, so `package:flutter/material.dart` and `package:flutter/cupertino.dart` must not be imported.
 - Only the **web (Chrome)** and headless test toolchains are set up. The Android and Linux-desktop toolchains are intentionally not installed, so `flutter doctor` reports them as missing — this is expected and does not affect web/test workflows.
 
+### iPhone Duo / iOS release builds
+- Layout is **size-driven** via `GameResponsiveLayout` (phone tier includes Duo cover ~466pt; wide rail at ≥900pt for Duo inner landscape ~951pt). Partially open crease avoidance uses `GameFoldGeometry` + the `foldable` package (`FoldableProvider` with `cutoutsOnly` bridge).
+- Duo logical sizes to fixture in widget tests: cover `466×678` / `678×466`, inner `669×951` / `951×669`, fold band ~40pt.
+- **Shipping Duo full-bleed** requires building with the **iOS 27.1 SDK** (Xcode 27.1+). Pre-27.1 SDKs letterbox or leave edge bars on Duo. App deployment target stays **iOS 15.0**.
+- Cloud Agents cannot run the Duo simulator; verify crease/posture on a Mac with Xcode 27.1 when possible. Widget tests inject `MediaQuery.displayFeatures` for fold geometry.
+
 ### Running the app (dev mode)
 - Run on web: `flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080` (serves at `http://localhost:8080`). Use a browser to reach it; the `web-server` device has no auto-launched Chrome. The first web build takes ~30–60s to compile before the URL is served.
 - Production web app: **https://playhandfoot.com** (Vercel; see `docs/DEPLOYMENT.md` and `vercel.json`).
