@@ -66,17 +66,30 @@ class GameHandDisplay extends StatelessWidget {
 
   Widget _buildHandContent(BuildContext context, GameCardSizes sizes) {
     final animationActive = CardAnimationScope.animationActive(context);
+    final isUltraShort = GameResponsiveLayout.isUltraShortHeight(
+      MediaQuery.sizeOf(context).height,
+    );
     final stackHeight =
-        sizes.handHeight + sizes.selectionLift + UIConstants.smallSpacing;
+        sizes.handHeight +
+        sizes.selectionLift +
+        (isUltraShort ? 2.0 : UIConstants.smallSpacing);
 
     final content = Container(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+      padding: EdgeInsets.fromLTRB(
+        8,
+        isUltraShort ? 0 : 4,
+        8,
+        isUltraShort ? 2 : 6,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding: EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: isUltraShort ? 0 : 2,
+            ),
             child: GestureDetector(
               onTap: onReturnToHand,
               child: Text(
@@ -89,7 +102,7 @@ class GameHandDisplay extends StatelessWidget {
                   return 'Your $pileName (${player.currentHand.length})';
                 }(),
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: isUltraShort ? 11 : 13,
                   fontWeight: FontWeight.bold,
                   color:
                       viewingPlayerMelds != null && viewingPlayerMelds != player

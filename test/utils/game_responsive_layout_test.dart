@@ -7,25 +7,37 @@ void main() {
   group('GameResponsiveLayout size tiers', () {
     test('classifies phone tablet and large tablet widths', () {
       expect(GameResponsiveLayout.isPhone(390), isTrue);
+      // iPhone Duo cover (~466) must stay phone-tier, not tablet cards.
+      expect(GameResponsiveLayout.isPhone(466), isTrue);
+      expect(GameResponsiveLayout.isPhone(500), isTrue);
+      expect(GameResponsiveLayout.isPhone(501), isFalse);
       expect(GameResponsiveLayout.isTabletOrLarger(390), isFalse);
+      expect(GameResponsiveLayout.isTabletOrLarger(669), isTrue);
       expect(GameResponsiveLayout.isTabletOrLarger(768), isTrue);
       expect(GameResponsiveLayout.isLargeTablet(768), isFalse);
       expect(GameResponsiveLayout.isLargeTablet(1024), isTrue);
       expect(GameResponsiveLayout.useWideBoardLayout(899), isFalse);
+      expect(GameResponsiveLayout.useWideBoardLayout(951), isTrue);
       expect(
         GameResponsiveLayout.useWideBoardLayout(
           GameConfig.tabletLandscapeBreakpoint,
         ),
         isTrue,
       );
+      expect(GameResponsiveLayout.isUltraShortHeight(466), isTrue);
+      expect(GameResponsiveLayout.isUltraShortHeight(678), isFalse);
+      expect(GameResponsiveLayout.isInnerClass(const Size(669, 951)), isTrue);
+      expect(GameResponsiveLayout.isInnerClass(const Size(466, 678)), isFalse);
     });
 
     test('cardSizesForWidth returns distinct tablet tiers', () {
       final phone = GameResponsiveLayout.cardSizesForWidth(390);
+      final duoCover = GameResponsiveLayout.cardSizesForWidth(466);
       final tablet = GameResponsiveLayout.cardSizesForWidth(768);
       final large = GameResponsiveLayout.cardSizesForWidth(1024);
 
       expect(phone.handWidth, GameCardSizes.normalPhone.handWidth);
+      expect(duoCover.handWidth, GameCardSizes.normalPhone.handWidth);
       expect(tablet.handWidth, GameCardSizes.tablet.handWidth);
       expect(large.handWidth, GameCardSizes.largeTablet.handWidth);
       expect(tablet.handWidth, greaterThan(phone.handWidth));

@@ -118,7 +118,7 @@ lib/
 - **Index-Based Selection** - handles multiple identical cards
 - **Dynamic Book Detection** - real-time status updates  
 - **Centralized State Management** with action logging
-- **Responsive Design** - adapts to all screen sizes
+- **Responsive Design** - adapts to phones, tablets, and iPhone Duo cover/inner/partially-folded forms
 
 ## 🤝 Contributing
 

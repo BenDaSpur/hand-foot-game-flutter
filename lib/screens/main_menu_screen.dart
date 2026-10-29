@@ -7,6 +7,7 @@ import '../config/project_links.dart';
 import '../config/solo_game_settings.dart';
 import '../theme/balatro_theme.dart';
 import '../utils/debug_logger.dart';
+import '../utils/game_responsive_layout.dart';
 import 'game_screen.dart';
 import 'learn_to_play_screen.dart';
 import 'multiplayer_lobby_screen.dart';
@@ -190,143 +191,152 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               Expanded(
                 child: Center(
                   child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Game Title
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 60),
-                          child: Column(
-                            children: [
-                              Text(
-                                'HAND & FOOT',
-                                style: Theme.of(context).textTheme.displayLarge
-                                    ?.copyWith(
-                                      color: BalatroTheme.neonBlue,
-                                      shadows: [
-                                        Shadow(
-                                          color: BalatroTheme.neonBlue
-                                              .withValues(alpha: 0.5),
-                                          blurRadius: 20,
-                                        ),
-                                      ],
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'CARD GAME',
-                                style: Theme.of(context).textTheme.displaySmall
-                                    ?.copyWith(
-                                      color: BalatroTheme.neonPink,
-                                      letterSpacing: 4,
-                                    ),
-                              ),
-                            ],
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: GameResponsiveLayout.menuContentMaxWidth,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Game Title
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 60),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'HAND & FOOT',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .displayLarge
+                                      ?.copyWith(
+                                        color: BalatroTheme.neonBlue,
+                                        shadows: [
+                                          Shadow(
+                                            color: BalatroTheme.neonBlue
+                                                .withValues(alpha: 0.5),
+                                            blurRadius: 20,
+                                          ),
+                                        ],
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'CARD GAME',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .displaySmall
+                                      ?.copyWith(
+                                        color: BalatroTheme.neonPink,
+                                        letterSpacing: 4,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
-                        // Menu Options
-                        if (_isLoading)
-                          const CircularProgressIndicator(
-                            color: BalatroTheme.neonBlue,
-                          )
-                        else
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Continue button (only shown if saved single player game exists)
-                              if (_hasSavedSinglePlayerGame) ...[
+                          // Menu Options
+                          if (_isLoading)
+                            const CircularProgressIndicator(
+                              color: BalatroTheme.neonBlue,
+                            )
+                          else
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Continue button (only shown if saved single player game exists)
+                                if (_hasSavedSinglePlayerGame) ...[
+                                  _buildMenuButton(
+                                    icon: Icons.play_arrow,
+                                    label: 'CONTINUE',
+                                    description: 'Resume your saved game',
+                                    onPressed: _continueSavedGame,
+                                    isPrimary: true,
+                                  ),
+                                  const SizedBox(height: 20),
+                                ],
+                                if (_rejoinableGame != null &&
+                                    _multiplayerAvailable) ...[
+                                  _buildMenuButton(
+                                    icon: Icons.wifi,
+                                    label: 'REJOIN GAME',
+                                    description:
+                                        'Reconnect to ${_rejoinableGame!['gameId']}',
+                                    onPressed: _rejoinMultiplayerGame,
+                                    isPrimary: true,
+                                  ),
+                                  const SizedBox(height: 20),
+                                ],
                                 _buildMenuButton(
-                                  icon: Icons.play_arrow,
-                                  label: 'CONTINUE',
-                                  description: 'Resume your saved game',
-                                  onPressed: _continueSavedGame,
-                                  isPrimary: true,
+                                  icon: Icons.person,
+                                  label: 'PLAY SOLO',
+                                  description: 'Play against AI opponents',
+                                  onPressed: _startSoloGame,
+                                  onSettingsPressed: _openSoloGameSettings,
                                 ),
                                 const SizedBox(height: 20),
-                              ],
-                              if (_rejoinableGame != null &&
-                                  _multiplayerAvailable) ...[
                                 _buildMenuButton(
-                                  icon: Icons.wifi,
-                                  label: 'REJOIN GAME',
+                                  icon: Icons.school,
+                                  label: 'LEARN TO PLAY',
                                   description:
-                                      'Reconnect to ${_rejoinableGame!['gameId']}',
-                                  onPressed: _rejoinMultiplayerGame,
-                                  isPrimary: true,
+                                      'Guided lesson for rules and controls',
+                                  onPressed: _startLearnToPlay,
                                 ),
                                 const SizedBox(height: 20),
-                              ],
-                              _buildMenuButton(
-                                icon: Icons.person,
-                                label: 'PLAY SOLO',
-                                description: 'Play against AI opponents',
-                                onPressed: _startSoloGame,
-                                onSettingsPressed: _openSoloGameSettings,
-                              ),
-                              const SizedBox(height: 20),
-                              _buildMenuButton(
-                                icon: Icons.school,
-                                label: 'LEARN TO PLAY',
-                                description:
-                                    'Guided lesson for rules and controls',
-                                onPressed: _startLearnToPlay,
-                              ),
-                              const SizedBox(height: 20),
-                              _buildMenuButton(
-                                icon: Icons.group_add,
-                                label: 'CREATE GAME',
-                                description: _multiplayerAvailable
-                                    ? 'Host a multiplayer game'
-                                    : 'Multiplayer requires Firebase configuration',
-                                onPressed: _multiplayerAvailable
-                                    ? _createMultiplayerGame
-                                    : _showMultiplayerUnavailable,
-                              ),
-                              const SizedBox(height: 20),
-                              _buildMenuButton(
-                                icon: Icons.group,
-                                label: 'JOIN GAME',
-                                description: _multiplayerAvailable
-                                    ? 'Join an existing game'
-                                    : 'Multiplayer requires Firebase configuration',
-                                onPressed: _multiplayerAvailable
-                                    ? _joinMultiplayerGame
-                                    : _showMultiplayerUnavailable,
-                              ),
-                              const SizedBox(height: 40),
-                              _buildSettingsButton(),
-                              const SizedBox(height: 16),
-                              _buildInfoButton(),
-                              const SizedBox(height: 16),
-                              _buildGitHubButton(),
-                              if (widget.isWeb) ...[
+                                _buildMenuButton(
+                                  icon: Icons.group_add,
+                                  label: 'CREATE GAME',
+                                  description: _multiplayerAvailable
+                                      ? 'Host a multiplayer game'
+                                      : 'Multiplayer requires Firebase configuration',
+                                  onPressed: _multiplayerAvailable
+                                      ? _createMultiplayerGame
+                                      : _showMultiplayerUnavailable,
+                                ),
+                                const SizedBox(height: 20),
+                                _buildMenuButton(
+                                  icon: Icons.group,
+                                  label: 'JOIN GAME',
+                                  description: _multiplayerAvailable
+                                      ? 'Join an existing game'
+                                      : 'Multiplayer requires Firebase configuration',
+                                  onPressed: _multiplayerAvailable
+                                      ? _joinMultiplayerGame
+                                      : _showMultiplayerUnavailable,
+                                ),
+                                const SizedBox(height: 40),
+                                _buildSettingsButton(),
                                 const SizedBox(height: 16),
-                                _buildIosAppStoreButton(),
+                                _buildInfoButton(),
                                 const SizedBox(height: 16),
-                                _buildInstallButton(),
+                                _buildGitHubButton(),
+                                if (widget.isWeb) ...[
+                                  const SizedBox(height: 16),
+                                  _buildIosAppStoreButton(),
+                                  const SizedBox(height: 16),
+                                  _buildInstallButton(),
+                                ],
+                                const SizedBox(height: 16),
+                                _buildPrivacyButton(),
+                                ListenableBuilder(
+                                  listenable: AdsService.instance,
+                                  builder: (context, _) {
+                                    if (!AdsService
+                                        .instance
+                                        .shouldShowPrivacyOptions) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Column(
+                                      children: [
+                                        const SizedBox(height: 8),
+                                        _buildPrivacyOptionsButton(),
+                                      ],
+                                    );
+                                  },
+                                ),
                               ],
-                              const SizedBox(height: 16),
-                              _buildPrivacyButton(),
-                              ListenableBuilder(
-                                listenable: AdsService.instance,
-                                builder: (context, _) {
-                                  if (!AdsService
-                                      .instance
-                                      .shouldShowPrivacyOptions) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return Column(
-                                    children: [
-                                      const SizedBox(height: 8),
-                                      _buildPrivacyOptionsButton(),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                      ],
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

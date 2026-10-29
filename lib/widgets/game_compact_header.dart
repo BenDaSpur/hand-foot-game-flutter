@@ -22,6 +22,10 @@ class GameCompactHeader extends StatelessWidget {
   final List<Widget> headerExtras;
   final List<Widget> expandedExtras;
 
+  /// Always shown in the top header row (phone and tablet), even when piles are
+  /// collapsed. Use for stateful controls like [TurnTimer] that must stay mounted.
+  final List<Widget> persistentHeaderExtras;
+
   const GameCompactHeader({
     super.key,
     required this.gameState,
@@ -33,6 +37,7 @@ class GameCompactHeader extends StatelessWidget {
     this.onRecentActionsTap,
     this.headerExtras = const [],
     this.expandedExtras = const [],
+    this.persistentHeaderExtras = const [],
   });
 
   Color _phaseColor() {
@@ -65,19 +70,31 @@ class GameCompactHeader extends StatelessWidget {
 
   /// Even tighter piles on short viewports (landscape phones, SE, etc.).
   static const double _shortCollapsedPileScale = 0.45;
-  static const double _shortHeightBreakpoint = 700;
+
+  /// Densest piles for ultra-short covers (Duo cover landscape).
+  static const double _ultraShortCollapsedPileScale = 0.38;
 
   @override
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final isPhone = GameResponsiveLayout.isPhone(mediaSize.width);
-    final isShortHeight = mediaSize.height < _shortHeightBreakpoint;
+    final isInner = GameResponsiveLayout.isInnerClass(mediaSize);
+    final isShortHeight = GameResponsiveLayout.isShortHeight(mediaSize.height);
+    final isUltraShort = GameResponsiveLayout.isUltraShortHeight(
+      mediaSize.height,
+    );
     final sizes = GameResponsiveLayout.cardSizes(context);
     final deckLow = gameState.deck.size <= 20;
     final deckColor = deckLow ? Colors.red : BalatroTheme.neonYellow;
     final topDiscard = gameState.topDiscard;
+    // Inner-class portrait (Duo open / iPad) keeps piles expanded for breathing room.
+    final effectiveExpanded = isExpanded || (isInner && !isPhone);
     final double collapsedScale;
-    if (isPhone && isShortHeight) {
+    // Ultra-short applies even when width is tablet-tier (Duo cover landscape
+    // is 678×466: not phone width, but still needs densest piles).
+    if (isUltraShort) {
+      collapsedScale = _ultraShortCollapsedPileScale;
+    } else if (isPhone && isShortHeight) {
       collapsedScale = _shortCollapsedPileScale;
     } else if (isPhone) {
       collapsedScale = _collapsedPileScale;
@@ -88,9 +105,17 @@ class GameCompactHeader extends StatelessWidget {
     return Container(
       margin: EdgeInsets.fromLTRB(
         8,
-        isShortHeight ? 2 : 4,
+        isUltraShort
+            ? 1
+            : isShortHeight
+            ? 2
+            : 4,
         8,
-        isShortHeight ? 2 : 4,
+        isUltraShort
+            ? 1
+            : isShortHeight
+            ? 2
+            : 4,
       ),
       decoration: BalatroTheme.glowDecoration(
         backgroundColor: BalatroTheme.darkPurple.withValues(alpha: 0.92),
@@ -100,7 +125,16 @@ class GameCompactHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(10, isShortHeight ? 4 : 8, 4, 4),
+            padding: EdgeInsets.fromLTRB(
+              10,
+              isUltraShort
+                  ? 2
+                  : isShortHeight
+                  ? 4
+                  : 8,
+              4,
+              isUltraShort ? 2 : 4,
+            ),
             child: Row(
               children: [
                 _RoundBadge(round: gameState.round),
@@ -119,42 +153,43 @@ class GameCompactHeader extends StatelessWidget {
                 Expanded(
                   child: Text(
                     gameState.currentPlayer.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: BalatroTheme.secondaryText,
-                      fontSize: 12,
+                      fontSize: isUltraShort ? 11 : 12,
                       fontWeight: FontWeight.w600,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (!isPhone) ...headerExtras,
+                ...persistentHeaderExtras,
                 if (onRecentActionsTap != null &&
                     gameState.recentActions.isNotEmpty)
                   _RecentActionsChip(
                     count: gameState.recentActions.length,
                     onTap: onRecentActionsTap!,
                   ),
-                if (showExpandToggle)
+                if (showExpandToggle && !(isInner && !isPhone))
                   IconButton(
                     onPressed: onToggleExpand,
                     icon: Icon(
-                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      effectiveExpanded ? Icons.expand_less : Icons.expand_more,
                       color: BalatroTheme.glowColor,
-                      size: 22,
+                      size: isUltraShort ? 18 : 22,
                     ),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                    constraints: BoxConstraints(
+                      minWidth: isUltraShort ? 32 : 36,
+                      minHeight: isUltraShort ? 32 : 36,
                     ),
-                    tooltip: isExpanded
+                    tooltip: effectiveExpanded
                         ? 'Hide deck & details'
                         : 'Show deck & details',
                   ),
               ],
             ),
           ),
-          if (isExpanded)
+          if (effectiveExpanded)
             _ExpandedPilesSection(
               isPhone: isPhone,
               sizes: sizes,

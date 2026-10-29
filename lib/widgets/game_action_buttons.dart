@@ -296,8 +296,12 @@ class GameActionButtons extends StatelessWidget {
         bot,
         gameState,
       );
-      final width = MediaQuery.of(context).size.width;
+      final mediaSize = MediaQuery.sizeOf(context);
+      final width = mediaSize.width;
       final isPhone = GameResponsiveLayout.isPhone(width);
+      final isUltraShort = GameResponsiveLayout.isUltraShortHeight(
+        mediaSize.height,
+      );
       final inWideRail = GameResponsiveLayout.useWideBoardLayout(width);
 
       final phaseChip = Container(
@@ -370,7 +374,11 @@ class GameActionButtons extends StatelessWidget {
       return Container(
         padding: EdgeInsets.symmetric(
           horizontal: 12,
-          vertical: isPhone ? 6 : 12,
+          vertical: isUltraShort
+              ? 2
+              : isPhone
+              ? 6
+              : 12,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -415,8 +423,12 @@ class GameActionButtons extends StatelessWidget {
     final buttons = <Widget>[];
     final isAnimating =
         CardAnimationScope.maybeOf(context)?.isAnimating ?? false;
-    final width = MediaQuery.of(context).size.width;
+    final mediaSize = MediaQuery.sizeOf(context);
+    final width = mediaSize.width;
     final isPhone = GameResponsiveLayout.isPhone(width);
+    final isUltraShort = GameResponsiveLayout.isUltraShortHeight(
+      mediaSize.height,
+    );
     final stackInRail = GameResponsiveLayout.useWideBoardLayout(width);
 
     if (gameState.turnPhase == TurnPhase.draw) {
@@ -426,6 +438,7 @@ class GameActionButtons extends StatelessWidget {
           text: 'Draw from deck',
           shortcutHint: showKeyboardHints ? KeyboardShortcuts.drawKey : null,
           isPhone: isPhone,
+          isUltraShort: isUltraShort,
         ),
       );
       if (onUnlockDiscard != null) {
@@ -437,6 +450,7 @@ class GameActionButtons extends StatelessWidget {
                 ? KeyboardShortcuts.takeDiscardKey
                 : null,
             isPhone: isPhone,
+            isUltraShort: isUltraShort,
           ),
         );
       }
@@ -451,6 +465,7 @@ class GameActionButtons extends StatelessWidget {
               ? KeyboardShortcuts.playCardsKey
               : null,
           isPhone: isPhone,
+          isUltraShort: isUltraShort,
           backgroundColor: const Color(
             0xFF16c79a,
           ), // Neon green for meld action
@@ -462,6 +477,7 @@ class GameActionButtons extends StatelessWidget {
             onPressed: isAnimating ? null : onUndoMeld,
             text: 'Undo',
             isPhone: isPhone,
+            isUltraShort: isUltraShort,
             backgroundColor: Colors.orange,
           ),
         );
@@ -472,6 +488,7 @@ class GameActionButtons extends StatelessWidget {
           text: _discardButtonText,
           shortcutHint: showKeyboardHints ? KeyboardShortcuts.discardKey : null,
           isPhone: isPhone,
+          isUltraShort: isUltraShort,
           backgroundColor:
               _discardButtonColor ??
               const Color(0xFFe94560), // Neon pink for discard
@@ -484,6 +501,7 @@ class GameActionButtons extends StatelessWidget {
             text: 'Clear',
             shortcutHint: showKeyboardHints ? KeyboardShortcuts.clearKey : null,
             isPhone: isPhone,
+            isUltraShort: isUltraShort,
             backgroundColor: Colors.grey,
           ),
         );
@@ -509,7 +527,11 @@ class GameActionButtons extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isPhone ? 10 : 16,
-        vertical: isPhone ? 8 : 12,
+        vertical: isUltraShort
+            ? 2
+            : isPhone
+            ? 8
+            : 12,
       ),
       child: Center(
         child: ConstrainedBox(
@@ -525,7 +547,9 @@ class GameActionButtons extends StatelessWidget {
                 .map(
                   (button) => Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isUltraShort ? 2 : 4,
+                      ),
                       child: button,
                     ),
                   ),
@@ -542,6 +566,7 @@ class GameActionButtons extends StatelessWidget {
     required VoidCallback? onPressed,
     required String text,
     required bool isPhone,
+    bool isUltraShort = false,
     String? shortcutHint,
     Color? backgroundColor,
   }) {
@@ -555,10 +580,14 @@ class GameActionButtons extends StatelessWidget {
         backgroundColor: backgroundColor,
         disabledBackgroundColor: Colors.grey.shade800,
         padding: EdgeInsets.symmetric(
-          vertical: isPhone ? 10 : 12,
+          vertical: isUltraShort
+              ? 6
+              : isPhone
+              ? 10
+              : 12,
           horizontal: isPhone ? 6 : 16,
         ),
-        minimumSize: Size(isPhone ? 0 : 64, 44),
+        minimumSize: Size(isPhone ? 0 : 64, isUltraShort ? 36 : 44),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         elevation: isPhone ? 2 : 4,
@@ -567,7 +596,11 @@ class GameActionButtons extends StatelessWidget {
         text,
         style: TextStyle(
           fontWeight: FontWeight.bold,
-          fontSize: isPhone ? 13 : 14,
+          fontSize: isUltraShort
+              ? 12
+              : isPhone
+              ? 13
+              : 14,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

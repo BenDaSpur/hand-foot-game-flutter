@@ -1015,6 +1015,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                             ),
                           ),
                         ),
+                      ],
+                      // Keep TurnTimer mounted on phone/Duo cover even when
+                      // piles are collapsed (headerExtras only show expanded).
+                      persistentHeaderExtras: [
                         if (_turnTimerEnabled) ...[
                           const SizedBox(width: 4),
                           TurnTimer(

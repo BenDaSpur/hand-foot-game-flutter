@@ -106,7 +106,18 @@ class GameResponsiveLayout {
 
   static const double smallPhoneBreakpoint = 360;
   static const double compactPhoneBreakpoint = 400;
-  static const double normalPhoneBreakpoint = 430;
+
+  /// Phone tier includes iPhone Duo cover (~466pt) so it does not get tablet cards.
+  static const double normalPhoneBreakpoint = 500;
+
+  /// Short viewports (SE / Duo cover portrait): tighten chrome.
+  static const double shortHeightBreakpoint = 700;
+
+  /// Ultra-short viewports (Duo cover landscape ~466pt tall): densest dock.
+  static const double ultraShortHeightBreakpoint = 520;
+
+  /// Max content width for menus on regular-width / inner Duo displays.
+  static const double menuContentMaxWidth = 520;
 
   /// Max width for the action button row on tablet+.
   static const double actionDockMaxWidthSingle = 520;
@@ -117,6 +128,9 @@ class GameResponsiveLayout {
 
   /// Left rail width in the two-pane wide board layout.
   static const double wideBoardRailWidth = 320;
+
+  /// Slightly wider rail on large inner / desktop canvases so the board is less sparse.
+  static const double wideBoardRailWidthLarge = 360;
 
   /// Target fill of the hand strip for dynamic tablet hand sizing.
   static const double handStripFillRatio = 0.80;
@@ -137,18 +151,38 @@ class GameResponsiveLayout {
     return width > GameConfig.tabletLandscapeBreakpoint;
   }
 
-  /// Two-pane board (rail + main) for iPad landscape / macOS.
+  /// Two-pane board (rail + main) for iPad landscape / macOS / Duo inner landscape.
   static bool useWideBoardLayout(double width) {
     return width >= GameConfig.tabletLandscapeBreakpoint;
   }
 
+  /// Regular-width “inner class” chrome (Duo open portrait, iPad) without forcing the rail.
+  static bool isInnerClass(Size size) {
+    return size.shortestSide >= GameConfig.tabletPortraitBreakpoint;
+  }
+
+  static bool isShortHeight(double height) {
+    return height < shortHeightBreakpoint;
+  }
+
+  static bool isUltraShortHeight(double height) {
+    return height <= ultraShortHeightBreakpoint;
+  }
+
+  static double wideBoardRailWidthFor(double width) {
+    if (width >= GameConfig.desktopBreakpoint) {
+      return wideBoardRailWidthLarge;
+    }
+    return wideBoardRailWidth;
+  }
+
   static bool isMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width <=
+    return MediaQuery.sizeOf(context).width <=
         GameConfig.tabletPortraitBreakpoint;
   }
 
   static bool isSmallMobile(BuildContext context) {
-    return MediaQuery.of(context).size.width <= compactPhoneBreakpoint;
+    return MediaQuery.sizeOf(context).width <= compactPhoneBreakpoint;
   }
 
   static GameCardSizes cardSizesForWidth(double width) {
@@ -171,6 +205,16 @@ class GameResponsiveLayout {
   /// Approximate vertical chrome around the hand stack (label + padding).
   static const double handDisplayChromeHeight = 48;
 
+  /// Tighter hand chrome on ultra-short covers (Duo cover landscape).
+  static const double handDisplayChromeHeightUltraShort = 28;
+
+  static double handChromeHeightFor(double viewportHeight) {
+    if (isUltraShortHeight(viewportHeight)) {
+      return handDisplayChromeHeightUltraShort;
+    }
+    return handDisplayChromeHeight;
+  }
+
   /// Hand cards on phone prioritize readability (horizontal scroll is expected).
   /// On tablet+, scales toward filling [handStripFillRatio] of the hand strip.
   static GameCardSizes handSizes(
@@ -179,7 +223,9 @@ class GameResponsiveLayout {
     double? availableWidth,
     double? availableHeight,
   }) {
-    final width = MediaQuery.of(context).size.width;
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
+    final chrome = handChromeHeightFor(size.height);
     final base = cardSizesForWidth(width);
     if (isPhone(width)) {
       return _fitHandToHeight(
@@ -189,6 +235,7 @@ class GameResponsiveLayout {
           handOffset: base.handOffset,
         ),
         availableHeight: availableHeight,
+        chromeHeight: chrome,
       );
     }
 
@@ -198,6 +245,7 @@ class GameResponsiveLayout {
       cardCount: cardCount,
       availableWidth: availableWidth,
       availableHeight: availableHeight,
+      chromeHeight: chrome,
     );
   }
 
@@ -208,11 +256,12 @@ class GameResponsiveLayout {
     int cardCount = 11,
     double? availableWidth,
     double? availableHeight,
+    double chromeHeight = handDisplayChromeHeight,
   }) {
     final stripWidth =
         availableWidth ??
         (useWideBoardLayout(screenWidth)
-            ? screenWidth - wideBoardRailWidth - 24
+            ? screenWidth - wideBoardRailWidthFor(screenWidth) - 24
             : screenWidth * 0.92);
     final targetFill = stripWidth * handStripFillRatio;
     final count = cardCount <= 0 ? 1 : cardCount;
@@ -230,6 +279,7 @@ class GameResponsiveLayout {
         handOffset: handOffset,
       ),
       availableHeight: availableHeight,
+      chromeHeight: chromeHeight,
     );
   }
 
@@ -237,11 +287,12 @@ class GameResponsiveLayout {
   static GameCardSizes _fitHandToHeight(
     GameCardSizes sizes, {
     double? availableHeight,
+    double chromeHeight = handDisplayChromeHeight,
   }) {
     if (availableHeight == null || !availableHeight.isFinite) {
       return sizes;
     }
-    final maxStackHeight = (availableHeight - handDisplayChromeHeight).clamp(
+    final maxStackHeight = (availableHeight - chromeHeight).clamp(
       40.0,
       availableHeight,
     );
