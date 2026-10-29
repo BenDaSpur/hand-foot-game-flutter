@@ -22,6 +22,10 @@ class GameCompactHeader extends StatelessWidget {
   final List<Widget> headerExtras;
   final List<Widget> expandedExtras;
 
+  /// Always shown in the top header row (phone and tablet), even when piles are
+  /// collapsed. Use for stateful controls like [TurnTimer] that must stay mounted.
+  final List<Widget> persistentHeaderExtras;
+
   const GameCompactHeader({
     super.key,
     required this.gameState,
@@ -33,6 +37,7 @@ class GameCompactHeader extends StatelessWidget {
     this.onRecentActionsTap,
     this.headerExtras = const [],
     this.expandedExtras = const [],
+    this.persistentHeaderExtras = const [],
   });
 
   Color _phaseColor() {
@@ -157,6 +162,7 @@ class GameCompactHeader extends StatelessWidget {
                   ),
                 ),
                 if (!isPhone) ...headerExtras,
+                ...persistentHeaderExtras,
                 if (onRecentActionsTap != null &&
                     gameState.recentActions.isNotEmpty)
                   _RecentActionsChip(

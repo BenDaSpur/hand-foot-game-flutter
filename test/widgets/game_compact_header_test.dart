@@ -32,6 +32,7 @@ void main() {
       required Size size,
       required bool expanded,
       required VoidCallback onToggle,
+      List<Widget> persistentHeaderExtras = const [],
     }) async {
       await tester.pumpWidget(
         MediaQuery(
@@ -44,6 +45,7 @@ void main() {
                 discardKey: discardKey,
                 isExpanded: expanded,
                 onToggleExpand: onToggle,
+                persistentHeaderExtras: persistentHeaderExtras,
               ),
             ),
           ),
@@ -121,5 +123,27 @@ void main() {
       await tester.tap(find.byTooltip('Show deck & details'));
       expect(toggled, isTrue);
     });
+
+    testWidgets(
+      'persistent extras stay visible on Duo cover when piles are collapsed',
+      (tester) async {
+        await pumpHeader(
+          tester,
+          size: const Size(466, 678),
+          expanded: false,
+          onToggle: () {},
+          persistentHeaderExtras: const [
+            KeyedSubtree(
+              key: ValueKey('persistent-timer'),
+              child: Text('TIMER'),
+            ),
+          ],
+        );
+
+        expect(find.byKey(const ValueKey('persistent-timer')), findsOneWidget);
+        expect(find.text('TIMER'), findsOneWidget);
+        expect(find.textContaining('Play down'), findsNothing);
+      },
+    );
   });
 }

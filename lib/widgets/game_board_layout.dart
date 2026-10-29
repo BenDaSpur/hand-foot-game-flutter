@@ -39,6 +39,9 @@ class GameBoardLayout extends StatelessWidget {
   final VoidCallback onHeaderToggle;
   final List<Widget> headerExtras;
   final List<Widget> expandedHeaderExtras;
+
+  /// Always-visible header row extras (e.g. multiplayer [TurnTimer]).
+  final List<Widget> persistentHeaderExtras;
   final String? currentUserId;
   final BotPersonalityManager? botPersonalityManager;
   final Widget? aboveMelds;
@@ -61,6 +64,7 @@ class GameBoardLayout extends StatelessWidget {
     required this.onHeaderToggle,
     this.headerExtras = const [],
     this.expandedHeaderExtras = const [],
+    this.persistentHeaderExtras = const [],
     this.currentUserId,
     this.botPersonalityManager,
     this.aboveMelds,
@@ -182,6 +186,7 @@ class GameBoardLayout extends StatelessWidget {
                   : () => showRecentActionsSheet(context, gameState),
               headerExtras: headerExtras,
               expandedExtras: expandedHeaderExtras,
+              persistentHeaderExtras: persistentHeaderExtras,
             ),
             if (!tightHeight &&
                 isWide &&
@@ -200,7 +205,8 @@ class GameBoardLayout extends StatelessWidget {
                 currentUserId: currentUserId,
                 botPersonalityManager: botPersonalityManager,
               ),
-            if (!tightHeight && aboveMelds != null) aboveMelds!,
+            // Keep stuck-turn / last-call recovery visible on short fold panes.
+            if (aboveMelds != null) aboveMelds!,
             Expanded(
               child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
             ),
@@ -225,6 +231,7 @@ class GameBoardLayout extends StatelessWidget {
               : () => showRecentActionsSheet(context, gameState),
           headerExtras: headerExtras,
           expandedExtras: expandedHeaderExtras,
+          persistentHeaderExtras: persistentHeaderExtras,
         ),
         if (isWide &&
             useDesktopRecentActions &&
@@ -277,6 +284,7 @@ class GameBoardLayout extends StatelessWidget {
                 onRecentActionsTap: null,
                 headerExtras: headerExtras,
                 expandedExtras: expandedHeaderExtras,
+                persistentHeaderExtras: persistentHeaderExtras,
               ),
               CompactPlayerScores(
                 gameState: gameState,
