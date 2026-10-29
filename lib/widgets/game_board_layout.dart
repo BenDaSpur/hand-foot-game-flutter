@@ -143,13 +143,15 @@ class GameBoardLayout extends StatelessWidget {
         ),
         SizedBox(key: foldGapKey, height: gapHeight),
         Flexible(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: _BottomDock(
-              key: bottomDockKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [actionButtons, handDisplay],
+          child: SingleChildScrollView(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _BottomDock(
+                key: bottomDockKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [actionButtons, handDisplay],
+                ),
               ),
             ),
           ),
@@ -337,14 +339,6 @@ class _FoldAwareBoardHost extends StatefulWidget {
 
 class _FoldAwareBoardHostState extends State<_FoldAwareBoardHost> {
   Offset? _origin;
-
-  @override
-  void didUpdateWidget(covariant _FoldAwareBoardHost oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.windowFold != widget.windowFold) {
-      _origin = null;
-    }
-  }
 
   void _scheduleOriginMeasure() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
