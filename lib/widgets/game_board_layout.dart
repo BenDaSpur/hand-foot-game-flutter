@@ -71,54 +71,21 @@ class GameBoardLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final padding = MediaQuery.paddingOf(context);
-    final width = size.width;
+    final width = MediaQuery.sizeOf(context).width;
     final isWide = width > UIConstants.smallScreenBreakpoint;
     final useWideBoard = GameResponsiveLayout.useWideBoardLayout(width);
-    // Convert fold bounds before SafeArea; padding is zeroed inside it.
     final windowFold = GameFoldGeometry.activeDivisionBounds(context);
-    final safeSize = Size(
-      size.width - padding.horizontal,
-      size.height - padding.vertical,
-    );
-    final localFold = windowFold == null
-        ? null
-        : GameFoldGeometry.toSafeAreaLocal(windowFold, padding, safeSize);
 
     return SafeArea(
-      child: localFold != null
-          ? _buildFoldAwareBoard(context, localFold: localFold, isWide: isWide)
+      child: windowFold != null
+          ? _FoldAwareBoardHost(
+              windowFold: windowFold,
+              isWide: isWide,
+              board: this,
+            )
           : useWideBoard
           ? _buildWideBoard(context, isWide: isWide)
           : _buildNarrowBoard(context, isWide: isWide),
-    );
-  }
-
-  Widget _buildFoldAwareBoard(
-    BuildContext context, {
-    required Rect localFold,
-    required bool isWide,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final safeWidth = constraints.maxWidth;
-        final safeHeight = constraints.maxHeight;
-        if (GameFoldGeometry.isVerticalDivision(localFold)) {
-          return _buildBookFold(
-            context,
-            localFold: localFold,
-            safeWidth: safeWidth,
-            isWide: isWide,
-          );
-        }
-        return _buildLaptopFold(
-          context,
-          localFold: localFold,
-          safeHeight: safeHeight,
-          isWide: isWide,
-        );
-      },
     );
   }
 
@@ -193,40 +160,51 @@ class GameBoardLayout extends StatelessWidget {
 
   /// Melds + scores + header without the hand dock (used by fold splits).
   Widget _buildPlaySurface(BuildContext context, {required bool isWide}) {
-    return Column(
-      children: [
-        GameCompactHeader(
-          gameState: gameState,
-          deckKey: deckKey,
-          discardKey: discardKey,
-          isExpanded: headerExpanded,
-          onToggleExpand: onHeaderToggle,
-          onRecentActionsTap: isWide
-              ? null
-              : () => showRecentActionsSheet(context, gameState),
-          headerExtras: headerExtras,
-          expandedExtras: expandedHeaderExtras,
-        ),
-        if (isWide &&
-            useDesktopRecentActions &&
-            gameState.recentActions.isNotEmpty)
-          CollapsibleRecentActions(
-            gameState: gameState,
-            isExpanded: recentActionsExpanded,
-            onToggle: onRecentActionsToggle ?? () {},
-          ),
-        CompactPlayerScores(
-          gameState: gameState,
-          viewingPlayerMelds: viewingPlayerMelds,
-          onPlayerTap: onPlayerTap,
-          currentUserId: currentUserId,
-          botPersonalityManager: botPersonalityManager,
-        ),
-        if (aboveMelds != null) aboveMelds!,
-        Expanded(
-          child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Laptop fold top panes can be short (esp. under an AppBar); collapse
+        // chrome so the column fits without overflowing the crease.
+        final tightHeight =
+            constraints.hasBoundedHeight && constraints.maxHeight < 320;
+        return Column(
+          children: [
+            GameCompactHeader(
+              gameState: gameState,
+              deckKey: deckKey,
+              discardKey: discardKey,
+              isExpanded: tightHeight ? false : headerExpanded,
+              showExpandToggle: !tightHeight,
+              onToggleExpand: onHeaderToggle,
+              onRecentActionsTap: isWide
+                  ? null
+                  : () => showRecentActionsSheet(context, gameState),
+              headerExtras: headerExtras,
+              expandedExtras: expandedHeaderExtras,
+            ),
+            if (!tightHeight &&
+                isWide &&
+                useDesktopRecentActions &&
+                gameState.recentActions.isNotEmpty)
+              CollapsibleRecentActions(
+                gameState: gameState,
+                isExpanded: recentActionsExpanded,
+                onToggle: onRecentActionsToggle ?? () {},
+              ),
+            if (!tightHeight)
+              CompactPlayerScores(
+                gameState: gameState,
+                viewingPlayerMelds: viewingPlayerMelds,
+                onPlayerTap: onPlayerTap,
+                currentUserId: currentUserId,
+                botPersonalityManager: botPersonalityManager,
+              ),
+            if (!tightHeight && aboveMelds != null) aboveMelds!,
+            Expanded(
+              child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -338,6 +316,106 @@ class GameBoardLayout extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Converts window-space fold bounds using this widget's global origin so
+/// AppBar / coach-banner chrome above the board does not misalign the crease.
+class _FoldAwareBoardHost extends StatefulWidget {
+  final Rect windowFold;
+  final bool isWide;
+  final GameBoardLayout board;
+
+  const _FoldAwareBoardHost({
+    required this.windowFold,
+    required this.isWide,
+    required this.board,
+  });
+
+  @override
+  State<_FoldAwareBoardHost> createState() => _FoldAwareBoardHostState();
+}
+
+class _FoldAwareBoardHostState extends State<_FoldAwareBoardHost> {
+  Offset? _origin;
+
+  @override
+  void didUpdateWidget(covariant _FoldAwareBoardHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.windowFold != widget.windowFold) {
+      _origin = null;
+    }
+  }
+
+  void _scheduleOriginMeasure() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final box = context.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) {
+        return;
+      }
+      final origin = box.localToGlobal(Offset.zero);
+      if (_origin != origin) {
+        setState(() {
+          _origin = origin;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _scheduleOriginMeasure();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+        final origin = _origin ?? Offset.zero;
+        final localFold = GameFoldGeometry.toWidgetLocal(
+          widget.windowFold,
+          origin,
+          size,
+        );
+        if (!_isUsableLocalFold(localFold, size)) {
+          // Until the first measure (or if fold is outside the board), use
+          // the normal wide/narrow layout for this width.
+          final useWide = GameResponsiveLayout.useWideBoardLayout(
+            MediaQuery.sizeOf(context).width,
+          );
+          return useWide
+              ? widget.board._buildWideBoard(context, isWide: widget.isWide)
+              : widget.board._buildNarrowBoard(context, isWide: widget.isWide);
+        }
+        if (GameFoldGeometry.isVerticalDivision(localFold)) {
+          return widget.board._buildBookFold(
+            context,
+            localFold: localFold,
+            safeWidth: size.width,
+            isWide: widget.isWide,
+          );
+        }
+        return widget.board._buildLaptopFold(
+          context,
+          localFold: localFold,
+          safeHeight: size.height,
+          isWide: widget.isWide,
+        );
+      },
+    );
+  }
+
+  bool _isUsableLocalFold(Rect localFold, Size size) {
+    if (!_originMeasured) {
+      return false;
+    }
+    if (localFold.width < 1 && localFold.height < 1) {
+      return false;
+    }
+    final board = Offset.zero & size;
+    return localFold.overlaps(board);
+  }
+
+  bool get _originMeasured => _origin != null;
 }
 
 class _BottomDock extends StatelessWidget {

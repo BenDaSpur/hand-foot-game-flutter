@@ -74,19 +74,35 @@ class GameFoldGeometry {
     return bounds.height >= bounds.width;
   }
 
-  /// Maps window-space [foldBounds] into the SafeArea child's local coordinates.
+  /// Maps window-space [foldBounds] into a widget's local coordinates.
+  ///
+  /// [origin] is the widget's top-left in window/global space (e.g. from
+  /// `RenderBox.localToGlobal(Offset.zero)`). Prefer this over padding-only
+  /// conversion when the board sits below an AppBar or other chrome.
+  static Rect toWidgetLocal(Rect foldBounds, Offset origin, Size widgetSize) {
+    final local = foldBounds.translate(-origin.dx, -origin.dy);
+    final widgetRect = Offset.zero & widgetSize;
+    final intersection = local.intersect(widgetRect);
+    if (intersection.isEmpty) {
+      return local;
+    }
+    return intersection;
+  }
+
+  /// Maps window-space [foldBounds] using MediaQuery padding only.
+  ///
+  /// Prefer [toWidgetLocal] when the board is not flush with the safe area
+  /// origin (AppBar, coach banners, etc.).
   static Rect toSafeAreaLocal(
     Rect foldBounds,
     EdgeInsets padding,
     Size safeSize,
   ) {
-    final local = foldBounds.translate(-padding.left, -padding.top);
-    final safeRect = Offset.zero & safeSize;
-    final intersection = local.intersect(safeRect);
-    if (intersection.isEmpty) {
-      return local;
-    }
-    return intersection;
+    return toWidgetLocal(
+      foldBounds,
+      Offset(padding.left, padding.top),
+      safeSize,
+    );
   }
 
   /// Padding that keeps children clear of [bounds] inside [viewport].

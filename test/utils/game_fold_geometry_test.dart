@@ -101,5 +101,19 @@ void main() {
       expect(local.width, 40);
       expect(local.height, 569);
     });
+
+    test('toWidgetLocal uses board origin including app-bar offset', () {
+      const fold = Rect.fromLTWH(0, 300, 951, 40);
+      // Board starts 56pt below the window top (toolbar).
+      final local = GameFoldGeometry.toWidgetLocal(
+        fold,
+        const Offset(0, 56),
+        const Size(951, 613),
+      );
+      expect(local.top, closeTo(244, 0.5));
+      expect(local.height, 40);
+      expect(local.left, 0);
+      expect(local.width, 951);
+    });
   });
 }
