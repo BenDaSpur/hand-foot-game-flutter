@@ -1,6 +1,11 @@
 # Firebase Apple SDK 12.x requires iOS 15.
 platform :ios, '15.0'
 
+# firebase_core 5.1.0 pins Firebase iOS SDK 12.19.3, but CocoaPods only has
+# FirebaseAnalytics through 12.19.0 (Firebase/CoreOnly 12.19.3 exists; Analytics
+# does not). Override until FlutterFire ships a SDK pin that matches published pods.
+$FirebaseSDKVersion = '12.19.0'
+
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
