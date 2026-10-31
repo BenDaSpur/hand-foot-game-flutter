@@ -376,11 +376,19 @@ class BotConfig {
 
   /// Extra scorer weight for adds that grow a 4–6 card pile toward a book
   /// when the bot is already on foot with fewer than two books (analytics
-  /// 2026.10: humans avg 3.6 books, bots 2.0).
-  static const int onFootBookCatchUpBonus = 140;
+  /// 2026.10-force-foot: humans ~3.8 books, bots ~1.9 — raise catch-up).
+  static const int onFootBookCatchUpBonus = 280;
+
+  /// Discard penalty for pitching a high-value natural pair (9–A) before
+  /// play-down. Late-round requirements (180–210) need that meld fuel.
+  static const int prePlayDownMeldFuelHoldPenalty = 220;
+
+  /// On foot without go-out books, do not open more than this many ranks
+  /// unless the new meld is the missing clean/dirty near-book lane.
+  static const int onFootMissingBookMeldCap = 4;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.10-force-foot';
+  static const String botAiVersion = '2026.10-playdown-books';
 
   // Prevent instantiation
   BotConfig._();

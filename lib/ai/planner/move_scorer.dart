@@ -52,6 +52,9 @@ class _MoveScores {
   static const missingGoOutBookAdd = 260.0;
   static const footMissingCleanCreate = 180.0;
   static const footMissingDirtyCreate = 160.0;
+
+  /// Penalize opening a non-go-out new rank while on foot missing books.
+  static const footSpreadCreatePenalty = 220.0;
 }
 
 /// Scores legal actions with personality-weighted features.
@@ -231,6 +234,17 @@ class MoveScorer {
         !bot.hasDirtyBook &&
         !isClean) {
       score += _MoveScores.footMissingDirtyCreate * weights.bookProgress;
+    }
+    // Analytics 2026.10: on-foot bots opened many small piles and finished
+    // with ~1.9 books. Prefer growing existing lanes over new ranks unless
+    // this meld is the missing clean/dirty go-out lane.
+    if (bot.hasPickedUpFoot && !bot.canGoOutWithBooks) {
+      final fillsMissingClean = !bot.hasCleanBook && isClean;
+      final fillsMissingDirty =
+          bot.hasCleanBook && !bot.hasDirtyBook && !isClean;
+      if (!fillsMissingClean && !fillsMissingDirty) {
+        score -= _MoveScores.footSpreadCreatePenalty * weights.bookProgress;
+      }
     }
     return score;
   }

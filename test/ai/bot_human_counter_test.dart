@@ -34,8 +34,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is force-foot', () {
-      expect(BotConfig.botAiVersion, '2026.10-force-foot');
+    test('botAiVersion is playdown-books', () {
+      expect(BotConfig.botAiVersion, '2026.10-playdown-books');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(BotConfig.genericUnlockKeyHoldPenalty, 90);
       expect(BotConfig.handPileForceFootMaxHand, 8);

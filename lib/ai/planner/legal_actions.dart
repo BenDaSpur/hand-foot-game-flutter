@@ -510,20 +510,46 @@ class LegalActionGenerator {
   /// After play-down, do not open ranks past [BotConfig.handPileNewMeldCap]
   /// unless the play empties, is already a book, or is the missing go-out lane.
   /// Same-rank incoming groups extend an existing pile and do not count.
+  ///
+  /// On foot without go-out books, apply [BotConfig.onFootMissingBookMeldCap]
+  /// so bots finish clean+dirty instead of spreading into 8–9 piles (analytics
+  /// 2026.10-force-foot: avg ~1.9 books with ~6–9 melds).
   bool _capsNewHandPileMeld(
     Player bot, {
     required bool emptiesHand,
     bool emptyHandPile = false,
     List<List<PlayingCard>> incomingMelds = const [],
   }) {
-    if (bot.hasPickedUpFoot || emptiesHand) {
+    if (emptiesHand) {
       return false;
+    }
+    if (bot.hasPickedUpFoot) {
+      if (bot.canGoOutWithBooks) {
+        return false;
+      }
+      return _projectsPastRankCap(
+        bot,
+        incomingMelds: incomingMelds,
+        cap: BotConfig.onFootMissingBookMeldCap,
+      );
     }
     // Force-foot: waive the rank cap so booked leftovers can open a natural
     // pair instead of stalling behind four incomplete piles.
     if (emptyHandPile && bot.bookCount >= 1) {
       return false;
     }
+    return _projectsPastRankCap(
+      bot,
+      incomingMelds: incomingMelds,
+      cap: BotConfig.handPileNewMeldCap,
+    );
+  }
+
+  bool _projectsPastRankCap(
+    Player bot, {
+    required List<List<PlayingCard>> incomingMelds,
+    required int cap,
+  }) {
     final existingRanks = {for (final meld in bot.melds) meld.rank};
     final newIncoming = incomingMelds.where((meld) {
       final rank = _naturalRank(meld);
@@ -531,11 +557,11 @@ class LegalActionGenerator {
     }).toList();
     final newRanks = {for (final meld in newIncoming) _naturalRank(meld)!};
     final projected = existingRanks.length + newRanks.length;
-    if (projected <= BotConfig.handPileNewMeldCap) {
+    if (projected <= cap) {
       return false;
     }
     if (incomingMelds.isEmpty) {
-      return existingRanks.length >= BotConfig.handPileNewMeldCap;
+      return existingRanks.length >= cap;
     }
     if (newIncoming.isEmpty) {
       return false;
