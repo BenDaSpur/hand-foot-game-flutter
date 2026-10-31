@@ -163,6 +163,17 @@ class BotDiscardAnalyzer {
       score += BotConfig.humanLowRankDiscardBonus;
     }
 
+    // Pre-play-down: hold high-value natural pairs (9–A). Analytics 2026.10
+    // showed bots dumping kings/queens/tens while waiting on 180–210pt
+    // requirements, then stalling at hand 21–27 with no legal play-down.
+    if (!bot.hasPlayedDown &&
+        !card.isWild &&
+        !card.isThree &&
+        sameRankCount >= 2 &&
+        _isHighBookRank(card.rank)) {
+      score -= BotConfig.prePlayDownMeldFuelHoldPenalty;
+    }
+
     // 5. MELD FIT: Don't discard cards that fit existing melds
     for (final meld in bot.melds) {
       if (_cardFitsMeld(card, meld)) {

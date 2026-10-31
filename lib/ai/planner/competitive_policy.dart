@@ -214,8 +214,9 @@ class CompetitivePolicy {
     }
     // Session 17874536912221222: skipped a 27-card pile on foot with keys
     // because four extras were 3s. The farm is worth the dump once huge.
-    if (bot.hasPickedUpFoot &&
-        gameState.discardPile.length >= hugeFarmPileSize) {
+    // Extend past foot-only: played-down bots also abandoned 20+ farms
+    // (unlock rate stayed ~2.6% under force-foot).
+    if (bot.hasPlayedDown && gameState.discardPile.length >= hugeFarmPileSize) {
       return false;
     }
     final pickupRedThrees = extras.where((card) => card.isRedThree).length;

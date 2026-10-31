@@ -88,8 +88,15 @@ class TurnPlanner {
       liveTop: liveTop,
       forceSpendKeys: forceSpendKeys,
       emptyHandPile: emptyHandPile,
+      // Analytics 2026.10: allowWildFreeze while !hasPlayedDown burned 2s/jokers
+      // at hand 19–27 (session_17934670363126312 dumped seven wilds in R5/R6),
+      // delaying 180–210pt play-downs. Freeze only after the bot is down.
       allowWildFreeze:
-          humanCanUnlock && !canUnlock && !goOutThisTurn && !skipThrees,
+          bot.hasPlayedDown &&
+          humanCanUnlock &&
+          !canUnlock &&
+          !goOutThisTurn &&
+          !skipThrees,
     );
 
     if (candidates.isEmpty) {

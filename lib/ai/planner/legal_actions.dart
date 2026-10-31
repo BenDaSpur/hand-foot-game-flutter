@@ -510,20 +510,46 @@ class LegalActionGenerator {
   /// After play-down, do not open ranks past [BotConfig.handPileNewMeldCap]
   /// unless the play empties, is already a book, or is the missing go-out lane.
   /// Same-rank incoming groups extend an existing pile and do not count.
+  ///
+  /// On foot without go-out books, apply [BotConfig.onFootMissingBookMeldCap]
+  /// so bots finish clean+dirty instead of spreading into 8–9 piles (analytics
+  /// 2026.10-force-foot: avg ~1.9 books with ~6–9 melds).
   bool _capsNewHandPileMeld(
     Player bot, {
     required bool emptiesHand,
     bool emptyHandPile = false,
     List<List<PlayingCard>> incomingMelds = const [],
   }) {
-    if (bot.hasPickedUpFoot || emptiesHand) {
+    if (emptiesHand) {
       return false;
+    }
+    if (bot.hasPickedUpFoot) {
+      if (bot.canGoOutWithBooks) {
+        return false;
+      }
+      return _projectsPastRankCap(
+        bot,
+        incomingMelds: incomingMelds,
+        cap: BotConfig.onFootMissingBookMeldCap,
+      );
     }
     // Force-foot: waive the rank cap so booked leftovers can open a natural
     // pair instead of stalling behind four incomplete piles.
     if (emptyHandPile && bot.bookCount >= 1) {
       return false;
     }
+    return _projectsPastRankCap(
+      bot,
+      incomingMelds: incomingMelds,
+      cap: BotConfig.handPileNewMeldCap,
+    );
+  }
+
+  bool _projectsPastRankCap(
+    Player bot, {
+    required List<List<PlayingCard>> incomingMelds,
+    required int cap,
+  }) {
     final existingRanks = {for (final meld in bot.melds) meld.rank};
     final newIncoming = incomingMelds.where((meld) {
       final rank = _naturalRank(meld);
@@ -531,11 +557,11 @@ class LegalActionGenerator {
     }).toList();
     final newRanks = {for (final meld in newIncoming) _naturalRank(meld)!};
     final projected = existingRanks.length + newRanks.length;
-    if (projected <= BotConfig.handPileNewMeldCap) {
+    if (projected <= cap) {
       return false;
     }
     if (incomingMelds.isEmpty) {
-      return existingRanks.length >= BotConfig.handPileNewMeldCap;
+      return existingRanks.length >= cap;
     }
     if (newIncoming.isEmpty) {
       return false;
@@ -579,9 +605,22 @@ class LegalActionGenerator {
     if (meld.isEmpty) {
       return false;
     }
-    // Only a near-complete missing go-out book may open past the rank cap.
-    // A 3-card leftover pair is how bots spread into 5–7 dirty piles.
     final isClean = !meld.any((card) => card.isWild);
+    // On foot without go-out books: allow opening ONE incomplete lane for the
+    // missing clean or dirty type at 3+ cards. Requiring six naturals first
+    // stranded bots with four dirty ranks and no clean book — but once that
+    // lane exists, further short ranks stay capped.
+    if (bot.hasPickedUpFoot) {
+      if (!bot.hasCleanBook && isClean) {
+        return !_hasIncompleteCleanLane(bot);
+      }
+      if (bot.hasCleanBook && !bot.hasDirtyBook && !isClean) {
+        return !_hasIncompleteDirtyLane(bot);
+      }
+      return false;
+    }
+    // Hand pile: only a near-complete missing go-out book may open past the
+    // rank cap. A 3-card leftover pair is how bots spread into 5–7 dirty piles.
     final nearBook = meld.length >= GameConfig.bookSize - 1;
     if (!nearBook) {
       return false;
@@ -593,6 +632,24 @@ class LegalActionGenerator {
       return true;
     }
     return false;
+  }
+
+  /// Incomplete natural-only piles (not yet books) count as a started clean lane.
+  bool _hasIncompleteCleanLane(Player bot) {
+    return bot.melds.any(
+      (meld) =>
+          meld.cards.length < GameConfig.bookSize &&
+          !meld.cards.any((card) => card.isWild),
+    );
+  }
+
+  /// Incomplete piles that already contain a wild count as a started dirty lane.
+  bool _hasIncompleteDirtyLane(Player bot) {
+    return bot.melds.any(
+      (meld) =>
+          meld.cards.length < GameConfig.bookSize &&
+          meld.cards.any((card) => card.isWild),
+    );
   }
 
   bool _burnsLiveKeys(

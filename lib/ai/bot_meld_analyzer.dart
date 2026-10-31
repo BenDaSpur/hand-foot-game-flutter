@@ -1004,11 +1004,14 @@ class BotMeldAnalyzer {
     }
 
     // Try progressively larger combinations. Large hands in late rounds
-    // often need 6–8 compact rank piles to hit 150+. Hands of 12+ that have
-    // not played down also need a wider search — analytics 2026.10 still
-    // showed long noMeld "waiting for better play-down" stalls.
-    final maxCombinationSize = !bot.hasPlayedDown && handSize >= 12
-        ? 7
+    // often need 6–8 compact rank piles to hit 150–210. Hands of 12+ that
+    // have not played down also need a wider search — analytics 2026.10
+    // still showed long noMeld "waiting for better play-down" stalls, with
+    // first play-downs at hand 26–27 in R5/R6 (180–210pt).
+    final highRequirement = requirement >= 180;
+    final maxCombinationSize =
+        !bot.hasPlayedDown && (handSize >= 12 || highRequirement)
+        ? 8
         : handSize >= 18
         ? 8
         : 5;
@@ -1023,6 +1026,7 @@ class BotMeldAnalyzer {
         requirement,
         combinationSize,
         hand: bot.currentHand,
+        highRequirement: highRequirement,
       );
       if (bestCombination.isNotEmpty) {
         return bestCombination;
@@ -1224,6 +1228,7 @@ class BotMeldAnalyzer {
     int requirement,
     int combinationSize, {
     List<PlayingCard>? hand,
+    bool highRequirement = false,
   }) {
     if (combinationSize == 1) {
       // Single meld - find the most EFFICIENT option for play-down
@@ -1292,13 +1297,18 @@ class BotMeldAnalyzer {
 
     // For 3+ melds, use recursive combination generation (with performance limits)
     if (possibleMelds.length >= combinationSize) {
+      final combinationBudget = highRequirement ? 200 : 100;
       final combinations = _generateCombinations(
         possibleMelds,
         combinationSize,
+        maxCombinations: combinationBudget,
       );
 
-      // Limit combinations checked to prevent performance issues
-      final maxCombinationsToCheck = (combinationSize <= 3) ? 80 : 40;
+      // Late-round 180–210pt dumps need a wider 3+ meld scan; earlier
+      // caps of 40–80 missed legal packs that greedy later recovered.
+      final maxCombinationsToCheck = highRequirement
+          ? (combinationSize <= 3 ? 160 : 100)
+          : (combinationSize <= 3 ? 80 : 40);
       final limitedCombinations = combinations
           .take(maxCombinationsToCheck)
           .toList();
@@ -1320,8 +1330,9 @@ class BotMeldAnalyzer {
   /// Generate all combinations of specified size from the list of melds
   List<List<List<PlayingCard>>> _generateCombinations(
     List<List<PlayingCard>> melds,
-    int size,
-  ) {
+    int size, {
+    int maxCombinations = 100,
+  }) {
     final combinations = <List<List<PlayingCard>>>[];
 
     void generateCombinationsRecursive(
@@ -1335,7 +1346,9 @@ class BotMeldAnalyzer {
       }
 
       // Performance limit: stop if we have enough combinations
-      if (combinations.length >= 100) return;
+      if (combinations.length >= maxCombinations) {
+        return;
+      }
 
       for (int i = startIndex; i <= melds.length - remainingSize; i++) {
         current.add(melds[i]);
