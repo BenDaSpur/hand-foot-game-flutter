@@ -605,9 +605,21 @@ class LegalActionGenerator {
     if (meld.isEmpty) {
       return false;
     }
-    // Only a near-complete missing go-out book may open past the rank cap.
-    // A 3-card leftover pair is how bots spread into 5–7 dirty piles.
     final isClean = !meld.any((card) => card.isWild);
+    // On foot without go-out books: allow opening the missing clean or dirty
+    // lane at 3+ cards. Requiring six naturals first stranded bots that
+    // already held four dirty ranks and no clean book.
+    if (bot.hasPickedUpFoot) {
+      if (!bot.hasCleanBook && isClean) {
+        return true;
+      }
+      if (bot.hasCleanBook && !bot.hasDirtyBook && !isClean) {
+        return true;
+      }
+      return false;
+    }
+    // Hand pile: only a near-complete missing go-out book may open past the
+    // rank cap. A 3-card leftover pair is how bots spread into 5–7 dirty piles.
     final nearBook = meld.length >= GameConfig.bookSize - 1;
     if (!nearBook) {
       return false;

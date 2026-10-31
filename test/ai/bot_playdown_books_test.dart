@@ -229,7 +229,8 @@ void main() {
       expect(bot.hasDirtyBook, isFalse);
       expect(bot.canGoOutWithBooks, isFalse);
 
-      bot.hand
+      // currentHand reads foot once hasPickedUpFoot is true.
+      bot.foot
         ..clear()
         ..addAll([
           const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
@@ -239,23 +240,65 @@ void main() {
           const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
           const PlayingCard(suit: Suit.spades, rank: CardRank.two),
         ]);
+      expect(bot.currentHand.length, 6);
 
       controller.gameState.turnPhase = TurnPhase.meld;
       controller.gameState.hasDrawnFromDeck = true;
       _setPile(controller, size: 8, top: CardRank.three);
 
       final decision = botAI.makeDecision(bot, controller);
-      expect(decision.action, anyOf('addToMeld', 'createMeld', 'noMeld'));
+      expect(decision.action, anyOf('addToMeld', 'createMeld'));
       if (decision.action == 'addToMeld') {
         final data = decision.data as Map<String, dynamic>;
         expect(
           (data['card'] as PlayingCard).rank,
           anyOf(CardRank.queen, CardRank.two, CardRank.seven, CardRank.five),
         );
-      } else if (decision.action == 'createMeld') {
+      } else {
         final meld = decision.data as List<PlayingCard>;
         // Only allow a dirty go-out lane open — not a clean nines pile.
         expect(meld.any((c) => c.isWild), isTrue);
+      }
+    });
+
+    test('on foot with four dirty ranks may open a 3-card clean lane for '
+        'the missing clean book', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = true;
+      bot.melds.addAll([
+        _sizedMeld(CardRank.queen, size: 5, dirty: true),
+        _sizedMeld(CardRank.seven, size: 4, dirty: true),
+        _sizedMeld(CardRank.five, size: 3, dirty: true),
+        _sizedMeld(CardRank.four, size: 3, dirty: true),
+      ]);
+      expect(bot.hasCleanBook, isFalse);
+      expect(bot.hasDirtyBook, isFalse);
+      expect(bot.canGoOutWithBooks, isFalse);
+
+      bot.foot
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        ]);
+
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      _setPile(controller, size: 8, top: CardRank.three);
+
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, anyOf('createMeld', 'addToMeld'));
+      if (decision.action == 'createMeld') {
+        final meld = decision.data as List<PlayingCard>;
+        expect(
+          meld.any((c) => c.isWild),
+          isFalse,
+          reason: 'missing clean book should open a natural kings lane',
+        );
+        expect(meld.every((c) => c.rank == CardRank.king || c.isWild), isTrue);
       }
     });
 
