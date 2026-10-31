@@ -302,6 +302,47 @@ void main() {
       }
     });
 
+    test('on foot does not open a second short clean lane once one incomplete '
+        'clean lane already exists', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = true;
+      bot.melds.addAll([
+        _sizedMeld(CardRank.queen, size: 5, dirty: true),
+        _sizedMeld(CardRank.seven, size: 4, dirty: true),
+        _sizedMeld(CardRank.five, size: 3, dirty: true),
+        _sizedMeld(CardRank.four, size: 3, dirty: true),
+        // Already-started clean lane for the missing clean book.
+        _sizedMeld(CardRank.king, size: 3, dirty: false),
+      ]);
+      expect(bot.hasCleanBook, isFalse);
+      expect(bot.melds.length, 5);
+
+      bot.foot
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.king),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two),
+        ]);
+
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      _setPile(controller, size: 8, top: CardRank.three);
+
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, anyOf('addToMeld', 'noMeld'));
+      if (decision.action == 'addToMeld') {
+        final data = decision.data as Map<String, dynamic>;
+        expect(
+          (data['card'] as PlayingCard).rank,
+          isNot(CardRank.ace),
+          reason: 'should grow the existing kings clean lane, not open aces',
+        );
+      }
+    });
+
     test('played-down bot does not skip huge farm unlock for buried 3s', () {
       bot.hasPlayedDown = true;
       bot.hasPickedUpFoot = false;

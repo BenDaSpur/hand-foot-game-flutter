@@ -606,15 +606,16 @@ class LegalActionGenerator {
       return false;
     }
     final isClean = !meld.any((card) => card.isWild);
-    // On foot without go-out books: allow opening the missing clean or dirty
-    // lane at 3+ cards. Requiring six naturals first stranded bots that
-    // already held four dirty ranks and no clean book.
+    // On foot without go-out books: allow opening ONE incomplete lane for the
+    // missing clean or dirty type at 3+ cards. Requiring six naturals first
+    // stranded bots with four dirty ranks and no clean book — but once that
+    // lane exists, further short ranks stay capped.
     if (bot.hasPickedUpFoot) {
       if (!bot.hasCleanBook && isClean) {
-        return true;
+        return !_hasIncompleteCleanLane(bot);
       }
       if (bot.hasCleanBook && !bot.hasDirtyBook && !isClean) {
-        return true;
+        return !_hasIncompleteDirtyLane(bot);
       }
       return false;
     }
@@ -631,6 +632,24 @@ class LegalActionGenerator {
       return true;
     }
     return false;
+  }
+
+  /// Incomplete natural-only piles (not yet books) count as a started clean lane.
+  bool _hasIncompleteCleanLane(Player bot) {
+    return bot.melds.any(
+      (meld) =>
+          meld.cards.length < GameConfig.bookSize &&
+          !meld.cards.any((card) => card.isWild),
+    );
+  }
+
+  /// Incomplete piles that already contain a wild count as a started dirty lane.
+  bool _hasIncompleteDirtyLane(Player bot) {
+    return bot.melds.any(
+      (meld) =>
+          meld.cards.length < GameConfig.bookSize &&
+          meld.cards.any((card) => card.isWild),
+    );
   }
 
   bool _burnsLiveKeys(
