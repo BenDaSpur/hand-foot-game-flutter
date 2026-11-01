@@ -11,6 +11,21 @@ void main() {
       player = Player(id: '1', name: 'Test Player', type: PlayerType.human);
     });
 
+    test('human control accepts the human type or exact solo identity', () {
+      expect(player.isHumanControlled, isTrue);
+      expect(
+        Player(id: '2', name: 'You', type: PlayerType.bot).isHumanControlled,
+        isTrue,
+      );
+      for (final name in ['Bot', 'you', 'You ', 'Younger']) {
+        expect(
+          Player(id: '3', name: name, type: PlayerType.bot).isHumanControlled,
+          isFalse,
+          reason: 'Bot named $name must not be treated as the solo player',
+        );
+      }
+    });
+
     test('should create player with correct initial state', () {
       expect(player.id, equals('1'));
       expect(player.name, equals('Test Player'));

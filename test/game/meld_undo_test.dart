@@ -22,6 +22,76 @@ void main() {
   }
 
   group('GameController meld undo', () {
+    for (final name in ['You', 'Bot']) {
+      for (final action in ['create', 'add', 'multiple']) {
+        test('$name with bot metadata: $action meld undo eligibility', () {
+          final player = Player(id: 'seat', name: name, type: PlayerType.bot)
+            ..hasPlayedDown = true
+            ..hasPickedUpFoot = true;
+          player.dealFoot(const [
+            PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+            PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          ]);
+          final controller = buildController(player);
+          final originalCards = List<PlayingCard>.of(player.foot);
+          late bool success;
+          if (action == 'add') {
+            player.melds.add(
+              Meld.createMeld(const [
+                PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+                PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+                PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+              ])!,
+            );
+            success = controller.addCardToMeld(0, player.foot.first);
+          } else if (action == 'multiple') {
+            success = controller.createMultipleMeldsFromIndices([
+              [0, 1, 2],
+            ], skipPlayDownCheck: true);
+          } else {
+            success = controller.createMeld(player.foot.take(3).toList());
+          }
+
+          expect(success, isTrue);
+          final eligible = name == 'You';
+          expect(controller.canUndoMeld, eligible);
+          expect(controller.undoLastMeld(), eligible);
+          if (eligible) {
+            expect(player.foot, containsAll(originalCards));
+            expect(player.foot, hasLength(originalCards.length));
+            expect(player.melds, hasLength(action == 'add' ? 1 : 0));
+            if (action == 'add') {
+              expect(player.melds.single.cards, hasLength(3));
+            }
+          }
+        });
+      }
+    }
+
+    test('a bot cannot consume another player’s undo record', () {
+      final human = Player(id: 'h', name: 'You', type: PlayerType.bot)
+        ..hasPlayedDown = true
+        ..hasPickedUpFoot = true;
+      human.dealFoot(const [
+        PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+        PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+        PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+        PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+        PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+      ]);
+      final controller = buildController(human);
+      expect(controller.createMeld(human.foot.take(3).toList()), isTrue);
+      controller.gameState.currentPlayerIndex = 1;
+      expect(controller.undoLastMeld(), isFalse);
+      expect(controller.canUndoMeld, isTrue);
+      controller.gameState.currentPlayerIndex = 0;
+      expect(controller.undoLastMeld(), isTrue);
+      expect(human.melds, isEmpty);
+    });
+
     test('create meld then undo restores cards and removes meld', () {
       final human = Player(id: 'h', name: 'Alice', type: PlayerType.human);
       human.hasPlayedDown = true;

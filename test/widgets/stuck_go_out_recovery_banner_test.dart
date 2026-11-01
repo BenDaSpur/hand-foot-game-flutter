@@ -30,5 +30,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Skip Turn (Emergency Recovery)'), findsOneWidget);
+
+    await tester.tap(find.text('CAN’T GO OUT'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('tap for details'), findsOneWidget);
+    expect(find.text('Skip Turn (Emergency Recovery)'), findsNothing);
+  });
+
+  testWidgets('wide banner exposes recovery actions and calls each once', (
+    tester,
+  ) async {
+    var undoCount = 0;
+    var skipCount = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: BalatroTheme.testTheme,
+        home: Scaffold(
+          body: StuckGoOutRecoveryBanner(
+            humanPlayer: Player(id: '1', name: 'You', type: PlayerType.human),
+            onUndo: () => undoCount++,
+            onSkipTurn: () => skipCount++,
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('tap for details'), findsNothing);
+    await tester.tap(find.text('Undo Meld'));
+    await tester.tap(find.text('Skip Turn (Emergency Recovery)'));
+    expect(undoCount, 1);
+    expect(skipCount, 1);
   });
 }
