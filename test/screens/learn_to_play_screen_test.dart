@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/screens/learn_to_play_screen.dart';
+import 'package:hand_foot_game_flutter/screens/game_screen.dart';
+import 'package:hand_foot_game_flutter/widgets/game_board_layout.dart';
+import 'package:hand_foot_game_flutter/services/turn_coach_preferences.dart';
 import 'package:hand_foot_game_flutter/theme/balatro_theme.dart';
 import 'package:hand_foot_game_flutter/widgets/advanced_meld_selector.dart';
 import 'package:hand_foot_game_flutter/widgets/learn_to_play_coach_banner.dart';
@@ -75,5 +78,53 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AdvancedMeldSelector), findsOneWidget);
+  });
+
+  testWidgets('lesson disables pile taps even at the draw step', (
+    tester,
+  ) async {
+    await _pumpLearnScreen(tester);
+    final controller = tester
+        .widget<GameScreen>(find.byType(GameScreen))
+        .gameController!;
+    final originalDeckSize = controller.gameState.deck.size;
+    var board = tester.widget<GameBoardLayout>(find.byType(GameBoardLayout));
+    expect(board.onDeckTap, isNull);
+    expect(board.onDiscardTap, isNull);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    board = tester.widget<GameBoardLayout>(find.byType(GameBoardLayout));
+    expect(board.onDeckTap, isNull);
+    expect(board.onDiscardTap, isNull);
+    expect(controller.gameState.deck.size, originalDeckSize);
+    expect(await TurnCoachPreferences.shouldShowCoach(), isTrue);
+  });
+
+  testWidgets('lesson play-down leaves the first-game coach available', (
+    tester,
+  ) async {
+    await _pumpLearnScreen(tester);
+    final session = tester
+        .widget<GameScreen>(find.byType(GameScreen))
+        .learnToPlaySession!;
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Draw from deck'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Play Cards'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    await tester.tap(find.byKey(const Key('all_clean_melds_button')));
+    await tester.pump();
+    await tester.tap(find.text('Confirm Play-Down'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(session.human.hasPlayedDown, isTrue);
+    expect(await TurnCoachPreferences.shouldShowCoach(), isTrue);
   });
 }

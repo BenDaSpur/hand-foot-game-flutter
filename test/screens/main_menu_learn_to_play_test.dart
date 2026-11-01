@@ -51,6 +51,42 @@ void main() {
     expect(await LearnToPlayPreferences.shouldShowOffer(), isFalse);
   });
 
+  testWidgets('starting the offer opens the lesson and remembers the choice', (
+    tester,
+  ) async {
+    configureLearnToPlayTestViewport(tester);
+    await tester.pumpWidget(
+      MaterialApp(theme: BalatroTheme.testTheme, home: const MainMenuScreen()),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(find.byType(LearnToPlayScreen), findsOneWidget);
+    expect(await LearnToPlayPreferences.shouldShowOffer(), isFalse);
+  });
+
+  testWidgets('dismissing the offer with back remembers the choice', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: BalatroTheme.testTheme, home: const MainMenuScreen()),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+    expect(find.text('Learn to Play?'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Learn to Play?'), findsNothing);
+    expect(await LearnToPlayPreferences.shouldShowOffer(), isFalse);
+  });
+
   testWidgets('LEARN TO PLAY opens lesson screen', (tester) async {
     SharedPreferences.setMockInitialValues({
       LearnToPlayPreferences.offerDismissedKey: true,

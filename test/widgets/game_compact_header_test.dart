@@ -33,6 +33,9 @@ void main() {
       required bool expanded,
       required VoidCallback onToggle,
       List<Widget> persistentHeaderExtras = const [],
+      String? localPlayerId,
+      VoidCallback? onDeckTap,
+      VoidCallback? onDiscardTap,
     }) async {
       await tester.pumpWidget(
         MediaQuery(
@@ -46,6 +49,9 @@ void main() {
                 isExpanded: expanded,
                 onToggleExpand: onToggle,
                 persistentHeaderExtras: persistentHeaderExtras,
+                localPlayerId: localPlayerId,
+                onDeckTap: onDeckTap,
+                onDiscardTap: onDiscardTap,
               ),
             ),
           ),
@@ -97,6 +103,62 @@ void main() {
       await tester.tap(find.text('Discard'));
       expect(deckTaps, 1);
       expect(discardTaps, 1);
+    });
+
+    testWidgets('collapsed pile taps work and null callbacks are inert', (
+      tester,
+    ) async {
+      var deckTaps = 0;
+      await pumpHeader(
+        tester,
+        size: const Size(390, 844),
+        expanded: false,
+        onToggle: () {},
+        onDeckTap: () => deckTaps++,
+      );
+      await tester.tap(find.text('Deck'));
+      await tester.tap(find.text('Discard'));
+      expect(deckTaps, 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('collapsed requirement follows the selected local player', (
+      tester,
+    ) async {
+      gameState.players.first.hasPlayedDown = true;
+      gameState.players.add(
+        Player(id: '2', name: 'Remote', type: PlayerType.human),
+      );
+      await pumpHeader(
+        tester,
+        size: const Size(390, 844),
+        expanded: false,
+        onToggle: () {},
+        localPlayerId: '2',
+      );
+      expect(
+        find.text('Play down ${gameState.playDownRequirement}'),
+        findsOneWidget,
+      );
+
+      gameState.players.last.hasPlayedDown = true;
+      await pumpHeader(
+        tester,
+        size: const Size(390, 844),
+        expanded: false,
+        onToggle: () {},
+        localPlayerId: '2',
+      );
+      expect(find.textContaining('Play down'), findsNothing);
+
+      await pumpHeader(
+        tester,
+        size: const Size(390, 844),
+        expanded: false,
+        onToggle: () {},
+        localPlayerId: 'missing',
+      );
+      expect(find.textContaining('Play down'), findsNothing);
     });
 
     testWidgets('expanded shows detail chips at normal height', (tester) async {
