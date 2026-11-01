@@ -115,6 +115,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   BotDecisionMaker get _decisionMaker => ref.read(botDecisionMakerProvider);
 
+  /// Intent banner for waiting UI — only while an Apple-routed seat is acting.
+  String? _botPlanIntentFor(Player currentPlayer) {
+    final maker = _decisionMaker;
+    if (maker is CompositeBotDecisionMaker) {
+      return maker.lastTurnIntentFor(currentPlayer.id);
+    }
+    return null;
+  }
+
   /// Turn owner read straight off the controller, which is the same source
   /// [build] uses to decide whether the hand is tappable. Turn-ownership gates
   /// must not disagree with what the player can see on screen.
@@ -2445,7 +2454,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
                           gameState: gameState,
                           humanPlayer: humanPlayer,
                           selectedCardIndices: _selectedCardIndices,
-                          botPlanIntent: _decisionMaker.lastTurnIntent,
+                          botPlanIntent: _botPlanIntentFor(
+                            gameState.currentPlayer,
+                          ),
                           showKeyboardHints:
                               showDesktopKeyboardHints && !_isLearnToPlay,
                           onDrawFromDeck:

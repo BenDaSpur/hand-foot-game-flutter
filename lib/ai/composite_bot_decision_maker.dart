@@ -30,6 +30,17 @@ class CompositeBotDecisionMaker extends BotDecisionMaker {
   bool usesAppleIntelligence(String playerId) =>
       _applePlayerIds.contains(playerId);
 
+  /// Waiting-UI intent for [playerId], or null when that seat is not Apple.
+  ///
+  /// Prefer this over [lastTurnIntent] when rendering a specific turn owner —
+  /// the shared Apple intent can briefly linger after the seat’s turn ends.
+  String? lastTurnIntentFor(String playerId) {
+    if (!usesAppleIntelligence(playerId)) {
+      return null;
+    }
+    return _apple.lastTurnIntent;
+  }
+
   @override
   EnhancedBotAI get ruleBot => _rule.ruleBot;
 

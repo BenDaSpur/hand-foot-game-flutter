@@ -330,9 +330,13 @@ void main() {
       await composite.beginTurn(bots.first, controller);
       expect(fake.planTurnCalls, 1);
       expect(composite.lastTurnIntent, 'Apple plan');
+      expect(composite.lastTurnIntentFor(bots.first.id), 'Apple plan');
+      // Shared Apple intent must not surface on a following rule-bot seat.
+      expect(composite.lastTurnIntentFor(bots.last.id), isNull);
 
       await composite.beginTurn(bots.last, controller);
       expect(fake.planTurnCalls, 1);
+      expect(composite.lastTurnIntentFor(bots.last.id), isNull);
     });
   });
 
