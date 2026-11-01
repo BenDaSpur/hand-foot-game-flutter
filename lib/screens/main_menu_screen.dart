@@ -110,6 +110,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       if (!mounted) {
         return;
       }
+      final route = ModalRoute.of(context);
+      if (route == null || !route.isCurrent) {
+        return;
+      }
       unawaited(_showLearnToPlayOfferDialog());
     });
   }
@@ -119,7 +123,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       return;
     }
 
-    await showDialog<void>(
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) {
+      return;
+    }
+
+    final result = await showDialog<String>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -143,23 +152,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () async {
-                await LearnToPlayPreferences.dismissOffer();
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
               },
               child: const Text('Skip'),
             ),
             ElevatedButton(
-              onPressed: () async {
-                await LearnToPlayPreferences.dismissOffer();
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
-                if (mounted) {
-                  _openLearnToPlay();
-                }
+              onPressed: () {
+                Navigator.of(dialogContext).pop('start');
               },
               child: const Text('Start'),
             ),
@@ -167,6 +167,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         );
       },
     );
+
+    // Persist for Skip, Start, barrier tap, and system back.
+    await LearnToPlayPreferences.dismissOffer();
+    if (!mounted) {
+      return;
+    }
+    if (result == 'start') {
+      _openLearnToPlay();
+    }
   }
 
   /// Jackbox-style: auto-resume when bookmark + Auth UID still match a live game.

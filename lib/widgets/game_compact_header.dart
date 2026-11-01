@@ -183,13 +183,6 @@ class GameCompactHeader extends StatelessWidget {
                     color: BalatroTheme.neonOrange,
                   ),
                 ],
-                if (!effectiveExpanded && _showCollapsedPlayDownChip) ...[
-                  const SizedBox(width: 6),
-                  _PhaseChip(
-                    label: 'Play down ${gameState.playDownRequirement}',
-                    color: BalatroTheme.neonOrange,
-                  ),
-                ],
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -230,6 +223,27 @@ class GameCompactHeader extends StatelessWidget {
               ],
             ),
           ),
+          // Keep play-down visible without crowding the status/timer row.
+          if (!effectiveExpanded && _showCollapsedPlayDownChip)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                10,
+                0,
+                10,
+                isUltraShort
+                    ? 2
+                    : isShortHeight
+                    ? 4
+                    : 6,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _PhaseChip(
+                  label: 'Play down ${gameState.playDownRequirement}',
+                  color: BalatroTheme.neonOrange,
+                ),
+              ),
+            ),
           if (effectiveExpanded)
             _ExpandedPilesSection(
               isPhone: isPhone,

@@ -171,6 +171,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   /// First-session phase coach; loaded from prefs, dismissed after play-down.
   bool _showTurnCoach = false;
+  bool _turnCoachDismissed = false;
   bool _drawPhaseNudgeShown = false;
 
   bool get _isLearnToPlay => widget.learnToPlaySession != null;
@@ -194,7 +195,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   Future<void> _loadTurnCoachPreference() async {
     final shouldShow = await TurnCoachPreferences.shouldShowCoach();
-    if (!mounted || _disposed) {
+    if (!mounted || _disposed || _turnCoachDismissed) {
       return;
     }
     setState(() {
@@ -203,13 +204,26 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _dismissTurnCoach() async {
-    if (!_showTurnCoach) {
+    _turnCoachDismissed = true;
+    if (_showTurnCoach) {
+      setState(() {
+        _showTurnCoach = false;
+      });
+    }
+    await TurnCoachPreferences.dismissCoach();
+  }
+
+  void _maybeNudgeDrawPhaseSelection() {
+    final gameState = _gameController?.gameState;
+    if (_isLearnToPlay ||
+        gameState == null ||
+        gameState.turnPhase != TurnPhase.draw ||
+        _selectedCardIndices.length < 2 ||
+        _drawPhaseNudgeShown) {
       return;
     }
-    setState(() {
-      _showTurnCoach = false;
-    });
-    await TurnCoachPreferences.dismissCoach();
+    _drawPhaseNudgeShown = true;
+    _showBriefSnackBar('Draw before you can play or discard.');
   }
 
   void _showBriefSnackBar(String message) {
@@ -1040,16 +1054,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _selectedCardIndices.add(cardIndex);
       }
     });
-
-    final gameState = _gameController?.gameState;
-    if (!_isLearnToPlay &&
-        gameState != null &&
-        gameState.turnPhase == TurnPhase.draw &&
-        _selectedCardIndices.length >= 2 &&
-        !_drawPhaseNudgeShown) {
-      _drawPhaseNudgeShown = true;
-      _showBriefSnackBar('Draw before you can play or discard.');
-    }
+    _maybeNudgeDrawPhaseSelection();
   }
 
   void _onCardDoubleTap(int cardIndex) {
@@ -1088,6 +1093,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         }
       }
     });
+    _maybeNudgeDrawPhaseSelection();
   }
 
   void _selectAllCardsForMeld(int meldIndex) {
@@ -1379,6 +1385,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _hasPlayerInteractedSinceDraw = false;
       _clearHandHighlightState();
       setState(() {});
+      // Unlock counts as playing down — hide first-session coach afterward.
+      if (controller.gameState.currentPlayer.hasPlayedDown) {
+        unawaited(_dismissTurnCoach());
+      }
       // UI will update via Riverpod reactivity when DiscardPileUnlockedEvent fires
       debugPrint('DEBUG: Discard pile unlocked successfully');
       // Top discard is melded; newly drawn cards are discard leftovers plus

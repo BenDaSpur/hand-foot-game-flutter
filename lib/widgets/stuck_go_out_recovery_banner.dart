@@ -101,6 +101,7 @@ class _StuckGoOutRecoveryBannerState extends State<StuckGoOutRecoveryBanner> {
                         onPressed: widget.onUndo,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: BalatroTheme.neonOrange,
+                          foregroundColor: BalatroTheme.deepPurple,
                         ),
                         child: const Text('Undo Meld'),
                       ),
@@ -108,6 +109,7 @@ class _StuckGoOutRecoveryBannerState extends State<StuckGoOutRecoveryBanner> {
                       onPressed: widget.onSkipTurn,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _urgencyColor,
+                        foregroundColor: BalatroTheme.deepPurple,
                       ),
                       child: const Text('Skip Turn (Emergency Recovery)'),
                     ),

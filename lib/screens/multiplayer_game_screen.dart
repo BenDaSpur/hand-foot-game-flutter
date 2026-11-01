@@ -82,6 +82,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   String? _lastObservedPlayerIdForHaptic;
 
   bool _showTurnCoach = false;
+  bool _turnCoachDismissed = false;
   bool _drawPhaseNudgeShown = false;
   GamePhase? _lastObservedPhaseForHaptic;
   int? _lastObservedRoundForHaptic;
@@ -122,7 +123,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
 
   Future<void> _loadTurnCoachPreference() async {
     final shouldShow = await TurnCoachPreferences.shouldShowCoach();
-    if (!mounted) {
+    if (!mounted || _turnCoachDismissed) {
       return;
     }
     setState(() {
@@ -131,13 +132,24 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   Future<void> _dismissTurnCoach() async {
-    if (!_showTurnCoach) {
+    _turnCoachDismissed = true;
+    if (_showTurnCoach) {
+      setState(() {
+        _showTurnCoach = false;
+      });
+    }
+    await TurnCoachPreferences.dismissCoach();
+  }
+
+  void _maybeNudgeDrawPhaseSelection() {
+    final gameState = _gameController.gameState;
+    if (gameState.turnPhase != TurnPhase.draw ||
+        _selectedCardIndices.length < 2 ||
+        _drawPhaseNudgeShown) {
       return;
     }
-    setState(() {
-      _showTurnCoach = false;
-    });
-    await TurnCoachPreferences.dismissCoach();
+    _drawPhaseNudgeShown = true;
+    _showBriefSnackBar('Draw before you can play or discard.');
   }
 
   void _showBriefSnackBar(String message) {
@@ -249,13 +261,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         _selectedCardIndices.add(cardIndex);
       }
     });
-
-    if (gameState.turnPhase == TurnPhase.draw &&
-        _selectedCardIndices.length >= 2 &&
-        !_drawPhaseNudgeShown) {
-      _drawPhaseNudgeShown = true;
-      _showBriefSnackBar('Draw before you can play or discard.');
-    }
+    _maybeNudgeDrawPhaseSelection();
   }
 
   void _onCardDoubleTap(int cardIndex) {
@@ -290,6 +296,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         }
       }
     });
+    _maybeNudgeDrawPhaseSelection();
   }
 
   Set<int> _playableCardIndices(Player humanPlayer) {
@@ -349,6 +356,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   void _onUnlockDiscard() {
     if (_gameController.unlockDiscardPile()) {
       setState(_clearHandHighlightState);
+      final player = _gameController.getCurrentUserPlayer();
+      if (player != null && player.hasPlayedDown) {
+        unawaited(_dismissTurnCoach());
+      }
       return;
     }
 

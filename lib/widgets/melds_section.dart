@@ -86,7 +86,15 @@ class MeldsSection extends StatelessWidget {
     required TurnPhase turnPhase,
     required bool hasPlayedDown,
     required int playDownRequirement,
+    required bool canAct,
+    required bool viewingOwnMelds,
   }) {
+    if (!viewingOwnMelds) {
+      return 'This player has not laid any melds yet.';
+    }
+    if (!canAct) {
+      return 'Melds you lay will show up here.';
+    }
     if (turnPhase == TurnPhase.draw) {
       return 'Draw first, then use Play Cards to lay sets from your hand.';
     }
@@ -98,10 +106,17 @@ class MeldsSection extends StatelessWidget {
   }
 
   Widget _buildEmptyState() {
+    final isCurrentUserTurn = currentUserId != null
+        ? gameState.currentPlayer.id == currentUserId
+        : gameState.currentPlayer.type == PlayerType.human;
+    final viewingOwnMelds =
+        viewingPlayerMelds == null || viewingPlayerMelds!.id == humanPlayer.id;
     final subtitle = emptyStateSubtitle(
       turnPhase: gameState.turnPhase,
       hasPlayedDown: humanPlayer.hasPlayedDown,
       playDownRequirement: gameState.playDownRequirement,
+      canAct: isCurrentUserTurn && gameState.phase == GamePhase.playing,
+      viewingOwnMelds: viewingOwnMelds,
     );
 
     return Padding(
