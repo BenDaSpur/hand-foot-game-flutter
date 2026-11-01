@@ -742,7 +742,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final currentPlayer = gameState.currentPlayer;
 
     if (currentPlayer.id != botPlayer.id ||
-        currentPlayer.type != PlayerType.bot) {
+        currentPlayer.type != PlayerType.bot ||
+        _isHumanControlledPlayer(currentPlayer)) {
       DebugLogger.debug(
         'Skipping queued bot ${botPlayer.name} - current player is now ${currentPlayer.name}',
       );
@@ -834,6 +835,38 @@ class _GameScreenState extends ConsumerState<GameScreen>
         'processCurrentPlayerTurn: Current player is ${currentPlayer.name} (${currentPlayer.type})',
       );
 
+      // Resolve turn owner once before bot/UI branches so a desynced seat
+      // (e.g. type bot + name You) cannot queue AI while the UI is enabled.
+      if (_isHumanControlledPlayer(currentPlayer)) {
+        DebugLogger.debug('Human turn - waiting for input');
+        final humanIndex = gameState.players.indexWhere(
+          (p) => p.type == PlayerType.human,
+        );
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: gameState.currentPlayerIndex,
+          humanPlayerIndex: humanIndex,
+          lastCurrentPlayerIndex: _lastCurrentPlayerIndexForHighlight,
+        )) {
+          _clearHandHighlightState();
+          if (mounted) {
+            setState(() {});
+          }
+        }
+        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
+        _gameStateManager.validateHumanPlayerState();
+        // CRITICAL: Ensure we never auto-process human turns
+        _botTurnManager
+            .resetProcessingState(); // Clear any stuck bot processing flag
+        if (mounted) {
+          if (controller.gameState.phase == GamePhase.roundEnd) {
+            _triggerRoundTransition('human turn');
+          } else {
+            _scheduleEarlyRoundEndAlerts();
+          }
+        }
+        return;
+      }
+
       // CRITICAL: Detect and recover from stuck bot turns
       if (currentPlayer.type == PlayerType.bot) {
         _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
@@ -863,7 +896,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       );
       if (gameState.turnPhase == TurnPhase.meld &&
           humanPlayer.currentHand.isNotEmpty &&
-          currentPlayer.type != PlayerType.human) {
+          !_isHumanControlledPlayer(currentPlayer)) {
         DebugLogger.error(
           'TURN CORRUPTION DETECTED: Human should be playing but current player is ${currentPlayer.name}',
         );
@@ -872,37 +905,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
           (p) => p.type == PlayerType.human,
         );
         controller.gameState.currentPlayerIndex = humanIndex;
-        return;
-      }
-
-      // Human turn: Do nothing, wait for UI input
-      if (_isHumanControlledPlayer(currentPlayer)) {
-        DebugLogger.debug('Human turn - waiting for input');
-        final humanIndex = gameState.players.indexWhere(
-          (p) => p.type == PlayerType.human,
-        );
-        if (shouldResetHandHighlightOnTurnChange(
-          currentPlayerIndex: gameState.currentPlayerIndex,
-          humanPlayerIndex: humanIndex,
-          lastCurrentPlayerIndex: _lastCurrentPlayerIndexForHighlight,
-        )) {
-          _clearHandHighlightState();
-          if (mounted) {
-            setState(() {});
-          }
-        }
-        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
-        _gameStateManager.validateHumanPlayerState();
-        // CRITICAL: Ensure we never auto-process human turns
-        _botTurnManager
-            .resetProcessingState(); // Clear any stuck bot processing flag
-        if (mounted) {
-          if (controller.gameState.phase == GamePhase.roundEnd) {
-            _triggerRoundTransition('human turn');
-          } else {
-            _scheduleEarlyRoundEndAlerts();
-          }
-        }
         return;
       }
     } catch (e) {
@@ -1728,7 +1730,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (controller.gameState.phase != GamePhase.playing) {
       return;
     }
-    if (controller.gameState.currentPlayer.type != PlayerType.bot) {
+    final currentPlayer = controller.gameState.currentPlayer;
+    if (_isHumanControlledPlayer(currentPlayer) ||
+        currentPlayer.type != PlayerType.bot) {
       return;
     }
     processCurrentPlayerTurn();
