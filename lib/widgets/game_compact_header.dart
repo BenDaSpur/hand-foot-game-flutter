@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/card.dart';
 import '../models/game_state.dart';
+import '../models/player.dart';
 import '../theme/balatro_theme.dart';
 import '../constants/ui_constants.dart';
 import '../utils/game_responsive_layout.dart';
@@ -26,6 +27,13 @@ class GameCompactHeader extends StatelessWidget {
   /// collapsed. Use for stateful controls like [TurnTimer] that must stay mounted.
   final List<Widget> persistentHeaderExtras;
 
+  /// Optional draw-phase taps on the deck / discard piles.
+  final VoidCallback? onDeckTap;
+  final VoidCallback? onDiscardTap;
+
+  /// Local player id (multiplayer) — used to decide collapsed play-down chip.
+  final String? localPlayerId;
+
   const GameCompactHeader({
     super.key,
     required this.gameState,
@@ -38,7 +46,33 @@ class GameCompactHeader extends StatelessWidget {
     this.headerExtras = const [],
     this.expandedExtras = const [],
     this.persistentHeaderExtras = const [],
+    this.onDeckTap,
+    this.onDiscardTap,
+    this.localPlayerId,
   });
+
+  Player? _localPlayer() {
+    final id = localPlayerId;
+    if (id != null) {
+      for (final player in gameState.players) {
+        if (player.id == id) {
+          return player;
+        }
+      }
+      return null;
+    }
+    for (final player in gameState.players) {
+      if (player.type == PlayerType.human) {
+        return player;
+      }
+    }
+    return null;
+  }
+
+  bool get _showCollapsedPlayDownChip {
+    final local = _localPlayer();
+    return local != null && !local.hasPlayedDown;
+  }
 
   Color _phaseColor() {
     switch (gameState.turnPhase) {
@@ -189,6 +223,27 @@ class GameCompactHeader extends StatelessWidget {
               ],
             ),
           ),
+          // Keep play-down visible without crowding the status/timer row.
+          if (!effectiveExpanded && _showCollapsedPlayDownChip)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                10,
+                0,
+                10,
+                isUltraShort
+                    ? 2
+                    : isShortHeight
+                    ? 4
+                    : 6,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _PhaseChip(
+                  label: 'Play down ${gameState.playDownRequirement}',
+                  color: BalatroTheme.neonOrange,
+                ),
+              ),
+            ),
           if (effectiveExpanded)
             _ExpandedPilesSection(
               isPhone: isPhone,
@@ -205,6 +260,8 @@ class GameCompactHeader extends StatelessWidget {
               expandedExtras: expandedExtras,
               playDownRequirement: gameState.playDownRequirement,
               deckLow: deckLow,
+              onDeckTap: onDeckTap,
+              onDiscardTap: onDiscardTap,
             )
           else
             _CollapsedPilesStrip(
@@ -217,6 +274,8 @@ class GameCompactHeader extends StatelessWidget {
               pileWidth: sizes.pileWidth * collapsedScale,
               pileHeight: sizes.pileHeight * collapsedScale,
               tight: isShortHeight,
+              onDeckTap: onDeckTap,
+              onDiscardTap: onDiscardTap,
             ),
         ],
       ),
@@ -240,6 +299,8 @@ class _ExpandedPilesSection extends StatelessWidget {
   final List<Widget> expandedExtras;
   final int playDownRequirement;
   final bool deckLow;
+  final VoidCallback? onDeckTap;
+  final VoidCallback? onDiscardTap;
 
   const _ExpandedPilesSection({
     required this.isPhone,
@@ -256,6 +317,8 @@ class _ExpandedPilesSection extends StatelessWidget {
     required this.expandedExtras,
     required this.playDownRequirement,
     required this.deckLow,
+    this.onDeckTap,
+    this.onDiscardTap,
   });
 
   @override
@@ -272,6 +335,7 @@ class _ExpandedPilesSection extends StatelessWidget {
                 label: 'Deck',
                 count: deckSize,
                 countColor: deckColor,
+                onTap: onDeckTap,
                 child: _DeckPileAnchor(
                   key: deckKey,
                   width: sizes.pileWidth,
@@ -284,6 +348,7 @@ class _ExpandedPilesSection extends StatelessWidget {
                 label: 'Discard',
                 count: discardCount,
                 countColor: BalatroTheme.glowColor,
+                onTap: onDiscardTap,
                 child: _DiscardPileAnchor(
                   key: discardKey,
                   width: sizes.pileWidth,
@@ -343,6 +408,8 @@ class _CollapsedPilesStrip extends StatelessWidget {
   final double pileWidth;
   final double pileHeight;
   final bool tight;
+  final VoidCallback? onDeckTap;
+  final VoidCallback? onDiscardTap;
 
   const _CollapsedPilesStrip({
     required this.deckKey,
@@ -354,6 +421,8 @@ class _CollapsedPilesStrip extends StatelessWidget {
     required this.pileWidth,
     required this.pileHeight,
     required this.tight,
+    this.onDeckTap,
+    this.onDiscardTap,
   });
 
   @override
@@ -367,6 +436,7 @@ class _CollapsedPilesStrip extends StatelessWidget {
             label: 'Deck',
             count: deckSize,
             countColor: deckColor,
+            onTap: onDeckTap,
             child: _DeckPileAnchor(
               key: deckKey,
               width: pileWidth,
@@ -379,6 +449,7 @@ class _CollapsedPilesStrip extends StatelessWidget {
             label: 'Discard',
             count: discardCount,
             countColor: BalatroTheme.glowColor,
+            onTap: onDiscardTap,
             child: _DiscardPileAnchor(
               key: discardKey,
               width: pileWidth,
@@ -397,17 +468,19 @@ class _InlineMiniPile extends StatelessWidget {
   final int count;
   final Color countColor;
   final Widget child;
+  final VoidCallback? onTap;
 
   const _InlineMiniPile({
     required this.label,
     required this.count,
     required this.countColor,
     required this.child,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         child,
@@ -437,6 +510,22 @@ class _InlineMiniPile extends StatelessWidget {
         ),
       ],
     );
+
+    if (onTap == null) {
+      return row;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: row,
+        ),
+      ),
+    );
   }
 }
 
@@ -445,17 +534,19 @@ class _LabeledPile extends StatelessWidget {
   final int count;
   final Color countColor;
   final Widget child;
+  final VoidCallback? onTap;
 
   const _LabeledPile({
     required this.label,
     required this.count,
     required this.countColor,
     required this.child,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final column = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -479,6 +570,22 @@ class _LabeledPile extends StatelessWidget {
           ),
         ),
       ],
+    );
+
+    if (onTap == null) {
+      return column;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: column,
+        ),
+      ),
     );
   }
 }

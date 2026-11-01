@@ -56,6 +56,8 @@ import '../tutorial/learn_to_play_coordinator.dart';
 import '../tutorial/learn_to_play_session.dart';
 import '../tutorial/learn_to_play_step.dart';
 import '../widgets/learn_to_play_coach_banner.dart';
+import '../widgets/turn_coach_banner.dart';
+import '../services/turn_coach_preferences.dart';
 import '../ads/ads_service.dart';
 
 /// Shared bot configurations live in [kBotConfigurations].
@@ -167,7 +169,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
   LearnToPlayCoordinator? _learnCoordinator;
   bool _learnCompletionShown = false;
 
+  /// First-session phase coach; loaded from prefs, dismissed after play-down.
+  bool _showTurnCoach = false;
+  bool _turnCoachDismissed = false;
+  bool _drawPhaseNudgeShown = false;
+
   bool get _isLearnToPlay => widget.learnToPlaySession != null;
+
+  /// Matches [processCurrentPlayerTurn]'s human gate via [Player.isHumanControlled].
+  bool _isHumanControlledPlayer(Player? player) {
+    return player?.isHumanControlled ?? false;
+  }
 
   @override
   void initState() {
@@ -181,8 +193,61 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _learnCoordinator = LearnToPlayCoordinator();
     } else {
       AdsService.instance.preloadInterstitial();
+      unawaited(_loadTurnCoachPreference());
     }
     _initializeGame();
+  }
+
+  Future<void> _loadTurnCoachPreference() async {
+    final shouldShow = await TurnCoachPreferences.shouldShowCoach();
+    if (!mounted || _disposed || _turnCoachDismissed) {
+      return;
+    }
+    setState(() {
+      _showTurnCoach = shouldShow;
+    });
+  }
+
+  Future<void> _dismissTurnCoach() async {
+    // Lesson practice melds call this path but never show the coach; do not
+    // persist dismissal or the coach is missing in the player's first real game.
+    if (_isLearnToPlay) {
+      return;
+    }
+    _turnCoachDismissed = true;
+    if (_showTurnCoach) {
+      setState(() {
+        _showTurnCoach = false;
+      });
+    }
+    await TurnCoachPreferences.dismissCoach();
+  }
+
+  void _maybeNudgeDrawPhaseSelection() {
+    final gameState = _gameController?.gameState;
+    if (_isLearnToPlay ||
+        gameState == null ||
+        gameState.turnPhase != TurnPhase.draw ||
+        _selectedCardIndices.length < 2 ||
+        _drawPhaseNudgeShown) {
+      return;
+    }
+    _drawPhaseNudgeShown = true;
+    _showBriefSnackBar('Draw before you can play or discard.');
+  }
+
+  void _showBriefSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -673,7 +738,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final currentPlayer = gameState.currentPlayer;
 
     if (currentPlayer.id != botPlayer.id ||
-        currentPlayer.type != PlayerType.bot) {
+        currentPlayer.type != PlayerType.bot ||
+        _isHumanControlledPlayer(currentPlayer)) {
       DebugLogger.debug(
         'Skipping queued bot ${botPlayer.name} - current player is now ${currentPlayer.name}',
       );
@@ -765,6 +831,38 @@ class _GameScreenState extends ConsumerState<GameScreen>
         'processCurrentPlayerTurn: Current player is ${currentPlayer.name} (${currentPlayer.type})',
       );
 
+      // Resolve turn owner once before bot/UI branches so a desynced seat
+      // (e.g. type bot + name You) cannot queue AI while the UI is enabled.
+      if (_isHumanControlledPlayer(currentPlayer)) {
+        DebugLogger.debug('Human turn - waiting for input');
+        final humanIndex = gameState.players.indexWhere(
+          (p) => p.type == PlayerType.human,
+        );
+        if (shouldResetHandHighlightOnTurnChange(
+          currentPlayerIndex: gameState.currentPlayerIndex,
+          humanPlayerIndex: humanIndex,
+          lastCurrentPlayerIndex: _lastCurrentPlayerIndexForHighlight,
+        )) {
+          _clearHandHighlightState();
+          if (mounted) {
+            setState(() {});
+          }
+        }
+        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
+        _gameStateManager.validateHumanPlayerState();
+        // CRITICAL: Ensure we never auto-process human turns
+        _botTurnManager
+            .resetProcessingState(); // Clear any stuck bot processing flag
+        if (mounted) {
+          if (controller.gameState.phase == GamePhase.roundEnd) {
+            _triggerRoundTransition('human turn');
+          } else {
+            _scheduleEarlyRoundEndAlerts();
+          }
+        }
+        return;
+      }
+
       // CRITICAL: Detect and recover from stuck bot turns
       if (currentPlayer.type == PlayerType.bot) {
         _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
@@ -794,7 +892,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       );
       if (gameState.turnPhase == TurnPhase.meld &&
           humanPlayer.currentHand.isNotEmpty &&
-          currentPlayer.type != PlayerType.human) {
+          !_isHumanControlledPlayer(currentPlayer)) {
         DebugLogger.error(
           'TURN CORRUPTION DETECTED: Human should be playing but current player is ${currentPlayer.name}',
         );
@@ -803,38 +901,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
           (p) => p.type == PlayerType.human,
         );
         controller.gameState.currentPlayerIndex = humanIndex;
-        return;
-      }
-
-      // Human turn: Do nothing, wait for UI input
-      if (currentPlayer.type == PlayerType.human ||
-          currentPlayer.name == 'You') {
-        DebugLogger.debug('Human turn - waiting for input');
-        final humanIndex = gameState.players.indexWhere(
-          (p) => p.type == PlayerType.human,
-        );
-        if (shouldResetHandHighlightOnTurnChange(
-          currentPlayerIndex: gameState.currentPlayerIndex,
-          humanPlayerIndex: humanIndex,
-          lastCurrentPlayerIndex: _lastCurrentPlayerIndexForHighlight,
-        )) {
-          _clearHandHighlightState();
-          if (mounted) {
-            setState(() {});
-          }
-        }
-        _lastCurrentPlayerIndexForHighlight = gameState.currentPlayerIndex;
-        _gameStateManager.validateHumanPlayerState();
-        // CRITICAL: Ensure we never auto-process human turns
-        _botTurnManager
-            .resetProcessingState(); // Clear any stuck bot processing flag
-        if (mounted) {
-          if (controller.gameState.phase == GamePhase.roundEnd) {
-            _triggerRoundTransition('human turn');
-          } else {
-            _scheduleEarlyRoundEndAlerts();
-          }
-        }
         return;
       }
     } catch (e) {
@@ -949,7 +1015,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // is disposed mid-animation, leaving cards untappable while Play Cards
     // stays enabled.
 
-    if (_liveCurrentPlayer?.type != PlayerType.human) {
+    final liveCurrent = _liveCurrentPlayer;
+    if (!_isHumanControlledPlayer(liveCurrent)) {
+      if (!_isLearnToPlay && liveCurrent != null) {
+        _showBriefSnackBar('Waiting for ${liveCurrent.name}…');
+      }
       return;
     }
 
@@ -995,10 +1065,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _selectedCardIndices.add(cardIndex);
       }
     });
+    _maybeNudgeDrawPhaseSelection();
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (_liveCurrentPlayer?.type != PlayerType.human) {
+    final liveCurrent = _liveCurrentPlayer;
+    if (!_isHumanControlledPlayer(liveCurrent)) {
+      if (!_isLearnToPlay && liveCurrent != null) {
+        _showBriefSnackBar('Waiting for ${liveCurrent.name}…');
+      }
       return;
     }
 
@@ -1033,6 +1108,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         }
       }
     });
+    _maybeNudgeDrawPhaseSelection();
   }
 
   void _selectAllCardsForMeld(int meldIndex) {
@@ -1094,7 +1170,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Set<int> _playableCardIndices(Player humanPlayer) {
-    if (_liveCurrentPlayer?.type != PlayerType.human) {
+    if (!_isHumanControlledPlayer(_liveCurrentPlayer)) {
       return {};
     }
 
@@ -1324,6 +1400,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _hasPlayerInteractedSinceDraw = false;
       _clearHandHighlightState();
       setState(() {});
+      // Unlock counts as playing down — hide first-session coach afterward.
+      if (controller.gameState.currentPlayer.hasPlayedDown) {
+        unawaited(_dismissTurnCoach());
+      }
       // UI will update via Riverpod reactivity when DiscardPileUnlockedEvent fires
       debugPrint('DEBUG: Discard pile unlocked successfully');
       // Top discard is melded; newly drawn cards are discard leftovers plus
@@ -1612,6 +1692,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
       );
       _sortHand('rank');
       _advanceLearnAfterSuccessfulMeld();
+      if (controller.gameState.currentPlayer.hasPlayedDown) {
+        unawaited(_dismissTurnCoach());
+      }
       setState(() {});
 
       // Check if creating melds caused the round to end
@@ -1647,7 +1730,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (controller.gameState.phase != GamePhase.playing) {
       return;
     }
-    if (controller.gameState.currentPlayer.type != PlayerType.bot) {
+    final currentPlayer = controller.gameState.currentPlayer;
+    if (_isHumanControlledPlayer(currentPlayer) ||
+        currentPlayer.type != PlayerType.bot) {
       return;
     }
     processCurrentPlayerTurn();
@@ -1912,7 +1997,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         index: _keyboardFocusedCardIndex,
         handLength: handLength,
       ),
-      isHumanTurn: gameState.currentPlayer.type == PlayerType.human,
+      isHumanTurn: _isHumanControlledPlayer(gameState.currentPlayer),
       isAnimating: _isCardAnimationActive,
       hasInteractedSinceDraw: _hasPlayerInteractedSinceDraw,
       isHelpVisible: _showKeyboardHelp,
@@ -2233,6 +2318,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
                                 ),
                               ]
                             : const [],
+                        onDeckTap: _pileDrawTapEnabled(currentPlayer, gameState)
+                            ? _onDrawFromDeck
+                            : null,
+                        onDiscardTap:
+                            _pileDiscardTapEnabled(currentPlayer, gameState)
+                            ? _onUnlockDiscard
+                            : null,
                         aboveMelds: _buildAboveMeldsBanner(
                           context,
                           gameState,
@@ -2334,7 +2426,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                             });
                           },
                           isCurrentPlayerTurn:
-                              currentPlayer.type == PlayerType.human &&
+                              _isHumanControlledPlayer(currentPlayer) &&
                               gameState.phase != GamePhase.gameEnd,
                           handStackKey: _handStackKey,
                           handScrollController: _handScrollController,
@@ -2367,12 +2459,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   bool _learnHandCardTapEnabled(Player currentPlayer, GameState gameState) {
-    if (currentPlayer.type != PlayerType.human ||
-        gameState.phase == GamePhase.gameEnd) {
+    if (gameState.phase == GamePhase.gameEnd) {
       return false;
     }
     if (!_isLearnToPlay) {
+      // Keep hand tappable off-turn so we can explain "waiting for …".
       return true;
+    }
+    if (!_isHumanControlledPlayer(currentPlayer)) {
+      return false;
     }
     // During play-down, selection happens inside the meld modal — not on the
     // hand strip — so learners practice the same create-meld flow as solo play.
@@ -2486,7 +2581,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
 
     if (_isGameStuck() &&
-        currentPlayer.type == PlayerType.human &&
+        _isHumanControlledPlayer(currentPlayer) &&
         gameState.phase != GamePhase.gameEnd) {
       final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
       return StuckGoOutRecoveryBanner(
@@ -2539,7 +2634,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     if (gameState.lastCallActive && gameState.phase == GamePhase.playing) {
       return LastCallBanner(
-        isLocalPlayerTurn: currentPlayer.type == PlayerType.human,
+        isLocalPlayerTurn: _isHumanControlledPlayer(currentPlayer),
       );
     }
 
@@ -2547,7 +2642,35 @@ class _GameScreenState extends ConsumerState<GameScreen>
       return FinalTurnBanner(gameState: gameState);
     }
 
+    if (_showTurnCoach &&
+        _isHumanControlledPlayer(currentPlayer) &&
+        gameState.phase == GamePhase.playing) {
+      final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
+      return TurnCoachBanner(
+        gameState: gameState,
+        localPlayer: humanPlayer,
+        onDismiss: () {
+          unawaited(_dismissTurnCoach());
+        },
+      );
+    }
+
     return null;
+  }
+
+  bool _pileDrawTapEnabled(Player currentPlayer, GameState gameState) {
+    if (_isLearnToPlay || _isCardAnimationActive) {
+      return false;
+    }
+    return _isHumanControlledPlayer(currentPlayer) &&
+        gameState.phase == GamePhase.playing &&
+        gameState.turnPhase == TurnPhase.draw;
+  }
+
+  bool _pileDiscardTapEnabled(Player currentPlayer, GameState gameState) {
+    // Same phase gates as draw; blocked unlocks still open feedback via
+    // [_onUnlockDiscard] so tapping the pile is never a silent no-op.
+    return _pileDrawTapEnabled(currentPlayer, gameState);
   }
 
   void _scheduleEarlyRoundEndAlerts() {

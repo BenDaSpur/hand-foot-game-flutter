@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/screens/main_menu_screen.dart';
 import 'package:hand_foot_game_flutter/screens/settings_screen.dart';
 import 'package:hand_foot_game_flutter/services/haptic_service.dart';
+import 'package:hand_foot_game_flutter/services/learn_to_play_preferences.dart';
 import 'package:hand_foot_game_flutter/theme/balatro_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +11,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      LearnToPlayPreferences.offerDismissedKey: true,
+    });
     HapticService().resetForTest(initialized: false);
   });
 

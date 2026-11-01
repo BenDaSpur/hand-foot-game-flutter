@@ -680,7 +680,7 @@ class GameController implements GameInterface {
       skipPlayDownCheck: skipPlayDownCheck,
     );
 
-    if (result && player.type == PlayerType.human) {
+    if (result && player.isHumanControlled) {
       _meldUndoStack.add(
         MeldUndoRecord(
           cardsReturnedToHand: cards,
@@ -718,7 +718,7 @@ class GameController implements GameInterface {
     _gameState.validateGameState();
 
     if (result) {
-      if (player.type == PlayerType.human) {
+      if (player.isHumanControlled) {
         _meldUndoStack.add(
           MeldUndoRecord(
             cardsReturnedToHand: [card],
@@ -772,7 +772,7 @@ class GameController implements GameInterface {
     }
 
     final player = _gameState.currentPlayer;
-    if (player.type != PlayerType.human) {
+    if (!player.isHumanControlled) {
       return false;
     }
 
@@ -796,7 +796,7 @@ class GameController implements GameInterface {
     required bool hadPlayedDown,
     required bool hadPickedUpFoot,
   }) {
-    if (player.type != PlayerType.human) {
+    if (!player.isHumanControlled) {
       return;
     }
 

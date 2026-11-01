@@ -81,7 +81,44 @@ class MeldsSection extends StatelessWidget {
     }).toList();
   }
 
+  /// Empty-state copy for the table melds area (not "sets in hand").
+  static String emptyStateSubtitle({
+    required TurnPhase turnPhase,
+    required bool hasPlayedDown,
+    required int playDownRequirement,
+    required bool canAct,
+    required bool viewingOwnMelds,
+  }) {
+    if (!viewingOwnMelds) {
+      return 'This player has not laid any melds yet.';
+    }
+    if (!canAct) {
+      return 'Melds you lay will show up here.';
+    }
+    if (turnPhase == TurnPhase.draw) {
+      return 'Draw first, then use Play Cards to lay sets from your hand.';
+    }
+    if (!hasPlayedDown) {
+      return 'Tap Play Cards — first play-down needs $playDownRequirement '
+          'points (sets in your hand don’t count until laid).';
+    }
+    return 'Tap Play Cards to lay more melds.';
+  }
+
   Widget _buildEmptyState() {
+    final isCurrentUserTurn = currentUserId != null
+        ? gameState.currentPlayer.id == currentUserId
+        : gameState.currentPlayer.type == PlayerType.human;
+    final viewingOwnMelds =
+        viewingPlayerMelds == null || viewingPlayerMelds!.id == humanPlayer.id;
+    final subtitle = emptyStateSubtitle(
+      turnPhase: gameState.turnPhase,
+      hasPlayedDown: humanPlayer.hasPlayedDown,
+      playDownRequirement: gameState.playDownRequirement,
+      canAct: isCurrentUserTurn && gameState.phase == GamePhase.playing,
+      viewingOwnMelds: viewingOwnMelds,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       child: Container(
@@ -104,7 +141,7 @@ class MeldsSection extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'No melds yet',
+              'No melds on the table yet',
               style: TextStyle(
                 color: BalatroTheme.primaryText,
                 fontWeight: FontWeight.bold,
@@ -113,7 +150,7 @@ class MeldsSection extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Tap Play Cards to lay down your first meld',
+              subtitle,
               style: TextStyle(
                 color: BalatroTheme.secondaryText.withValues(alpha: 0.85),
                 fontSize: 12,
