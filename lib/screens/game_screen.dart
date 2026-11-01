@@ -657,6 +657,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
       settings: effectiveSettings,
       botPlayers: botPlayers,
     );
+    if (!mounted || _disposed) {
+      return;
+    }
 
     _logSoloGameStarted(effectiveSettings);
 
@@ -1291,6 +1294,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
         _initializeManagers();
         await _restorePersonalitiesForContinuedGame(savedController);
+        if (!mounted || _disposed) {
+          return;
+        }
 
         // Sort the human player's hand
         final humanPlayer = ref.read(humanPlayerProvider);
@@ -1303,12 +1309,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
         // Continue game flow
         processCurrentPlayerTurn();
       } else {
+        if (!mounted || _disposed) {
+          return;
+        }
         _dialogManager.showErrorDialog(
           'Failed to load saved game. Starting new game.',
         );
         unawaited(_startFreshGame());
       }
     } catch (e) {
+      if (!mounted || _disposed) {
+        return;
+      }
       _dialogManager.showErrorDialog(
         'Error loading saved game: ${e.toString()}',
       );
