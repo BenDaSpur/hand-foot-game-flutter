@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -19,6 +21,7 @@ import '../ads/ads_banner.dart';
 import '../ads/ads_service.dart';
 import '../services/firebase_service.dart';
 import '../services/game_save_service.dart';
+import '../services/learn_to_play_preferences.dart';
 import '../services/multiplayer_resume_service.dart';
 import '../models/player.dart';
 
@@ -80,6 +83,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   Map<String, dynamic>? _rejoinableGame;
 
   bool _didAttemptAutoResume = false;
+  bool _didAttemptLearnOffer = false;
 
   @override
   void initState() {
@@ -87,6 +91,82 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     _checkForSavedSinglePlayerGame();
     _multiplayerAvailable = FirebaseService.isMultiplayerAvailable;
     _attemptAutoResumeOrOfferRejoin();
+    _maybeOfferLearnToPlay();
+  }
+
+  Future<void> _maybeOfferLearnToPlay() async {
+    if (_didAttemptLearnOffer) {
+      return;
+    }
+    _didAttemptLearnOffer = true;
+
+    final shouldShow = await LearnToPlayPreferences.shouldShowOffer();
+    if (!shouldShow || !mounted) {
+      return;
+    }
+
+    // Wait until after the first frame so the menu Navigator is ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_showLearnToPlayOfferDialog());
+    });
+  }
+
+  Future<void> _showLearnToPlayOfferDialog() async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: BalatroTheme.darkPurple,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: BalatroTheme.neonBlue.withValues(alpha: 0.7),
+              width: 1.5,
+            ),
+          ),
+          title: const Text(
+            'Learn to Play?',
+            style: TextStyle(color: BalatroTheme.primaryText),
+          ),
+          content: const Text(
+            'New to Hand & Foot? A short guided lesson walks you through '
+            'drawing, playing down, and discarding on the real board.',
+            style: TextStyle(color: BalatroTheme.secondaryText, height: 1.35),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await LearnToPlayPreferences.dismissOffer();
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              child: const Text('Skip'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await LearnToPlayPreferences.dismissOffer();
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+                if (mounted) {
+                  _openLearnToPlay();
+                }
+              },
+              child: const Text('Start'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// Jackbox-style: auto-resume when bookmark + Auth UID still match a live game.
@@ -997,6 +1077,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _startLearnToPlay() {
+    // Menu entry counts as seeing the offer so we do not nag later.
+    unawaited(LearnToPlayPreferences.dismissOffer());
     _openLearnToPlay();
   }
 

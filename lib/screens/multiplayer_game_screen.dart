@@ -18,6 +18,7 @@ import '../widgets/final_turn_banner.dart';
 import '../widgets/last_call_banner.dart';
 import '../widgets/last_call_dialog.dart';
 import '../widgets/stuck_go_out_recovery_banner.dart';
+import '../widgets/turn_coach_banner.dart';
 import '../widgets/turn_timer.dart';
 import '../game/go_out_guards.dart';
 import '../widgets/card_animation_host.dart';
@@ -26,6 +27,7 @@ import '../services/haptic_event_listener.dart';
 import '../services/haptic_service.dart';
 import '../services/local_turn_haptic.dart';
 import '../services/multiplayer_resume_service.dart';
+import '../services/turn_coach_preferences.dart';
 import '../models/multiplayer_lifecycle.dart';
 import '../widgets/game_keyboard_shortcuts.dart';
 import '../widgets/keyboard_shortcuts_overlay.dart';
@@ -78,6 +80,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   int? _keyboardFocusedCardIndex;
   String? _lastCurrentPlayerIdForHighlight;
   String? _lastObservedPlayerIdForHaptic;
+
+  bool _showTurnCoach = false;
+  bool _drawPhaseNudgeShown = false;
   GamePhase? _lastObservedPhaseForHaptic;
   int? _lastObservedRoundForHaptic;
   bool _showKeyboardHelp = false;
@@ -93,6 +98,7 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     super.initState();
     _gameController = widget.gameController;
     unawaited(HapticService().initialize());
+    unawaited(_loadTurnCoachPreference());
     _hapticEventListener = HapticEventListener(
       eventBus: gameEventBus,
       hapticService: HapticService(),
@@ -111,6 +117,40 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     });
     _lifecycleSubscription = _gameController.lifecycleStream.listen(
       _onLifecycleEvent,
+    );
+  }
+
+  Future<void> _loadTurnCoachPreference() async {
+    final shouldShow = await TurnCoachPreferences.shouldShowCoach();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _showTurnCoach = shouldShow;
+    });
+  }
+
+  Future<void> _dismissTurnCoach() async {
+    if (!_showTurnCoach) {
+      return;
+    }
+    setState(() {
+      _showTurnCoach = false;
+    });
+    await TurnCoachPreferences.dismissCoach();
+  }
+
+  void _showBriefSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -189,8 +229,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
     // second gate on [_isCardAnimationActive] — it can desync after host
     // dispose and permanently block selection while action buttons stay live.
 
-    if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
-      return; // Same pattern as single-player checking PlayerType.human
+    final gameState = _gameController.gameState;
+    if (gameState.currentPlayer.id != _gameController.userId) {
+      _showBriefSnackBar('Waiting for ${gameState.currentPlayer.name}…');
+      return;
     }
 
     final currentUserPlayer = _gameController.getCurrentUserPlayer();
@@ -207,6 +249,13 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
         _selectedCardIndices.add(cardIndex);
       }
     });
+
+    if (gameState.turnPhase == TurnPhase.draw &&
+        _selectedCardIndices.length >= 2 &&
+        !_drawPhaseNudgeShown) {
+      _drawPhaseNudgeShown = true;
+      _showBriefSnackBar('Draw before you can play or discard.');
+    }
   }
 
   void _onCardDoubleTap(int cardIndex) {
@@ -557,6 +606,10 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       );
       if (success) {
         setState(() => _selectedCardIndices.clear());
+        final player = _gameController.getCurrentUserPlayer();
+        if (player != null && player.hasPlayedDown) {
+          unawaited(_dismissTurnCoach());
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -737,7 +790,28 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
       );
     }
 
+    if (_showTurnCoach &&
+        _gameController.isMyTurn &&
+        gameState.phase == GamePhase.playing) {
+      return TurnCoachBanner(
+        gameState: gameState,
+        localPlayer: humanPlayer,
+        onDismiss: () {
+          unawaited(_dismissTurnCoach());
+        },
+      );
+    }
+
     return null;
+  }
+
+  bool _pileDrawTapEnabled(GameState gameState) {
+    if (_isCardAnimationActive) {
+      return false;
+    }
+    return _gameController.isMyTurn &&
+        gameState.phase == GamePhase.playing &&
+        gameState.turnPhase == TurnPhase.draw;
   }
 
   void _scheduleEarlyRoundEndAlerts() {
@@ -1046,6 +1120,12 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
                           ),
                         ],
                       ],
+                      onDeckTap: _pileDrawTapEnabled(gameState)
+                          ? _onDrawFromDeck
+                          : null,
+                      onDiscardTap: _pileDrawTapEnabled(gameState)
+                          ? _onUnlockDiscard
+                          : null,
                       aboveMelds: _buildAboveMeldsBanner(
                         gameState,
                         humanPlayer,

@@ -53,7 +53,7 @@ void main() {
       );
     }
 
-    testWidgets('collapsed hides detail chips at normal height', (
+    testWidgets('collapsed keeps play-down chip and mini piles', (
       tester,
     ) async {
       await pumpHeader(
@@ -63,11 +63,40 @@ void main() {
         onToggle: () {},
       );
 
-      expect(find.textContaining('Play down'), findsNothing);
+      // First play-down requirement stays visible without expanding.
+      expect(find.textContaining('Play down'), findsOneWidget);
       expect(find.text('Deck'), findsOneWidget);
       expect(find.text('Discard'), findsOneWidget);
       expect(deckKey.currentContext, isNotNull);
       expect(discardKey.currentContext, isNotNull);
+    });
+
+    testWidgets('deck and discard piles invoke tap callbacks', (tester) async {
+      var deckTaps = 0;
+      var discardTaps = 0;
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(size: Size(390, 844)),
+          child: MaterialApp(
+            home: Scaffold(
+              body: GameCompactHeader(
+                gameState: gameState,
+                deckKey: deckKey,
+                discardKey: discardKey,
+                isExpanded: true,
+                onToggleExpand: () {},
+                onDeckTap: () => deckTaps++,
+                onDiscardTap: () => discardTaps++,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Deck'));
+      await tester.tap(find.text('Discard'));
+      expect(deckTaps, 1);
+      expect(discardTaps, 1);
     });
 
     testWidgets('expanded shows detail chips at normal height', (tester) async {
@@ -106,7 +135,7 @@ void main() {
         onToggle: () {},
       );
 
-      expect(find.textContaining('Play down'), findsNothing);
+      expect(find.textContaining('Play down'), findsOneWidget);
       expect(deckKey.currentContext, isNotNull);
       expect(discardKey.currentContext, isNotNull);
     });
@@ -142,7 +171,7 @@ void main() {
 
         expect(find.byKey(const ValueKey('persistent-timer')), findsOneWidget);
         expect(find.text('TIMER'), findsOneWidget);
-        expect(find.textContaining('Play down'), findsNothing);
+        expect(find.textContaining('Play down'), findsOneWidget);
       },
     );
   });

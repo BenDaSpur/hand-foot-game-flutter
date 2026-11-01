@@ -48,6 +48,8 @@ class GameBoardLayout extends StatelessWidget {
   final bool useDesktopRecentActions;
   final bool recentActionsExpanded;
   final VoidCallback? onRecentActionsToggle;
+  final VoidCallback? onDeckTap;
+  final VoidCallback? onDiscardTap;
 
   const GameBoardLayout({
     super.key,
@@ -71,6 +73,8 @@ class GameBoardLayout extends StatelessWidget {
     this.useDesktopRecentActions = false,
     this.recentActionsExpanded = false,
     this.onRecentActionsToggle,
+    this.onDeckTap,
+    this.onDiscardTap,
   });
 
   @override
@@ -187,6 +191,9 @@ class GameBoardLayout extends StatelessWidget {
               headerExtras: headerExtras,
               expandedExtras: expandedHeaderExtras,
               persistentHeaderExtras: persistentHeaderExtras,
+              onDeckTap: onDeckTap,
+              onDiscardTap: onDiscardTap,
+              localPlayerId: currentUserId,
             ),
             if (!tightHeight &&
                 isWide &&
@@ -232,6 +239,9 @@ class GameBoardLayout extends StatelessWidget {
           headerExtras: headerExtras,
           expandedExtras: expandedHeaderExtras,
           persistentHeaderExtras: persistentHeaderExtras,
+          onDeckTap: onDeckTap,
+          onDiscardTap: onDiscardTap,
+          localPlayerId: currentUserId,
         ),
         if (isWide &&
             useDesktopRecentActions &&
@@ -285,6 +295,9 @@ class GameBoardLayout extends StatelessWidget {
                 headerExtras: headerExtras,
                 expandedExtras: expandedHeaderExtras,
                 persistentHeaderExtras: persistentHeaderExtras,
+                onDeckTap: onDeckTap,
+                onDiscardTap: onDiscardTap,
+                localPlayerId: currentUserId,
               ),
               CompactPlayerScores(
                 gameState: gameState,

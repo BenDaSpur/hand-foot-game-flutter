@@ -81,7 +81,29 @@ class MeldsSection extends StatelessWidget {
     }).toList();
   }
 
+  /// Empty-state copy for the table melds area (not "sets in hand").
+  static String emptyStateSubtitle({
+    required TurnPhase turnPhase,
+    required bool hasPlayedDown,
+    required int playDownRequirement,
+  }) {
+    if (turnPhase == TurnPhase.draw) {
+      return 'Draw first, then use Play Cards to lay sets from your hand.';
+    }
+    if (!hasPlayedDown) {
+      return 'Tap Play Cards — first play-down needs $playDownRequirement '
+          'points (sets in your hand don’t count until laid).';
+    }
+    return 'Tap Play Cards to lay more melds.';
+  }
+
   Widget _buildEmptyState() {
+    final subtitle = emptyStateSubtitle(
+      turnPhase: gameState.turnPhase,
+      hasPlayedDown: humanPlayer.hasPlayedDown,
+      playDownRequirement: gameState.playDownRequirement,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       child: Container(
@@ -104,7 +126,7 @@ class MeldsSection extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'No melds yet',
+              'No melds on the table yet',
               style: TextStyle(
                 color: BalatroTheme.primaryText,
                 fontWeight: FontWeight.bold,
@@ -113,7 +135,7 @@ class MeldsSection extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Tap Play Cards to lay down your first meld',
+              subtitle,
               style: TextStyle(
                 color: BalatroTheme.secondaryText.withValues(alpha: 0.85),
                 fontSize: 12,

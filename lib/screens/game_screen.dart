@@ -56,6 +56,8 @@ import '../tutorial/learn_to_play_coordinator.dart';
 import '../tutorial/learn_to_play_session.dart';
 import '../tutorial/learn_to_play_step.dart';
 import '../widgets/learn_to_play_coach_banner.dart';
+import '../widgets/turn_coach_banner.dart';
+import '../services/turn_coach_preferences.dart';
 import '../ads/ads_service.dart';
 
 /// Shared bot configurations live in [kBotConfigurations].
@@ -167,6 +169,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   LearnToPlayCoordinator? _learnCoordinator;
   bool _learnCompletionShown = false;
 
+  /// First-session phase coach; loaded from prefs, dismissed after play-down.
+  bool _showTurnCoach = false;
+  bool _drawPhaseNudgeShown = false;
+
   bool get _isLearnToPlay => widget.learnToPlaySession != null;
 
   @override
@@ -181,8 +187,43 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _learnCoordinator = LearnToPlayCoordinator();
     } else {
       AdsService.instance.preloadInterstitial();
+      unawaited(_loadTurnCoachPreference());
     }
     _initializeGame();
+  }
+
+  Future<void> _loadTurnCoachPreference() async {
+    final shouldShow = await TurnCoachPreferences.shouldShowCoach();
+    if (!mounted || _disposed) {
+      return;
+    }
+    setState(() {
+      _showTurnCoach = shouldShow;
+    });
+  }
+
+  Future<void> _dismissTurnCoach() async {
+    if (!_showTurnCoach) {
+      return;
+    }
+    setState(() {
+      _showTurnCoach = false;
+    });
+    await TurnCoachPreferences.dismissCoach();
+  }
+
+  void _showBriefSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -949,7 +990,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // is disposed mid-animation, leaving cards untappable while Play Cards
     // stays enabled.
 
-    if (_liveCurrentPlayer?.type != PlayerType.human) {
+    final liveCurrent = _liveCurrentPlayer;
+    if (liveCurrent == null || liveCurrent.type != PlayerType.human) {
+      if (!_isLearnToPlay && liveCurrent != null) {
+        _showBriefSnackBar('Waiting for ${liveCurrent.name}…');
+      }
       return;
     }
 
@@ -995,6 +1040,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _selectedCardIndices.add(cardIndex);
       }
     });
+
+    final gameState = _gameController?.gameState;
+    if (!_isLearnToPlay &&
+        gameState != null &&
+        gameState.turnPhase == TurnPhase.draw &&
+        _selectedCardIndices.length >= 2 &&
+        !_drawPhaseNudgeShown) {
+      _drawPhaseNudgeShown = true;
+      _showBriefSnackBar('Draw before you can play or discard.');
+    }
   }
 
   void _onCardDoubleTap(int cardIndex) {
@@ -1612,6 +1667,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
       );
       _sortHand('rank');
       _advanceLearnAfterSuccessfulMeld();
+      if (controller.gameState.currentPlayer.hasPlayedDown) {
+        unawaited(_dismissTurnCoach());
+      }
       setState(() {});
 
       // Check if creating melds caused the round to end
@@ -2233,6 +2291,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
                                 ),
                               ]
                             : const [],
+                        onDeckTap: _pileDrawTapEnabled(currentPlayer, gameState)
+                            ? _onDrawFromDeck
+                            : null,
+                        onDiscardTap:
+                            _pileDiscardTapEnabled(currentPlayer, gameState)
+                            ? _onUnlockDiscard
+                            : null,
                         aboveMelds: _buildAboveMeldsBanner(
                           context,
                           gameState,
@@ -2367,12 +2432,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   bool _learnHandCardTapEnabled(Player currentPlayer, GameState gameState) {
-    if (currentPlayer.type != PlayerType.human ||
-        gameState.phase == GamePhase.gameEnd) {
+    if (gameState.phase == GamePhase.gameEnd) {
       return false;
     }
     if (!_isLearnToPlay) {
+      // Keep hand tappable off-turn so we can explain "waiting for …".
       return true;
+    }
+    if (currentPlayer.type != PlayerType.human) {
+      return false;
     }
     // During play-down, selection happens inside the meld modal — not on the
     // hand strip — so learners practice the same create-meld flow as solo play.
@@ -2547,7 +2615,35 @@ class _GameScreenState extends ConsumerState<GameScreen>
       return FinalTurnBanner(gameState: gameState);
     }
 
+    if (_showTurnCoach &&
+        currentPlayer.type == PlayerType.human &&
+        gameState.phase == GamePhase.playing) {
+      final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
+      return TurnCoachBanner(
+        gameState: gameState,
+        localPlayer: humanPlayer,
+        onDismiss: () {
+          unawaited(_dismissTurnCoach());
+        },
+      );
+    }
+
     return null;
+  }
+
+  bool _pileDrawTapEnabled(Player currentPlayer, GameState gameState) {
+    if (_isLearnToPlay || _isCardAnimationActive) {
+      return false;
+    }
+    return currentPlayer.type == PlayerType.human &&
+        gameState.phase == GamePhase.playing &&
+        gameState.turnPhase == TurnPhase.draw;
+  }
+
+  bool _pileDiscardTapEnabled(Player currentPlayer, GameState gameState) {
+    // Same phase gates as draw; blocked unlocks still open feedback via
+    // [_onUnlockDiscard] so tapping the pile is never a silent no-op.
+    return _pileDrawTapEnabled(currentPlayer, gameState);
   }
 
   void _scheduleEarlyRoundEndAlerts() {
