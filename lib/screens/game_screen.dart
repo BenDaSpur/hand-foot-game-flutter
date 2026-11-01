@@ -176,13 +176,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   bool get _isLearnToPlay => widget.learnToPlaySession != null;
 
-  /// Matches [processCurrentPlayerTurn]'s human gate, including the
-  /// `name == 'You'` fallback used when type metadata is desynced.
+  /// Matches [processCurrentPlayerTurn]'s human gate via [Player.isHumanControlled].
   bool _isHumanControlledPlayer(Player? player) {
-    if (player == null) {
-      return false;
-    }
-    return player.type == PlayerType.human || player.name == 'You';
+    return player?.isHumanControlled ?? false;
   }
 
   @override
@@ -1073,7 +1069,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (!_isHumanControlledPlayer(_liveCurrentPlayer)) {
+    final liveCurrent = _liveCurrentPlayer;
+    if (!_isHumanControlledPlayer(liveCurrent)) {
+      if (!_isLearnToPlay && liveCurrent != null) {
+        _showBriefSnackBar('Waiting for ${liveCurrent.name}…');
+      }
       return;
     }
 

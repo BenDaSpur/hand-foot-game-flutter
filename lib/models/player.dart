@@ -40,6 +40,10 @@ class Player {
 
   List<PlayingCard> get currentHand => hasPickedUpFoot ? foot : hand;
 
+  /// Local human seat, including the defensive `name == 'You'` fallback used
+  /// when type metadata is desynced from the solo player identity.
+  bool get isHumanControlled => type == PlayerType.human || name == 'You';
+
   bool get isHandEmpty => hand.isEmpty;
   bool get isFootEmpty => foot.isEmpty;
   bool get canGoOut =>

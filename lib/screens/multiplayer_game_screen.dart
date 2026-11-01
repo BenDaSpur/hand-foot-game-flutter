@@ -265,7 +265,9 @@ class _MultiplayerGameScreenState extends State<MultiplayerGameScreen> {
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (_gameController.gameState.currentPlayer.id != _gameController.userId) {
+    final gameState = _gameController.gameState;
+    if (gameState.currentPlayer.id != _gameController.userId) {
+      _showBriefSnackBar('Waiting for ${gameState.currentPlayer.name}…');
       return;
     }
 
