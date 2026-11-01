@@ -323,7 +323,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   /// Restore personalities when opening a continued autosave.
-  void _restorePersonalitiesForContinuedGame(GameController controller) {
+  Future<void> _restorePersonalitiesForContinuedGame(
+    GameController controller,
+  ) async {
     final saved = controller.restoredBotPersonalities;
     if (saved.isNotEmpty) {
       _botTurnManager.restoreBotPersonalities(saved);
@@ -336,12 +338,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final botPlayers = controller.gameState.players
         .where((p) => p.type == PlayerType.bot)
         .toList();
-    unawaited(
-      _configureAppleIntelligenceSeats(
-        decisionMaker: _decisionMaker,
-        settings: controller.gameState.soloSettings,
-        botPlayers: botPlayers,
-      ),
+    await _configureAppleIntelligenceSeats(
+      decisionMaker: _decisionMaker,
+      settings: controller.gameState.soloSettings,
+      botPlayers: botPlayers,
     );
   }
 
@@ -459,14 +459,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
         final loadedBots = newController.gameState.players
             .where((p) => p.type == PlayerType.bot)
             .toList();
-        unawaited(
-          _configureAppleIntelligenceSeats(
-            decisionMaker: _decisionMaker,
-            settings: newController.gameState.soloSettings,
-            botPlayers: loadedBots,
-          ),
-        );
-
         _clearHandHighlightState();
         _viewingPlayerMelds = null;
         _isInitialized = true;
@@ -474,13 +466,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
         // Reinitialize managers with new controller
         _initializeManagers();
 
-        // CRITICAL: Resume game flow after import
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            DebugLogger.debug('Resuming game flow after import');
-            processCurrentPlayerTurn();
+        // Await seat config before resuming so the first bot turn uses
+        // the correct Apple Intelligence routing.
+        unawaited(() async {
+          await _configureAppleIntelligenceSeats(
+            decisionMaker: _decisionMaker,
+            settings: newController.gameState.soloSettings,
+            botPlayers: loadedBots,
+          );
+          if (!mounted) {
+            return;
           }
-        });
+          DebugLogger.debug('Resuming game flow after import');
+          processCurrentPlayerTurn();
+        }());
       },
     );
   }
@@ -503,11 +502,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
       // Continue must restore personalities — autosave previously left them
       // unassigned, so icons/AI defaulted to Adaptive (e.g. Clara showed Sue's icon).
       if (!_isLearnToPlay) {
-        _restorePersonalitiesForContinuedGame(widget.gameController!);
+        await _restorePersonalitiesForContinuedGame(widget.gameController!);
       } else {
         _assignBotPersonalities();
       }
 
+      if (!mounted) {
+        return;
+      }
       _isInitialized = true;
       setState(() {});
 
@@ -1288,7 +1290,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _bindGameController(savedController);
 
         _initializeManagers();
-        _restorePersonalitiesForContinuedGame(savedController);
+        await _restorePersonalitiesForContinuedGame(savedController);
 
         // Sort the human player's hand
         final humanPlayer = ref.read(humanPlayerProvider);

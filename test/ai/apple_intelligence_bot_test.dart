@@ -253,17 +253,11 @@ void main() {
       final decision = await apple.decide(bot, controller);
       expect(fake.planTurnCalls, 2);
       expect((fake.lastPrompt!['game'] as Map)['phase'], 'meld');
-      expect(
-        decision.action,
-        anyOf(
-          'noMeld',
-          'createMeld',
-          'createMultipleMelds',
-          'addToMeld',
-          'goOut',
-          'endTurn',
-        ),
-      );
+      // c0 is always the generator's leading noMeld candidate in meld phase.
+      expect(decision.action, 'noMeld');
+      final candidates = fake.lastPrompt!['candidates'] as List<dynamic>;
+      expect(candidates, isNotEmpty);
+      expect((candidates.first as Map)['kind'], 'noMeld');
     });
 
     test('stale planned step falls back without throwing', () async {
