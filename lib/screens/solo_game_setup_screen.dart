@@ -4,6 +4,7 @@ import '../ai/bot_personality.dart';
 import '../config/bot_configurations.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
+import '../services/foundation_models_service.dart';
 import '../theme/balatro_theme.dart';
 import '../utils/game_responsive_layout.dart';
 import 'game_screen.dart';
@@ -22,6 +23,8 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
   bool _botsManuallyConfigured = false;
   bool _seedManuallyConfigured = false;
   String? _seedValidationError;
+  bool _appleIntelligenceAvailable = false;
+  String _appleIntelligenceReason = '';
   final TextEditingController _seedController = TextEditingController();
 
   @override
@@ -38,9 +41,15 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
 
   Future<void> _loadSettings() async {
     final settings = await SoloGameSettings.loadFromPreferences();
+    final availability = await FoundationModelsService.instance
+        .checkAvailability();
     if (mounted) {
       setState(() {
-        _settings = settings;
+        _appleIntelligenceAvailable = availability.available;
+        _appleIntelligenceReason = availability.reason;
+        _settings = availability.available
+            ? settings
+            : settings.copyWith(enableAppleIntelligenceOpponent: false);
         _isLoading = false;
       });
     }
@@ -189,6 +198,29 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
                                     });
                                   },
                                 ),
+                                if (_appleIntelligenceAvailable) ...[
+                                  const SizedBox(height: 16),
+                                  _buildRuleToggle(
+                                    title: 'Apple Intelligence opponent',
+                                    subtitle:
+                                        'First bot plans each turn on-device and '
+                                        'remembers goals across turns. Falls back '
+                                        'to classic AI if planning fails.',
+                                    value: _settings
+                                        .enableAppleIntelligenceOpponent,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _settings = _settings.copyWith(
+                                          enableAppleIntelligenceOpponent:
+                                              value,
+                                        );
+                                      });
+                                    },
+                                  ),
+                                ] else ...[
+                                  const SizedBox(height: 16),
+                                  _buildAppleIntelligenceUnavailableNote(),
+                                ],
                                 const SizedBox(height: 32),
                                 _buildStartButton(),
                               ],
@@ -457,6 +489,40 @@ class _SoloGameSetupScreenState extends State<SoloGameSetupScreen> {
           onChanged: _onSeedChanged,
         ),
       ],
+    );
+  }
+
+  Widget _buildAppleIntelligenceUnavailableNote() {
+    final reason = _appleIntelligenceReason.isEmpty
+        ? 'Requires iOS 26+ with Apple Intelligence enabled.'
+        : _appleIntelligenceReason;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: BalatroTheme.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BalatroTheme.neonBlue.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Apple Intelligence opponent',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            reason,
+            style: TextStyle(
+              color: BalatroTheme.primaryText.withValues(alpha: 0.7),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

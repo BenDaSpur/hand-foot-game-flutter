@@ -12,8 +12,11 @@ import '../models/game_state.dart';
 import '../game/game_action_feedback.dart';
 import '../game/game_controller.dart';
 import '../game/game_controller_factory.dart';
+import '../ai/bot_decision_maker.dart';
+import '../ai/composite_bot_decision_maker.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
+import '../services/foundation_models_service.dart';
 import '../config/bot_configurations.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
@@ -110,6 +113,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   EnhancedBotAI get _botAI => ref.read(botAIProvider);
 
+  BotDecisionMaker get _decisionMaker => ref.read(botDecisionMakerProvider);
+
+  /// Intent banner for waiting UI — only while an Apple-routed seat is acting.
+  String? _botPlanIntentFor(Player currentPlayer) {
+    final maker = _decisionMaker;
+    if (maker is CompositeBotDecisionMaker) {
+      return maker.lastTurnIntentFor(currentPlayer.id);
+    }
+    return null;
+  }
+
   /// Turn owner read straight off the controller, which is the same source
   /// [build] uses to decide whether the hand is tappable. Turn-ownership gates
   /// must not disagree with what the player can see on screen.
@@ -122,6 +136,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   bool _statusExpanded = false;
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
+
+  /// Bumped on dispose and at the start of each Apple-seat configure so a
+  /// stale availability await cannot apply an old game's bot routing.
+  int _appleSeatConfigGeneration = 0;
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
   // Analytics tracking
@@ -253,6 +271,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   void dispose() {
     _disposed = true;
+    _appleSeatConfigGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_abandonAnalyticsIfNeeded('disposed'));
     _handScrollController.dispose();
@@ -318,15 +337,26 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   /// Restore personalities when opening a continued autosave.
-  void _restorePersonalitiesForContinuedGame(GameController controller) {
+  Future<void> _restorePersonalitiesForContinuedGame(
+    GameController controller,
+  ) async {
     final saved = controller.restoredBotPersonalities;
     if (saved.isNotEmpty) {
       _botTurnManager.restoreBotPersonalities(saved);
-      return;
+    } else {
+      // Legacy saves: derive from solo settings / known bot names
+      _assignBotPersonalities();
     }
 
-    // Legacy saves: derive from solo settings / known bot names
-    _assignBotPersonalities();
+    _decisionMaker.clearMemory();
+    final botPlayers = controller.gameState.players
+        .where((p) => p.type == PlayerType.bot)
+        .toList();
+    await _configureAppleIntelligenceSeats(
+      decisionMaker: _decisionMaker,
+      settings: controller.gameState.soloSettings,
+      botPlayers: botPlayers,
+    );
   }
 
   /// Initialize all manager instances after game controller setup
@@ -338,7 +368,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     _botTurnManager = BotTurnManager(
       gameController: controller,
-      botAI: _botAI,
+      decisionMaker: _decisionMaker,
       onStateChanged: () {
         // Force UI rebuild to show updated bot turn phase
         if (mounted) {
@@ -439,6 +469,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
           _botTurnManager.assignBotPersonalities();
         }
 
+        _decisionMaker.clearMemory();
+        final loadedBots = newController.gameState.players
+            .where((p) => p.type == PlayerType.bot)
+            .toList();
         _clearHandHighlightState();
         _viewingPlayerMelds = null;
         _isInitialized = true;
@@ -446,13 +480,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
         // Reinitialize managers with new controller
         _initializeManagers();
 
-        // CRITICAL: Resume game flow after import
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            DebugLogger.debug('Resuming game flow after import');
-            processCurrentPlayerTurn();
+        // Await seat config before resuming so the first bot turn uses
+        // the correct Apple Intelligence routing.
+        unawaited(() async {
+          await _configureAppleIntelligenceSeats(
+            decisionMaker: _decisionMaker,
+            settings: newController.gameState.soloSettings,
+            botPlayers: loadedBots,
+          );
+          if (!mounted) {
+            return;
           }
-        });
+          DebugLogger.debug('Resuming game flow after import');
+          processCurrentPlayerTurn();
+        }());
       },
     );
   }
@@ -475,11 +516,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
       // Continue must restore personalities — autosave previously left them
       // unassigned, so icons/AI defaulted to Adaptive (e.g. Clara showed Sue's icon).
       if (!_isLearnToPlay) {
-        _restorePersonalitiesForContinuedGame(widget.gameController!);
+        await _restorePersonalitiesForContinuedGame(widget.gameController!);
       } else {
         _assignBotPersonalities();
       }
 
+      if (!mounted) {
+        return;
+      }
       _isInitialized = true;
       setState(() {});
 
@@ -616,9 +660,19 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     // Assign bot personalities from setup settings
     final botAI = ref.read(botAIProvider);
+    final decisionMaker = ref.read(botDecisionMakerProvider);
+    decisionMaker.clearMemory();
     final botPlayers = players.where((p) => p.type == PlayerType.bot).toList();
     for (var i = 0; i < botPlayers.length; i++) {
       botAI.assignPersonality(botPlayers[i].id, personalities[i]);
+    }
+    await _configureAppleIntelligenceSeats(
+      decisionMaker: decisionMaker,
+      settings: effectiveSettings,
+      botPlayers: botPlayers,
+    );
+    if (!mounted || _disposed) {
+      return;
     }
 
     _logSoloGameStarted(effectiveSettings);
@@ -1253,7 +1307,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _bindGameController(savedController);
 
         _initializeManagers();
-        _restorePersonalitiesForContinuedGame(savedController);
+        await _restorePersonalitiesForContinuedGame(savedController);
+        if (!mounted || _disposed) {
+          return;
+        }
 
         // Sort the human player's hand
         final humanPlayer = ref.read(humanPlayerProvider);
@@ -1266,16 +1323,64 @@ class _GameScreenState extends ConsumerState<GameScreen>
         // Continue game flow
         processCurrentPlayerTurn();
       } else {
+        if (!mounted || _disposed) {
+          return;
+        }
         _dialogManager.showErrorDialog(
           'Failed to load saved game. Starting new game.',
         );
         unawaited(_startFreshGame());
       }
     } catch (e) {
+      if (!mounted || _disposed) {
+        return;
+      }
       _dialogManager.showErrorDialog(
         'Error loading saved game: ${e.toString()}',
       );
       unawaited(_startFreshGame());
+    }
+  }
+
+  Future<void> _configureAppleIntelligenceSeats({
+    required BotDecisionMaker decisionMaker,
+    required SoloGameSettings settings,
+    required List<Player> botPlayers,
+  }) async {
+    final generation = ++_appleSeatConfigGeneration;
+    if (decisionMaker is! CompositeBotDecisionMaker) {
+      return;
+    }
+
+    bool applySeats(Iterable<String> ids) {
+      if (!mounted || _disposed || generation != _appleSeatConfigGeneration) {
+        return false;
+      }
+      decisionMaker.setApplePlayerIds(ids);
+      return true;
+    }
+
+    if (!settings.enableAppleIntelligenceOpponent || botPlayers.isEmpty) {
+      applySeats(const []);
+      return;
+    }
+
+    final availability = await FoundationModelsService.instance
+        .checkAvailability();
+    if (!availability.available) {
+      DebugLogger.debug(
+        'Apple Intelligence opponent requested but unavailable: '
+        '${availability.reason}',
+      );
+      applySeats(const []);
+      return;
+    }
+
+    // First bot seat only — keeps latency predictable on a mixed table.
+    if (applySeats([botPlayers.first.id])) {
+      DebugLogger.debug(
+        'Apple Intelligence opponent enabled for ${botPlayers.first.name}',
+      );
     }
   }
 
@@ -1291,6 +1396,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               .join(','),
           'goingOutBonus': settings.enableGoingOutBonus,
           'finalTurn': settings.enableFinalTurnAfterGoingOut,
+          'appleIntelligenceOpponent': settings.enableAppleIntelligenceOpponent,
         },
       );
     } catch (_) {
@@ -2348,6 +2454,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
                           gameState: gameState,
                           humanPlayer: humanPlayer,
                           selectedCardIndices: _selectedCardIndices,
+                          botPlanIntent: _botPlanIntentFor(
+                            gameState.currentPlayer,
+                          ),
                           showKeyboardHints:
                               showDesktopKeyboardHints && !_isLearnToPlay,
                           onDrawFromDeck:

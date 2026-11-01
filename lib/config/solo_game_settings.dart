@@ -31,11 +31,16 @@ class SoloGameSettings {
   final bool enableGoingOutBonus;
   final bool enableFinalTurnAfterGoingOut;
 
+  /// When true and Foundation Models are available, the first bot seat uses
+  /// the Apple Intelligence multi-turn planner.
+  final bool enableAppleIntelligenceOpponent;
+
   SoloGameSettings({
     required int botCount,
     required this.botPersonalities,
     required this.enableGoingOutBonus,
     required this.enableFinalTurnAfterGoingOut,
+    this.enableAppleIntelligenceOpponent = false,
   }) : botCount = _clampBotCount(botCount);
 
   static int _clampBotCount(int count) {
@@ -47,6 +52,7 @@ class SoloGameSettings {
     botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
     enableGoingOutBonus: true,
     enableFinalTurnAfterGoingOut: true,
+    enableAppleIntelligenceOpponent: false,
   );
 
   /// Disables final-turn phase; useful for legacy tests expecting immediate round end.
@@ -55,6 +61,7 @@ class SoloGameSettings {
     botPersonalities: [BotPersonality.adaptive, BotPersonality.conservative],
     enableGoingOutBonus: true,
     enableFinalTurnAfterGoingOut: false,
+    enableAppleIntelligenceOpponent: false,
   );
 
   int get goingOutBonusPoints =>
@@ -83,6 +90,7 @@ class SoloGameSettings {
     List<BotPersonality>? botPersonalities,
     bool? enableGoingOutBonus,
     bool? enableFinalTurnAfterGoingOut,
+    bool? enableAppleIntelligenceOpponent,
   }) {
     final nextBotCount = botCount ?? this.botCount;
     return SoloGameSettings(
@@ -91,6 +99,9 @@ class SoloGameSettings {
       enableGoingOutBonus: enableGoingOutBonus ?? this.enableGoingOutBonus,
       enableFinalTurnAfterGoingOut:
           enableFinalTurnAfterGoingOut ?? this.enableFinalTurnAfterGoingOut,
+      enableAppleIntelligenceOpponent:
+          enableAppleIntelligenceOpponent ??
+          this.enableAppleIntelligenceOpponent,
     )._normalized();
   }
 
@@ -100,6 +111,7 @@ class SoloGameSettings {
       botPersonalities: normalizedPersonalities,
       enableGoingOutBonus: enableGoingOutBonus,
       enableFinalTurnAfterGoingOut: enableFinalTurnAfterGoingOut,
+      enableAppleIntelligenceOpponent: enableAppleIntelligenceOpponent,
     );
   }
 
@@ -133,6 +145,7 @@ class SoloGameSettings {
       'botPersonalities': botPersonalities.map((p) => p.name).toList(),
       'enableGoingOutBonus': enableGoingOutBonus,
       'enableFinalTurnAfterGoingOut': enableFinalTurnAfterGoingOut,
+      'enableAppleIntelligenceOpponent': enableAppleIntelligenceOpponent,
     };
   }
 
@@ -151,6 +164,9 @@ class SoloGameSettings {
       enableFinalTurnAfterGoingOut:
           json['enableFinalTurnAfterGoingOut'] as bool? ??
           defaults.enableFinalTurnAfterGoingOut,
+      enableAppleIntelligenceOpponent:
+          json['enableAppleIntelligenceOpponent'] as bool? ??
+          defaults.enableAppleIntelligenceOpponent,
     )._normalized();
   }
 

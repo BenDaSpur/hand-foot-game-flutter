@@ -4,10 +4,12 @@ import '../../models/player.dart';
 import '../../models/card.dart';
 import '../../models/game_state.dart';
 import '../../game/game_controller.dart';
-import '../../ai/enhanced_bot_ai.dart';
 import '../../ai/bot_decision.dart';
+import '../../ai/bot_decision_maker.dart';
 import '../../ai/bot_personality.dart';
 import '../../ai/bot_config.dart' as ai_bot_config;
+import '../../ai/enhanced_bot_ai.dart';
+import '../../ai/rule_bot_decision_maker.dart';
 import '../../config/bot_configurations.dart';
 import '../../utils/debug_logger.dart';
 import '../../config/game_config.dart';
@@ -22,7 +24,7 @@ import '../../services/analytics/bot_decision_snapshot_mapper.dart';
 /// Extracted from GameScreen to improve code organization and testability.
 class BotTurnManager {
   final GameController gameController;
-  final EnhancedBotAI botAI;
+  final BotDecisionMaker decisionMaker;
   final Function() onStateChanged;
   final Function(String) logHumanAction;
   final Function({
@@ -42,12 +44,23 @@ class BotTurnManager {
 
   BotTurnManager({
     required this.gameController,
-    required this.botAI,
     required this.onStateChanged,
     required this.logHumanAction,
     required this.logBotDecision,
     this.waitForPendingUi,
-  });
+    BotDecisionMaker? decisionMaker,
+    EnhancedBotAI? botAI,
+  }) : decisionMaker =
+           decisionMaker ??
+           RuleBotDecisionMaker(
+             botAI ??
+                 (throw ArgumentError(
+                   'BotTurnManager requires decisionMaker or botAI',
+                 )),
+           );
+
+  /// Compatibility accessor for personality / analytics call sites.
+  EnhancedBotAI get botAI => decisionMaker.ruleBot;
 
   /// End the round when a bot goes out, publishing events for UI transition.
   ///
@@ -115,7 +128,7 @@ class BotTurnManager {
     );
 
     for (final entry in resolved.entries) {
-      botAI.assignPersonality(entry.key, entry.value);
+      decisionMaker.assignPersonality(entry.key, entry.value);
     }
 
     // Log personality assignments in debug mode
@@ -124,7 +137,9 @@ class BotTurnManager {
         (p) => p.type == PlayerType.bot,
       );
       for (final bot in botPlayers) {
-        final personality = botAI.personalityManager.getPersonality(bot.id);
+        final personality = decisionMaker.personalityManager.getPersonality(
+          bot.id,
+        );
         DebugLogger.debug(
           'Bot ${bot.name} (${bot.id}) assigned personality: $personality',
         );
@@ -135,7 +150,7 @@ class BotTurnManager {
   /// Restore bot personalities from imported save data
   void restoreBotPersonalities(Map<String, String> savedPersonalities) {
     // Clear any existing assignments
-    botAI.personalityManager.clearPersonalityData();
+    decisionMaker.personalityManager.clearPersonalityData();
 
     final botPlayers = gameController.gameState.players
         .where((p) => p.type == PlayerType.bot)
@@ -155,7 +170,7 @@ class BotTurnManager {
       final savedPersonalityName = savedPersonalities[bot.id];
       if (savedPersonalityName != null) {
         final personality = parseBotPersonalityString(savedPersonalityName);
-        botAI.assignPersonality(bot.id, personality);
+        decisionMaker.assignPersonality(bot.id, personality);
 
         if (kDebugMode) {
           DebugLogger.debug(
@@ -165,7 +180,7 @@ class BotTurnManager {
       } else {
         // Missing entry for this bot — fall back to full-roster resolution
         final personality = resolvedFallback[bot.id] ?? BotPersonality.adaptive;
-        botAI.assignPersonality(bot.id, personality);
+        decisionMaker.assignPersonality(bot.id, personality);
 
         if (kDebugMode) {
           DebugLogger.debug(
@@ -216,6 +231,14 @@ class BotTurnManager {
       await Future.delayed(const Duration(milliseconds: _turnStartDelayMs));
       onStateChanged(); // Show "Waiting for X to draw..."
 
+      // Turn-start plan + multi-turn memory refresh (no-op for rule bots).
+      try {
+        await decisionMaker.beginTurn(botPlayer, gameController);
+        onStateChanged();
+      } catch (e) {
+        DebugLogger.warning('Bot beginTurn failed for ${botPlayer.name}: $e');
+      }
+
       // Process bot turn iteratively until turn ends or max iterations reached
       int maxIterations = 15; // Increased to allow for longer meld phases
       int iteration = 0;
@@ -248,7 +271,10 @@ class BotTurnManager {
         // Try bot decision with retry mechanism
         for (int attempt = 0; attempt < 3 && !actionSucceeded; attempt++) {
           try {
-            final decision = botAI.makeDecision(botPlayer, gameController);
+            final decision = await decisionMaker.decide(
+              botPlayer,
+              gameController,
+            );
             final gameStateSnapshot = BotDecisionSnapshotMapper.fromGameState(
               gameController.gameState,
             );
@@ -353,6 +379,11 @@ class BotTurnManager {
         forceCompleteBotTurn(botPlayer);
       }
     } finally {
+      try {
+        decisionMaker.endTurn(botPlayer);
+      } catch (e) {
+        DebugLogger.warning('Bot endTurn failed for ${botPlayer.name}: $e');
+      }
       _isProcessingBotTurn = false;
     }
   }
