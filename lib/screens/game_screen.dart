@@ -204,6 +204,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _dismissTurnCoach() async {
+    // Lesson practice melds call this path but never show the coach; do not
+    // persist dismissal or the coach is missing in the player's first real game.
+    if (_isLearnToPlay) {
+      return;
+    }
     _turnCoachDismissed = true;
     if (_showTurnCoach) {
       setState(() {

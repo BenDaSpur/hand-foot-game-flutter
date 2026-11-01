@@ -84,24 +84,36 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   bool _didAttemptAutoResume = false;
   bool _didAttemptLearnOffer = false;
+  bool _learnOfferPending = false;
+  bool _learnOfferClearedByNavigation = false;
 
   @override
   void initState() {
     super.initState();
     _checkForSavedSinglePlayerGame();
     _multiplayerAvailable = FirebaseService.isMultiplayerAvailable;
-    _attemptAutoResumeOrOfferRejoin();
-    _maybeOfferLearnToPlay();
+    // Finish auto-resume before the first-visit offer so a resume replace
+    // cannot dismiss the offer without a user choice.
+    unawaited(_bootstrapFirstVisitFlow());
+  }
+
+  Future<void> _bootstrapFirstVisitFlow() async {
+    await _attemptAutoResumeOrOfferRejoin();
+    if (!mounted) {
+      return;
+    }
+    await _maybeOfferLearnToPlay();
   }
 
   Future<void> _maybeOfferLearnToPlay() async {
-    if (_didAttemptLearnOffer) {
+    if (_didAttemptLearnOffer || _learnOfferClearedByNavigation) {
       return;
     }
-    _didAttemptLearnOffer = true;
 
     final shouldShow = await LearnToPlayPreferences.shouldShowOffer();
     if (!shouldShow || !mounted) {
+      _didAttemptLearnOffer = true;
+      _learnOfferPending = false;
       return;
     }
 
@@ -110,11 +122,47 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       if (!mounted) {
         return;
       }
-      final route = ModalRoute.of(context);
-      if (route == null || !route.isCurrent) {
+      unawaited(_presentLearnOfferIfCurrent());
+    });
+  }
+
+  Future<void> _presentLearnOfferIfCurrent() async {
+    if (!mounted || _didAttemptLearnOffer || _learnOfferClearedByNavigation) {
+      return;
+    }
+
+    // Re-check prefs on retry — LEARN TO PLAY may have dismissed while pending.
+    final shouldShow = await LearnToPlayPreferences.shouldShowOffer();
+    if (!shouldShow || !mounted) {
+      _didAttemptLearnOffer = true;
+      _learnOfferPending = false;
+      return;
+    }
+
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) {
+      // Settings / lesson / etc. is covering the menu — retry when we return.
+      _learnOfferPending = true;
+      return;
+    }
+
+    _learnOfferPending = false;
+    _didAttemptLearnOffer = true;
+    await _showLearnToPlayOfferDialog();
+  }
+
+  void _retryPendingLearnOffer() {
+    if (!_learnOfferPending ||
+        _didAttemptLearnOffer ||
+        _learnOfferClearedByNavigation ||
+        !mounted) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
         return;
       }
-      unawaited(_showLearnToPlayOfferDialog());
+      unawaited(_presentLearnOfferIfCurrent());
     });
   }
 
@@ -125,6 +173,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
     final route = ModalRoute.of(context);
     if (route == null || !route.isCurrent) {
+      _didAttemptLearnOffer = false;
+      _learnOfferPending = true;
       return;
     }
 
@@ -168,6 +218,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       },
     );
 
+    // Auto-resume / rejoin may replace this route while the dialog is open.
+    // That completes the future with null — do not treat it as a user Skip.
+    if (_learnOfferClearedByNavigation) {
+      return;
+    }
+
     // Persist for Skip, Start, barrier tap, and system back.
     await LearnToPlayPreferences.dismissOffer();
     if (!mounted) {
@@ -180,7 +236,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   /// Jackbox-style: auto-resume when bookmark + Auth UID still match a live game.
   /// Falls back to showing the REJOIN GAME button if auto-nav fails.
-  void _attemptAutoResumeOrOfferRejoin() async {
+  Future<void> _attemptAutoResumeOrOfferRejoin() async {
     if (_didAttemptAutoResume) {
       return;
     }
@@ -210,6 +266,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   }
 
   void _navigateToResumedGame(MultiplayerResumeResult result) {
+    _learnOfferClearedByNavigation = true;
     if (result.isWaiting) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -732,15 +789,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     );
   }
 
-  void _openSettings() {
-    Navigator.of(context)
+  Future<void> _openSettings() async {
+    await Navigator.of(context)
         .push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
+    _retryPendingLearnOffer();
   }
 
-  void _openPrivacyPolicy() {
-    Navigator.of(context).push(
+  Future<void> _openPrivacyPolicy() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()),
     );
+    _retryPendingLearnOffer();
   }
 
   Future<void> _openGitHubRepository() async {
@@ -1091,16 +1150,18 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     _openLearnToPlay();
   }
 
-  void _openLearnToPlay() {
-    Navigator.of(
+  Future<void> _openLearnToPlay() async {
+    await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const LearnToPlayScreen()));
+    _retryPendingLearnOffer();
   }
 
-  void _openSoloGameSettings() {
-    Navigator.of(context).push(
+  Future<void> _openSoloGameSettings() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const SoloGameSetupScreen()),
     );
+    _retryPendingLearnOffer();
   }
 
   void _createMultiplayerGame() async {
