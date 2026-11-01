@@ -5,11 +5,12 @@ Optional solo opponent that uses Apple’s on-device Foundation Models framework
 
 ## Behavior
 
-1. At the start of the first bot’s turn, Dart builds a compact game summary,
-   legal candidates (`LegalActionGenerator`), and prior `BotStrategicMemory`.
+1. At turn start (and again when the phase advances to meld/discard), Dart
+   builds a compact game summary, **current-phase** legal candidates
+   (`LegalActionGenerator`), and prior `BotStrategicMemory`.
 2. Native Swift (`FoundationModelsBotService`) asks `LanguageModelSession` for a
-   `@Generable` turn plan (`intent`, ordered candidate ids, memory updates,
-   thinking-ahead notes).
+   `@Generable` plan (`intent`, ordered candidate ids for that phase, memory
+   updates, thinking-ahead notes). Channel replies run on the main actor.
 3. `AppleIntelligenceBot` executes only still-legal planned steps; otherwise it
    falls back to `EnhancedBotAI` for that action.
 4. Memory is stored in Dart and re-injected on later turns (native sessions are

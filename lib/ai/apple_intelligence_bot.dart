@@ -57,63 +57,35 @@ class AppleIntelligenceBot extends BotDecisionMaker {
 
   @override
   Future<void> beginTurn(Player bot, GameController controller) async {
-    _lastPhase = null;
     _activePlans.remove(bot.id);
-
-    final context = BotGameContext(controller.gameState, controller);
-    final labeled = _labelCandidates(bot, context);
-    final memory = _memoryStore.forPlayer(bot.id);
-    final prompt = _buildPrompt(
-      bot: bot,
-      controller: controller,
-      memory: memory,
-      candidates: labeled,
-    );
-
-    Map<String, dynamic>? raw;
-    try {
-      raw = await _foundationModels.planTurn(prompt).timeout(_planTimeout);
-    } catch (e) {
-      DebugLogger.warning('AppleIntelligenceBot plan timeout/error: $e');
-      raw = null;
-    }
-
-    if (raw == null) {
-      _lastTurnIntent = null;
-      return;
-    }
-
-    final plan = BotTurnPlan.fromJson(raw);
-    _lastTurnIntent = plan.intent.isEmpty ? null : plan.intent;
-
-    memory.mergeUpdate(plan.memoryUpdate);
-    if (plan.thinkingAhead.isNotEmpty) {
-      memory.thinkingAhead
-        ..clear()
-        ..addAll(plan.thinkingAhead.take(3));
-    }
-    memory.updatedAtRound = controller.gameState.round;
-    memory.updatedAtTurn = controller.gameState.currentPlayerIndex;
-
-    final byId = {for (final c in labeled) c.id: c};
-    _activePlans[bot.id] = ActiveTurnPlan(plan: plan, candidatesById: byId);
+    await _planCurrentPhase(bot, controller, updateIntent: true);
+    _lastPhase = controller.gameState.turnPhase;
   }
 
   @override
   Future<BotDecision> decide(Player bot, GameController controller) async {
     final context = BotGameContext(controller.gameState, controller);
     final phase = context.turnPhase;
-    final active = _activePlans[bot.id];
 
+    // Fresh legal candidates only exist for the live phase. Re-plan when the
+    // phase advances so meld/discard steps have real candidate ids.
+    if (_lastPhase != null && _lastPhase != phase) {
+      final existing = _activePlans[bot.id];
+      if (existing != null) {
+        _skipCompletedPhase(existing, _lastPhase!);
+      }
+      await _planCurrentPhase(bot, controller, updateIntent: false);
+      _lastPhase = phase;
+    } else if (_lastPhase == null) {
+      // decide() without beginTurn (tests / recovery) — plan once.
+      await _planCurrentPhase(bot, controller, updateIntent: true);
+      _lastPhase = phase;
+    }
+
+    final active = _activePlans[bot.id];
     if (active == null) {
       return _rule.decide(bot, controller);
     }
-
-    // When phase advances, drop leftover steps from the previous phase.
-    if (_lastPhase != null && _lastPhase != phase) {
-      _skipCompletedPhase(active, _lastPhase!);
-    }
-    _lastPhase = phase;
 
     final liveLabeled = _labelCandidates(bot, context);
     final liveByAction = <String, LabeledLegalCandidate>{};
@@ -139,6 +111,57 @@ class AppleIntelligenceBot extends BotDecisionMaker {
     }
 
     return _rule.decide(bot, controller);
+  }
+
+  /// Ask Foundation Models for a plan using the current phase's legal set.
+  Future<void> _planCurrentPhase(
+    Player bot,
+    GameController controller, {
+    required bool updateIntent,
+  }) async {
+    final context = BotGameContext(controller.gameState, controller);
+    final labeled = _labelCandidates(bot, context);
+    final memory = _memoryStore.forPlayer(bot.id);
+    final prompt = _buildPrompt(
+      bot: bot,
+      controller: controller,
+      memory: memory,
+      candidates: labeled,
+      phase: context.turnPhase,
+    );
+
+    Map<String, dynamic>? raw;
+    try {
+      raw = await _foundationModels.planTurn(prompt).timeout(_planTimeout);
+    } catch (e) {
+      DebugLogger.warning('AppleIntelligenceBot plan timeout/error: $e');
+      raw = null;
+    }
+
+    if (raw == null) {
+      if (updateIntent) {
+        _lastTurnIntent = null;
+      }
+      // Keep any prior plan; decide() will fall back to the rule bot.
+      return;
+    }
+
+    final plan = BotTurnPlan.fromJson(raw);
+    if (updateIntent || (plan.intent.isNotEmpty && _lastTurnIntent == null)) {
+      _lastTurnIntent = plan.intent.isEmpty ? null : plan.intent;
+    }
+
+    memory.mergeUpdate(plan.memoryUpdate);
+    if (plan.thinkingAhead.isNotEmpty) {
+      memory.thinkingAhead
+        ..clear()
+        ..addAll(plan.thinkingAhead.take(3));
+    }
+    memory.updatedAtRound = controller.gameState.round;
+    memory.updatedAtTurn = controller.gameState.currentPlayerIndex;
+
+    final byId = {for (final c in labeled) c.id: c};
+    _activePlans[bot.id] = ActiveTurnPlan(plan: plan, candidatesById: byId);
   }
 
   @override
@@ -391,6 +414,7 @@ class AppleIntelligenceBot extends BotDecisionMaker {
     required GameController controller,
     required BotStrategicMemory memory,
     required List<LabeledLegalCandidate> candidates,
+    TurnPhase? phase,
   }) {
     final state = controller.gameState;
     final hand = bot.currentHand
@@ -422,16 +446,17 @@ class AppleIntelligenceBot extends BotDecisionMaker {
         )
         .toList(growable: false);
 
+    final phaseName = (phase ?? state.turnPhase).name;
     return {
       'instructions':
-          'You are playing Hand & Foot. Choose only from the provided '
-          'candidate ids. Plan this entire turn (draw, then melds, then '
-          'discard). Think ahead 1-3 turns. Update memory for next turns. '
-          'Prefer legal book progress, foot transition, and denying opponent '
-          'unlocks when relevant.',
+          'You are playing Hand & Foot in the $phaseName phase. Choose only '
+          'from the provided candidate ids for this phase. Think ahead 1-3 '
+          'turns via memory fields. Update goals, holdRanks, safeDiscards, '
+          'and thinkingAhead for later turns. Prefer legal book progress, '
+          'foot transition, and denying opponent unlocks when relevant.',
       'game': {
         'round': state.round,
-        'phase': state.turnPhase.name,
+        'phase': phaseName,
         'playDownRequirement': state.playDownRequirement,
         'deckSize': state.deck.size,
         'discardSize': state.discardPile.length,

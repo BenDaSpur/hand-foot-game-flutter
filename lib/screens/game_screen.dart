@@ -332,6 +332,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _assignBotPersonalities();
     }
 
+    _decisionMaker.clearMemory();
     final botPlayers = controller.gameState.players
         .where((p) => p.type == PlayerType.bot)
         .toList();
@@ -453,6 +454,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
         } else {
           _botTurnManager.assignBotPersonalities();
         }
+
+        _decisionMaker.clearMemory();
+        final loadedBots = newController.gameState.players
+            .where((p) => p.type == PlayerType.bot)
+            .toList();
+        unawaited(
+          _configureAppleIntelligenceSeats(
+            decisionMaker: _decisionMaker,
+            settings: newController.gameState.soloSettings,
+            botPlayers: loadedBots,
+          ),
+        );
 
         _clearHandHighlightState();
         _viewingPlayerMelds = null;

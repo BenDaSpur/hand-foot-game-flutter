@@ -128,8 +128,7 @@ class PersonalityConstants {
           handPileValueThreshold:
               25, // REDUCED further - take almost any valuable pile
           handPileSizeThreshold: 3, // Reduced from 4 - very low threshold
-          maxTurnsBeforeForcePlayDown:
-              1, // SUPER AGGRESSIVE - counter human accumulation with speed strikes
+          maxTurnsBeforeForcePlayDown: 1, // SUPER AGGRESSIVE - counter human accumulation with speed strikes
           highValuePairBreakChance:
               0.5, // Keep pairs longer until books form (was 0.8)
           bookCompletionPriority:

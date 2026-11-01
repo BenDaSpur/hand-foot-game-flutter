@@ -34,7 +34,7 @@ final class FoundationModelsBotService {
         )
         return
       }
-      Task {
+      Task { @MainActor in
         let plan = await self.planTurn(prompt: prompt)
         result(plan)
       }

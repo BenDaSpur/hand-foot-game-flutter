@@ -206,6 +206,66 @@ void main() {
       expect(memory['holdRanks'], contains('ace'));
     });
 
+    test('replans with live candidates when phase advances', () async {
+      final fake = _FakeFoundationModelsService(
+        planJson: {
+          'intent': 'Draw then stop melding',
+          'stepCandidateIds': ['c0'],
+          'thinkingAhead': <String>['hold aces'],
+          'goals': <String>['books'],
+          'holdRanks': <String>['ace'],
+          'safeDiscards': <String>[],
+          'plannedUnlock': '',
+          'opponentNotes': <String>[],
+          'lastTurnSummary': '',
+        },
+      );
+      final apple = AppleIntelligenceBot(
+        ruleBot: EnhancedBotAI(seed: 9),
+        foundationModels: fake,
+      );
+      final controller = _controllerWithBots();
+      final botIndex = controller.gameState.players.indexWhere(
+        (p) => p.type == PlayerType.bot,
+      );
+      controller.gameState.currentPlayerIndex = botIndex;
+      controller.gameState.turnPhase = TurnPhase.draw;
+      final bot = controller.gameState.players[botIndex];
+
+      await apple.beginTurn(bot, controller);
+      expect(fake.planTurnCalls, 1);
+      expect((fake.lastPrompt!['game'] as Map)['phase'], 'draw');
+
+      // Advance to meld without consuming the draw plan via decide().
+      controller.gameState.turnPhase = TurnPhase.meld;
+      fake.planJson = {
+        'intent': 'Stop melding',
+        'stepCandidateIds': ['c0'],
+        'thinkingAhead': <String>[],
+        'goals': <String>['books'],
+        'holdRanks': <String>['ace'],
+        'safeDiscards': <String>['five'],
+        'plannedUnlock': '',
+        'opponentNotes': <String>[],
+        'lastTurnSummary': 'drew',
+      };
+
+      final decision = await apple.decide(bot, controller);
+      expect(fake.planTurnCalls, 2);
+      expect((fake.lastPrompt!['game'] as Map)['phase'], 'meld');
+      expect(
+        decision.action,
+        anyOf(
+          'noMeld',
+          'createMeld',
+          'createMultipleMelds',
+          'addToMeld',
+          'goOut',
+          'endTurn',
+        ),
+      );
+    });
+
     test('stale planned step falls back without throwing', () async {
       final fake = _FakeFoundationModelsService(
         planJson: {
