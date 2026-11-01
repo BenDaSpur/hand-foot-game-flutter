@@ -1441,7 +1441,8 @@ class EnhancedBotAI {
     if (bookStatus['needsBookBalance'] == true) {
       adjustedValueThreshold *= BotConfig
           .defensiveDiscardMultiplier; // More willing to take pile for books
-      adjustedSizeThreshold *= BotConfig.aggressiveDiscardMultiplier; // Lower size threshold for book completion
+      adjustedSizeThreshold *= BotConfig
+          .aggressiveDiscardMultiplier; // Lower size threshold for book completion
     }
 
     // Opponent threat adjustment - be more aggressive when opponents are dangerous
@@ -1502,7 +1503,9 @@ class EnhancedBotAI {
           0.4; // Extremely aggressive for all personalities
 
       return pileValue > adjustedValueThreshold * aggressiveMultiplier ||
-          pileSize >= BotConfig.minimumDiscardPileSize; // Take any pile with minimum cards if not played down
+          pileSize >=
+              BotConfig
+                  .minimumDiscardPileSize; // Take any pile with minimum cards if not played down
     }
 
     // Hard-take after play-down comes before foot-urgency value gating so an

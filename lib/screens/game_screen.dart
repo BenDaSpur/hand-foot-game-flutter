@@ -12,8 +12,11 @@ import '../models/game_state.dart';
 import '../game/game_action_feedback.dart';
 import '../game/game_controller.dart';
 import '../game/game_controller_factory.dart';
+import '../ai/bot_decision_maker.dart';
+import '../ai/composite_bot_decision_maker.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../ai/bot_personality.dart';
+import '../services/foundation_models_service.dart';
 import '../config/bot_configurations.dart';
 import '../config/game_config.dart';
 import '../config/solo_game_settings.dart';
@@ -109,6 +112,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   EnhancedBotAI get _botAI => ref.read(botAIProvider);
+
+  BotDecisionMaker get _decisionMaker => ref.read(botDecisionMakerProvider);
 
   /// Turn owner read straight off the controller, which is the same source
   /// [build] uses to decide whether the hand is tappable. Turn-ownership gates
@@ -322,11 +327,21 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final saved = controller.restoredBotPersonalities;
     if (saved.isNotEmpty) {
       _botTurnManager.restoreBotPersonalities(saved);
-      return;
+    } else {
+      // Legacy saves: derive from solo settings / known bot names
+      _assignBotPersonalities();
     }
 
-    // Legacy saves: derive from solo settings / known bot names
-    _assignBotPersonalities();
+    final botPlayers = controller.gameState.players
+        .where((p) => p.type == PlayerType.bot)
+        .toList();
+    unawaited(
+      _configureAppleIntelligenceSeats(
+        decisionMaker: _decisionMaker,
+        settings: controller.gameState.soloSettings,
+        botPlayers: botPlayers,
+      ),
+    );
   }
 
   /// Initialize all manager instances after game controller setup
@@ -338,7 +353,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     _botTurnManager = BotTurnManager(
       gameController: controller,
-      botAI: _botAI,
+      decisionMaker: _decisionMaker,
       onStateChanged: () {
         // Force UI rebuild to show updated bot turn phase
         if (mounted) {
@@ -616,10 +631,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     // Assign bot personalities from setup settings
     final botAI = ref.read(botAIProvider);
+    final decisionMaker = ref.read(botDecisionMakerProvider);
+    decisionMaker.clearMemory();
     final botPlayers = players.where((p) => p.type == PlayerType.bot).toList();
     for (var i = 0; i < botPlayers.length; i++) {
       botAI.assignPersonality(botPlayers[i].id, personalities[i]);
     }
+    await _configureAppleIntelligenceSeats(
+      decisionMaker: decisionMaker,
+      settings: effectiveSettings,
+      botPlayers: botPlayers,
+    );
 
     _logSoloGameStarted(effectiveSettings);
 
@@ -1279,6 +1301,38 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
   }
 
+  Future<void> _configureAppleIntelligenceSeats({
+    required BotDecisionMaker decisionMaker,
+    required SoloGameSettings settings,
+    required List<Player> botPlayers,
+  }) async {
+    if (decisionMaker is! CompositeBotDecisionMaker) {
+      return;
+    }
+
+    if (!settings.enableAppleIntelligenceOpponent || botPlayers.isEmpty) {
+      decisionMaker.setApplePlayerIds(const []);
+      return;
+    }
+
+    final availability = await FoundationModelsService.instance
+        .checkAvailability();
+    if (!availability.available) {
+      DebugLogger.debug(
+        'Apple Intelligence opponent requested but unavailable: '
+        '${availability.reason}',
+      );
+      decisionMaker.setApplePlayerIds(const []);
+      return;
+    }
+
+    // First bot seat only — keeps latency predictable on a mixed table.
+    decisionMaker.setApplePlayerIds([botPlayers.first.id]);
+    DebugLogger.debug(
+      'Apple Intelligence opponent enabled for ${botPlayers.first.name}',
+    );
+  }
+
   Future<void> _logSoloGameStarted(SoloGameSettings settings) async {
     try {
       await FirebaseService.logGameEvent(
@@ -1291,6 +1345,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               .join(','),
           'goingOutBonus': settings.enableGoingOutBonus,
           'finalTurn': settings.enableFinalTurnAfterGoingOut,
+          'appleIntelligenceOpponent': settings.enableAppleIntelligenceOpponent,
         },
       );
     } catch (_) {
@@ -2348,6 +2403,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                           gameState: gameState,
                           humanPlayer: humanPlayer,
                           selectedCardIndices: _selectedCardIndices,
+                          botPlanIntent: _decisionMaker.lastTurnIntent,
                           showKeyboardHints:
                               showDesktopKeyboardHints && !_isLearnToPlay,
                           onDrawFromDeck:

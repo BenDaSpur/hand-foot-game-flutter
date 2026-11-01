@@ -196,6 +196,10 @@ class GameActionButtons extends StatelessWidget {
   final bool showKeyboardHints;
   final bool canUndoMeld;
 
+  /// When set (e.g. Apple Intelligence turn plan), shown instead of a random
+  /// personality thinking line.
+  final String? botPlanIntent;
+
   const GameActionButtons({
     super.key,
     required this.gameState,
@@ -210,6 +214,7 @@ class GameActionButtons extends StatelessWidget {
     this.currentUserId, // Optional - for multiplayer
     this.showKeyboardHints = false,
     this.canUndoMeld = false,
+    this.botPlanIntent,
   });
 
   bool get _hasSelectedCard => selectedCardIndices.length == 1;
@@ -292,10 +297,10 @@ class GameActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!_isCurrentUserTurn) {
       final bot = gameState.currentPlayer;
-      final thinkingMessage = BotThinkingMessages.getThinkingMessage(
-        bot,
-        gameState,
-      );
+      final override = botPlanIntent?.trim();
+      final thinkingMessage = (override != null && override.isNotEmpty)
+          ? override
+          : BotThinkingMessages.getThinkingMessage(bot, gameState);
       final mediaSize = MediaQuery.sizeOf(context);
       final width = mediaSize.width;
       final isPhone = GameResponsiveLayout.isPhone(width);

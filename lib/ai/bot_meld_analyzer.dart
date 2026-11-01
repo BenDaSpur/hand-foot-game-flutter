@@ -624,7 +624,8 @@ class BotMeldAnalyzer {
 
         // CRITICAL: Extremely harsh penalty if we have no clean books
         if (!hasCleanBook) {
-          priority -= GameConfig.cleanBookProtectionPenalty; // Never contaminate when no clean books exist
+          priority -= GameConfig
+              .cleanBookProtectionPenalty; // Never contaminate when no clean books exist
         }
 
         if (meld.cards.length >= 5) {
@@ -1051,8 +1052,9 @@ class BotMeldAnalyzer {
 
     final comparators = <int Function(List<PlayingCard>, List<PlayingCard>)>[
       (a, b) {
-        final valueCmp = calculateTotalMeldValue([b])
-            .compareTo(calculateTotalMeldValue([a]));
+        final valueCmp = calculateTotalMeldValue([
+          b,
+        ]).compareTo(calculateTotalMeldValue([a]));
         if (valueCmp != 0) {
           return valueCmp;
         }
@@ -1063,8 +1065,9 @@ class BotMeldAnalyzer {
         if (sizeCmp != 0) {
           return sizeCmp;
         }
-        return calculateTotalMeldValue([b])
-            .compareTo(calculateTotalMeldValue([a]));
+        return calculateTotalMeldValue([
+          b,
+        ]).compareTo(calculateTotalMeldValue([a]));
       },
       (a, b) {
         final wildA = a.where((card) => card.isWild).length;
@@ -1073,8 +1076,9 @@ class BotMeldAnalyzer {
         if (wildCmp != 0) {
           return wildCmp;
         }
-        return calculateTotalMeldValue([b])
-            .compareTo(calculateTotalMeldValue([a]));
+        return calculateTotalMeldValue([
+          b,
+        ]).compareTo(calculateTotalMeldValue([a]));
       },
     ];
 

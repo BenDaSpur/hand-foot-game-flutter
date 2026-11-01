@@ -12,6 +12,10 @@ void main() {
       expect(SoloGameSettings.defaults.botCount, 2);
       expect(SoloGameSettings.defaults.enableGoingOutBonus, isTrue);
       expect(SoloGameSettings.defaults.enableFinalTurnAfterGoingOut, isTrue);
+      expect(
+        SoloGameSettings.defaults.enableAppleIntelligenceOpponent,
+        isFalse,
+      );
       expect(SoloGameSettings.defaults.normalizedPersonalities, hasLength(2));
     });
 
@@ -55,6 +59,7 @@ void main() {
         ],
         enableGoingOutBonus: false,
         enableFinalTurnAfterGoingOut: false,
+        enableAppleIntelligenceOpponent: true,
       );
 
       final restored = SoloGameSettings.fromJson(original.toJson());
@@ -65,6 +70,7 @@ void main() {
       );
       expect(restored.enableGoingOutBonus, isFalse);
       expect(restored.enableFinalTurnAfterGoingOut, isFalse);
+      expect(restored.enableAppleIntelligenceOpponent, isTrue);
     });
 
     test('fromJson clamps out-of-range botCount', () {

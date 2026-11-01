@@ -8,6 +8,8 @@ import '../game/game_interface.dart';
 import '../game/enhanced_multiplayer_controller.dart';
 import '../models/player.dart';
 import '../models/game_state.dart';
+import '../ai/bot_decision_maker.dart';
+import '../ai/composite_bot_decision_maker.dart';
 import '../ai/enhanced_bot_ai.dart';
 import '../game/events/game_event_bus.dart';
 import '../game/events/game_event.dart';
@@ -314,9 +316,19 @@ final gameInterfaceProvider = Provider<GameInterface?>((ref) {
   return multiplayer ?? singleplayer;
 });
 
-/// Provider for bot AI instance
+/// Provider for the classic rule bot instance (personalities / fallback).
 final botAIProvider = Provider<EnhancedBotAI>((ref) {
   return EnhancedBotAI();
+});
+
+/// Async decision maker used by [BotTurnManager].
+///
+/// Defaults to the rule bot. Call sites that enable Apple Intelligence should
+/// replace seats via [CompositeBotDecisionMaker.setApplePlayerIds] on the
+/// concrete instance from [botDecisionMakerProvider].
+final botDecisionMakerProvider = Provider<BotDecisionMaker>((ref) {
+  final ruleBot = ref.watch(botAIProvider);
+  return CompositeBotDecisionMaker(ruleBot: ruleBot);
 });
 
 /// Provider for reactive game state stream (singleplayer)
