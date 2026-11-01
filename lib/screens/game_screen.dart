@@ -176,6 +176,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   bool get _isLearnToPlay => widget.learnToPlaySession != null;
 
+  /// Matches [processCurrentPlayerTurn]'s human gate, including the
+  /// `name == 'You'` fallback used when type metadata is desynced.
+  bool _isHumanControlledPlayer(Player? player) {
+    if (player == null) {
+      return false;
+    }
+    return player.type == PlayerType.human || player.name == 'You';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -867,8 +876,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       }
 
       // Human turn: Do nothing, wait for UI input
-      if (currentPlayer.type == PlayerType.human ||
-          currentPlayer.name == 'You') {
+      if (_isHumanControlledPlayer(currentPlayer)) {
         DebugLogger.debug('Human turn - waiting for input');
         final humanIndex = gameState.players.indexWhere(
           (p) => p.type == PlayerType.human,
@@ -1010,7 +1018,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // stays enabled.
 
     final liveCurrent = _liveCurrentPlayer;
-    if (liveCurrent == null || liveCurrent.type != PlayerType.human) {
+    if (!_isHumanControlledPlayer(liveCurrent)) {
       if (!_isLearnToPlay && liveCurrent != null) {
         _showBriefSnackBar('Waiting for ${liveCurrent.name}…');
       }
@@ -1063,7 +1071,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _onCardDoubleTap(int cardIndex) {
-    if (_liveCurrentPlayer?.type != PlayerType.human) {
+    if (!_isHumanControlledPlayer(_liveCurrentPlayer)) {
       return;
     }
 
@@ -1160,7 +1168,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Set<int> _playableCardIndices(Player humanPlayer) {
-    if (_liveCurrentPlayer?.type != PlayerType.human) {
+    if (!_isHumanControlledPlayer(_liveCurrentPlayer)) {
       return {};
     }
 
@@ -1985,7 +1993,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         index: _keyboardFocusedCardIndex,
         handLength: handLength,
       ),
-      isHumanTurn: gameState.currentPlayer.type == PlayerType.human,
+      isHumanTurn: _isHumanControlledPlayer(gameState.currentPlayer),
       isAnimating: _isCardAnimationActive,
       hasInteractedSinceDraw: _hasPlayerInteractedSinceDraw,
       isHelpVisible: _showKeyboardHelp,
@@ -2414,7 +2422,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                             });
                           },
                           isCurrentPlayerTurn:
-                              currentPlayer.type == PlayerType.human &&
+                              _isHumanControlledPlayer(currentPlayer) &&
                               gameState.phase != GamePhase.gameEnd,
                           handStackKey: _handStackKey,
                           handScrollController: _handScrollController,
@@ -2454,7 +2462,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       // Keep hand tappable off-turn so we can explain "waiting for …".
       return true;
     }
-    if (currentPlayer.type != PlayerType.human) {
+    if (!_isHumanControlledPlayer(currentPlayer)) {
       return false;
     }
     // During play-down, selection happens inside the meld modal — not on the
@@ -2569,7 +2577,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
 
     if (_isGameStuck() &&
-        currentPlayer.type == PlayerType.human &&
+        _isHumanControlledPlayer(currentPlayer) &&
         gameState.phase != GamePhase.gameEnd) {
       final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
       return StuckGoOutRecoveryBanner(
@@ -2622,7 +2630,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     if (gameState.lastCallActive && gameState.phase == GamePhase.playing) {
       return LastCallBanner(
-        isLocalPlayerTurn: currentPlayer.type == PlayerType.human,
+        isLocalPlayerTurn: _isHumanControlledPlayer(currentPlayer),
       );
     }
 
@@ -2631,7 +2639,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
 
     if (_showTurnCoach &&
-        currentPlayer.type == PlayerType.human &&
+        _isHumanControlledPlayer(currentPlayer) &&
         gameState.phase == GamePhase.playing) {
       final humanPlayer = ref.read(humanPlayerProvider) ?? currentPlayer;
       return TurnCoachBanner(
@@ -2650,7 +2658,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (_isLearnToPlay || _isCardAnimationActive) {
       return false;
     }
-    return currentPlayer.type == PlayerType.human &&
+    return _isHumanControlledPlayer(currentPlayer) &&
         gameState.phase == GamePhase.playing &&
         gameState.turnPhase == TurnPhase.draw;
   }
