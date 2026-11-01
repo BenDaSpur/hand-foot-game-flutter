@@ -127,6 +127,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   bool _statusExpanded = false;
   bool _actionsExpanded = false;
   bool _disposed = false; // Track disposal state
+
+  /// Bumped on dispose and at the start of each Apple-seat configure so a
+  /// stale availability await cannot apply an old game's bot routing.
+  int _appleSeatConfigGeneration = 0;
   bool _hasPlayerInteractedSinceDraw = false; // Prevent auto-discard after draw
 
   // Analytics tracking
@@ -258,6 +262,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   void dispose() {
     _disposed = true;
+    _appleSeatConfigGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_abandonAnalyticsIfNeeded('disposed'));
     _handScrollController.dispose();
@@ -1333,12 +1338,21 @@ class _GameScreenState extends ConsumerState<GameScreen>
     required SoloGameSettings settings,
     required List<Player> botPlayers,
   }) async {
+    final generation = ++_appleSeatConfigGeneration;
     if (decisionMaker is! CompositeBotDecisionMaker) {
       return;
     }
 
+    bool applySeats(Iterable<String> ids) {
+      if (!mounted || _disposed || generation != _appleSeatConfigGeneration) {
+        return false;
+      }
+      decisionMaker.setApplePlayerIds(ids);
+      return true;
+    }
+
     if (!settings.enableAppleIntelligenceOpponent || botPlayers.isEmpty) {
-      decisionMaker.setApplePlayerIds(const []);
+      applySeats(const []);
       return;
     }
 
@@ -1349,15 +1363,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
         'Apple Intelligence opponent requested but unavailable: '
         '${availability.reason}',
       );
-      decisionMaker.setApplePlayerIds(const []);
+      applySeats(const []);
       return;
     }
 
     // First bot seat only — keeps latency predictable on a mixed table.
-    decisionMaker.setApplePlayerIds([botPlayers.first.id]);
-    DebugLogger.debug(
-      'Apple Intelligence opponent enabled for ${botPlayers.first.name}',
-    );
+    if (applySeats([botPlayers.first.id])) {
+      DebugLogger.debug(
+        'Apple Intelligence opponent enabled for ${botPlayers.first.name}',
+      );
+    }
   }
 
   Future<void> _logSoloGameStarted(SoloGameSettings settings) async {
