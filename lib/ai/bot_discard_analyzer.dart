@@ -50,6 +50,8 @@ class BotDiscardAnalyzer {
     BotGameAnalyzer? analyzer,
     bool preserveUnlockKeys = true,
     Set<CardRank>? extraProtectedRanks,
+    Set<CardRank>? holdRanks,
+    Set<CardRank>? extraFeedRanks,
     bool allowWildFreeze = false,
   }) {
     if (bot.currentHand.isEmpty) {
@@ -78,6 +80,8 @@ class BotDiscardAnalyzer {
         analyzer,
         preserveUnlockKeys: preserveUnlockKeys,
         extraProtectedRanks: extraProtectedRanks,
+        holdRanks: holdRanks,
+        extraFeedRanks: extraFeedRanks,
         allowWildFreeze: allowWildFreeze,
       );
     }
@@ -98,6 +102,8 @@ class BotDiscardAnalyzer {
     BotGameAnalyzer? analyzer, {
     bool preserveUnlockKeys = true,
     Set<CardRank>? extraProtectedRanks,
+    Set<CardRank>? holdRanks,
+    Set<CardRank>? extraFeedRanks,
     bool allowWildFreeze = false,
   }) {
     int score = 0;
@@ -234,6 +240,28 @@ class BotDiscardAnalyzer {
       score -=
           BotConfig.genericUnlockKeyHoldPenalty +
           BotConfig.liveTopKeyHoldExtraPenalty;
+    }
+
+    // Model hold ranks apply even when the planner is spending live keys.
+    // The penalty only sticks when a pair remains, so a singleton can still
+    // be the discard if every other card is worse.
+    final holds = holdRanks;
+    if (holds != null &&
+        holds.contains(card.rank) &&
+        !card.isWild &&
+        !card.isThree &&
+        sameRankCount >= 2) {
+      score -=
+          BotConfig.genericUnlockKeyHoldPenalty +
+          BotConfig.liveTopKeyHoldExtraPenalty;
+    }
+
+    final feedRanks = extraFeedRanks;
+    if (feedRanks != null &&
+        feedRanks.contains(card.rank) &&
+        !card.isWild &&
+        !card.isThree) {
+      score -= BotConfig.opponentMeldedRankPenalty;
     }
 
     // Contestable farm: never toss 4–8/K/A if the bot cannot take this top.

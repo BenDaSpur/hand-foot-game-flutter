@@ -9,6 +9,8 @@ class BotStrategicMemory {
     List<String>? goals,
     List<String>? holdRanks,
     List<String>? safeDiscards,
+    List<String>? avoidFeedRanks,
+    this.posture = '',
     this.plannedUnlock = '',
     List<String>? opponentNotes,
     this.lastTurnSummary = '',
@@ -18,12 +20,15 @@ class BotStrategicMemory {
   }) : goals = List<String>.from(goals ?? const []),
        holdRanks = List<String>.from(holdRanks ?? const []),
        safeDiscards = List<String>.from(safeDiscards ?? const []),
+       avoidFeedRanks = List<String>.from(avoidFeedRanks ?? const []),
        opponentNotes = List<String>.from(opponentNotes ?? const []),
        thinkingAhead = List<String>.from(thinkingAhead ?? const []);
 
   final List<String> goals;
   final List<String> holdRanks;
   final List<String> safeDiscards;
+  final List<String> avoidFeedRanks;
+  String posture;
   String plannedUnlock;
   final List<String> opponentNotes;
   String lastTurnSummary;
@@ -36,6 +41,8 @@ class BotStrategicMemory {
       goals: goals,
       holdRanks: holdRanks,
       safeDiscards: safeDiscards,
+      avoidFeedRanks: avoidFeedRanks,
+      posture: posture,
       plannedUnlock: plannedUnlock,
       opponentNotes: opponentNotes,
       lastTurnSummary: lastTurnSummary,
@@ -62,6 +69,14 @@ class BotStrategicMemory {
         ..clear()
         ..addAll(_normalizeRanks(update.safeDiscards!));
     }
+    if (update.avoidFeedRanks != null && update.avoidFeedRanks!.isNotEmpty) {
+      avoidFeedRanks
+        ..clear()
+        ..addAll(_normalizeRanks(update.avoidFeedRanks!));
+    }
+    if (update.posture != null && update.posture!.trim().isNotEmpty) {
+      posture = update.posture!.trim();
+    }
     if (update.plannedUnlock != null &&
         update.plannedUnlock!.trim().isNotEmpty) {
       plannedUnlock = update.plannedUnlock!.trim();
@@ -87,6 +102,8 @@ class BotStrategicMemory {
       'goals': goals,
       'holdRanks': holdRanks,
       'safeDiscards': safeDiscards,
+      'avoidFeedRanks': avoidFeedRanks,
+      'posture': posture,
       'plannedUnlock': plannedUnlock,
       'opponentNotes': opponentNotes,
       'lastTurnSummary': lastTurnSummary,
@@ -104,6 +121,8 @@ class BotStrategicMemory {
       goals: _stringList(json['goals']),
       holdRanks: _stringList(json['holdRanks']),
       safeDiscards: _stringList(json['safeDiscards']),
+      avoidFeedRanks: _stringList(json['avoidFeedRanks']),
+      posture: json['posture'] as String? ?? '',
       plannedUnlock: json['plannedUnlock'] as String? ?? '',
       opponentNotes: _stringList(json['opponentNotes']),
       lastTurnSummary: json['lastTurnSummary'] as String? ?? '',
@@ -118,6 +137,20 @@ class BotStrategicMemory {
       return [];
     }
     return value.map((e) => e.toString()).toList();
+  }
+
+  /// Rank names the model asked to hold or avoid, as [CardRank] values.
+  static Set<CardRank> parseRanks(Iterable<String> raw) {
+    final out = <CardRank>{};
+    for (final name in _normalizeRanks(raw.toList())) {
+      for (final rank in CardRank.values) {
+        if (rank.name == name) {
+          out.add(rank);
+          break;
+        }
+      }
+    }
+    return out;
   }
 
   static List<String> _normalizeRanks(List<String> raw) {
@@ -169,6 +202,8 @@ class BotStrategicMemoryUpdate {
     this.goals,
     this.holdRanks,
     this.safeDiscards,
+    this.avoidFeedRanks,
+    this.posture,
     this.plannedUnlock,
     this.opponentNotes,
     this.lastTurnSummary,
@@ -178,6 +213,8 @@ class BotStrategicMemoryUpdate {
   final List<String>? goals;
   final List<String>? holdRanks;
   final List<String>? safeDiscards;
+  final List<String>? avoidFeedRanks;
+  final String? posture;
   final String? plannedUnlock;
   final List<String>? opponentNotes;
   final String? lastTurnSummary;
@@ -191,6 +228,8 @@ class BotStrategicMemoryUpdate {
       goals: _optionalStringList(json['goals']),
       holdRanks: _optionalStringList(json['holdRanks']),
       safeDiscards: _optionalStringList(json['safeDiscards']),
+      avoidFeedRanks: _optionalStringList(json['avoidFeedRanks']),
+      posture: json['posture'] as String?,
       plannedUnlock: json['plannedUnlock'] as String?,
       opponentNotes: _optionalStringList(json['opponentNotes']),
       lastTurnSummary: json['lastTurnSummary'] as String?,

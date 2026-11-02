@@ -18,6 +18,7 @@ import 'bot_game_context.dart';
 import 'bot_discard_analyzer.dart';
 import 'bot_config.dart';
 import 'planner/turn_planner.dart';
+import 'turn_plan.dart';
 import '../utils/debug_logger.dart';
 
 /// Enhanced Bot AI coordinator that orchestrates all bot decision-making.
@@ -99,10 +100,23 @@ class EnhancedBotAI {
        _planner = planner,
        _random = random;
 
-  /// Main entry point for bot decisions
-  BotDecision makeDecision(Player bot, GameController controller) {
+  /// Main entry point for bot decisions.
+  ///
+  /// [bias] is the Apple Intelligence posture overlay. Hard constraints inside
+  /// the planner still run first, so a bias cannot skip a forced take or
+  /// play-down. Null bias is the coded bot.
+  BotDecision makeDecision(
+    Player bot,
+    GameController controller, {
+    AppleTurnBias? bias,
+  }) {
     final context = BotGameContext(controller.gameState, controller);
-    return _makeDecisionWithContext(bot, context);
+    return _makeDecisionWithContext(bot, context, bias: bias);
+  }
+
+  /// Planner action for a prompt, without counting a turn or applying bias.
+  BotDecision previewPlannerAction(Player bot, GameController controller) {
+    return _planner.plan(bot, BotGameContext(controller.gameState, controller));
   }
 
   /// Internal decision-making method using BotGameContext for decoupling.
@@ -111,11 +125,15 @@ class EnhancedBotAI {
   /// responses, emergency melds, finish-round shortcuts) — is validated so no
   /// path can meld/discard a foot hand down to 0 cards without go-out books
   /// (analytics: session 17849474674147414 `error` states).
-  BotDecision _makeDecisionWithContext(Player bot, BotGameContext context) {
+  BotDecision _makeDecisionWithContext(
+    Player bot,
+    BotGameContext context, {
+    AppleTurnBias? bias,
+  }) {
     _activeContext = context;
     _forceSpendUnlockKeys = false;
     try {
-      final decision = _computeDecisionWithContext(bot, context);
+      final decision = _computeDecisionWithContext(bot, context, bias: bias);
       if (_isValidDecision(decision, bot, context)) {
         return decision;
       }
@@ -132,7 +150,11 @@ class EnhancedBotAI {
   }
 
   /// Computes the raw decision; callers must validate via [_isValidDecision].
-  BotDecision _computeDecisionWithContext(Player bot, BotGameContext context) {
+  BotDecision _computeDecisionWithContext(
+    Player bot,
+    BotGameContext context, {
+    AppleTurnBias? bias,
+  }) {
     final gameState = context.gameState;
 
     try {
@@ -194,7 +216,13 @@ class EnhancedBotAI {
         );
       }
 
-      final decision = _planner.plan(bot, context);
+      final decision = _planner.plan(
+        bot,
+        context,
+        extraProtectedRanks: bias?.holdRanks ?? const <CardRank>{},
+        extraFeedRanks: bias?.avoidFeedRanks ?? const <CardRank>{},
+        adjustWeights: bias?.adjustWeights,
+      );
       DebugLogger.botDebug(
         bot.id,
         bot.name,

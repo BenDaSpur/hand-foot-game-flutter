@@ -53,6 +53,8 @@ class LegalActionGenerator {
     required bool forceSpendKeys,
     required bool emptyHandPile,
     bool allowWildFreeze = false,
+    Set<CardRank> extraProtectedRanks = const <CardRank>{},
+    Set<CardRank> extraFeedRanks = const <CardRank>{},
   }) {
     switch (context.turnPhase) {
       case TurnPhase.draw:
@@ -72,6 +74,8 @@ class LegalActionGenerator {
           liveKeyRanks: liveKeyRanks,
           forceSpendKeys: forceSpendKeys,
           allowWildFreeze: allowWildFreeze,
+          extraProtectedRanks: extraProtectedRanks,
+          extraFeedRanks: extraFeedRanks,
         );
     }
   }
@@ -285,6 +289,8 @@ class LegalActionGenerator {
     required Set<CardRank> liveKeyRanks,
     required bool forceSpendKeys,
     required bool allowWildFreeze,
+    Set<CardRank> extraProtectedRanks = const <CardRank>{},
+    Set<CardRank> extraFeedRanks = const <CardRank>{},
   }) {
     if (bot.currentHand.isEmpty) {
       if (bot.canGoOut) {
@@ -317,6 +323,8 @@ class LegalActionGenerator {
       context.gameState,
       preserveUnlockKeys: !forceSpendKeys,
       extraProtectedRanks: forceSpendKeys ? null : liveKeyRanks,
+      holdRanks: extraProtectedRanks.isEmpty ? null : extraProtectedRanks,
+      extraFeedRanks: extraFeedRanks.isEmpty ? null : extraFeedRanks,
       allowWildFreeze: allowWildFreeze,
     );
     return [

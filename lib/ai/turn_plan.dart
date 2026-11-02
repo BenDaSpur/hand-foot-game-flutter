@@ -1,6 +1,91 @@
+import '../models/card.dart';
 import 'bot_decision.dart';
 import 'bot_strategic_memory.dart';
+import 'planner/competitive_policy.dart';
 import 'planner/legal_actions.dart';
+
+/// How an Apple Intelligence seat asks the coded planner to lean.
+///
+/// There is no stall option. Postures only tighten play.
+enum ApplePosture {
+  raceGoOut,
+  buildBooks,
+  denyPile,
+  holdKeys;
+
+  static const double boost = 1.35;
+
+  String get wireName {
+    switch (this) {
+      case ApplePosture.raceGoOut:
+        return 'raceGoOut';
+      case ApplePosture.buildBooks:
+        return 'buildBooks';
+      case ApplePosture.denyPile:
+        return 'denyPile';
+      case ApplePosture.holdKeys:
+        return 'holdKeys';
+    }
+  }
+
+  /// Accepts the wire name. Unknown values, including stall, are ignored.
+  static ApplePosture? parse(Object? raw) {
+    if (raw is! String) {
+      return null;
+    }
+    final cleaned = raw.trim().toLowerCase().replaceAll(RegExp(r'[\s_-]'), '');
+    switch (cleaned) {
+      case 'racegoout':
+        return ApplePosture.raceGoOut;
+      case 'buildbooks':
+        return ApplePosture.buildBooks;
+      case 'denypile':
+        return ApplePosture.denyPile;
+      case 'holdkeys':
+        return ApplePosture.holdKeys;
+      default:
+        return null;
+    }
+  }
+
+  /// Multiplies the personality weights this posture is allowed to raise.
+  ScorerWeights adjust(ScorerWeights base) {
+    switch (this) {
+      case ApplePosture.raceGoOut:
+        return base.scaled(goOut: boost, footTransition: boost);
+      case ApplePosture.buildBooks:
+        return base.scaled(bookProgress: boost, cleanBook: boost);
+      case ApplePosture.denyPile:
+        return base.scaled(takePile: boost, denial: boost);
+      case ApplePosture.holdKeys:
+        return base.scaled(keyHold: boost);
+    }
+  }
+}
+
+/// Ranks and weight bias for one Apple seat turn.
+///
+/// Applied on top of [TurnPlanner] hard constraints. A null posture leaves
+/// the personality weights unchanged.
+class AppleTurnBias {
+  const AppleTurnBias({
+    this.posture,
+    this.holdRanks = const <CardRank>{},
+    this.avoidFeedRanks = const <CardRank>{},
+  });
+
+  final ApplePosture? posture;
+  final Set<CardRank> holdRanks;
+  final Set<CardRank> avoidFeedRanks;
+
+  ScorerWeights adjustWeights(ScorerWeights base) {
+    final posture = this.posture;
+    if (posture == null) {
+      return base;
+    }
+    return posture.adjust(base);
+  }
+}
 
 /// A legal candidate exposed to the on-device model with a stable id.
 class LabeledLegalCandidate {
@@ -25,12 +110,16 @@ class LabeledLegalCandidate {
 class BotTurnPlan {
   BotTurnPlan({
     required this.intent,
-    required this.stepCandidateIds,
+    this.posture,
+    this.stepCandidateIds = const [],
     required this.thinkingAhead,
     required this.memoryUpdate,
   });
 
   final String intent;
+  final ApplePosture? posture;
+
+  /// Accepted from older native payloads and ignored when choosing an action.
   final List<String> stepCandidateIds;
   final List<String> thinkingAhead;
   final BotStrategicMemoryUpdate memoryUpdate;
@@ -38,7 +127,6 @@ class BotTurnPlan {
   factory BotTurnPlan.empty() {
     return BotTurnPlan(
       intent: '',
-      stepCandidateIds: const [],
       thinkingAhead: const [],
       memoryUpdate: const BotStrategicMemoryUpdate(),
     );
@@ -74,10 +162,13 @@ class BotTurnPlan {
             'opponentNotes': json['opponentNotes'],
             'lastTurnSummary': json['lastTurnSummary'],
             'thinkingAhead': json['thinkingAhead'],
+            'avoidFeedRanks': json['avoidFeedRanks'],
+            'posture': json['posture'],
           };
 
     return BotTurnPlan(
       intent: (json['intent'] as String?)?.trim() ?? '',
+      posture: ApplePosture.parse(json['posture'] ?? memoryJson['posture']),
       stepCandidateIds: steps,
       thinkingAhead: thinking,
       memoryUpdate: BotStrategicMemoryUpdate.fromJson(memoryJson),
