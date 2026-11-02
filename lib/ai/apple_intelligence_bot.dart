@@ -142,14 +142,11 @@ class AppleIntelligenceBot extends BotDecisionMaker {
 
     final plan = BotTurnPlan.fromJson(raw);
     final memory = _memoryStore.forPlayer(bot.id);
-    final previousPosture = memory.posture;
     memory.mergeUpdate(plan.memoryUpdate);
+    // An omitted posture keeps the last valid one. stall and any other
+    // unparseable value clear it so this turn does not reuse that bias.
     final parsed = plan.posture ?? ApplePosture.parse(memory.posture);
-    if (parsed == null) {
-      memory.posture = previousPosture;
-    } else {
-      memory.posture = parsed.wireName;
-    }
+    memory.posture = parsed?.wireName ?? '';
     if (plan.intent.isNotEmpty) {
       memory.lastTurnSummary = plan.intent;
       _lastTurnIntent = plan.intent;

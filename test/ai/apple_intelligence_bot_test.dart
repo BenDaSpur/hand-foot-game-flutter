@@ -412,6 +412,66 @@ void main() {
       expect(memory['posture'], 'buildBooks');
     });
 
+    test('stall clears the previous posture instead of reusing it', () async {
+      final fake = _FakeFoundationModelsService(
+        planJson: {
+          'intent': 'Race out',
+          'posture': 'raceGoOut',
+          'thinkingAhead': <String>[],
+          'goals': <String>['go out'],
+          'holdRanks': <String>[],
+          'safeDiscards': <String>[],
+          'avoidFeedRanks': <String>[],
+          'plannedUnlock': '',
+          'opponentNotes': <String>[],
+          'lastTurnSummary': '',
+        },
+      );
+      final ruleBot = EnhancedBotAI(seed: 8);
+      final apple = AppleIntelligenceBot(
+        ruleBot: ruleBot,
+        foundationModels: fake,
+      );
+      final controller = _controllerWithBots();
+      final botIndex = controller.gameState.players.indexWhere(
+        (p) => p.type == PlayerType.bot,
+      );
+      controller.gameState.currentPlayerIndex = botIndex;
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      final bot = controller.gameState.players[botIndex];
+
+      await apple.beginTurn(bot, controller);
+      await apple.pendingPlanFor(bot.id);
+      apple.endTurn(bot);
+
+      fake.planJson = {
+        'intent': 'Stall',
+        'posture': 'stall',
+        'thinkingAhead': <String>[],
+        'goals': <String>['go out'],
+        'holdRanks': <String>[],
+        'safeDiscards': <String>[],
+        'avoidFeedRanks': <String>[],
+        'plannedUnlock': '',
+        'opponentNotes': <String>[],
+        'lastTurnSummary': '',
+      };
+      await apple.beginTurn(bot, controller);
+      await apple.pendingPlanFor(bot.id);
+      final baseline = EnhancedBotAI(seed: 8).makeDecision(bot, controller);
+      final decision = await apple.decide(bot, controller);
+      expect(decision.action, baseline.action);
+
+      apple.endTurn(bot);
+      fake.planJson = null;
+      await apple.beginTurn(bot, controller);
+      await apple.pendingPlanFor(bot.id);
+      final memory = fake.lastPrompt!['memory'] as Map<String, dynamic>;
+      expect(memory['posture'], isEmpty);
+      expect(memory['goals'], contains('go out'));
+    });
+
     test('plans once per turn across phases', () async {
       final fake = _FakeFoundationModelsService(
         planJson: {
