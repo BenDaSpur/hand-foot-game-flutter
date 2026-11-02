@@ -97,11 +97,12 @@ final class FoundationModelsBotService {
     }
 
     let instructions = """
-    You are a Hand & Foot card-game strategist. Choose only candidate ids from \
-    the provided list. Return a short intent, ordered stepCandidateIds for this \
-    turn (draw then meld then discard), thinkingAhead contingencies, and memory \
-    fields (goals, holdRanks, safeDiscards, plannedUnlock, opponentNotes, \
-    lastTurnSummary). Prefer legal book progress and denying opponent unlocks.
+    You advise a Hand & Foot bot. Do not choose cards or candidate ids. The \
+    coded planner plays the move and will not skip a forced discard-pile take, \
+    play-down, or hand-pile empty. Return posture as one of raceGoOut, \
+    buildBooks, denyPile, or holdKeys, plus holdRanks, avoidFeedRanks, goals, \
+    thinkingAhead, opponentNotes, plannedUnlock, lastTurnSummary, and a short \
+    intent. Match the expert action in the prompt. Never recommend stalling.
     """
 
     let session = LanguageModelSession(model: model, instructions: instructions)
@@ -138,11 +139,11 @@ final class FoundationModelsBotService {
 @available(iOS 26.0, *)
 @Generable
 struct HandFootTurnPlan {
-  @Guide(description: "One or two sentences describing this turn's plan")
+  @Guide(description: "One or two sentences shown while this bot thinks")
   var intent: String
 
-  @Guide(description: "Ordered candidate ids to execute this turn")
-  var stepCandidateIds: [String]
+  @Guide(description: "One of raceGoOut, buildBooks, denyPile, holdKeys")
+  var posture: String
 
   @Guide(description: "One to three next-turn contingencies")
   var thinkingAhead: [String]
@@ -150,8 +151,11 @@ struct HandFootTurnPlan {
   @Guide(description: "Strategic goals to remember")
   var goals: [String]
 
-  @Guide(description: "Card ranks to hold for unlocks or books")
+  @Guide(description: "Card ranks to hold for unlocks or books, such as ace or king")
   var holdRanks: [String]
+
+  @Guide(description: "Ranks to avoid discarding because an opponent is collecting them")
+  var avoidFeedRanks: [String]
 
   @Guide(description: "Card ranks that are safer to discard")
   var safeDiscards: [String]
@@ -162,16 +166,17 @@ struct HandFootTurnPlan {
   @Guide(description: "Visible opponent notes")
   var opponentNotes: [String]
 
-  @Guide(description: "Brief summary of this turn for next prompt")
+  @Guide(description: "Brief summary of this turn for the next prompt")
   var lastTurnSummary: String
 
   func asDictionary() -> [String: Any] {
     [
       "intent": intent,
-      "stepCandidateIds": stepCandidateIds,
+      "posture": posture,
       "thinkingAhead": thinkingAhead,
       "goals": goals,
       "holdRanks": holdRanks,
+      "avoidFeedRanks": avoidFeedRanks,
       "safeDiscards": safeDiscards,
       "plannedUnlock": plannedUnlock,
       "opponentNotes": opponentNotes,

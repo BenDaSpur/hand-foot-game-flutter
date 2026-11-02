@@ -495,4 +495,32 @@ class ScorerWeights {
     required this.keyHold,
     required this.denial,
   });
+
+  /// Returns a copy with each field multiplied by the given factor.
+  ///
+  /// Omitted factors stay at 1, so callers can boost one axis without
+  /// rebuilding the personality baseline.
+  ScorerWeights scaled({
+    double takePile = 1,
+    double playDown = 1,
+    double bookProgress = 1,
+    double cleanBook = 1,
+    double points = 1,
+    double footTransition = 1,
+    double goOut = 1,
+    double keyHold = 1,
+    double denial = 1,
+  }) {
+    return ScorerWeights(
+      takePile: this.takePile * takePile,
+      playDown: this.playDown * playDown,
+      bookProgress: this.bookProgress * bookProgress,
+      cleanBook: this.cleanBook * cleanBook,
+      points: this.points * points,
+      footTransition: this.footTransition * footTransition,
+      goOut: this.goOut * goOut,
+      keyHold: this.keyHold * keyHold,
+      denial: this.denial * denial,
+    );
+  }
 }

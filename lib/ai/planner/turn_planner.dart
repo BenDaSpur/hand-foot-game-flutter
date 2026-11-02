@@ -32,7 +32,13 @@ class TurnPlanner {
        _scorer = MoveScorer(),
        _personalityOf = personalityOf;
 
-  BotDecision plan(Player bot, BotGameContext context) {
+  BotDecision plan(
+    Player bot,
+    BotGameContext context, {
+    Set<CardRank> extraProtectedRanks = const <CardRank>{},
+    Set<CardRank> extraFeedRanks = const <CardRank>{},
+    ScorerWeights Function(ScorerWeights weights)? adjustWeights,
+  }) {
     final gameState = context.gameState;
     final liveTop = CompetitivePolicy.liveTopRank(gameState);
     final liveKeys = CompetitivePolicy.liveKeyRanks(gameState);
@@ -55,7 +61,8 @@ class TurnPlanner {
       bot.id,
     );
     final personality = _personalityOf(bot.id);
-    final weights = CompetitivePolicy.weightsFor(personality);
+    final baseWeights = CompetitivePolicy.weightsFor(personality);
+    final weights = adjustWeights?.call(baseWeights) ?? baseWeights;
     final emptyHandPile = CompetitivePolicy.shouldEmptyHandPile(
       bot,
       gameState,
@@ -97,6 +104,8 @@ class TurnPlanner {
           !canUnlock &&
           !goOutThisTurn &&
           !skipThrees,
+      extraProtectedRanks: extraProtectedRanks,
+      extraFeedRanks: extraFeedRanks,
     );
 
     if (candidates.isEmpty) {

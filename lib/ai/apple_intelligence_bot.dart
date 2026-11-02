@@ -1,26 +1,24 @@
 import '../game/game_controller.dart';
-import '../models/card.dart';
 import '../models/game_state.dart';
 import '../models/player.dart';
 import '../services/foundation_models_service.dart';
 import '../utils/debug_logger.dart';
+import 'apple_situation_brief.dart';
 import 'bot_decision.dart';
 import 'bot_decision_maker.dart';
-import 'bot_discard_analyzer.dart';
-import 'bot_game_context.dart';
 import 'bot_meld_analyzer.dart';
 import 'bot_strategic_memory.dart';
 import 'enhanced_bot_ai.dart';
 import 'planner/competitive_policy.dart';
-import 'planner/legal_actions.dart';
 import 'rule_bot_decision_maker.dart';
 import 'turn_plan.dart';
 
-/// On-device Apple Foundation Models bot with turn-start planning + memory.
+/// On-device Apple Foundation Models bot.
 ///
-/// Always constrained to [LegalActionGenerator] candidates. Falls back to
-/// [RuleBotDecisionMaker] when the model is unavailable, times out, or picks
-/// a stale/illegal step.
+/// The model is a once-per-turn posture advisor. Every action is the coded
+/// [TurnPlanner] choice, optionally leaned by that posture. Draw does not
+/// wait for the model and never applies the bias, so a slow or wrong plan
+/// cannot skip a forced pile take.
 class AppleIntelligenceBot extends BotDecisionMaker {
   AppleIntelligenceBot({
     required EnhancedBotAI ruleBot,
@@ -29,25 +27,19 @@ class AppleIntelligenceBot extends BotDecisionMaker {
   }) : _rule = RuleBotDecisionMaker(ruleBot),
        _foundationModels = foundationModels ?? FoundationModelsService.instance,
        _planTimeout = planTimeout,
-       _meldAnalyzer = BotMeldAnalyzer(),
-       _discardAnalyzer = BotDiscardAnalyzer() {
-    _generator = LegalActionGenerator(
-      meldAnalyzer: _meldAnalyzer,
-      discardAnalyzer: _discardAnalyzer,
-    );
-  }
+       _meldAnalyzer = BotMeldAnalyzer();
 
   final RuleBotDecisionMaker _rule;
   final FoundationModelsService _foundationModels;
   final Duration _planTimeout;
   final BotMeldAnalyzer _meldAnalyzer;
-  final BotDiscardAnalyzer _discardAnalyzer;
-  late final LegalActionGenerator _generator;
   final BotStrategicMemoryStore _memoryStore = BotStrategicMemoryStore();
 
-  final Map<String, ActiveTurnPlan> _activePlans = {};
+  final Map<String, Future<void>> _inflight = {};
+  final Map<String, int> _planGeneration = {};
+  final Map<String, bool> _planApplied = {};
+
   String? _lastTurnIntent;
-  TurnPhase? _lastPhase;
 
   @override
   EnhancedBotAI get ruleBot => _rule.ruleBot;
@@ -55,103 +47,112 @@ class AppleIntelligenceBot extends BotDecisionMaker {
   @override
   String? get lastTurnIntent => _lastTurnIntent;
 
+  /// Completes when the in-flight posture request for [playerId] finishes.
+  ///
+  /// Draw does not wait on this. Tests and the meld/discard phases do.
+  Future<void> pendingPlanFor(String playerId) {
+    return _inflight[playerId] ?? Future<void>.value();
+  }
+
   @override
   Future<void> beginTurn(Player bot, GameController controller) async {
-    _activePlans.remove(bot.id);
-    await _planCurrentPhase(bot, controller, updateIntent: true);
-    _lastPhase = controller.gameState.turnPhase;
+    _lastTurnIntent = null;
+    _planApplied[bot.id] = false;
+    _inflight[bot.id] = _requestPlan(bot, controller);
   }
 
   @override
   Future<BotDecision> decide(Player bot, GameController controller) async {
-    final context = BotGameContext(controller.gameState, controller);
-    final phase = context.turnPhase;
-
-    // Fresh legal candidates only exist for the live phase. Re-plan when the
-    // phase advances so meld/discard steps have real candidate ids.
-    if (_lastPhase != null && _lastPhase != phase) {
-      final existing = _activePlans[bot.id];
-      if (existing != null) {
-        _skipCompletedPhase(existing, _lastPhase!);
-      }
-      await _planCurrentPhase(bot, controller, updateIntent: false);
-      _lastPhase = phase;
-    } else if (_lastPhase == null) {
-      // decide() without beginTurn (tests / recovery) — plan once.
-      await _planCurrentPhase(bot, controller, updateIntent: true);
-      _lastPhase = phase;
-    }
-
-    final active = _activePlans[bot.id];
-    if (active == null) {
-      return _rule.decide(bot, controller);
-    }
-
-    final liveLabeled = _labelCandidates(bot, context);
-    final liveByAction = <String, LabeledLegalCandidate>{};
-    for (final c in liveLabeled) {
-      liveByAction[_decisionKey(c.decision)] = c;
-    }
-
-    final phaseKinds = _kindsForPhase(phase);
-    final planned = active.takeNextForPhase(phaseKinds);
-    if (planned != null) {
-      final match = _matchLiveCandidate(planned, liveLabeled, liveByAction);
-      if (match != null) {
-        return match.decision;
+    final phase = controller.gameState.turnPhase;
+    _inflight.putIfAbsent(bot.id, () => _requestPlan(bot, controller));
+    if (phase != TurnPhase.draw) {
+      try {
+        await _inflight[bot.id];
+      } catch (e) {
+        DebugLogger.warning('AppleIntelligenceBot plan await failed: $e');
+        _planApplied[bot.id] = false;
+        _lastTurnIntent = null;
       }
     }
 
-    // Prefer memory-guided discard/hold when rule fallback would otherwise run.
-    if (phase == TurnPhase.discard) {
-      final memoryPick = _memoryGuidedDiscard(bot, liveLabeled);
-      if (memoryPick != null) {
-        return memoryPick.decision;
-      }
-    }
-
-    return _rule.decide(bot, controller);
+    final bias = phase == TurnPhase.draw ? null : _biasFor(bot, controller);
+    return _rule.ruleBot.makeDecision(bot, controller, bias: bias);
   }
 
-  /// Ask Foundation Models for a plan using the current phase's legal set.
-  Future<void> _planCurrentPhase(
-    Player bot,
-    GameController controller, {
-    required bool updateIntent,
-  }) async {
-    final context = BotGameContext(controller.gameState, controller);
-    final labeled = _labelCandidates(bot, context);
+  @override
+  void endTurn(Player bot) {
+    _planGeneration[bot.id] = (_planGeneration[bot.id] ?? 0) + 1;
+    _inflight.remove(bot.id);
+    _planApplied.remove(bot.id);
+    _lastTurnIntent = null;
+  }
+
+  @override
+  void clearMemory() {
+    _memoryStore.clear();
+    _inflight.clear();
+    _planGeneration.clear();
+    _planApplied.clear();
+    _lastTurnIntent = null;
+  }
+
+  AppleTurnBias? _biasFor(Player bot, GameController controller) {
+    if (_planApplied[bot.id] != true) {
+      return null;
+    }
     final memory = _memoryStore.forPlayer(bot.id);
-    final prompt = _buildPrompt(
-      bot: bot,
-      controller: controller,
-      memory: memory,
-      candidates: labeled,
-      phase: context.turnPhase,
+    final posture = ApplePosture.parse(memory.posture);
+    final holds = BotStrategicMemory.parseRanks(memory.holdRanks);
+    if (posture == ApplePosture.holdKeys) {
+      holds.addAll(CompetitivePolicy.liveKeyRanks(controller.gameState));
+    }
+    final feeds = BotStrategicMemory.parseRanks(memory.avoidFeedRanks);
+    if (posture == null && holds.isEmpty && feeds.isEmpty) {
+      return null;
+    }
+    return AppleTurnBias(
+      posture: posture,
+      holdRanks: holds,
+      avoidFeedRanks: feeds,
     );
+  }
+
+  Future<void> _requestPlan(Player bot, GameController controller) async {
+    final generation = (_planGeneration[bot.id] ?? 0) + 1;
+    _planGeneration[bot.id] = generation;
 
     Map<String, dynamic>? raw;
     try {
+      final prompt = _buildPrompt(bot, controller);
       raw = await _foundationModels.planTurn(prompt).timeout(_planTimeout);
     } catch (e) {
       DebugLogger.warning('AppleIntelligenceBot plan timeout/error: $e');
       raw = null;
     }
 
+    if (_planGeneration[bot.id] != generation) {
+      return;
+    }
+
     if (raw == null) {
-      if (updateIntent) {
-        _lastTurnIntent = null;
-      }
-      // Keep any prior plan; decide() will fall back to the rule bot.
+      _planApplied[bot.id] = false;
+      _lastTurnIntent = null;
       return;
     }
 
     final plan = BotTurnPlan.fromJson(raw);
-    if (updateIntent || (plan.intent.isNotEmpty && _lastTurnIntent == null)) {
-      _lastTurnIntent = plan.intent.isEmpty ? null : plan.intent;
-    }
-
+    final memory = _memoryStore.forPlayer(bot.id);
     memory.mergeUpdate(plan.memoryUpdate);
+    // An omitted posture keeps the last valid one. stall and any other
+    // unparseable value clear it so this turn does not reuse that bias.
+    final parsed = plan.posture ?? ApplePosture.parse(memory.posture);
+    memory.posture = parsed?.wireName ?? '';
+    if (plan.intent.isNotEmpty) {
+      memory.lastTurnSummary = plan.intent;
+      _lastTurnIntent = plan.intent;
+    } else {
+      _lastTurnIntent = null;
+    }
     if (plan.thinkingAhead.isNotEmpty) {
       memory.thinkingAhead
         ..clear()
@@ -159,323 +160,20 @@ class AppleIntelligenceBot extends BotDecisionMaker {
     }
     memory.updatedAtRound = controller.gameState.round;
     memory.updatedAtTurn = controller.gameState.currentPlayerIndex;
-
-    final byId = {for (final c in labeled) c.id: c};
-    _activePlans[bot.id] = ActiveTurnPlan(plan: plan, candidatesById: byId);
-  }
-
-  @override
-  void endTurn(Player bot) {
-    final active = _activePlans.remove(bot.id);
-    if (active == null) {
-      return;
-    }
-    final memory = _memoryStore.forPlayer(bot.id);
-    memory.mergeUpdate(active.plan.memoryUpdate);
-    if (active.plan.intent.isNotEmpty) {
-      memory.lastTurnSummary = active.plan.intent;
-    }
-    _lastTurnIntent = null;
-    _lastPhase = null;
-  }
-
-  @override
-  void clearMemory() {
-    _memoryStore.clear();
-    _activePlans.clear();
-    _lastTurnIntent = null;
-    _lastPhase = null;
-  }
-
-  void _skipCompletedPhase(ActiveTurnPlan active, TurnPhase completed) {
-    final kinds = _kindsForPhase(completed);
-    while (true) {
-      final next = active.takeNextForPhase(kinds);
-      if (next == null) {
-        break;
-      }
-    }
-  }
-
-  Set<LegalActionKind> _kindsForPhase(TurnPhase phase) {
-    switch (phase) {
-      case TurnPhase.draw:
-        return {LegalActionKind.drawDeck, LegalActionKind.drawDiscard};
-      case TurnPhase.meld:
-        return {
-          LegalActionKind.playDown,
-          LegalActionKind.createMeld,
-          LegalActionKind.maximalBurst,
-          LegalActionKind.addToMeld,
-          LegalActionKind.noMeld,
-          LegalActionKind.goOut,
-          LegalActionKind.endTurn,
-        };
-      case TurnPhase.discard:
-        return {LegalActionKind.discard};
-    }
-  }
-
-  List<LabeledLegalCandidate> _labelCandidates(
-    Player bot,
-    BotGameContext context,
-  ) {
-    final gameState = context.gameState;
-    final liveTop = CompetitivePolicy.liveTopRank(gameState);
-    final liveKeys = CompetitivePolicy.liveKeyRanks(gameState);
-    final personality = ruleBot.personalityManager.getPersonality(bot.id);
-    final emptyHandPile = CompetitivePolicy.shouldEmptyHandPile(
-      bot,
-      gameState,
-      personality: personality,
+    _planApplied[bot.id] = true;
+    DebugLogger.debug(
+      'AppleIntelligenceBot ${bot.name} posture=${memory.posture.isEmpty ? 'none' : memory.posture}',
     );
-    final canUnlock = context.canUnlockDiscard();
-    final goOutThisTurn = CompetitivePolicy.canEmptyThisTurn(
-      bot,
-      context: context,
+  }
+
+  Map<String, dynamic> _buildPrompt(Player bot, GameController controller) {
+    final expert = _rule.ruleBot.previewPlannerAction(bot, controller);
+    return AppleSituationBrief.build(
+      bot: bot,
+      controller: controller,
+      memory: _memoryStore.forPlayer(bot.id),
+      expert: expert,
       meldAnalyzer: _meldAnalyzer,
     );
-    final forceSpendKeys =
-        gameState.discardPileFrozen ||
-        liveTop == null ||
-        (canUnlock && goOutThisTurn) ||
-        (emptyHandPile && context.turnPhase != TurnPhase.discard) ||
-        (emptyHandPile && bot.bookCount >= 1);
-    final humanCanUnlock = CompetitivePolicy.humanLikelyCanUnlock(
-      gameState,
-      bot.id,
-    );
-    final skipThrees = CompetitivePolicy.shouldSkipUnlockForThrees(
-      bot,
-      gameState,
-    );
-
-    final raw = _generator.generate(
-      bot,
-      context,
-      liveKeyRanks: liveKeys,
-      liveTop: liveTop,
-      forceSpendKeys: forceSpendKeys,
-      emptyHandPile: emptyHandPile,
-      allowWildFreeze:
-          bot.hasPlayedDown &&
-          humanCanUnlock &&
-          !canUnlock &&
-          !goOutThisTurn &&
-          !skipThrees,
-    );
-
-    final labeled = <LabeledLegalCandidate>[];
-    for (var i = 0; i < raw.length; i++) {
-      final candidate = raw[i];
-      labeled.add(
-        LabeledLegalCandidate(
-          id: 'c$i',
-          label: _labelFor(candidate),
-          kind: candidate.kind,
-          decision: candidate.decision,
-        ),
-      );
-    }
-    return labeled;
-  }
-
-  String _labelFor(LegalCandidate candidate) {
-    final decision = candidate.decision;
-    switch (candidate.kind) {
-      case LegalActionKind.drawDeck:
-        return 'Draw from deck';
-      case LegalActionKind.drawDiscard:
-        return 'Take discard pile';
-      case LegalActionKind.noMeld:
-        return 'Stop melding / go to discard';
-      case LegalActionKind.goOut:
-        return 'Go out';
-      case LegalActionKind.endTurn:
-        return 'End turn';
-      case LegalActionKind.discard:
-        if (decision.data is PlayingCard) {
-          return 'Discard ${(decision.data as PlayingCard).compactName}';
-        }
-        return 'Discard';
-      case LegalActionKind.addToMeld:
-        final data = decision.data;
-        if (data is Map && data['card'] is PlayingCard) {
-          return 'Add ${(data['card'] as PlayingCard).compactName} to meld';
-        }
-        return 'Add to meld';
-      case LegalActionKind.createMeld:
-      case LegalActionKind.playDown:
-        if (decision.data is List<PlayingCard>) {
-          final cards = decision.data as List<PlayingCard>;
-          return 'Meld ${cards.map((c) => c.compactName).join(', ')}';
-        }
-        return 'Create meld';
-      case LegalActionKind.maximalBurst:
-        if (decision.data is List) {
-          return 'Play down multiple melds';
-        }
-        return 'Maximal burst';
-      case LegalActionKind.error:
-        return 'Error recovery';
-    }
-  }
-
-  LabeledLegalCandidate? _matchLiveCandidate(
-    LabeledLegalCandidate planned,
-    List<LabeledLegalCandidate> live,
-    Map<String, LabeledLegalCandidate> liveByAction,
-  ) {
-    // Exact decision fingerprint.
-    final exact = liveByAction[_decisionKey(planned.decision)];
-    if (exact != null) {
-      return exact;
-    }
-
-    // Same kind + same action string (draw/noMeld/goOut).
-    for (final c in live) {
-      if (c.kind == planned.kind &&
-          c.decision.action == planned.decision.action) {
-        if (planned.kind == LegalActionKind.drawDeck ||
-            planned.kind == LegalActionKind.drawDiscard ||
-            planned.kind == LegalActionKind.noMeld ||
-            planned.kind == LegalActionKind.goOut ||
-            planned.kind == LegalActionKind.endTurn) {
-          return c;
-        }
-      }
-    }
-
-    // Discard: match by rank if the exact card identity changed.
-    if (planned.kind == LegalActionKind.discard &&
-        planned.decision.data is PlayingCard) {
-      final rank = (planned.decision.data as PlayingCard).rank;
-      for (final c in live) {
-        if (c.kind == LegalActionKind.discard &&
-            c.decision.data is PlayingCard &&
-            (c.decision.data as PlayingCard).rank == rank) {
-          return c;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  LabeledLegalCandidate? _memoryGuidedDiscard(
-    Player bot,
-    List<LabeledLegalCandidate> live,
-  ) {
-    final memory = _memoryStore.forPlayer(bot.id);
-    if (memory.safeDiscards.isEmpty && memory.holdRanks.isEmpty) {
-      return null;
-    }
-
-    final hold = memory.holdRanks.map((r) => r.toLowerCase()).toSet();
-    final prefer = memory.safeDiscards.map((r) => r.toLowerCase()).toSet();
-
-    LabeledLegalCandidate? preferred;
-    for (final c in live) {
-      if (c.kind != LegalActionKind.discard ||
-          c.decision.data is! PlayingCard) {
-        continue;
-      }
-      final rank = (c.decision.data as PlayingCard).rank.name.toLowerCase();
-      if (hold.contains(rank)) {
-        continue;
-      }
-      if (prefer.contains(rank)) {
-        preferred = c;
-        break;
-      }
-    }
-    return preferred;
-  }
-
-  String _decisionKey(BotDecision decision) {
-    final buffer = StringBuffer(decision.action);
-    final data = decision.data;
-    if (data is PlayingCard) {
-      buffer.write(':${data.rank.name}:${data.suit?.name ?? 'j'}');
-    } else if (data is List<PlayingCard>) {
-      buffer.write(
-        ':${data.map((c) => '${c.rank.name}${c.suit?.name ?? 'j'}').join(',')}',
-      );
-    } else if (data is List) {
-      buffer.write(':multi:${data.length}');
-    } else if (data is Map) {
-      buffer.write(':${data['meldIndex']}:${data['card']}');
-    }
-    return buffer.toString();
-  }
-
-  Map<String, dynamic> _buildPrompt({
-    required Player bot,
-    required GameController controller,
-    required BotStrategicMemory memory,
-    required List<LabeledLegalCandidate> candidates,
-    TurnPhase? phase,
-  }) {
-    final state = controller.gameState;
-    final hand = bot.currentHand
-        .map((c) => c.compactName)
-        .toList(growable: false);
-    final melds = bot.melds
-        .map(
-          (m) => {
-            'size': m.cards.length,
-            'ranks': m.cards.map((c) => c.rank.name).toSet().toList(),
-            'isClean': m.isClean,
-            'isBook': m.isBook,
-          },
-        )
-        .toList(growable: false);
-
-    final opponents = state.players
-        .where((p) => p.id != bot.id)
-        .map(
-          (p) => {
-            'name': p.name,
-            'isHuman': p.type == PlayerType.human,
-            'handSize': p.currentHand.length,
-            'hasPlayedDown': p.hasPlayedDown,
-            'hasPickedUpFoot': p.hasPickedUpFoot,
-            'bookCount': p.bookCount,
-            'score': p.score,
-          },
-        )
-        .toList(growable: false);
-
-    final phaseName = (phase ?? state.turnPhase).name;
-    return {
-      'instructions':
-          'You are playing Hand & Foot in the $phaseName phase. Choose only '
-          'from the provided candidate ids for this phase. Think ahead 1-3 '
-          'turns via memory fields. Update goals, holdRanks, safeDiscards, '
-          'and thinkingAhead for later turns. Prefer legal book progress, '
-          'foot transition, and denying opponent unlocks when relevant.',
-      'game': {
-        'round': state.round,
-        'phase': phaseName,
-        'playDownRequirement': state.playDownRequirement,
-        'deckSize': state.deck.size,
-        'discardSize': state.discardPile.length,
-        'topDiscard': state.topDiscard?.compactName,
-        'discardFrozen': state.discardPileFrozen,
-      },
-      'self': {
-        'name': bot.name,
-        'hand': hand,
-        'handSize': hand.length,
-        'hasPlayedDown': bot.hasPlayedDown,
-        'hasPickedUpFoot': bot.hasPickedUpFoot,
-        'score': bot.score,
-        'melds': melds,
-        'bookCount': bot.bookCount,
-      },
-      'opponents': opponents,
-      'memory': memory.toJson(),
-      'candidates': candidates.map((c) => c.toPromptJson()).toList(),
-    };
   }
 }
