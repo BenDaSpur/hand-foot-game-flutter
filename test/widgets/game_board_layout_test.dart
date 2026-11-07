@@ -73,14 +73,30 @@ void main() {
       Size size, {
       List<DisplayFeature> displayFeatures = const [],
       PreferredSizeWidget? appBar,
+      EdgeInsets padding = EdgeInsets.zero,
     }) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
+      final viewPadding = FakeViewPadding(
+        left: padding.left,
+        top: padding.top,
+        right: padding.right,
+        bottom: padding.bottom,
+      );
+      tester.view.padding = viewPadding;
+      tester.view.viewPadding = viewPadding;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
       await tester.pumpWidget(
         MediaQuery(
-          data: MediaQueryData(size: size, displayFeatures: displayFeatures),
+          data: MediaQueryData(
+            size: size,
+            padding: padding,
+            viewPadding: padding,
+            displayFeatures: displayFeatures,
+          ),
           child: MaterialApp(
             home: Scaffold(appBar: appBar, body: buildBoard()),
           ),
@@ -148,6 +164,86 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
+      testWidgets(
+        'cover portrait puts the action rail in the trailing status strip',
+        (tester) async {
+          const size = Size(466, 678);
+          const statusStrip = 84.0;
+          await pumpBoard(
+            tester,
+            size,
+            padding: const EdgeInsets.only(right: statusStrip),
+          );
+          expect(find.byKey(GameBoardLayout.coverBoardKey), findsOneWidget);
+          _expectTrailingActions(tester);
+
+          final rail = tester.getRect(
+            find.byKey(GameBoardLayout.trailingActionRailKey),
+          );
+          final dock = tester.getRect(
+            find.byKey(GameBoardLayout.bottomDockKey),
+          );
+          // The rail is the strip itself, flush with the screen edge. The
+          // hand keeps the full safe width instead of losing another 84pt.
+          expect(rail.right, closeTo(size.width, 0.5));
+          expect(rail.left, closeTo(size.width - statusStrip, 0.5));
+          expect(rail.width, closeTo(statusStrip, 0.5));
+          expect(dock.right, closeTo(rail.left, 0.5));
+          expect(dock.left, closeTo(0, 0.5));
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets(
+        'cover rail grows with a wider status strip and clears the home indicator',
+        (tester) async {
+          const size = Size(678, 466);
+          const statusStrip = 100.0;
+          const homeIndicator = 34.0;
+          await pumpBoard(
+            tester,
+            size,
+            padding: const EdgeInsets.only(
+              right: statusStrip,
+              bottom: homeIndicator,
+            ),
+          );
+          expect(find.byKey(GameBoardLayout.coverBoardKey), findsOneWidget);
+          final rail = tester.getRect(
+            find.byKey(GameBoardLayout.trailingActionRailKey),
+          );
+          final dock = tester.getRect(
+            find.byKey(GameBoardLayout.bottomDockKey),
+          );
+          final actions = tester.getRect(find.text('Actions'));
+          expect(rail.right, closeTo(size.width, 0.5));
+          expect(rail.width, closeTo(statusStrip, 0.5));
+          expect(rail.bottom, closeTo(size.height - homeIndicator, 0.5));
+          expect(dock.right, closeTo(rail.left, 0.5));
+          expect(actions.bottom, lessThanOrEqualTo(rail.bottom + 0.5));
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets('phone keeps actions inside a trailing safe inset', (
+        tester,
+      ) async {
+        const size = Size(390, 844);
+        const inset = 47.0;
+        await pumpBoard(
+          tester,
+          size,
+          padding: const EdgeInsets.only(right: inset),
+        );
+        expect(find.byKey(GameBoardLayout.narrowBoardKey), findsOneWidget);
+        expect(find.byKey(GameBoardLayout.trailingActionRailKey), findsNothing);
+        final dock = tester.getRect(find.byKey(GameBoardLayout.bottomDockKey));
+        final actions = tester.getRect(find.text('Actions'));
+        expect(dock.right, lessThanOrEqualTo(size.width - inset + 0.5));
+        expect(dock.overlaps(actions), isTrue);
+        expect(tester.takeException(), isNull);
+      });
+
       testWidgets('inner portrait stays narrow with expansive chrome', (
         tester,
       ) async {
@@ -208,6 +304,49 @@ void main() {
         expect(rail.left, greaterThanOrEqualTo(dock.right - 0.5));
         expect(rail.overlaps(fold), isFalse);
       });
+
+      testWidgets(
+        'book pose puts the action rail in the trailing status strip',
+        (tester) async {
+          const size = Size(951, 669);
+          const statusStrip = 84.0;
+          const fold = Rect.fromLTWH(455, 0, 40, 669);
+          await pumpBoard(
+            tester,
+            size,
+            padding: const EdgeInsets.only(right: statusStrip),
+            displayFeatures: const [
+              DisplayFeature(
+                bounds: fold,
+                type: DisplayFeatureType.fold,
+                state: DisplayFeatureState.postureHalfOpened,
+              ),
+            ],
+          );
+          expect(find.byKey(GameBoardLayout.foldBookKey), findsOneWidget);
+
+          final gap = tester.getRect(find.byKey(GameBoardLayout.foldGapKey));
+          final play = tester.getRect(
+            find.byKey(GameBoardLayout.foldPlaySurfaceKey),
+          );
+          final dock = tester.getRect(
+            find.byKey(GameBoardLayout.bottomDockKey),
+          );
+          final rail = tester.getRect(
+            find.byKey(GameBoardLayout.trailingActionRailKey),
+          );
+          expect(gap.left, closeTo(fold.left, 0.5));
+          expect(gap.width, closeTo(fold.width, 0.5));
+          expect(play.overlaps(fold), isFalse);
+          expect(dock.overlaps(fold), isFalse);
+          expect(rail.overlaps(fold), isFalse);
+          expect(rail.right, closeTo(size.width, 0.5));
+          expect(rail.width, closeTo(statusStrip, 0.5));
+          expect(dock.right, closeTo(rail.left, 0.5));
+          expect(dock.left, greaterThanOrEqualTo(gap.right - 0.5));
+          expect(tester.takeException(), isNull);
+        },
+      );
 
       testWidgets('partially open laptop pose splits around horizontal fold', (
         tester,
