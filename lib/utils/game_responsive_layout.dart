@@ -117,6 +117,23 @@ class GameResponsiveLayout {
   /// Ultra-short viewports (Duo cover landscape ~466pt tall): densest dock.
   static const double ultraShortHeightBreakpoint = 520;
 
+  /// Duo cover logical size is about 466×678 (portrait or landscape).
+  ///
+  /// A normal phone in landscape is shorter than 440pt or longer than 720pt,
+  /// and the inner display's shortest side is about 669pt.
+  static const double duoCoverMinShortestSide = 440;
+  static const double duoCoverMaxShortestSide = 500;
+  static const double duoCoverMinLongestSide = 640;
+  static const double duoCoverMaxLongestSide = 720;
+
+  /// Slim trailing column for turn actions on the Duo cover and book pose.
+  static const double trailingActionRailWidth = 84;
+
+  /// Open Duo landscape (~951×669). Taller canvases (iPad) and wider
+  /// canvases (desktop) keep the leading rail.
+  static const double duoInnerLandscapeMaxHeight = 720;
+  static const double duoInnerLandscapeMaxWidth = 1100;
+
   /// Max content width for menus on regular-width / inner Duo displays.
   static const double menuContentMaxWidth = 520;
 
@@ -167,6 +184,24 @@ class GameResponsiveLayout {
   /// Two-pane board (rail + main) for iPad landscape / macOS / Duo inner landscape.
   static bool useWideBoardLayout(double width) {
     return width >= GameConfig.tabletLandscapeBreakpoint;
+  }
+
+  /// Closed Duo cover, where turn actions move to a slim trailing column.
+  static bool isDuoCover(Size size) {
+    final shortest = size.shortestSide;
+    final longest = size.longestSide;
+    return shortest >= duoCoverMinShortestSide &&
+        shortest <= duoCoverMaxShortestSide &&
+        longest >= duoCoverMinLongestSide &&
+        longest <= duoCoverMaxLongestSide;
+  }
+
+  /// Open Duo landscape: the wide context rail sits on the trailing edge,
+  /// under the Control Center / status strip.
+  static bool useTrailingWideRail(Size size) {
+    return size.width >= GameConfig.tabletLandscapeBreakpoint &&
+        size.height < duoInnerLandscapeMaxHeight &&
+        size.width < duoInnerLandscapeMaxWidth;
   }
 
   /// Regular-width “inner class” chrome (Duo open portrait, iPad) without forcing the rail.

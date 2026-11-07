@@ -7,6 +7,7 @@ import '../constants/ui_constants.dart';
 import '../theme/balatro_theme.dart';
 import '../utils/game_fold_geometry.dart';
 import '../utils/game_responsive_layout.dart';
+import 'game_action_rail_scope.dart';
 import 'game_compact_header.dart';
 import 'compact_player_scores.dart';
 import 'collapsible_recent_actions.dart';
@@ -14,12 +15,20 @@ import 'collapsible_recent_actions.dart';
 /// Mobile-first game board shell shared by solo and multiplayer screens.
 ///
 /// Uses a two-pane rail layout when width ≥ tablet landscape breakpoint
-/// (iPad landscape / macOS / iPhone Duo inner landscape). When a fold crease
-/// is active (partially open), keeps the interactive dock clear of the fold.
+/// (iPad landscape / macOS / iPhone Duo inner landscape). On Duo inner
+/// landscape that rail is trailing, under the Control Center strip. The Duo
+/// cover uses a slim trailing action column so the hand keeps a phone-width
+/// pane. When a fold crease is active, the table stays on the left page and
+/// the hand plus actions stay on the right; a horizontal crease keeps the
+/// dock in the lower half.
 class GameBoardLayout extends StatelessWidget {
   static const Key wideBoardKey = ValueKey('game-board-wide');
   static const Key narrowBoardKey = ValueKey('game-board-narrow');
   static const Key wideRailKey = ValueKey('game-board-wide-rail');
+  static const Key coverBoardKey = ValueKey('game-board-cover');
+  static const Key trailingActionRailKey = ValueKey(
+    'game-board-trailing-action-rail',
+  );
   static const Key foldBookKey = ValueKey('game-board-fold-book');
   static const Key foldLaptopKey = ValueKey('game-board-fold-laptop');
   static const Key bottomDockKey = ValueKey('game-board-bottom-dock');
@@ -79,9 +88,9 @@ class GameBoardLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final isWide = width > UIConstants.smallScreenBreakpoint;
-    final useWideBoard = GameResponsiveLayout.useWideBoardLayout(width);
+    final size = MediaQuery.sizeOf(context);
+    final isWide = size.width > UIConstants.smallScreenBreakpoint;
+    final useWideBoard = GameResponsiveLayout.useWideBoardLayout(size.width);
     final windowFold = GameFoldGeometry.activeDivisionBounds(context);
 
     return SafeArea(
@@ -93,7 +102,34 @@ class GameBoardLayout extends StatelessWidget {
             )
           : useWideBoard
           ? _buildWideBoard(context, isWide: isWide)
+          : GameResponsiveLayout.isDuoCover(size)
+          ? _buildCoverBoard(context, isWide: isWide)
           : _buildNarrowBoard(context, isWide: isWide),
+    );
+  }
+
+  /// Cover: phone column for the table and hand, turn actions on the right.
+  Widget _buildCoverBoard(BuildContext context, {required bool isWide}) {
+    return Row(
+      key: coverBoardKey,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: _buildPlayColumn(
+            context,
+            isWide: isWide,
+            bottom: _BottomDock(key: bottomDockKey, child: handDisplay),
+          ),
+        ),
+        _slimActionRail(),
+      ],
+    );
+  }
+
+  Widget _slimActionRail() {
+    return _TrailingActionRail(
+      key: trailingActionRailKey,
+      child: GameActionRailScope(slim: true, child: actionButtons),
     );
   }
 
@@ -107,25 +143,31 @@ class GameBoardLayout extends StatelessWidget {
     final leftWidth = localFold.left.clamp(0.0, safeWidth);
     final gapWidth = localFold.width.clamp(0.0, safeWidth - leftWidth);
     final rightWidth = (safeWidth - leftWidth - gapWidth).clamp(0.0, safeWidth);
-    final leftWider = leftWidth >= rightWidth;
     final playSurface = KeyedSubtree(
       key: foldPlaySurfaceKey,
       child: _buildPlaySurface(context, isWide: isWide),
     );
-    final dock = _BottomDock(
-      key: bottomDockKey,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [actionButtons, handDisplay],
-      ),
+    // Right page is the outer edge under Control Center. The hand sits at
+    // the bottom; turn actions use the same slim column as the cover.
+    final dock = Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [_BottomDock(key: bottomDockKey, child: handDisplay)],
+          ),
+        ),
+        _slimActionRail(),
+      ],
     );
     return Row(
       key: foldBookKey,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(width: leftWidth, child: leftWider ? playSurface : dock),
+        SizedBox(width: leftWidth, child: playSurface),
         SizedBox(key: foldGapKey, width: gapWidth),
-        SizedBox(width: rightWidth, child: leftWider ? dock : playSurface),
+        SizedBox(width: rightWidth, child: dock),
       ],
     );
   }
@@ -224,8 +266,29 @@ class GameBoardLayout extends StatelessWidget {
   }
 
   Widget _buildNarrowBoard(BuildContext context, {required bool isWide}) {
+    return _buildPlayColumn(
+      context,
+      isWide: isWide,
+      columnKey: narrowBoardKey,
+      bottom: _BottomDock(
+        key: bottomDockKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [actionButtons, handDisplay],
+        ),
+      ),
+    );
+  }
+
+  /// Header, scores, and melds with [bottom] pinned under the table.
+  Widget _buildPlayColumn(
+    BuildContext context, {
+    required bool isWide,
+    Key? columnKey,
+    required Widget bottom,
+  }) {
     return Column(
-      key: narrowBoardKey,
+      key: columnKey,
       children: [
         GameCompactHeader(
           gameState: gameState,
@@ -262,83 +325,81 @@ class GameBoardLayout extends StatelessWidget {
         Expanded(
           child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
         ),
-        _BottomDock(
-          key: bottomDockKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [actionButtons, handDisplay],
-          ),
-        ),
+        bottom,
       ],
     );
   }
 
   Widget _buildWideBoard(BuildContext context, {required bool isWide}) {
-    final width = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
+    final railOnTrailing = GameResponsiveLayout.useTrailingWideRail(size);
+    final rail = SizedBox(
+      key: wideRailKey,
+      width: GameResponsiveLayout.wideBoardRailWidthFor(size.width),
+      child: Column(
+        children: [
+          GameCompactHeader(
+            gameState: gameState,
+            deckKey: deckKey,
+            discardKey: discardKey,
+            isExpanded: true,
+            showExpandToggle: false,
+            onToggleExpand: onHeaderToggle,
+            onRecentActionsTap: null,
+            headerExtras: headerExtras,
+            expandedExtras: expandedHeaderExtras,
+            persistentHeaderExtras: persistentHeaderExtras,
+            onDeckTap: onDeckTap,
+            onDiscardTap: onDiscardTap,
+            localPlayerId: currentUserId,
+          ),
+          CompactPlayerScores(
+            gameState: gameState,
+            viewingPlayerMelds: viewingPlayerMelds,
+            onPlayerTap: onPlayerTap,
+            currentUserId: currentUserId,
+            botPersonalityManager: botPersonalityManager,
+            vertical: true,
+          ),
+          const Spacer(),
+          actionButtons,
+        ],
+      ),
+    );
+    final divider = VerticalDivider(
+      width: 1,
+      thickness: 1,
+      color: BalatroTheme.glowColor.withValues(alpha: 0.2),
+    );
+    final play = Expanded(
+      child: Column(
+        // Stretch so the hand dock fills the pane. Centered alignment
+        // shrinks the dock to the fan and leaves it floating in the pane.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (isWide &&
+              useDesktopRecentActions &&
+              gameState.recentActions.isNotEmpty)
+            CollapsibleRecentActions(
+              gameState: gameState,
+              isExpanded: recentActionsExpanded,
+              onToggle: onRecentActionsToggle ?? () {},
+            ),
+          if (aboveMelds != null) aboveMelds!,
+          Expanded(
+            child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
+          ),
+          _BottomDock(key: bottomDockKey, child: handDisplay),
+        ],
+      ),
+    );
     return Row(
       key: wideBoardKey,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          key: wideRailKey,
-          width: GameResponsiveLayout.wideBoardRailWidthFor(width),
-          child: Column(
-            children: [
-              GameCompactHeader(
-                gameState: gameState,
-                deckKey: deckKey,
-                discardKey: discardKey,
-                isExpanded: true,
-                showExpandToggle: false,
-                onToggleExpand: onHeaderToggle,
-                onRecentActionsTap: null,
-                headerExtras: headerExtras,
-                expandedExtras: expandedHeaderExtras,
-                persistentHeaderExtras: persistentHeaderExtras,
-                onDeckTap: onDeckTap,
-                onDiscardTap: onDiscardTap,
-                localPlayerId: currentUserId,
-              ),
-              CompactPlayerScores(
-                gameState: gameState,
-                viewingPlayerMelds: viewingPlayerMelds,
-                onPlayerTap: onPlayerTap,
-                currentUserId: currentUserId,
-                botPersonalityManager: botPersonalityManager,
-                vertical: true,
-              ),
-              const Spacer(),
-              actionButtons,
-            ],
-          ),
-        ),
-        VerticalDivider(
-          width: 1,
-          thickness: 1,
-          color: BalatroTheme.glowColor.withValues(alpha: 0.2),
-        ),
-        Expanded(
-          child: Column(
-            // Stretch so the hand dock fills the pane. Centered alignment
-            // shrinks the dock to the fan and leaves it floating in the pane.
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (isWide &&
-                  useDesktopRecentActions &&
-                  gameState.recentActions.isNotEmpty)
-                CollapsibleRecentActions(
-                  gameState: gameState,
-                  isExpanded: recentActionsExpanded,
-                  onToggle: onRecentActionsToggle ?? () {},
-                ),
-              if (aboveMelds != null) aboveMelds!,
-              Expanded(
-                child: KeyedSubtree(key: meldAreaKey, child: meldsSection),
-              ),
-              _BottomDock(key: bottomDockKey, child: handDisplay),
-            ],
-          ),
-        ),
+        if (!railOnTrailing) ...[rail, divider],
+        play,
+        if (railOnTrailing) ...[divider, rail],
       ],
     );
   }
@@ -434,6 +495,32 @@ class _FoldAwareBoardHostState extends State<_FoldAwareBoardHost> {
   }
 
   bool get _originMeasured => _origin != null;
+}
+
+/// Trailing turn-action column. Sits inside the safe area, directly under
+/// the Duo status / Control Center strip.
+class _TrailingActionRail extends StatelessWidget {
+  final Widget child;
+
+  const _TrailingActionRail({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: BalatroTheme.deepPurple.withValues(alpha: 0.96),
+        border: Border(
+          left: BorderSide(
+            color: BalatroTheme.glowColor.withValues(alpha: 0.28),
+          ),
+        ),
+      ),
+      child: SizedBox(
+        width: GameResponsiveLayout.trailingActionRailWidth,
+        child: Align(alignment: Alignment.bottomCenter, child: child),
+      ),
+    );
+  }
 }
 
 class _BottomDock extends StatelessWidget {
