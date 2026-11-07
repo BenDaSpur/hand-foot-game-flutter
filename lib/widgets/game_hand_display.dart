@@ -12,6 +12,8 @@ import 'playing_card_widget.dart';
 
 /// Reusable hand display for solo and multiplayer with responsive card sizing.
 class GameHandDisplay extends StatelessWidget {
+  static const Key scrollerKey = ValueKey('game-hand-scroller');
+
   final Player player;
   final List<int> selectedCardIndices;
   final int? keyboardFocusedCardIndex;
@@ -121,10 +123,14 @@ class GameHandDisplay extends StatelessWidget {
                 dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
               ),
               child: SingleChildScrollView(
+                key: scrollerKey,
                 controller: handScrollController,
                 scrollDirection: Axis.horizontal,
-                // Keep glow shadows visible on edge cards (pairs of 4s/5s etc.)
-                clipBehavior: Clip.none,
+                // Clip to the dock. Clip.none let a scrolled fan paint over the
+                // wide-board rail (Duo inner landscape covers Play/Discard and
+                // the player list). Glow inset below keeps edge-card shadows
+                // inside the viewport.
+                clipBehavior: Clip.hardEdge,
                 padding: const EdgeInsets.symmetric(
                   horizontal: UIConstants.handGlowPadding,
                 ),
