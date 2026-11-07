@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../config/game_config.dart';
+import '../constants/ui_constants.dart';
 
 /// Responsive card dimensions for in-game UI elements.
 class GameCardSizes {
@@ -135,6 +136,18 @@ class GameResponsiveLayout {
   /// Target fill of the hand strip for dynamic tablet hand sizing.
   static const double handStripFillRatio = 0.80;
 
+  /// Horizontal padding inside the hand strip: the hand container (8 + 8)
+  /// plus the scroller glow inset on each side.
+  ///
+  /// Must stay in sync with the hand display padding so a fitted fan does not
+  /// scroll.
+  static const double handStripHorizontalChrome =
+      16 + UIConstants.handGlowPadding * 2;
+
+  /// Smallest tablet hand card. Matches [GameCardSizes.smallPhone].
+  /// Below this, the fan scrolls inside the dock instead of shrinking further.
+  static const double minScaledHandWidth = 60;
+
   static bool isPhone(double width) {
     return width <= normalPhoneBreakpoint;
   }
@@ -243,10 +256,24 @@ class GameResponsiveLayout {
       base: base,
       screenWidth: width,
       cardCount: cardCount,
-      availableWidth: availableWidth,
+      availableWidth:
+          availableWidth ?? _estimatedHandStripWidth(context, width),
       availableHeight: availableHeight,
       chromeHeight: chrome,
     );
+  }
+
+  /// Strip width when the hand has not been measured yet (draw animations).
+  ///
+  /// Subtracts safe-area insets so a trailing Duo status inset does not size
+  /// flying cards for a pane wider than the one the hand actually gets.
+  static double _estimatedHandStripWidth(BuildContext context, double width) {
+    final layoutWidth = (width - MediaQuery.paddingOf(context).horizontal)
+        .clamp(0.0, width);
+    if (useWideBoardLayout(width)) {
+      return layoutWidth - wideBoardRailWidthFor(width) - 24;
+    }
+    return layoutWidth * 0.92;
   }
 
   /// Pure helper for tests and callers that already know strip width.
@@ -263,14 +290,28 @@ class GameResponsiveLayout {
         (useWideBoardLayout(screenWidth)
             ? screenWidth - wideBoardRailWidthFor(screenWidth) - 24
             : screenWidth * 0.92);
-    final targetFill = stripWidth * handStripFillRatio;
+    final usableStrip = stripWidth > handStripHorizontalChrome
+        ? stripWidth - handStripHorizontalChrome
+        : stripWidth;
+    final targetFill = usableStrip * handStripFillRatio;
     final count = cardCount <= 0 ? 1 : cardCount;
     final offsetRatio = base.handOffset / base.handWidth;
     final computedWidth = targetFill / ((count - 1) * offsetRatio + 1);
     final maxHandWidth = isLargeTablet(screenWidth)
         ? GameConfig.maxCardWidth
         : GameConfig.maxCardWidth * 0.92;
-    final handWidth = computedWidth.clamp(base.handWidth, maxHandWidth);
+    final minHandWidth = base.handWidth < minScaledHandWidth
+        ? base.handWidth
+        : minScaledHandWidth;
+    var handWidth = computedWidth.clamp(minHandWidth, maxHandWidth);
+    // Keep the tier's design size when that fan already fits (iPad / desktop).
+    // Shrink below it only when the fan would otherwise spill out of the
+    // strip — Duo inner landscape is wide enough for the rail but not for a
+    // 13-card large-tablet fan.
+    if (_fanWidth(base.handWidth, offsetRatio, count) <= usableStrip &&
+        handWidth < base.handWidth) {
+      handWidth = base.handWidth.clamp(minHandWidth, maxHandWidth);
+    }
     final handOffset = handWidth * offsetRatio;
     return _fitHandToHeight(
       base.copyWithHand(
@@ -281,6 +322,10 @@ class GameResponsiveLayout {
       availableHeight: availableHeight,
       chromeHeight: chromeHeight,
     );
+  }
+
+  static double _fanWidth(double handWidth, double offsetRatio, int count) {
+    return (count - 1) * handWidth * offsetRatio + handWidth;
   }
 
   /// Shrinks hand cards when the dock height cannot fit the scaled size.

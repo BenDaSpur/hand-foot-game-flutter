@@ -88,6 +88,45 @@ void main() {
       expect(sizes.handWidth, GameCardSizes.normalPhone.handWidth);
     });
 
+    test('opening hand fits the Duo inner landscape pane', () {
+      final base = GameResponsiveLayout.cardSizesForWidth(951);
+      // Full right pane, and the same pane with a trailing status inset.
+      for (final strip in <double>[630, 550]) {
+        final sizes = GameResponsiveLayout.scaledHandSizes(
+          base: base,
+          screenWidth: 951,
+          cardCount: 13,
+          availableWidth: strip,
+        );
+        final usable = strip - GameResponsiveLayout.handStripHorizontalChrome;
+
+        expect(
+          sizes.handStackWidth(13),
+          lessThanOrEqualTo(usable + 0.01),
+          reason: 'strip $strip',
+        );
+        expect(
+          sizes.handWidth,
+          greaterThanOrEqualTo(GameResponsiveLayout.minScaledHandWidth),
+        );
+        expect(sizes.handWidth, lessThan(GameCardSizes.largeTablet.handWidth));
+      }
+    });
+
+    test('very large hand stops at the readable floor', () {
+      final sizes = GameResponsiveLayout.scaledHandSizes(
+        base: GameCardSizes.largeTablet,
+        screenWidth: 951,
+        cardCount: 40,
+        availableWidth: 600,
+      );
+
+      expect(
+        sizes.handWidth,
+        closeTo(GameResponsiveLayout.minScaledHandWidth, 0.01),
+      );
+    });
+
     testWidgets('handSizes on large tablet exceeds tablet base', (
       tester,
     ) async {

@@ -319,6 +319,9 @@ class GameBoardLayout extends StatelessWidget {
         ),
         Expanded(
           child: Column(
+            // Stretch so the hand dock fills the pane. Centered alignment
+            // shrinks the dock to the fan and leaves it floating in the pane.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (isWide &&
                   useDesktopRecentActions &&
