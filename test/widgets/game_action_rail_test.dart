@@ -29,6 +29,7 @@ void main() {
     WidgetTester tester, {
     required Size size,
     required bool slim,
+    VoidCallback? onDrawFromDeck,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -46,7 +47,7 @@ void main() {
                 gameState: gameState,
                 humanPlayer: human,
                 selectedCardIndices: const [],
-                onDrawFromDeck: () {},
+                onDrawFromDeck: onDrawFromDeck ?? () {},
                 onUnlockDiscard: null,
                 onShowAdvancedMeldSelector: () {},
                 onDiscard: () {},
@@ -69,6 +70,61 @@ void main() {
     expect(find.text('Draw from deck'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'slim rail exposes tap on enabled actions and hides it when disabled',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      try {
+        var draws = 0;
+        await pumpButtons(
+          tester,
+          size: const Size(466, 678),
+          slim: true,
+          onDrawFromDeck: () => draws++,
+        );
+
+        expect(
+          tester.getSemantics(find.bySemanticsLabel('Draw from deck')),
+          matchesSemantics(
+            label: 'Draw from deck',
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: true,
+            hasTapAction: true,
+          ),
+        );
+        tester.semantics.tap(find.semantics.byLabel('Draw from deck'));
+        await tester.pump();
+        expect(draws, 1);
+
+        gameState.turnPhase = TurnPhase.meld;
+        await pumpButtons(tester, size: const Size(466, 678), slim: true);
+
+        expect(
+          tester.getSemantics(find.bySemanticsLabel('Play Cards')),
+          matchesSemantics(
+            label: 'Play Cards',
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: true,
+            hasTapAction: true,
+          ),
+        );
+        expect(
+          tester.getSemantics(find.bySemanticsLabel('Discard')),
+          matchesSemantics(
+            label: 'Discard',
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: false,
+          ),
+        );
+      } finally {
+        handle.dispose();
+      }
+    },
+  );
 
   testWidgets('phone dock keeps the full action label visible', (tester) async {
     await pumpButtons(tester, size: const Size(390, 844), slim: false);

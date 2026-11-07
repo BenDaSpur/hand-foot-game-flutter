@@ -679,10 +679,13 @@ class GameActionButtons extends StatelessWidget {
     final tooltip = shortcutHint == null
         ? text
         : '$text${KeyboardShortcuts.tooltipSuffix(shortcutHint)}';
+    final handler = _withHaptic(onPressed);
 
     return Semantics(
       button: true,
       label: text,
+      enabled: handler != null,
+      onTap: handler,
       excludeSemantics: true,
       child: Tooltip(
         message: tooltip,
@@ -690,7 +693,7 @@ class GameActionButtons extends StatelessWidget {
           height: 48,
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _withHaptic(onPressed),
+            onPressed: handler,
             style: ElevatedButton.styleFrom(
               backgroundColor: backgroundColor,
               disabledBackgroundColor: Colors.grey.shade800,
