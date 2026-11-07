@@ -28,6 +28,27 @@ void main() {
       expect(GameResponsiveLayout.isUltraShortHeight(678), isFalse);
       expect(GameResponsiveLayout.isInnerClass(const Size(669, 951)), isTrue);
       expect(GameResponsiveLayout.isInnerClass(const Size(466, 678)), isFalse);
+      expect(GameResponsiveLayout.isDuoCover(const Size(466, 678)), isTrue);
+      expect(GameResponsiveLayout.isDuoCover(const Size(678, 466)), isTrue);
+      expect(GameResponsiveLayout.isDuoCover(const Size(390, 844)), isFalse);
+      expect(GameResponsiveLayout.isDuoCover(const Size(852, 393)), isFalse);
+      expect(GameResponsiveLayout.isDuoCover(const Size(669, 951)), isFalse);
+      expect(
+        GameResponsiveLayout.useTrailingWideRail(const Size(951, 669)),
+        isTrue,
+      );
+      expect(
+        GameResponsiveLayout.useTrailingWideRail(const Size(1024, 768)),
+        isFalse,
+      );
+      expect(
+        GameResponsiveLayout.useTrailingWideRail(const Size(1440, 900)),
+        isFalse,
+      );
+      expect(
+        GameResponsiveLayout.useTrailingWideRail(const Size(669, 951)),
+        isFalse,
+      );
     });
 
     test('cardSizesForWidth returns distinct tablet tiers', () {
@@ -90,7 +111,7 @@ void main() {
 
     test('opening hand fits the Duo inner landscape pane', () {
       final base = GameResponsiveLayout.cardSizesForWidth(951);
-      // Full right pane, and the same pane with a trailing status inset.
+      // Play pane beside the wide rail, and the same pane with a trailing status inset.
       for (final strip in <double>[630, 550]) {
         final sizes = GameResponsiveLayout.scaledHandSizes(
           base: base,

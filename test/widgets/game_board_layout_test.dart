@@ -10,6 +10,21 @@ import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
 import 'package:hand_foot_game_flutter/widgets/game_board_layout.dart';
 
+void _expectTrailingActions(WidgetTester tester) {
+  final rail = tester.getRect(
+    find.byKey(GameBoardLayout.trailingActionRailKey),
+  );
+  final melds = tester.getRect(find.text('Melds'));
+  final dock = tester.getRect(find.byKey(GameBoardLayout.bottomDockKey));
+  final hand = tester.getRect(find.text('Hand'));
+  final actions = tester.getRect(find.text('Actions'));
+  expect(rail.left, greaterThanOrEqualTo(melds.right - 0.5));
+  expect(dock.right, lessThanOrEqualTo(rail.left + 0.5));
+  expect(dock.overlaps(hand), isTrue);
+  expect(actions.left, greaterThanOrEqualTo(rail.left - 0.5));
+  expect(actions.right, lessThanOrEqualTo(rail.right + 0.5));
+}
+
 void main() {
   group('GameBoardLayout', () {
     late GameState gameState;
@@ -80,12 +95,20 @@ void main() {
       expect(find.byKey(GameBoardLayout.narrowBoardKey), findsOneWidget);
       expect(find.byKey(GameBoardLayout.wideBoardKey), findsNothing);
       expect(find.byKey(GameBoardLayout.wideRailKey), findsNothing);
+      expect(find.byKey(GameBoardLayout.trailingActionRailKey), findsNothing);
+      final dock = tester.getRect(find.byKey(GameBoardLayout.bottomDockKey));
+      final actions = tester.getRect(find.text('Actions'));
+      expect(dock.overlaps(actions), isTrue);
     });
 
     testWidgets('uses narrow column layout on iPad portrait', (tester) async {
       await pumpBoard(tester, const Size(768, 1024));
       expect(find.byKey(GameBoardLayout.narrowBoardKey), findsOneWidget);
       expect(find.byKey(GameBoardLayout.wideBoardKey), findsNothing);
+      expect(find.byKey(GameBoardLayout.trailingActionRailKey), findsNothing);
+      final dock = tester.getRect(find.byKey(GameBoardLayout.bottomDockKey));
+      final actions = tester.getRect(find.text('Actions'));
+      expect(dock.overlaps(actions), isTrue);
     });
 
     testWidgets('uses two-pane rail layout when width is wide', (tester) async {
@@ -96,23 +119,32 @@ void main() {
       expect(find.text('Actions'), findsOneWidget);
       expect(find.text('Hand'), findsOneWidget);
       expect(find.text('Melds'), findsOneWidget);
+      final rail = tester.getRect(find.byKey(GameBoardLayout.wideRailKey));
+      final melds = tester.getRect(find.text('Melds'));
+      expect(rail.left, lessThan(melds.left));
     });
 
     group('iPhone Duo fixtures', () {
-      testWidgets('cover portrait uses narrow phone board', (tester) async {
+      testWidgets('cover portrait parks actions in a trailing rail', (
+        tester,
+      ) async {
         await pumpBoard(tester, const Size(466, 678));
-        expect(find.byKey(GameBoardLayout.narrowBoardKey), findsOneWidget);
+        expect(find.byKey(GameBoardLayout.coverBoardKey), findsOneWidget);
+        expect(find.byKey(GameBoardLayout.narrowBoardKey), findsNothing);
         expect(find.byKey(GameBoardLayout.wideBoardKey), findsNothing);
         expect(find.byKey(GameBoardLayout.bottomDockKey), findsOneWidget);
+        _expectTrailingActions(tester);
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('cover landscape ultra-short stays narrow without overflow', (
+      testWidgets('cover landscape parks actions in a trailing rail', (
         tester,
       ) async {
         await pumpBoard(tester, const Size(678, 466));
-        expect(find.byKey(GameBoardLayout.narrowBoardKey), findsOneWidget);
+        expect(find.byKey(GameBoardLayout.coverBoardKey), findsOneWidget);
+        expect(find.byKey(GameBoardLayout.narrowBoardKey), findsNothing);
         expect(find.byKey(GameBoardLayout.bottomDockKey), findsOneWidget);
+        _expectTrailingActions(tester);
         expect(tester.takeException(), isNull);
       });
 
@@ -125,11 +157,17 @@ void main() {
         expect(find.text('Melds'), findsOneWidget);
       });
 
-      testWidgets('inner landscape uses wide rail board', (tester) async {
+      testWidgets('inner landscape puts the wide rail on the trailing edge', (
+        tester,
+      ) async {
         await pumpBoard(tester, const Size(951, 669));
         expect(find.byKey(GameBoardLayout.wideBoardKey), findsOneWidget);
         expect(find.byKey(GameBoardLayout.wideRailKey), findsOneWidget);
         expect(find.byKey(GameBoardLayout.narrowBoardKey), findsNothing);
+        expect(find.byKey(GameBoardLayout.trailingActionRailKey), findsNothing);
+        final rail = tester.getRect(find.byKey(GameBoardLayout.wideRailKey));
+        final melds = tester.getRect(find.text('Melds'));
+        expect(rail.left, greaterThan(melds.right));
       });
 
       testWidgets('partially open book pose splits around vertical fold', (
@@ -163,6 +201,12 @@ void main() {
         expect(gap.width, closeTo(fold.width, 0.5));
         expect(play.overlaps(fold), isFalse);
         expect(dock.overlaps(fold), isFalse);
+        expect(dock.left, greaterThanOrEqualTo(gap.right - 0.5));
+        final rail = tester.getRect(
+          find.byKey(GameBoardLayout.trailingActionRailKey),
+        );
+        expect(rail.left, greaterThanOrEqualTo(dock.right - 0.5));
+        expect(rail.overlaps(fold), isFalse);
       });
 
       testWidgets('partially open laptop pose splits around horizontal fold', (

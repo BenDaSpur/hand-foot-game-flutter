@@ -142,21 +142,24 @@ void main() {
       expect(cards, isNotEmpty);
       expect(find.byKey(GameBoardLayout.wideBoardKey), findsOneWidget);
       final board = tester.getRect(find.byKey(GameBoardLayout.wideBoardKey));
-      expect(dock.left, closeTo(rail.right + 1, 1));
-      expect(dock.right, closeTo(board.right, 1));
+      expect(dock.right, closeTo(rail.left - 1, 1));
+      expect(dock.left, closeTo(board.left, 1));
+      expect(rail.right, closeTo(board.right, 1));
       for (final card in cards) {
-        expect(card.left, greaterThanOrEqualTo(rail.right - 0.5));
-        expect(card.right, lessThanOrEqualTo(dock.right + 0.5));
+        expect(card.right, lessThanOrEqualTo(rail.left + 0.5));
+        expect(card.left, greaterThanOrEqualTo(dock.left - 0.5));
         expect(card.overlaps(play), isFalse);
         expect(card.overlaps(discard), isFalse);
       }
-      expect(play.right, lessThanOrEqualTo(rail.right + 0.5));
+      expect(play.left, greaterThanOrEqualTo(rail.left - 0.5));
       expect(play.bottom, lessThanOrEqualTo(duoInnerLandscape.height + 0.5));
       expect(discard.bottom, lessThanOrEqualTo(duoInnerLandscape.height + 0.5));
       expect(tester.takeException(), isNull);
     }
 
-    testWidgets('13-card hand stays in the right pane', (tester) async {
+    testWidgets('13-card hand stays clear of the trailing rail', (
+      tester,
+    ) async {
       final scroll = await pumpHand(tester, cardCount: 13);
 
       expectHandClearsRail(tester);
