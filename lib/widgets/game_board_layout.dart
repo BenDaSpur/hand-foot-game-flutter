@@ -16,11 +16,12 @@ import 'collapsible_recent_actions.dart';
 ///
 /// Uses a two-pane rail layout when width ≥ tablet landscape breakpoint
 /// (iPad landscape / macOS / iPhone Duo inner landscape). On Duo inner
-/// landscape that rail is trailing, under the Control Center strip. The Duo
-/// cover uses a slim trailing action column so the hand keeps a phone-width
-/// pane. When a fold crease is active, the table stays on the left page and
-/// the hand plus actions stay on the right; a horizontal crease keeps the
-/// dock in the lower half.
+/// landscape that rail stays inside the safe area, beside the Control Center
+/// strip. The Duo cover and book pose put turn actions in the strip itself,
+/// under the status icons, so the table is not squeezed by a second column.
+/// When a fold crease is active, the table stays on the left page and the
+/// hand plus actions stay on the right; a horizontal crease keeps the dock
+/// in the lower half.
 class GameBoardLayout extends StatelessWidget {
   static const Key wideBoardKey = ValueKey('game-board-wide');
   static const Key narrowBoardKey = ValueKey('game-board-narrow');
@@ -92,24 +93,89 @@ class GameBoardLayout extends StatelessWidget {
     final isWide = size.width > UIConstants.smallScreenBreakpoint;
     final useWideBoard = GameResponsiveLayout.useWideBoardLayout(size.width);
     final windowFold = GameFoldGeometry.activeDivisionBounds(context);
+    final padding = MediaQuery.paddingOf(context);
+    final trailingIsLeft = Directionality.of(context) == TextDirection.rtl;
+    final trailingInset = trailingIsLeft ? padding.left : padding.right;
+    // Cover and book poses draw into the trailing status strip. Leaving
+    // SafeArea on that side, then adding another 84pt rail, parks Draw beside
+    // the clock and leaves the strip empty.
+    final absorbTrailingStrip = _placeActionsInStatusStrip(
+      size: size,
+      windowFold: windowFold,
+    );
+    final slimRailWidth = _slimRailWidthFor(
+      trailingInset,
+      absorbStrip: absorbTrailingStrip,
+    );
+    final board = windowFold != null
+        ? _FoldAwareBoardHost(
+            windowFold: windowFold,
+            isWide: isWide,
+            board: this,
+            slimRailWidth: slimRailWidth,
+            trailingReserve: absorbTrailingStrip ? trailingInset : 0,
+            trailingIsLeft: trailingIsLeft,
+          )
+        : useWideBoard
+        ? _buildWideBoard(context, isWide: isWide)
+        : absorbTrailingStrip
+        ? _buildCoverBoard(
+            context,
+            isWide: isWide,
+            slimRailWidth: slimRailWidth,
+          )
+        : _buildNarrowBoard(context, isWide: isWide);
 
     return SafeArea(
-      child: windowFold != null
-          ? _FoldAwareBoardHost(
-              windowFold: windowFold,
-              isWide: isWide,
-              board: this,
-            )
-          : useWideBoard
-          ? _buildWideBoard(context, isWide: isWide)
-          : GameResponsiveLayout.isDuoCover(size)
-          ? _buildCoverBoard(context, isWide: isWide)
-          : _buildNarrowBoard(context, isWide: isWide),
+      left: !(absorbTrailingStrip && trailingIsLeft),
+      right: !(absorbTrailingStrip && !trailingIsLeft),
+      child: Builder(
+        builder: (context) {
+          if (!absorbTrailingStrip) {
+            return board;
+          }
+          // SafeArea leaves the unconsumed side in MediaQuery. Drop it so the
+          // table does not inset itself a second time beside the action rail.
+          return MediaQuery.removePadding(
+            context: context,
+            removeLeft: trailingIsLeft,
+            removeRight: !trailingIsLeft,
+            child: board,
+          );
+        },
+      ),
     );
   }
 
-  /// Cover: phone column for the table and hand, turn actions on the right.
-  Widget _buildCoverBoard(BuildContext context, {required bool isWide}) {
+  /// Cover and vertical book folds own the trailing status strip.
+  static bool _placeActionsInStatusStrip({
+    required Size size,
+    required Rect? windowFold,
+  }) {
+    if (windowFold != null) {
+      return GameFoldGeometry.isVerticalDivision(windowFold);
+    }
+    return GameResponsiveLayout.isDuoCover(size);
+  }
+
+  /// Rail fills the status strip when that inset is wider than the minimum.
+  static double _slimRailWidthFor(
+    double trailingInset, {
+    required bool absorbStrip,
+  }) {
+    final minimum = GameResponsiveLayout.trailingActionRailWidth;
+    if (!absorbStrip || !trailingInset.isFinite || trailingInset <= minimum) {
+      return minimum;
+    }
+    return trailingInset;
+  }
+
+  /// Cover: phone column for the table and hand, turn actions in the status strip.
+  Widget _buildCoverBoard(
+    BuildContext context, {
+    required bool isWide,
+    required double slimRailWidth,
+  }) {
     return Row(
       key: coverBoardKey,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -121,14 +187,15 @@ class GameBoardLayout extends StatelessWidget {
             bottom: _BottomDock(key: bottomDockKey, child: handDisplay),
           ),
         ),
-        _slimActionRail(),
+        _slimActionRail(width: slimRailWidth),
       ],
     );
   }
 
-  Widget _slimActionRail() {
+  Widget _slimActionRail({required double width}) {
     return _TrailingActionRail(
       key: trailingActionRailKey,
+      width: width,
       child: GameActionRailScope(slim: true, child: actionButtons),
     );
   }
@@ -139,6 +206,7 @@ class GameBoardLayout extends StatelessWidget {
     required Rect localFold,
     required double safeWidth,
     required bool isWide,
+    required double slimRailWidth,
   }) {
     final leftWidth = localFold.left.clamp(0.0, safeWidth);
     final gapWidth = localFold.width.clamp(0.0, safeWidth - leftWidth);
@@ -147,8 +215,8 @@ class GameBoardLayout extends StatelessWidget {
       key: foldPlaySurfaceKey,
       child: _buildPlaySurface(context, isWide: isWide),
     );
-    // Right page is the outer edge under Control Center. The hand sits at
-    // the bottom; turn actions use the same slim column as the cover.
+    // Right page is the outer edge. The hand sits at the bottom of that page;
+    // turn actions occupy the status strip on its trailing edge.
     final dock = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -158,7 +226,7 @@ class GameBoardLayout extends StatelessWidget {
             children: [_BottomDock(key: bottomDockKey, child: handDisplay)],
           ),
         ),
-        _slimActionRail(),
+        _slimActionRail(width: slimRailWidth.clamp(0.0, rightWidth).toDouble()),
       ],
     );
     return Row(
@@ -411,11 +479,20 @@ class _FoldAwareBoardHost extends StatefulWidget {
   final Rect windowFold;
   final bool isWide;
   final GameBoardLayout board;
+  final double slimRailWidth;
+
+  /// Trailing inset the host must keep clear when it falls back to a layout
+  /// that does not draw into the status strip.
+  final double trailingReserve;
+  final bool trailingIsLeft;
 
   const _FoldAwareBoardHost({
     required this.windowFold,
     required this.isWide,
     required this.board,
+    required this.slimRailWidth,
+    required this.trailingReserve,
+    required this.trailingIsLeft,
   });
 
   @override
@@ -457,13 +534,25 @@ class _FoldAwareBoardHostState extends State<_FoldAwareBoardHost> {
         );
         if (!_isUsableLocalFold(localFold, size)) {
           // Until the first measure (or if fold is outside the board), use
-          // the normal wide/narrow layout for this width.
+          // the normal wide/narrow layout for this width. That layout stays
+          // beside the status strip, so put the trailing inset back.
           final useWide = GameResponsiveLayout.useWideBoardLayout(
             MediaQuery.sizeOf(context).width,
           );
-          return useWide
+          final fallback = useWide
               ? widget.board._buildWideBoard(context, isWide: widget.isWide)
               : widget.board._buildNarrowBoard(context, isWide: widget.isWide);
+          final reserve = widget.trailingReserve;
+          if (reserve <= 0) {
+            return fallback;
+          }
+          return Padding(
+            padding: EdgeInsets.only(
+              left: widget.trailingIsLeft ? reserve : 0,
+              right: widget.trailingIsLeft ? 0 : reserve,
+            ),
+            child: fallback,
+          );
         }
         if (GameFoldGeometry.isVerticalDivision(localFold)) {
           return widget.board._buildBookFold(
@@ -471,6 +560,7 @@ class _FoldAwareBoardHostState extends State<_FoldAwareBoardHost> {
             localFold: localFold,
             safeWidth: size.width,
             isWide: widget.isWide,
+            slimRailWidth: widget.slimRailWidth,
           );
         }
         return widget.board._buildLaptopFold(
@@ -497,12 +587,17 @@ class _FoldAwareBoardHostState extends State<_FoldAwareBoardHost> {
   bool get _originMeasured => _origin != null;
 }
 
-/// Trailing turn-action column. Sits inside the safe area, directly under
-/// the Duo status / Control Center strip.
+/// Trailing turn-action column. On the Duo cover and in book pose this is the
+/// status / Control Center strip, with the buttons at the bottom of it.
 class _TrailingActionRail extends StatelessWidget {
   final Widget child;
+  final double width;
 
-  const _TrailingActionRail({super.key, required this.child});
+  const _TrailingActionRail({
+    super.key,
+    required this.child,
+    required this.width,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -516,8 +611,11 @@ class _TrailingActionRail extends StatelessWidget {
         ),
       ),
       child: SizedBox(
-        width: GameResponsiveLayout.trailingActionRailWidth,
-        child: Align(alignment: Alignment.bottomCenter, child: child),
+        width: width,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 0, 8, 0),
+          child: Align(alignment: Alignment.bottomCenter, child: child),
+        ),
       ),
     );
   }

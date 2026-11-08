@@ -126,7 +126,9 @@ class GameResponsiveLayout {
   static const double duoCoverMinLongestSide = 640;
   static const double duoCoverMaxLongestSide = 720;
 
-  /// Slim trailing column for turn actions on the Duo cover and book pose.
+  /// Minimum width of the trailing turn-action column on the Duo cover and
+  /// in book pose. The column grows to the trailing safe inset when that
+  /// inset is wider, so the buttons sit in the status strip.
   static const double trailingActionRailWidth = 84;
 
   /// Open Duo landscape (~951×669). Taller canvases (iPad) and wider
