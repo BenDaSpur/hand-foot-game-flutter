@@ -185,6 +185,21 @@ class LegalActionGenerator {
     if (!forceSpendKeys) {
       possible = _filterLiveKeyMelds(bot, possible, liveTop);
     }
+    // Drop creates the foot filter would reject before findBestMeld picks
+    // one. A high-point ace extension otherwise hides a fours group that
+    // finishes a book.
+    final dumpFoot = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+    possible = possible
+        .where(
+          (meld) => _keepsNewRank(
+            bot,
+            meld,
+            playDownRequirement: context.playDownRequirement,
+            onHandPile: onHandPile,
+            dumpFoot: dumpFoot,
+          ),
+        )
+        .toList();
     List<PlayingCard>? createMeld;
     if (possible.isNotEmpty) {
       final best = meldAnalyzer.findBestMeld(

@@ -188,6 +188,33 @@ void main() {
       },
     );
 
+    test('offers a book-completing fours create when aces score higher', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.melds.addAll([
+        _sizedMeld(CardRank.queen, size: 7, dirty: false),
+        _sizedMeld(CardRank.king, size: 7, dirty: true),
+        _sizedMeld(CardRank.ace, size: 3, dirty: false),
+        _sizedMeld(CardRank.four, size: 4, dirty: false),
+      ]);
+      bot.hand
+        ..clear()
+        ..addAll([
+          ..._nOf(CardRank.ace, 3),
+          ..._nOf(CardRank.four, 3),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+        ]);
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      _setPile(controller, size: 3, top: CardRank.three);
+
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, 'createMeld');
+      final meld = decision.data as List<PlayingCard>;
+      expect(meld.every((card) => card.rank == CardRank.four), isTrue);
+    });
+
     test('finishes a 6-card book instead of growing a higher size-5 pile', () {
       bot.hasPlayedDown = true;
       bot.hasPickedUpFoot = false;
