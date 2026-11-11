@@ -492,6 +492,7 @@ class GameActionButtons extends StatelessWidget {
       buttons.add(
         _buildTurnButton(
           slim: slimRail,
+          rail: stackInRail,
           onPressed: isAnimating ? null : onDrawFromDeck,
           text: 'Draw from deck',
           shortcutHint: showKeyboardHints ? KeyboardShortcuts.drawKey : null,
@@ -503,6 +504,7 @@ class GameActionButtons extends StatelessWidget {
         buttons.add(
           _buildTurnButton(
             slim: slimRail,
+            rail: stackInRail,
             onPressed: isAnimating ? null : onUnlockDiscard,
             text: 'Take Discard',
             shortcutHint: showKeyboardHints
@@ -519,6 +521,7 @@ class GameActionButtons extends StatelessWidget {
       buttons.add(
         _buildTurnButton(
           slim: slimRail,
+          rail: stackInRail,
           onPressed: isAnimating ? null : onShowAdvancedMeldSelector,
           text: 'Play Cards',
           shortcutHint: showKeyboardHints
@@ -535,6 +538,7 @@ class GameActionButtons extends StatelessWidget {
         buttons.add(
           _buildTurnButton(
             slim: slimRail,
+            rail: stackInRail,
             onPressed: isAnimating ? null : onUndoMeld,
             text: 'Undo',
             isPhone: isPhone,
@@ -546,6 +550,7 @@ class GameActionButtons extends StatelessWidget {
       buttons.add(
         _buildTurnButton(
           slim: slimRail,
+          rail: stackInRail,
           onPressed: isAnimating ? null : (_hasSelectedCard ? onDiscard : null),
           text: _discardButtonText,
           shortcutHint: showKeyboardHints ? KeyboardShortcuts.discardKey : null,
@@ -560,6 +565,7 @@ class GameActionButtons extends StatelessWidget {
         buttons.add(
           _buildTurnButton(
             slim: slimRail,
+            rail: stackInRail,
             onPressed: isAnimating ? null : onClearSelection,
             text: 'Clear',
             shortcutHint: showKeyboardHints ? KeyboardShortcuts.clearKey : null,
@@ -589,14 +595,22 @@ class GameActionButtons extends StatelessWidget {
 
     if (stackInRail) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+        padding: const EdgeInsets.fromLTRB(
+          10,
+          8,
+          10,
+          12 + GameResponsiveLayout.actionDockBottomTouchInset,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (var i = 0; i < buttons.length; i++) ...[
               if (i > 0) const SizedBox(height: 8),
-              SizedBox(height: 44, child: buttons[i]),
+              SizedBox(
+                height: GameResponsiveLayout.railActionButtonHeight,
+                child: buttons[i],
+              ),
             ],
           ],
         ),
@@ -646,6 +660,7 @@ class GameActionButtons extends StatelessWidget {
     required String text,
     required bool isPhone,
     bool isUltraShort = false,
+    bool rail = false,
     String? shortcutHint,
     Color? backgroundColor,
   }) {
@@ -662,6 +677,7 @@ class GameActionButtons extends StatelessWidget {
       text: text,
       isPhone: isPhone,
       isUltraShort: isUltraShort,
+      rail: rail,
       shortcutHint: shortcutHint,
       backgroundColor: backgroundColor,
     );
@@ -690,7 +706,7 @@ class GameActionButtons extends StatelessWidget {
       child: Tooltip(
         message: tooltip,
         child: SizedBox(
-          height: 48,
+          height: GameResponsiveLayout.railActionButtonHeight,
           width: double.infinity,
           child: ElevatedButton(
             onPressed: handler,
@@ -698,8 +714,11 @@ class GameActionButtons extends StatelessWidget {
               backgroundColor: backgroundColor,
               disabledBackgroundColor: Colors.grey.shade800,
               padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-              minimumSize: const Size(44, 44),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(
+                GameResponsiveLayout.railActionButtonHeight,
+                GameResponsiveLayout.railActionButtonHeight,
+              ),
+              tapTargetSize: MaterialTapTargetSize.padded,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -781,6 +800,7 @@ class GameActionButtons extends StatelessWidget {
     required String text,
     required bool isPhone,
     bool isUltraShort = false,
+    bool rail = false,
     String? shortcutHint,
     Color? backgroundColor,
   }) {
@@ -801,8 +821,15 @@ class GameActionButtons extends StatelessWidget {
               : 12,
           horizontal: isPhone ? 6 : 16,
         ),
-        minimumSize: Size(isPhone ? 0 : 64, isUltraShort ? 36 : 44),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        minimumSize: Size(
+          isPhone ? 0 : 64,
+          rail
+              ? GameResponsiveLayout.railActionButtonHeight
+              : (isUltraShort ? 36 : 44),
+        ),
+        tapTargetSize: rail
+            ? MaterialTapTargetSize.padded
+            : MaterialTapTargetSize.shrinkWrap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         elevation: isPhone ? 2 : 4,
       ),

@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hand_foot_game_flutter/models/deck.dart';
 import 'package:hand_foot_game_flutter/models/game_state.dart';
 import 'package:hand_foot_game_flutter/models/player.dart';
+import 'package:hand_foot_game_flutter/utils/game_responsive_layout.dart';
+import 'package:hand_foot_game_flutter/widgets/game_action_buttons.dart';
 import 'package:hand_foot_game_flutter/widgets/game_board_layout.dart';
 
 void _expectTrailingActions(WidgetTester tester) {
@@ -44,7 +46,7 @@ void main() {
       discardKey = GlobalKey();
     });
 
-    Widget buildBoard() {
+    Widget buildBoard({Widget? actionButtons}) {
       return GameBoardLayout(
         gameState: gameState,
         viewingPlayerMelds: null,
@@ -53,10 +55,9 @@ void main() {
           color: Colors.black26,
           child: Center(child: Text('Melds')),
         ),
-        actionButtons: const SizedBox(
-          height: 48,
-          child: Center(child: Text('Actions')),
-        ),
+        actionButtons:
+            actionButtons ??
+            const SizedBox(height: 48, child: Center(child: Text('Actions'))),
         handDisplay: const SizedBox(
           height: 80,
           child: Center(child: Text('Hand')),
@@ -74,6 +75,7 @@ void main() {
       List<DisplayFeature> displayFeatures = const [],
       PreferredSizeWidget? appBar,
       EdgeInsets padding = EdgeInsets.zero,
+      Widget? actionButtons,
     }) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
@@ -98,7 +100,10 @@ void main() {
             displayFeatures: displayFeatures,
           ),
           child: MaterialApp(
-            home: Scaffold(appBar: appBar, body: buildBoard()),
+            home: Scaffold(
+              appBar: appBar,
+              body: buildBoard(actionButtons: actionButtons),
+            ),
           ),
         ),
       );
@@ -264,6 +269,85 @@ void main() {
         final rail = tester.getRect(find.byKey(GameBoardLayout.wideRailKey));
         final melds = tester.getRect(find.text('Melds'));
         expect(rail.left, greaterThan(melds.right));
+      });
+
+      testWidgets('inner landscape keeps Discard above the home indicator', (
+        tester,
+      ) async {
+        const size = Size(951, 669);
+        const homeIndicator = 34.0;
+        gameState.turnPhase = TurnPhase.meld;
+        final human = gameState.players.first;
+        await pumpBoard(
+          tester,
+          size,
+          padding: const EdgeInsets.only(bottom: homeIndicator),
+          actionButtons: GameActionButtons(
+            gameState: gameState,
+            humanPlayer: human,
+            selectedCardIndices: const [],
+            onDrawFromDeck: () {},
+            onUnlockDiscard: () {},
+            onShowAdvancedMeldSelector: () {},
+            onDiscard: () {},
+            onClearSelection: () {},
+          ),
+        );
+
+        final discard = tester.getRect(
+          find.ancestor(
+            of: find.text('Discard'),
+            matching: find.byType(ElevatedButton),
+          ),
+        );
+        final safeBottom = size.height - homeIndicator;
+        expect(
+          discard.bottom,
+          lessThanOrEqualTo(
+            safeBottom - GameResponsiveLayout.actionDockBottomTouchInset + 0.5,
+          ),
+        );
+        expect(
+          discard.height,
+          greaterThanOrEqualTo(
+            GameResponsiveLayout.railActionButtonHeight - 0.5,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('short wide rail keeps every meld button reachable', (
+        tester,
+      ) async {
+        gameState.turnPhase = TurnPhase.meld;
+        final human = gameState.players.first;
+        await pumpBoard(
+          tester,
+          const Size(1024, 360),
+          actionButtons: GameActionButtons(
+            gameState: gameState,
+            humanPlayer: human,
+            selectedCardIndices: const [0],
+            onDrawFromDeck: () {},
+            onUnlockDiscard: () {},
+            onShowAdvancedMeldSelector: () {},
+            onDiscard: () {},
+            onClearSelection: () {},
+            onUndoMeld: () {},
+            canUndoMeld: true,
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        for (final label in ['Play Cards', 'Undo', 'Discard', 'Clear']) {
+          final button = find.descendant(
+            of: find.byType(ElevatedButton),
+            matching: find.text(label),
+          );
+          expect(button, findsOneWidget);
+          await tester.ensureVisible(button);
+        }
+        expect(tester.takeException(), isNull);
       });
 
       testWidgets('partially open book pose splits around vertical fold', (

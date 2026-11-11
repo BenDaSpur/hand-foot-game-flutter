@@ -11,12 +11,16 @@ abstract final class AdsEligibility {
     required bool canRequestAds,
     required DateTime? lastShownAt,
     required DateTime now,
+    bool isDuoLayout = false,
     Duration cooldown = AdsConfig.interstitialCooldown,
   }) {
     if (!isSolo) {
       return false;
     }
     if (isLearnToPlay) {
+      return false;
+    }
+    if (isDuoLayout) {
       return false;
     }
     if (!canRequestAds) {

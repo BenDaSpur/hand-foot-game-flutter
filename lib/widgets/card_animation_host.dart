@@ -142,6 +142,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
         type: CardDrawAnimationType.deckDraw,
         handCards: List<PlayingCard>.from(event.cards),
         handTargetIndices: _indicesForCards(event.player!, event.cards),
+        handCount: event.player!.currentHand.length,
       ),
     );
   }
@@ -166,6 +167,7 @@ class _CardAnimationHostState extends State<CardAnimationHost> {
         handTargetIndices: isLocalHuman
             ? _indicesForCards(player, event.handPickupCards)
             : const [],
+        handCount: isLocalHuman ? player.currentHand.length : null,
         meldedCards: List<PlayingCard>.from(event.meldedCards),
         meldIndex: event.meldIndex,
       ),

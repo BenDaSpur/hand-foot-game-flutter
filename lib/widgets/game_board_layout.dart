@@ -404,34 +404,54 @@ class GameBoardLayout extends StatelessWidget {
     final rail = SizedBox(
       key: wideRailKey,
       width: GameResponsiveLayout.wideBoardRailWidthFor(size.width),
-      child: Column(
-        children: [
-          GameCompactHeader(
-            gameState: gameState,
-            deckKey: deckKey,
-            discardKey: discardKey,
-            isExpanded: true,
-            showExpandToggle: false,
-            onToggleExpand: onHeaderToggle,
-            onRecentActionsTap: null,
-            headerExtras: headerExtras,
-            expandedExtras: expandedHeaderExtras,
-            persistentHeaderExtras: persistentHeaderExtras,
-            onDeckTap: onDeckTap,
-            onDiscardTap: onDiscardTap,
-            localPlayerId: currentUserId,
-          ),
-          CompactPlayerScores(
-            gameState: gameState,
-            viewingPlayerMelds: viewingPlayerMelds,
-            onPlayerTap: onPlayerTap,
-            currentUserId: currentUserId,
-            botPersonalityManager: botPersonalityManager,
-            vertical: true,
-          ),
-          const Spacer(),
-          actionButtons,
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final minHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 0.0;
+          // One scroll keeps a four-button meld stack reachable on a short
+          // window. The minimum height pins those buttons to the bottom when
+          // the header still fits.
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minHeight),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GameCompactHeader(
+                        gameState: gameState,
+                        deckKey: deckKey,
+                        discardKey: discardKey,
+                        isExpanded: true,
+                        showExpandToggle: false,
+                        onToggleExpand: onHeaderToggle,
+                        onRecentActionsTap: null,
+                        headerExtras: headerExtras,
+                        expandedExtras: expandedHeaderExtras,
+                        persistentHeaderExtras: persistentHeaderExtras,
+                        onDeckTap: onDeckTap,
+                        onDiscardTap: onDiscardTap,
+                        localPlayerId: currentUserId,
+                      ),
+                      CompactPlayerScores(
+                        gameState: gameState,
+                        viewingPlayerMelds: viewingPlayerMelds,
+                        onPlayerTap: onPlayerTap,
+                        currentUserId: currentUserId,
+                        botPersonalityManager: botPersonalityManager,
+                        vertical: true,
+                      ),
+                    ],
+                  ),
+                  actionButtons,
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
     final divider = VerticalDivider(
@@ -613,7 +633,12 @@ class _TrailingActionRail extends StatelessWidget {
       child: SizedBox(
         width: width,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 0, 8, 0),
+          padding: const EdgeInsets.fromLTRB(
+            6,
+            0,
+            8,
+            GameResponsiveLayout.actionDockBottomTouchInset,
+          ),
           child: Align(alignment: Alignment.bottomCenter, child: child),
         ),
       ),

@@ -29,6 +29,7 @@ abstract class AdsService extends ChangeNotifier {
   Future<void> showInterstitialIfEligible({
     required bool isSolo,
     required bool isLearnToPlay,
+    bool isDuoLayout = false,
   });
 
   /// True when a menu banner should occupy layout (SDK ready + consent).
@@ -54,6 +55,7 @@ class NoOpAdsService extends AdsService {
   Future<void> showInterstitialIfEligible({
     required bool isSolo,
     required bool isLearnToPlay,
+    bool isDuoLayout = false,
   }) async {}
 
   @override
