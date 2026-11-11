@@ -23,10 +23,17 @@ void main() {
       WidgetTester tester, {
       required int cardCount,
       double trailingInset = 0,
+      bool foot = false,
     }) async {
-      final human = Player(id: '1', name: 'You', type: PlayerType.human);
+      final human = Player(
+        id: '1',
+        name: 'You',
+        type: PlayerType.human,
+        hasPickedUpFoot: foot,
+      );
+      final pile = foot ? human.foot : human.hand;
       for (var i = 0; i < cardCount; i++) {
-        human.hand.add(
+        pile.add(
           PlayingCard(
             suit: i.isEven ? Suit.hearts : Suit.spades,
             rank: CardRank.values[i % (CardRank.values.length - 1)],
@@ -156,6 +163,24 @@ void main() {
       expect(discard.bottom, lessThanOrEqualTo(duoInnerLandscape.height + 0.5));
       expect(tester.takeException(), isNull);
     }
+
+    testWidgets('one-card foot and three-card hand use the same card width', (
+      tester,
+    ) async {
+      await pumpHand(tester, cardCount: 1, foot: true);
+      expect(find.text('Your Foot (1)'), findsOneWidget);
+      final footWidth = handCardRects(tester).single.width;
+
+      await pumpHand(tester, cardCount: 3);
+      expect(find.text('Your Hand (3)'), findsOneWidget);
+      final handWidths = handCardRects(tester)
+          .map((rect) => rect.width)
+          .toSet();
+
+      expect(handWidths, hasLength(1));
+      expect(handWidths.single, closeTo(footWidth, 0.5));
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('13-card hand stays clear of the trailing rail', (
       tester,

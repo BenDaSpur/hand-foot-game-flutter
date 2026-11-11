@@ -406,30 +406,38 @@ class GameBoardLayout extends StatelessWidget {
       width: GameResponsiveLayout.wideBoardRailWidthFor(size.width),
       child: Column(
         children: [
-          GameCompactHeader(
-            gameState: gameState,
-            deckKey: deckKey,
-            discardKey: discardKey,
-            isExpanded: true,
-            showExpandToggle: false,
-            onToggleExpand: onHeaderToggle,
-            onRecentActionsTap: null,
-            headerExtras: headerExtras,
-            expandedExtras: expandedHeaderExtras,
-            persistentHeaderExtras: persistentHeaderExtras,
-            onDeckTap: onDeckTap,
-            onDiscardTap: onDiscardTap,
-            localPlayerId: currentUserId,
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GameCompactHeader(
+                    gameState: gameState,
+                    deckKey: deckKey,
+                    discardKey: discardKey,
+                    isExpanded: true,
+                    showExpandToggle: false,
+                    onToggleExpand: onHeaderToggle,
+                    onRecentActionsTap: null,
+                    headerExtras: headerExtras,
+                    expandedExtras: expandedHeaderExtras,
+                    persistentHeaderExtras: persistentHeaderExtras,
+                    onDeckTap: onDeckTap,
+                    onDiscardTap: onDiscardTap,
+                    localPlayerId: currentUserId,
+                  ),
+                  CompactPlayerScores(
+                    gameState: gameState,
+                    viewingPlayerMelds: viewingPlayerMelds,
+                    onPlayerTap: onPlayerTap,
+                    currentUserId: currentUserId,
+                    botPersonalityManager: botPersonalityManager,
+                    vertical: true,
+                  ),
+                ],
+              ),
+            ),
           ),
-          CompactPlayerScores(
-            gameState: gameState,
-            viewingPlayerMelds: viewingPlayerMelds,
-            onPlayerTap: onPlayerTap,
-            currentUserId: currentUserId,
-            botPersonalityManager: botPersonalityManager,
-            vertical: true,
-          ),
-          const Spacer(),
           actionButtons,
         ],
       ),
@@ -613,7 +621,12 @@ class _TrailingActionRail extends StatelessWidget {
       child: SizedBox(
         width: width,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 0, 8, 0),
+          padding: const EdgeInsets.fromLTRB(
+            6,
+            0,
+            8,
+            GameResponsiveLayout.actionDockBottomTouchInset,
+          ),
           child: Align(alignment: Alignment.bottomCenter, child: child),
         ),
       ),

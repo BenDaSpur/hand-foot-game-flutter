@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/debug_logger.dart';
 import 'ads_config.dart';
 import 'ads_eligibility.dart';
+import 'ads_scene_window.dart';
 import 'ads_service.dart';
 
 /// Android / iOS AdMob implementation. Never throw — ads must not crash play.
@@ -20,6 +21,10 @@ class MobileAdsService extends AdsService {
   bool _interstitialLoadInFlight = false;
   InterstitialAd? _interstitialAd;
   DateTime? _lastInterstitialShownAt;
+
+  /// Bumped when a show-time load replaces an in-flight preload so the stale
+  /// callback cannot store an ad bound to an older window.
+  int _loadGeneration = 0;
 
   @override
   bool get isBannerAvailable => _sdkReady && _canRequestAds;
@@ -178,21 +183,28 @@ class MobileAdsService extends AdsService {
       return;
     }
     _interstitialLoadInFlight = true;
-    unawaited(_loadInterstitialAd());
+    unawaited(_loadInterstitialAd(_loadGeneration));
   }
 
-  Future<void> _loadInterstitialAd() async {
+  Future<void> _loadInterstitialAd(int generation) async {
     try {
       await InterstitialAd.load(
         adUnitId: AdsConfig.interstitialUnitId,
         request: const AdRequest(),
         adLoadCallback: InterstitialAdLoadCallback(
           onAdLoaded: (ad) {
+            if (generation != _loadGeneration) {
+              ad.dispose();
+              return;
+            }
             _interstitialAd = ad;
             _interstitialLoadInFlight = false;
           },
           onAdFailedToLoad: (error) {
             DebugLogger.debug('Interstitial failed to load: $error');
+            if (generation != _loadGeneration) {
+              return;
+            }
             _interstitialAd = null;
             _interstitialLoadInFlight = false;
           },
@@ -200,7 +212,73 @@ class MobileAdsService extends AdsService {
       );
     } catch (e) {
       DebugLogger.warning('Interstitial load threw: $e');
+      if (generation == _loadGeneration) {
+        _interstitialLoadInFlight = false;
+      }
+    }
+  }
+
+  /// Loads against the current scene window and ignores a preload that was
+  /// bound earlier (cover display, or before the Flutter window existed).
+  Future<InterstitialAd?> _loadFreshInterstitial() async {
+    _loadGeneration++;
+    final generation = _loadGeneration;
+    final stale = _interstitialAd;
+    _interstitialAd = null;
+    stale?.dispose();
+    _interstitialLoadInFlight = true;
+    await AdsSceneWindow.bind();
+
+    final completer = Completer<InterstitialAd?>();
+    void finish(InterstitialAd? ad) {
+      if (generation == _loadGeneration) {
+        _interstitialLoadInFlight = false;
+      }
+      if (!completer.isCompleted) {
+        completer.complete(ad);
+      }
+    }
+
+    try {
+      unawaited(
+        InterstitialAd.load(
+          adUnitId: AdsConfig.interstitialUnitId,
+          request: const AdRequest(),
+          adLoadCallback: InterstitialAdLoadCallback(
+            onAdLoaded: (ad) {
+              if (generation != _loadGeneration) {
+                ad.dispose();
+                finish(null);
+                return;
+              }
+              finish(ad);
+            },
+            onAdFailedToLoad: (error) {
+              DebugLogger.debug('Interstitial failed to load: $error');
+              finish(null);
+            },
+          ),
+        ).then<void>(
+          (_) {},
+          onError: (Object e, StackTrace _) {
+            DebugLogger.warning('Interstitial load threw: $e');
+            finish(null);
+          },
+        ),
+      );
+    } catch (e) {
+      DebugLogger.warning('Interstitial load threw: $e');
+      finish(null);
+    }
+
+    try {
+      return await completer.future.timeout(
+        AdsConfig.interstitialPresentTimeout,
+      );
+    } on TimeoutException {
+      _loadGeneration++;
       _interstitialLoadInFlight = false;
+      return null;
     }
   }
 
@@ -208,6 +286,7 @@ class MobileAdsService extends AdsService {
   Future<void> showInterstitialIfEligible({
     required bool isSolo,
     required bool isLearnToPlay,
+    bool isDuoLayout = false,
   }) async {
     try {
       if (!_sdkReady) {
@@ -219,16 +298,15 @@ class MobileAdsService extends AdsService {
         canRequestAds: _canRequestAds,
         lastShownAt: _lastInterstitialShownAt,
         now: DateTime.now(),
+        isDuoLayout: isDuoLayout,
       )) {
         return;
       }
 
-      final ad = _interstitialAd;
+      final ad = await _loadFreshInterstitial();
       if (ad == null) {
-        preloadInterstitial();
         return;
       }
-      _interstitialAd = null;
 
       final presented = Completer<bool>();
       final dismissed = Completer<void>();

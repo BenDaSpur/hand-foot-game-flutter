@@ -69,6 +69,20 @@ void main() {
     );
   });
 
+  test('skips Duo layouts so a half-pane interstitial is not presented', () {
+    expect(
+      AdsEligibility.canShowInterstitial(
+        isSolo: true,
+        isLearnToPlay: false,
+        canRequestAds: true,
+        lastShownAt: null,
+        now: now,
+        isDuoLayout: true,
+      ),
+      isFalse,
+    );
+  });
+
   test('allows after the two-minute cooldown', () {
     expect(
       AdsEligibility.canShowInterstitial(

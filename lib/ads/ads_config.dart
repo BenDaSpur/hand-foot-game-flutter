@@ -7,7 +7,12 @@ import 'package:flutter/foundation.dart';
 /// (see `docs/ADMOB.md`). App IDs in native manifests are separate.
 abstract final class AdsConfig {
   static const Duration interstitialCooldown = Duration(minutes: 2);
-  static const Duration interstitialPresentTimeout = Duration(seconds: 1);
+
+  /// How long round-end waits for a freshly loaded interstitial.
+  ///
+  /// The ad is loaded again at show time so it binds the current window.
+  /// A slow response continues the next round without an ad.
+  static const Duration interstitialPresentTimeout = Duration(seconds: 4);
   static const Duration interstitialDismissTimeout = Duration(minutes: 5);
   static const Duration consentGatherTimeout = Duration(seconds: 15);
 

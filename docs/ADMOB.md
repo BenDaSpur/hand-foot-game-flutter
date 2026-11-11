@@ -85,6 +85,13 @@ AdMob app and unit IDs are public in the binary. Do not put them in `.env`.
 - Interstitial: solo `GameScreen` only, after `ScoreboardModal` Continue.
 - Banner: `MainMenuScreen` only.
 - Never during `GamePhase.playing`, Learn to Play, or multiplayer matches.
-- Skip the interstitial if one is not already loaded, consent is missing, or
-  the last interstitial was less than two minutes ago.
+- Skip the interstitial if consent is missing, the last interstitial was less
+  than two minutes ago, or the current layout is an iPhone Duo (cover, open
+  inner, or a partially open fold). On Duo the native interstitial view covers
+  one pane and leaves the other black. The app does not draw a replacement ad.
+- At show time the preloaded interstitial is dropped and loaded again, after
+  iOS binds `AppDelegate.window` to the foreground Flutter scene window.
+  `google_mobile_ads` captures its presenter when the ad loads; a load from
+  game start can still be bound to the cover. The reload waits up to 4 seconds
+  (`AdsConfig.interstitialPresentTimeout`) and then continues without an ad.
 - Fail open: a missing or slow ad never blocks the next round.

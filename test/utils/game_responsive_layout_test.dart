@@ -49,6 +49,55 @@ void main() {
         GameResponsiveLayout.useTrailingWideRail(const Size(669, 951)),
         isFalse,
       );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(466, 678),
+          hasActiveFold: false,
+        ),
+        isTrue,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(678, 466),
+          hasActiveFold: false,
+        ),
+        isTrue,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(951, 669),
+          hasActiveFold: false,
+        ),
+        isTrue,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(669, 951),
+          hasActiveFold: false,
+        ),
+        isTrue,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(390, 844),
+          hasActiveFold: true,
+        ),
+        isTrue,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(390, 844),
+          hasActiveFold: false,
+        ),
+        isFalse,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(1024, 768),
+          hasActiveFold: false,
+        ),
+        isFalse,
+      );
     });
 
     test('cardSizesForWidth returns distinct tablet tiers', () {
@@ -74,12 +123,13 @@ void main() {
         cardCount: 11,
         availableWidth: 800,
       );
+      const availableHeight = 160.0;
       final fitted = GameResponsiveLayout.scaledHandSizes(
         base: base,
         screenWidth: 800,
         cardCount: 11,
         availableWidth: 800,
-        availableHeight: 200,
+        availableHeight: availableHeight,
       );
 
       expect(fitted.handHeight, lessThan(unconstrained.handHeight));
@@ -88,7 +138,7 @@ void main() {
             fitted.selectionLift +
             GameResponsiveLayout.handDisplayChromeHeight +
             4,
-        lessThanOrEqualTo(200),
+        lessThanOrEqualTo(availableHeight),
       );
     });
 
@@ -134,6 +184,62 @@ void main() {
       }
     });
 
+    test('short hands stay at the tier size on Duo and tablet strips', () {
+      final cases = <(double width, double strip, GameCardSizes base)>[
+        (678, 678 * 0.92, GameCardSizes.tablet),
+        (669, 669 * 0.92, GameCardSizes.tablet),
+        (
+          951,
+          951 - GameResponsiveLayout.wideBoardRailWidth - 24,
+          GameCardSizes.largeTablet,
+        ),
+      ];
+
+      for (final (width, strip, base) in cases) {
+        GameCardSizes? first;
+        for (final count in <int>[1, 3, 8]) {
+          final sizes = GameResponsiveLayout.scaledHandSizes(
+            base: base,
+            screenWidth: width,
+            cardCount: count,
+            availableWidth: strip,
+          );
+          final usable = strip - GameResponsiveLayout.handStripHorizontalChrome;
+          final fanFits = base.handStackWidth(count) <= usable + 0.01;
+          expect(fanFits, isTrue, reason: '$width x $count');
+          expect(
+            sizes.handWidth,
+            closeTo(base.handWidth, 0.01),
+            reason: '$width x $count',
+          );
+          first ??= sizes;
+          expect(
+            sizes.handWidth,
+            closeTo(first.handWidth, 0.01),
+            reason: '$width x $count',
+          );
+        }
+      }
+    });
+
+    test('17-card Duo inner landscape fan shrinks only enough to fit', () {
+      const strip = 951 - GameResponsiveLayout.wideBoardRailWidth - 24;
+      final sizes = GameResponsiveLayout.scaledHandSizes(
+        base: GameCardSizes.largeTablet,
+        screenWidth: 951,
+        cardCount: 17,
+        availableWidth: strip,
+      );
+      final usable = strip - GameResponsiveLayout.handStripHorizontalChrome;
+
+      expect(sizes.handWidth, lessThan(GameCardSizes.largeTablet.handWidth));
+      expect(
+        sizes.handWidth,
+        greaterThan(GameResponsiveLayout.minScaledHandWidth),
+      );
+      expect(sizes.handStackWidth(17), closeTo(usable, 0.01));
+    });
+
     test('very large hand stops at the readable floor', () {
       final sizes = GameResponsiveLayout.scaledHandSizes(
         base: GameCardSizes.largeTablet,
@@ -148,7 +254,7 @@ void main() {
       );
     });
 
-    testWidgets('handSizes on large tablet exceeds tablet base', (
+    testWidgets('handSizes on large tablet stays at the tier width', (
       tester,
     ) async {
       late GameCardSizes sizes;
@@ -164,10 +270,7 @@ void main() {
         ),
       );
 
-      expect(
-        sizes.handWidth,
-        greaterThanOrEqualTo(GameCardSizes.largeTablet.handWidth),
-      );
+      expect(sizes.handWidth, GameCardSizes.largeTablet.handWidth);
     });
   });
 }

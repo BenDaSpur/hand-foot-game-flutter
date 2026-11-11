@@ -30,6 +30,13 @@ class CardAnimationRequest {
   /// `-1` means every pickup card is treated as public.
   final int fromDiscardCount;
 
+  /// Cards in the destination hand while the animation runs.
+  ///
+  /// Flying cards use this so a large foot, which shrinks to fit the strip,
+  /// is the same size as the cards already in the dock. Null keeps the
+  /// default 11-card tier size (spectator reveals).
+  final int? handCount;
+
   const CardAnimationRequest({
     required this.type,
     required this.handCards,
@@ -39,6 +46,7 @@ class CardAnimationRequest {
     this.isSpectator = false,
     this.actorName,
     this.fromDiscardCount = -1,
+    this.handCount,
   });
 
   int get revealedFromDiscardCount {
@@ -488,7 +496,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       return;
     }
 
-    final handSizes = GameResponsiveLayout.handSizes(context);
+    final handSizes = _handSizesForRequest(request);
 
     await _scrollHandToIndices(request.handTargetIndices, handSizes);
 
@@ -692,6 +700,15 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
     return _widgetCenter(widget.handStackKey);
   }
 
+  /// Size flying cards to the live hand so they land on the dock's cards.
+  GameCardSizes _handSizesForRequest(CardAnimationRequest? request) {
+    final count = request?.handCount;
+    return GameResponsiveLayout.handSizes(
+      context,
+      cardCount: count == null || count <= 0 ? 11 : count,
+    );
+  }
+
   Offset? _handCardCenter(int index, GameCardSizes handSizes) {
     final stackBox =
         widget.handStackKey.currentContext?.findRenderObject() as RenderBox?;
@@ -749,7 +766,7 @@ class _CardDrawAnimationOverlayState extends State<CardDrawAnimationOverlay>
       return const SizedBox.shrink();
     }
 
-    final handSizes = GameResponsiveLayout.handSizes(context);
+    final handSizes = _handSizesForRequest(widget.request);
 
     return Positioned.fill(
       child: GestureDetector(

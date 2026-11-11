@@ -136,6 +136,12 @@ class GameResponsiveLayout {
   static const double duoInnerLandscapeMaxHeight = 720;
   static const double duoInnerLandscapeMaxWidth = 1100;
 
+  /// Open Duo portrait is about 669×951. The band stays inside iPad portrait.
+  static const double duoInnerPortraitMinShortestSide = 640;
+  static const double duoInnerPortraitMaxShortestSide = 720;
+  static const double duoInnerPortraitMinLongestSide = 900;
+  static const double duoInnerPortraitMaxLongestSide = 1000;
+
   /// Max content width for menus on regular-width / inner Duo displays.
   static const double menuContentMaxWidth = 520;
 
@@ -152,8 +158,12 @@ class GameResponsiveLayout {
   /// Slightly wider rail on large inner / desktop canvases so the board is less sparse.
   static const double wideBoardRailWidthLarge = 360;
 
-  /// Target fill of the hand strip for dynamic tablet hand sizing.
-  static const double handStripFillRatio = 0.80;
+  /// Extra space under bottom-edge action buttons so the last control
+  /// (Go Out, Discard, Draw) stays out of the home-indicator gesture band.
+  static const double actionDockBottomTouchInset = 24;
+
+  /// Minimum height of a rail action button, including its padded hit target.
+  static const double railActionButtonHeight = 48;
 
   /// Horizontal padding inside the hand strip: the hand container (8 + 8)
   /// plus the scroller glow inset on each side.
@@ -204,6 +214,32 @@ class GameResponsiveLayout {
     return size.width >= GameConfig.tabletLandscapeBreakpoint &&
         size.height < duoInnerLandscapeMaxHeight &&
         size.width < duoInnerLandscapeMaxWidth;
+  }
+
+  /// Open Duo portrait (~669×951), which is not a cover and not a wide rail.
+  static bool isDuoInnerPortrait(Size size) {
+    final shortest = size.shortestSide;
+    final longest = size.longestSide;
+    return shortest >= duoInnerPortraitMinShortestSide &&
+        shortest <= duoInnerPortraitMaxShortestSide &&
+        longest >= duoInnerPortraitMinLongestSide &&
+        longest <= duoInnerPortraitMaxLongestSide;
+  }
+
+  /// Duo layouts where a native interstitial only covers one pane.
+  ///
+  /// [hasActiveFold] is true while the device is partially open.
+  static bool skipsDuoInterstitial(Size size, {required bool hasActiveFold}) {
+    if (hasActiveFold) {
+      return true;
+    }
+    if (isDuoCover(size)) {
+      return true;
+    }
+    if (useTrailingWideRail(size)) {
+      return true;
+    }
+    return isDuoInnerPortrait(size);
   }
 
   /// Regular-width “inner class” chrome (Duo open portrait, iPad) without forcing the rail.
@@ -266,7 +302,8 @@ class GameResponsiveLayout {
   }
 
   /// Hand cards on phone prioritize readability (horizontal scroll is expected).
-  /// On tablet+, scales toward filling [handStripFillRatio] of the hand strip.
+  /// On tablet+, cards stay at the tier size and shrink only when that fan
+  /// would spill out of the strip. A short hand does not grow.
   static GameCardSizes handSizes(
     BuildContext context, {
     int cardCount = 11,
@@ -330,24 +367,19 @@ class GameResponsiveLayout {
     final usableStrip = stripWidth > handStripHorizontalChrome
         ? stripWidth - handStripHorizontalChrome
         : stripWidth;
-    final targetFill = usableStrip * handStripFillRatio;
     final count = cardCount <= 0 ? 1 : cardCount;
     final offsetRatio = base.handOffset / base.handWidth;
-    final computedWidth = targetFill / ((count - 1) * offsetRatio + 1);
-    final maxHandWidth = isLargeTablet(screenWidth)
-        ? GameConfig.maxCardWidth
-        : GameConfig.maxCardWidth * 0.92;
     final minHandWidth = base.handWidth < minScaledHandWidth
         ? base.handWidth
         : minScaledHandWidth;
-    var handWidth = computedWidth.clamp(minHandWidth, maxHandWidth);
-    // Keep the tier's design size when that fan already fits (iPad / desktop).
-    // Shrink below it only when the fan would otherwise spill out of the
-    // strip — Duo inner landscape is wide enough for the rail but not for a
-    // 13-card large-tablet fan.
-    if (_fanWidth(base.handWidth, offsetRatio, count) <= usableStrip &&
-        handWidth < base.handWidth) {
-      handWidth = base.handWidth.clamp(minHandWidth, maxHandWidth);
+    // Keep the tier's design size whenever that fan fits. Shrink only when
+    // it would spill — Duo inner landscape fits the rail but not a 13-card
+    // large-tablet fan. Never grow a short hand toward maxCardWidth.
+    var handWidth = base.handWidth;
+    if (_fanWidth(handWidth, offsetRatio, count) > usableStrip &&
+        usableStrip > 0) {
+      final fitted = usableStrip / ((count - 1) * offsetRatio + 1);
+      handWidth = fitted.clamp(minHandWidth, base.handWidth);
     }
     final handOffset = handWidth * offsetRatio;
     return _fitHandToHeight(

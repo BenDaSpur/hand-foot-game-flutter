@@ -52,6 +52,7 @@ import 'managers/persistence_manager.dart';
 import 'managers/event_based_game_state_manager.dart';
 import '../widgets/game_keyboard_shortcuts.dart';
 import '../widgets/keyboard_shortcuts_overlay.dart';
+import '../utils/game_fold_geometry.dart';
 import '../utils/game_responsive_layout.dart';
 import '../providers/game_providers.dart';
 import '../providers/computed_providers.dart';
@@ -1016,6 +1017,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
         await AdsService.instance.showInterstitialIfEligible(
           isSolo: true,
           isLearnToPlay: false,
+          isDuoLayout: GameResponsiveLayout.skipsDuoInterstitial(
+            MediaQuery.sizeOf(context),
+            hasActiveFold:
+                GameFoldGeometry.activeDivisionBounds(context) != null,
+          ),
         );
         if (_disposed || !mounted) {
           return;
