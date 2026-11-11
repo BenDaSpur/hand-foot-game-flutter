@@ -216,8 +216,11 @@ class GameResponsiveLayout {
         size.width < duoInnerLandscapeMaxWidth;
   }
 
-  /// Open Duo portrait (~669×951), which is not a cover and not a wide rail.
-  static bool isDuoInnerPortrait(Size size) {
+  /// Open Duo inner canvas (~669×951), in either orientation.
+  ///
+  /// This is narrower than [useTrailingWideRail], which also matches a short
+  /// desktop or phone landscape window.
+  static bool isDuoInner(Size size) {
     final shortest = size.shortestSide;
     final longest = size.longestSide;
     return shortest >= duoInnerPortraitMinShortestSide &&
@@ -228,7 +231,8 @@ class GameResponsiveLayout {
 
   /// Duo layouts where a native interstitial only covers one pane.
   ///
-  /// [hasActiveFold] is true while the device is partially open.
+  /// [hasActiveFold] is true while the device is partially open. A short
+  /// non-Duo landscape window keeps its interstitial.
   static bool skipsDuoInterstitial(Size size, {required bool hasActiveFold}) {
     if (hasActiveFold) {
       return true;
@@ -236,10 +240,7 @@ class GameResponsiveLayout {
     if (isDuoCover(size)) {
       return true;
     }
-    if (useTrailingWideRail(size)) {
-      return true;
-    }
-    return isDuoInnerPortrait(size);
+    return isDuoInner(size);
   }
 
   /// Regular-width “inner class” chrome (Duo open portrait, iPad) without forcing the rail.

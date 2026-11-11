@@ -404,42 +404,54 @@ class GameBoardLayout extends StatelessWidget {
     final rail = SizedBox(
       key: wideRailKey,
       width: GameResponsiveLayout.wideBoardRailWidthFor(size.width),
-      child: Column(
-        children: [
-          Flexible(
-            child: SingleChildScrollView(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final minHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 0.0;
+          // One scroll keeps a four-button meld stack reachable on a short
+          // window. The minimum height pins those buttons to the bottom when
+          // the header still fits.
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minHeight),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GameCompactHeader(
-                    gameState: gameState,
-                    deckKey: deckKey,
-                    discardKey: discardKey,
-                    isExpanded: true,
-                    showExpandToggle: false,
-                    onToggleExpand: onHeaderToggle,
-                    onRecentActionsTap: null,
-                    headerExtras: headerExtras,
-                    expandedExtras: expandedHeaderExtras,
-                    persistentHeaderExtras: persistentHeaderExtras,
-                    onDeckTap: onDeckTap,
-                    onDiscardTap: onDiscardTap,
-                    localPlayerId: currentUserId,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GameCompactHeader(
+                        gameState: gameState,
+                        deckKey: deckKey,
+                        discardKey: discardKey,
+                        isExpanded: true,
+                        showExpandToggle: false,
+                        onToggleExpand: onHeaderToggle,
+                        onRecentActionsTap: null,
+                        headerExtras: headerExtras,
+                        expandedExtras: expandedHeaderExtras,
+                        persistentHeaderExtras: persistentHeaderExtras,
+                        onDeckTap: onDeckTap,
+                        onDiscardTap: onDiscardTap,
+                        localPlayerId: currentUserId,
+                      ),
+                      CompactPlayerScores(
+                        gameState: gameState,
+                        viewingPlayerMelds: viewingPlayerMelds,
+                        onPlayerTap: onPlayerTap,
+                        currentUserId: currentUserId,
+                        botPersonalityManager: botPersonalityManager,
+                        vertical: true,
+                      ),
+                    ],
                   ),
-                  CompactPlayerScores(
-                    gameState: gameState,
-                    viewingPlayerMelds: viewingPlayerMelds,
-                    onPlayerTap: onPlayerTap,
-                    currentUserId: currentUserId,
-                    botPersonalityManager: botPersonalityManager,
-                    vertical: true,
-                  ),
+                  actionButtons,
                 ],
               ),
             ),
-          ),
-          actionButtons,
-        ],
+          );
+        },
       ),
     );
     final divider = VerticalDivider(

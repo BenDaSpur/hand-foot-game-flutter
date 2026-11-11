@@ -98,6 +98,21 @@ void main() {
         ),
         isFalse,
       );
+      // Short landscape windows use the trailing rail without being a Duo.
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(932, 430),
+          hasActiveFold: false,
+        ),
+        isFalse,
+      );
+      expect(
+        GameResponsiveLayout.skipsDuoInterstitial(
+          const Size(1024, 600),
+          hasActiveFold: false,
+        ),
+        isFalse,
+      );
     });
 
     test('cardSizesForWidth returns distinct tablet tiers', () {

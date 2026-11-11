@@ -316,6 +316,40 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
+      testWidgets('short wide rail keeps every meld button reachable', (
+        tester,
+      ) async {
+        gameState.turnPhase = TurnPhase.meld;
+        final human = gameState.players.first;
+        await pumpBoard(
+          tester,
+          const Size(1024, 360),
+          actionButtons: GameActionButtons(
+            gameState: gameState,
+            humanPlayer: human,
+            selectedCardIndices: const [0],
+            onDrawFromDeck: () {},
+            onUnlockDiscard: () {},
+            onShowAdvancedMeldSelector: () {},
+            onDiscard: () {},
+            onClearSelection: () {},
+            onUndoMeld: () {},
+            canUndoMeld: true,
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        for (final label in ['Play Cards', 'Undo', 'Discard', 'Clear']) {
+          final button = find.descendant(
+            of: find.byType(ElevatedButton),
+            matching: find.text(label),
+          );
+          expect(button, findsOneWidget);
+          await tester.ensureVisible(button);
+        }
+        expect(tester.takeException(), isNull);
+      });
+
       testWidgets('partially open book pose splits around vertical fold', (
         tester,
       ) async {
