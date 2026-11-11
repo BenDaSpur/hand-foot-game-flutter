@@ -158,12 +158,22 @@ class LegalActionGenerator {
               ),
         )
         .toList();
-    if (additions.isNotEmpty) {
+    final onHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
+    final additionPool = onHandPile
+        ? additions
+              .where((addition) => _keepsHandPileAddition(bot, addition))
+              .toList()
+        : additions;
+    if (additionPool.isNotEmpty) {
       actions.add(
         LegalCandidate(
           decision: BotDecision(
             action: 'addToMeld',
-            data: _chooseBookBuildingAddition(bot, additions),
+            data: _chooseBookBuildingAddition(
+              bot,
+              additionPool,
+              preferFinishedBook: onHandPile,
+            ),
           ),
           kind: LegalActionKind.addToMeld,
         ),
@@ -175,6 +185,21 @@ class LegalActionGenerator {
     if (!forceSpendKeys) {
       possible = _filterLiveKeyMelds(bot, possible, liveTop);
     }
+    // Drop creates the foot filter would reject before findBestMeld picks
+    // one. A high-point ace extension otherwise hides a fours group that
+    // finishes a book.
+    final dumpFoot = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+    possible = possible
+        .where(
+          (meld) => _keepsNewRank(
+            bot,
+            meld,
+            playDownRequirement: context.playDownRequirement,
+            onHandPile: onHandPile,
+            dumpFoot: dumpFoot,
+          ),
+        )
+        .toList();
     List<PlayingCard>? createMeld;
     if (possible.isNotEmpty) {
       final best = meldAnalyzer.findBestMeld(
@@ -228,7 +253,263 @@ class LegalActionGenerator {
       emptyHandPile: emptyHandPile,
     );
 
-    return actions;
+    return _filterFootAndOutMelds(
+      bot,
+      actions,
+      playDownRequirement: context.playDownRequirement,
+    );
+  }
+
+  /// After play-down, stop opening short ranks and stop padding piles that
+  /// are not a book, a near-book, or the missing clean/dirty lane. On foot
+  /// with both go-out books, do not open another rank unless it leaves at
+  /// most one card (the go-out discard).
+  ///
+  /// Analytics 2026.10-playdown-books: 30% of finished bots were down and
+  /// never reached the foot, with ~6.8 melds and 2.1 books. Humans reached
+  /// the foot 98% of the time and finished with ~4 books.
+  List<LegalCandidate> _filterFootAndOutMelds(
+    Player bot,
+    List<LegalCandidate> actions, {
+    required int playDownRequirement,
+  }) {
+    final onHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
+    final dumpFoot = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+    if (!onHandPile && !dumpFoot) {
+      return actions;
+    }
+    return actions
+        .where(
+          (candidate) => _keepsFootAndOutMeld(
+            bot,
+            candidate,
+            playDownRequirement: playDownRequirement,
+            onHandPile: onHandPile,
+            dumpFoot: dumpFoot,
+          ),
+        )
+        .toList();
+  }
+
+  bool _keepsFootAndOutMeld(
+    Player bot,
+    LegalCandidate candidate, {
+    required int playDownRequirement,
+    required bool onHandPile,
+    required bool dumpFoot,
+  }) {
+    switch (candidate.kind) {
+      case LegalActionKind.createMeld:
+        return _keepsNewRank(
+          bot,
+          candidate.decision.data is List<PlayingCard>
+              ? candidate.decision.data as List<PlayingCard>
+              : const <PlayingCard>[],
+          playDownRequirement: playDownRequirement,
+          onHandPile: onHandPile,
+          dumpFoot: dumpFoot,
+        );
+      case LegalActionKind.maximalBurst:
+        {
+          final melds = candidate.decision.data is List<List<PlayingCard>>
+              ? candidate.decision.data as List<List<PlayingCard>>
+              : const <List<PlayingCard>>[];
+          final used = melds.fold<int>(0, (sum, meld) => sum + meld.length);
+          if (_leavesAtMostOne(bot, used)) {
+            return true;
+          }
+          if (dumpFoot) {
+            return false;
+          }
+          return melds.every(
+            (meld) => _keepsNewRank(
+              bot,
+              meld,
+              playDownRequirement: playDownRequirement,
+              onHandPile: onHandPile,
+              dumpFoot: dumpFoot,
+              cardsUsedOverride: used,
+            ),
+          );
+        }
+      case LegalActionKind.addToMeld:
+        if (dumpFoot) {
+          return true;
+        }
+        if (!onHandPile) {
+          return true;
+        }
+        return _keepsHandPileAddition(bot, candidate.decision.data);
+      case LegalActionKind.noMeld:
+      case LegalActionKind.playDown:
+      case LegalActionKind.drawDeck:
+      case LegalActionKind.drawDiscard:
+      case LegalActionKind.goOut:
+      case LegalActionKind.endTurn:
+      case LegalActionKind.discard:
+      case LegalActionKind.error:
+        return true;
+    }
+  }
+
+  bool _keepsNewRank(
+    Player bot,
+    List<PlayingCard> meld, {
+    required int playDownRequirement,
+    required bool onHandPile,
+    required bool dumpFoot,
+    int? cardsUsedOverride,
+  }) {
+    if (meld.isEmpty) {
+      return false;
+    }
+    final used = cardsUsedOverride ?? meld.length;
+    if (_leavesAtMostOne(bot, used)) {
+      return true;
+    }
+    if (dumpFoot) {
+      return false;
+    }
+    if (!onHandPile) {
+      return true;
+    }
+    if (!_isNewRank(bot, meld)) {
+      // createMeld of an existing rank is executed as an add. A 3-card
+      // group must not pad a short pile that a one-card add would refuse.
+      return _keepsSameRankExtension(bot, meld);
+    }
+    if (meld.length >= GameConfig.bookSize) {
+      return true;
+    }
+    if (!_isMissingLaneCreate(bot, meld)) {
+      return false;
+    }
+    if (playDownRequirement >= BotConfig.lateRoundWidePlayDownRequirement &&
+        !_newRankCanReachBook(bot, meld)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _leavesAtMostOne(Player bot, int cardsUsed) {
+    return cardsUsed > 0 && bot.currentHand.length - cardsUsed <= 1;
+  }
+
+  bool _isNewRank(Player bot, List<PlayingCard> meld) {
+    final rank = _naturalRank(meld);
+    if (rank == null) {
+      return false;
+    }
+    return !bot.melds.any((existing) => existing.rank == rank);
+  }
+
+  bool _isMissingLaneCreate(Player bot, List<PlayingCard> meld) {
+    final isClean = !meld.any((card) => card.isWild);
+    if (!bot.hasCleanBook && isClean && !_hasIncompleteCleanLane(bot)) {
+      return true;
+    }
+    if (bot.hasCleanBook &&
+        !bot.hasDirtyBook &&
+        !isClean &&
+        !_hasIncompleteDirtyLane(bot)) {
+      return true;
+    }
+    return false;
+  }
+
+  /// A new rank can become a book from cards already in hand.
+  bool _newRankCanReachBook(Player bot, List<PlayingCard> meld) {
+    if (meld.length >= GameConfig.bookSize - 1) {
+      return true;
+    }
+    final rank = _naturalRank(meld);
+    if (rank == null) {
+      return false;
+    }
+    final naturals = bot.currentHand
+        .where((card) => !card.isWild && !card.isThree && card.rank == rank)
+        .length;
+    return naturals >= GameConfig.bookSize;
+  }
+
+  /// Hand-pile adds: finish a book, feed the missing clean/dirty lane, or
+  /// (above the force-foot window) grow a pile that is already 4+ cards.
+  /// Short side piles in the 1–8 card window are discarded toward the foot.
+  bool _keepsHandPileAddition(Player bot, Object? data) {
+    if (data is! Map<String, dynamic>) {
+      return false;
+    }
+    final card = data['card'];
+    final index = data['meldIndex'];
+    if (card is! PlayingCard || index is! int) {
+      return false;
+    }
+    if (index < 0 || index >= bot.melds.length) {
+      return false;
+    }
+    final meld = bot.melds[index];
+    final size = meld.cards.length;
+    // Adding this card leaves 0–1, so the discard can empty the hand pile
+    // this turn. Two kings on a short dirty pile are that case.
+    if (_leavesAtMostOne(bot, 1)) {
+      return true;
+    }
+    if (size < GameConfig.bookSize && size + 1 >= GameConfig.bookSize) {
+      return true;
+    }
+    if (_additionFeedsMissingLane(bot, meld, card)) {
+      return true;
+    }
+    if (bot.currentHand.length > BotConfig.handPileForceFootMaxHand &&
+        size >= 4 &&
+        size < GameConfig.bookSize) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Same keep rules as [_keepsHandPileAddition], using the pile size after
+  /// every card in a same-rank create lands on the existing meld.
+  bool _keepsSameRankExtension(Player bot, List<PlayingCard> meld) {
+    final rank = _naturalRank(meld);
+    if (rank == null) {
+      return false;
+    }
+    final index = bot.melds.indexWhere((existing) => existing.rank == rank);
+    if (index < 0) {
+      return true;
+    }
+    final existing = bot.melds[index];
+    if (!meld.every(existing.canAddCard)) {
+      return false;
+    }
+    final size = existing.cards.length;
+    final projected = size + meld.length;
+    if (size < GameConfig.bookSize && projected >= GameConfig.bookSize) {
+      return true;
+    }
+    if (meld.any((card) => _additionFeedsMissingLane(bot, existing, card))) {
+      return true;
+    }
+    if (bot.currentHand.length > BotConfig.handPileForceFootMaxHand &&
+        size >= 4 &&
+        size < GameConfig.bookSize) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _additionFeedsMissingLane(Player bot, Meld meld, PlayingCard card) {
+    final naturalOnly = !meld.cards.any((held) => held.isWild);
+    if (!bot.hasCleanBook && naturalOnly && !card.isWild) {
+      return true;
+    }
+    if (bot.hasCleanBook &&
+        !bot.hasDirtyBook &&
+        (!naturalOnly || card.isWild)) {
+      return true;
+    }
+    return false;
   }
 
   void _addMaximalBurstCandidate(
@@ -432,9 +713,11 @@ class LegalActionGenerator {
   /// add onto a 4–6 card pile, over a leftover card on a short meld.
   Map<String, dynamic> _chooseBookBuildingAddition(
     Player bot,
-    List<Map<String, dynamic>> additions,
-  ) {
+    List<Map<String, dynamic>> additions, {
+    bool preferFinishedBook = false,
+  }) {
     Map<String, dynamic>? completesMissing;
+    Map<String, dynamic>? finishesBook;
     Map<String, dynamic>? growsNearBook;
     for (final addition in additions) {
       final card = addition['card'] as PlayingCard?;
@@ -450,12 +733,15 @@ class LegalActionGenerator {
           meld.cards.length < GameConfig.bookSize) {
         growsNearBook ??= addition;
       }
+      if (preferFinishedBook && meld.cards.length == GameConfig.bookSize - 1) {
+        finishesBook ??= addition;
+      }
       if (meld.cards.length == GameConfig.bookSize - 1 &&
           _completesMissingGoOutBook(bot, meld, card)) {
         completesMissing ??= addition;
       }
     }
-    return completesMissing ?? growsNearBook ?? additions.first;
+    return completesMissing ?? finishesBook ?? growsNearBook ?? additions.first;
   }
 
   /// A wild may finish a dirty book once a clean book exists. Naturals finish

@@ -55,6 +55,9 @@ class _MoveScores {
 
   /// Penalize opening a non-go-out new rank while on foot missing books.
   static const footSpreadCreatePenalty = 220.0;
+
+  /// On foot with clean and dirty books, a new rank loses to discarding.
+  static const goOutSpreadPenalty = 800.0;
 }
 
 /// Scores legal actions with personality-weighted features.
@@ -222,6 +225,13 @@ class MoveScorer {
       score += isClean
           ? _MoveScores.cleanBookComplete * weights.cleanBook
           : _MoveScores.dirtyBookComplete * weights.bookProgress;
+    }
+    // Both go-out books already exist: opening another rank holds the foot.
+    // An emptying meld (leave <= 1) is the go-out itself and stays valuable.
+    if (bot.hasPickedUpFoot &&
+        bot.canGoOutWithBooks &&
+        data.length < bot.currentHand.length - 1) {
+      score -= _MoveScores.goOutSpreadPenalty * weights.goOut;
     }
     if (bot.hasPickedUpFoot &&
         bot.bookCount == 0 &&

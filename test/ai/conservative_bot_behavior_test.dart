@@ -23,55 +23,36 @@ void main() {
       bot = players[1];
     });
 
-    test('should make strategic melds while preserving wild cards', () {
-      // Give bot many wild cards but not enough to exceed threshold (6+)
-      bot.dealHand([
-        const PlayingCard(suit: null, rank: CardRank.joker), // Wild
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.two), // Wild
-        const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.two), // Wild
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.two), // Wild
-        // Add some naturals so bot has options
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-        const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-        const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
-        const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-        const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
-      ]);
+    test(
+      'does not open a dirty rank from pairs and wilds before a clean book',
+      () {
+        // Give bot many wild cards but not enough to exceed threshold (6+)
+        bot.dealHand([
+          const PlayingCard(suit: null, rank: CardRank.joker), // Wild
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.two), // Wild
+          const PlayingCard(suit: Suit.spades, rank: CardRank.two), // Wild
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.two), // Wild
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.two), // Wild
+          // Add some naturals so bot has options
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+        ]);
 
-      bot.hasPlayedDown = true; // Already played down
-      gameController.gameState.currentPlayerIndex = 1;
-      gameController.gameState.turnPhase = TurnPhase.meld;
-      gameController.gameState.hasDrawnFromDeck = true;
+        bot.hasPlayedDown = true; // Already played down
+        gameController.gameState.currentPlayerIndex = 1;
+        gameController.gameState.turnPhase = TurnPhase.meld;
+        gameController.gameState.hasDrawnFromDeck = true;
 
-      final decision = botAI.makeDecision(bot, gameController);
+        final decision = botAI.makeDecision(bot, gameController);
 
-      // Bot should make strategic melds to reduce hand size while preserving wilds
-      expect(
-        decision.action,
-        anyOf(equals('createMeld'), equals('createMultipleMelds')),
-      );
-
-      // Should create melds that include some natural cards
-      if (decision.action == 'createMeld') {
-        final meldCards = decision.data as List<PlayingCard>;
-        expect(meldCards.length, greaterThanOrEqualTo(2));
-
-        // Allow some wild cards in the meld, but should have at least 2 naturals
-        final naturalCards = meldCards.where((card) => !card.isWild).toList();
-        expect(naturalCards.length, greaterThanOrEqualTo(2));
-      } else if (decision.action == 'createMultipleMelds') {
-        final multipleMelds = decision.data as List<List<PlayingCard>>;
-        expect(multipleMelds.length, greaterThanOrEqualTo(1));
-        expect(multipleMelds.first.length, greaterThanOrEqualTo(2));
-
-        // Check naturals in first meld
-        final firstMeldNaturals = multipleMelds.first
-            .where((card) => !card.isWild)
-            .toList();
-        expect(firstMeldNaturals.length, greaterThanOrEqualTo(2));
-      }
-    });
+        // Pairs plus wilds can only open a dirty rank. With no clean book yet
+        // that is not the missing lane, so the bot discards toward the foot.
+        expect(decision.action, 'noMeld');
+      },
+    );
 
     test(
       'should only discard wilds when having 6+ or forced to (1 card left)',
@@ -133,7 +114,7 @@ void main() {
     });
 
     test(
-      'should only meld on hand when close to foot transition (1-2 cards)',
+      'adds one king when that leaves a single card for the foot discard',
       () {
         // Bot with only 2 cards left - should be aggressive now
         bot.dealHand([
@@ -160,11 +141,11 @@ void main() {
 
         final decision = botAI.makeDecision(bot, gameController);
 
-        // With only 2 cards, bot should try to use them up or at least discard is acceptable
-        expect(
-          decision.action,
-          anyOf(equals('createMeld'), equals('addToMeld'), equals('discard')),
-        );
+        // Adding one king leaves one card, so the discard empties the hand
+        // pile this turn. A meld-phase discard is not a legal action.
+        expect(decision.action, 'addToMeld');
+        final data = decision.data as Map<String, dynamic>;
+        expect((data['card'] as PlayingCard).rank, CardRank.king);
       },
     );
 

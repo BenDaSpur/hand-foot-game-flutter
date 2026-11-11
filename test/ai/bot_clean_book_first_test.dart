@@ -64,8 +64,8 @@ void main() {
       gameController.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is playdown-books', () {
-      expect(BotConfig.botAiVersion, '2026.10-playdown-books');
+    test('botAiVersion is foot-and-out', () {
+      expect(BotConfig.botAiVersion, '2026.11-foot-and-out');
     });
 
     test(

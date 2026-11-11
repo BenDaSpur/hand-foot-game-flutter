@@ -373,6 +373,12 @@ class CompetitivePolicy {
     if (handSize >= latePlayDownHandSize) {
       return true;
     }
+    // Round 4+ (150pts) still missed legal dumps from modest hands. Search
+    // the greedy pack even before the hand hits [latePlayDownHandSize].
+    if (gameState.playDownRequirement >=
+        BotConfig.lateRoundWidePlayDownRequirement) {
+      return true;
+    }
     if (handSize >= BotConfig.pileFarmForcePlayDownHandSize &&
         fatDiscardFarm(gameState)) {
       return true;

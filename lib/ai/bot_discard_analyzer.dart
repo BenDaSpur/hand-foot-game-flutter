@@ -180,17 +180,22 @@ class BotDiscardAnalyzer {
       score -= BotConfig.prePlayDownMeldFuelHoldPenalty;
     }
 
-    // 5. MELD FIT: Don't discard cards that fit existing melds
-    for (final meld in bot.melds) {
-      if (_cardFitsMeld(card, meld)) {
-        score -= 30; // Keep cards that can extend melds
+    // On foot with both go-out books, dumping beats holding meld fuel.
+    // Humans in finished games left 0.4 cards; bots left 4.4.
+    final dumpingToGoOut = bot.hasPickedUpFoot && bot.canGoOutWithBooks;
+    if (!dumpingToGoOut) {
+      // 5. MELD FIT: Don't discard cards that fit existing melds
+      for (final meld in bot.melds) {
+        if (_cardFitsMeld(card, meld)) {
+          score -= 30; // Keep cards that can extend melds
+        }
       }
-    }
 
-    // 6. BOOK COMPLETION: Heavily penalize discarding cards near completing books
-    for (final meld in bot.melds) {
-      if (meld.cards.length >= 5 && _cardFitsMeld(card, meld)) {
-        score -= 50; // Strong incentive to keep near-book cards
+      // 6. BOOK COMPLETION: Heavily penalize discarding cards near completing books
+      for (final meld in bot.melds) {
+        if (meld.cards.length >= 5 && _cardFitsMeld(card, meld)) {
+          score -= 50; // Strong incentive to keep near-book cards
+        }
       }
     }
 
@@ -300,12 +305,9 @@ class BotDiscardAnalyzer {
       score += BotConfig.wildFreezeDiscardBonus;
     }
 
-    // Stuck hand pile (played down, <= 8 cards): humans discard 4–8
-    // singletons and unlock the 9–Q bots were dumping instead. 3s already
-    // return above, so a live-top 9 cannot beat a 3.
-    final stuckHand =
-        bot.hasPlayedDown && handSize <= BotConfig.booklessFarmForceFootMaxHand;
-    if (stuckHand && !card.isWild && !card.isThree) {
+    // Played down: humans discard 4–8 singletons and unlock the 9–Q bots
+    // were dumping. 3s already return above, so a live-top 9 cannot beat a 3.
+    if (bot.hasPlayedDown && !card.isWild && !card.isThree) {
       final topRank = top == null || top.isWild || top.isThree
           ? null
           : top.rank;

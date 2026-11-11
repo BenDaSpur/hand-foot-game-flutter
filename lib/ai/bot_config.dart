@@ -95,6 +95,11 @@ class BotConfig {
   /// unlock rate/denial, not haul size.
   static const int postPlayDownAlmostAlwaysTakePileSize = 25;
 
+  /// Round requirement (round 4+) at which play-down search widens and a
+  /// legal dump is taken even from a modest hand. Analytics 2026.10:
+  /// round 6 foot fell to 55% and play-down slipped off 100%.
+  static const int lateRoundWidePlayDownRequirement = 150;
+
   /// Late-round hand size that forces play-down when still not down
   static const int lateRoundForcePlayDownHandSize = 18;
 
@@ -364,15 +369,20 @@ class BotConfig {
   /// 4♦ onto 4♦ at pile 4 while holding three fours.
   static const int liveTopNaturalHoldPenalty = 400;
 
-  /// On a played-down hand at or below [handPileForceFootMaxHand], dump a
-  /// singleton 4–8 before a singleton 9–A. Must beat
+  /// After play-down, dump a singleton 4–8 before a singleton 9–A. Must beat
   /// [contestableUnlockFeedPenalty], which was protecting 4–8 and leaving
-  /// 9/10/J/Q as the card humans then unlocked.
+  /// 9/10/J/Q as the card humans then unlocked. Applies for the whole
+  /// played-down hand, not only the 8-card force-foot window — humans
+  /// discard 4–8 first at every hand size.
   static const int stuckLowSingletonDiscardBonus = 160;
 
   /// Prefer freezing the pile with a wild when the human can unlock and the
-  /// bot cannot (humans discarded 152 wilds vs bots 8 in recent games).
-  static const int wildFreezeDiscardBonus = 180;
+  /// bot cannot. Must beat a played-down 4–8 singleton
+  /// (base ~45 + [stuckLowSingletonDiscardBonus]) so the freeze actually
+  /// wins, and stay under [threesPriority] so penalty 3s still go first.
+  /// Humans discarded wilds on ~10% of discards in 2026.10-playdown-books;
+  /// bots were at 2.4%.
+  static const int wildFreezeDiscardBonus = 260;
 
   /// Extra scorer weight for adds that grow a 4–6 card pile toward a book
   /// when the bot is already on foot with fewer than two books (analytics
@@ -388,7 +398,7 @@ class BotConfig {
   static const int onFootMissingBookMeldCap = 4;
 
   /// Bump when bot AI logic changes — stored on analytics docs for cross-version analysis.
-  static const String botAiVersion = '2026.10-playdown-books';
+  static const String botAiVersion = '2026.11-foot-and-out';
 
   // Prevent instantiation
   BotConfig._();

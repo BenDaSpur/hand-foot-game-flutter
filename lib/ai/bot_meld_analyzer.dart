@@ -1008,7 +1008,8 @@ class BotMeldAnalyzer {
     // have not played down also need a wider search — analytics 2026.10
     // still showed long noMeld "waiting for better play-down" stalls, with
     // first play-downs at hand 26–27 in R5/R6 (180–210pt).
-    final highRequirement = requirement >= 180;
+    final highRequirement =
+        requirement >= BotConfig.lateRoundWidePlayDownRequirement;
     final maxCombinationSize =
         !bot.hasPlayedDown && (handSize >= 12 || highRequirement)
         ? 8

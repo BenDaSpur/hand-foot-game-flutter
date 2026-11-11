@@ -33,46 +33,42 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is playdown-books', () {
-      expect(BotConfig.botAiVersion, '2026.10-playdown-books');
+    test('botAiVersion is foot-and-out', () {
+      expect(BotConfig.botAiVersion, '2026.11-foot-and-out');
     });
 
-    test(
-      'does not open a fifth leftover rank after four piles including books',
-      () {
-        bot.hasPlayedDown = true;
-        bot.hasPickedUpFoot = false;
-        bot.melds.addAll([
-          _sizedMeld(CardRank.ace, size: 7, dirty: false),
-          _sizedMeld(CardRank.queen, size: 7, dirty: true),
-          _sizedMeld(CardRank.seven, size: 4, dirty: true),
-          _sizedMeld(CardRank.five, size: 3, dirty: true),
+    test('empties a booked hand pile instead of padding a finished book', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.melds.addAll([
+        _sizedMeld(CardRank.ace, size: 7, dirty: false),
+        _sizedMeld(CardRank.queen, size: 7, dirty: true),
+        _sizedMeld(CardRank.seven, size: 4, dirty: true),
+        _sizedMeld(CardRank.five, size: 3, dirty: true),
+      ]);
+      expect(bot.melds.length, BotConfig.handPileNewMeldCap);
+      expect(bot.hasCleanBook, isTrue);
+      expect(bot.hasDirtyBook, isTrue);
+
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.king),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
         ]);
-        expect(bot.melds.length, BotConfig.handPileNewMeldCap);
-        expect(bot.hasCleanBook, isTrue);
-        expect(bot.hasDirtyBook, isTrue);
 
-        bot.hand
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.king),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.king),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.king),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.queen),
-          ]);
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      _setPile(controller, size: 12, top: CardRank.jack);
 
-        controller.gameState.turnPhase = TurnPhase.meld;
-        controller.gameState.hasDrawnFromDeck = true;
-        _setPile(controller, size: 12, top: CardRank.jack);
-
-        final decision = botAI.makeDecision(bot, controller);
-        expect(decision.action, isNot(equals('createMeld')));
-        expect(decision.action, isNot(equals('createMultipleMelds')));
-        expect(decision.action, 'addToMeld');
-        final data = decision.data as Map<String, dynamic>;
-        expect((data['card'] as PlayingCard).rank, CardRank.queen);
-      },
-    );
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, 'createMeld');
+      final cards = decision.data as List<PlayingCard>;
+      expect(cards.every((card) => card.rank == CardRank.king), isTrue);
+      expect(bot.currentHand.length - cards.length, lessThanOrEqualTo(1));
+    });
 
     test('holds live-top fours at pile size 4 before play-down', () {
       bot.hasPlayedDown = false;
@@ -212,43 +208,37 @@ void main() {
       }
     });
 
-    test(
-      'opens one off-rank natural pair when four piles leave the hand stuck',
-      () {
-        bot.hasPlayedDown = true;
-        bot.hasPickedUpFoot = false;
-        bot.melds.addAll([
-          _sizedMeld(CardRank.ace, size: 3, dirty: false),
-          _sizedMeld(CardRank.king, size: 3, dirty: false),
-          _sizedMeld(CardRank.queen, size: 3, dirty: true),
-          _sizedMeld(CardRank.jack, size: 3, dirty: true),
+    test('discards toward the foot instead of opening a fifth rank when a clean lane exists', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.melds.addAll([
+        _sizedMeld(CardRank.ace, size: 3, dirty: false),
+        _sizedMeld(CardRank.king, size: 3, dirty: false),
+        _sizedMeld(CardRank.queen, size: 3, dirty: true),
+        _sizedMeld(CardRank.jack, size: 3, dirty: true),
+      ]);
+      expect(bot.bookCount, 0);
+      expect(bot.melds.length, BotConfig.handPileNewMeldCap);
+
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
         ]);
-        expect(bot.bookCount, 0);
-        expect(bot.melds.length, BotConfig.handPileNewMeldCap);
 
-        bot.hand
-          ..clear()
-          ..addAll([
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.four),
-            const PlayingCard(suit: Suit.diamonds, rank: CardRank.five),
-            const PlayingCard(suit: Suit.hearts, rank: CardRank.six),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.seven),
-          ]);
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      _setPile(controller, size: 12, top: CardRank.eight);
 
-        controller.gameState.turnPhase = TurnPhase.meld;
-        controller.gameState.hasDrawnFromDeck = true;
-        _setPile(controller, size: 12, top: CardRank.eight);
-
-        final decision = botAI.makeDecision(bot, controller);
-        expect(decision.action, 'createMeld');
-        final cards = decision.data as List<PlayingCard>;
-        expect(cards.every((card) => card.rank == CardRank.ten), isTrue);
-        expect(cards.any((card) => card.rank == CardRank.eight), isFalse);
-      },
-    );
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, 'noMeld');
+    });
 
     test('does not spend the live-top pair to open a fifth rank', () {
       bot.hasPlayedDown = true;

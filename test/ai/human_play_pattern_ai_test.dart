@@ -160,7 +160,7 @@ void main() {
       expect(bot.currentHand.length, 15);
     });
 
-    test('prefers low-rank discard on large hands even with duplicates', () {
+    test('sheds a 4-8 singleton before breaking a low-rank set', () {
       final bot = Player(id: 'bot1', name: 'Bot1', type: PlayerType.bot);
       bot.hasPlayedDown = true;
       bot.hand.addAll([
@@ -187,8 +187,10 @@ void main() {
 
       expect(
         discard.rank,
-        anyOf(CardRank.four, CardRank.five),
-        reason: 'Humans shed low ranks on ~16-card hands',
+        CardRank.eight,
+        reason:
+            'A played-down hand sheds the 4–8 singleton before breaking '
+            'a four- or five-of-a-kind',
       );
       expect(
         bot.currentHand.length,
