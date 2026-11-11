@@ -28,7 +28,7 @@ void main() {
       gameController.gameState.hasDrawnFromDeck = true;
     });
 
-    test('melds aggressively when human is on foot instead of holding', () {
+    test('discards toward the foot when the human is on foot and a clean lane exists', () {
       human.hasPickedUpFoot = true;
       // >5 foot cards avoids _isCompetitivelyThreatened "close to going out".
       human.dealFoot([
@@ -75,11 +75,7 @@ void main() {
 
       final decision = botAI.makeDecision(bot, gameController);
 
-      expect(decision.action, isNot('noMeld'));
-      expect(
-        decision.action,
-        anyOf('createMeld', 'addToMeld', 'createMultipleMelds'),
-      );
+      expect(decision.action, 'noMeld');
     });
   });
 }

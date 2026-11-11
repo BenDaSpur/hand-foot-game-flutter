@@ -33,8 +33,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is playdown-books', () {
-      expect(BotConfig.botAiVersion, '2026.10-playdown-books');
+    test('botAiVersion is foot-and-out', () {
+      expect(BotConfig.botAiVersion, '2026.11-foot-and-out');
       expect(BotConfig.goOutThisTurnMaxHand, 5);
       expect(CompetitivePolicy.latePlayDownHandSize, 10);
     }, tags: ['competitive_planner']);
@@ -440,7 +440,7 @@ void main() {
       tags: ['competitive_planner'],
     );
 
-    test('bursts two disjoint melds on a large foot hand', () {
+    test('on foot with both books does not burst new ranks', () {
       bot.hasPlayedDown = true;
       bot.hasPickedUpFoot = true;
       bot.foot
@@ -467,9 +467,7 @@ void main() {
       controller.gameState.discardPileFrozen = true;
 
       final decision = botAI.makeDecision(bot, controller);
-      expect(decision.action, 'createMultipleMelds');
-      final melds = decision.data as List<List<PlayingCard>>;
-      expect(melds.length, greaterThanOrEqualTo(2));
+      expect(decision.action, 'noMeld');
     }, tags: ['competitive_planner']);
 
     test('conservative with a live pair still takes a 12-card pile', () {

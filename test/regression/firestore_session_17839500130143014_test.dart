@@ -70,51 +70,44 @@ void main() {
       }
     });
 
-    test(
-      'Carl conservative melds at hand=3 with 1 book while opponent on foot',
-      () {
-        human.hasPickedUpFoot = true;
-        carl.hasPlayedDown = true;
-        carl.hasPickedUpFoot = false;
-        carl.melds
-          ..clear()
-          ..addAll([
-            Meld.createMeld([
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
-            ])!,
-            Meld.createMeld([
-              const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
-              const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
-            ])!,
-          ]);
-        carl.hand
-          ..clear()
-          ..addAll([
+    test('Carl discards a 3-card hand toward the foot instead of padding a second clean pile', () {
+      human.hasPickedUpFoot = true;
+      carl.hasPlayedDown = true;
+      carl.hasPickedUpFoot = false;
+      carl.melds
+        ..clear()
+        ..addAll([
+          Meld.createMeld([
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ace),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ace),
+          ])!,
+          Meld.createMeld([
             const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
-            const PlayingCard(suit: Suit.spades, rank: CardRank.six),
-            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
-          ]);
-        setCurrentPlayer(carl);
-        gameController.gameState.turnPhase = TurnPhase.meld;
-        gameController.gameState.hasDrawnFromDeck = true;
+            const PlayingCard(suit: Suit.spades, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.ten),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+          ])!,
+        ]);
+      carl.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+        ]);
+      setCurrentPlayer(carl);
+      gameController.gameState.turnPhase = TurnPhase.meld;
+      gameController.gameState.hasDrawnFromDeck = true;
 
-        final decision = botAI.makeDecision(carl, gameController);
+      final decision = botAI.makeDecision(carl, gameController);
 
-        expect(decision.action, isNot('noMeld'));
-        expect(
-          decision.action,
-          anyOf('addToMeld', 'createMeld', 'createMultipleMelds'),
-        );
-      },
-    );
+      expect(decision.action, 'noMeld');
+    });
 
     test('hand pile completion defers discard in meld phase when no melds available', () {
       carl.hasPlayedDown = true;

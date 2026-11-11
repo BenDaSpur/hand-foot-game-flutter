@@ -29,8 +29,8 @@ void main() {
       controller.gameState.currentPlayerIndex = 1;
     });
 
-    test('botAiVersion is playdown-books', () {
-      expect(BotConfig.botAiVersion, '2026.10-playdown-books');
+    test('botAiVersion is foot-and-out', () {
+      expect(BotConfig.botAiVersion, '2026.11-foot-and-out');
       expect(BotConfig.postPlayDownHardTakePileSize, 6);
       expect(BotConfig.preserveUnlockKeysMeldPileSize, 5);
     });
@@ -202,7 +202,7 @@ void main() {
       },
     );
 
-    test('force-spends unlock keys when pile top is a three', () {
+    test('keeps king keys when a clean lane exists and the pile top is a three', () {
       bot.hasPlayedDown = true;
       bot.hasPickedUpFoot = false;
       bot.hand
@@ -257,14 +257,10 @@ void main() {
       final decision = botAI.makeDecision(bot, controller);
       expect(
         decision.action,
-        'createMeld',
-        reason: 'three-top must force-spend keys via king meld, not stall',
-      );
-      final meld = decision.data as List<PlayingCard>;
-      expect(
-        meld.every((c) => c.rank == CardRank.king),
-        isTrue,
-        reason: 'forced spend should meld the king unlock keys',
+        'noMeld',
+        reason:
+            'a clean ace lane already exists, so the king meld is a new '
+            'rank and the 5-card hand discards toward the foot',
       );
     });
 
