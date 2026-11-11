@@ -158,12 +158,22 @@ class LegalActionGenerator {
               ),
         )
         .toList();
-    if (additions.isNotEmpty) {
+    final onHandPile = bot.hasPlayedDown && !bot.hasPickedUpFoot;
+    final additionPool = onHandPile
+        ? additions
+              .where((addition) => _keepsHandPileAddition(bot, addition))
+              .toList()
+        : additions;
+    if (additionPool.isNotEmpty) {
       actions.add(
         LegalCandidate(
           decision: BotDecision(
             action: 'addToMeld',
-            data: _chooseBookBuildingAddition(bot, additions),
+            data: _chooseBookBuildingAddition(
+              bot,
+              additionPool,
+              preferFinishedBook: onHandPile,
+            ),
           ),
           kind: LegalActionKind.addToMeld,
         ),
@@ -349,7 +359,9 @@ class LegalActionGenerator {
       return true;
     }
     if (!_isNewRank(bot, meld)) {
-      return true;
+      // createMeld of an existing rank is executed as an add. A 3-card
+      // group must not pad a short pile that a one-card add would refuse.
+      return _keepsSameRankExtension(bot, meld);
     }
     if (meld.length >= GameConfig.bookSize) {
       return true;
@@ -422,10 +434,46 @@ class LegalActionGenerator {
     }
     final meld = bot.melds[index];
     final size = meld.cards.length;
+    // Adding this card leaves 0–1, so the discard can empty the hand pile
+    // this turn. Two kings on a short dirty pile are that case.
+    if (_leavesAtMostOne(bot, 1)) {
+      return true;
+    }
     if (size < GameConfig.bookSize && size + 1 >= GameConfig.bookSize) {
       return true;
     }
     if (_additionFeedsMissingLane(bot, meld, card)) {
+      return true;
+    }
+    if (bot.currentHand.length > BotConfig.handPileForceFootMaxHand &&
+        size >= 4 &&
+        size < GameConfig.bookSize) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Same keep rules as [_keepsHandPileAddition], using the pile size after
+  /// every card in a same-rank create lands on the existing meld.
+  bool _keepsSameRankExtension(Player bot, List<PlayingCard> meld) {
+    final rank = _naturalRank(meld);
+    if (rank == null) {
+      return false;
+    }
+    final index = bot.melds.indexWhere((existing) => existing.rank == rank);
+    if (index < 0) {
+      return true;
+    }
+    final existing = bot.melds[index];
+    if (!meld.every(existing.canAddCard)) {
+      return false;
+    }
+    final size = existing.cards.length;
+    final projected = size + meld.length;
+    if (size < GameConfig.bookSize && projected >= GameConfig.bookSize) {
+      return true;
+    }
+    if (meld.any((card) => _additionFeedsMissingLane(bot, existing, card))) {
       return true;
     }
     if (bot.currentHand.length > BotConfig.handPileForceFootMaxHand &&
@@ -650,9 +698,11 @@ class LegalActionGenerator {
   /// add onto a 4–6 card pile, over a leftover card on a short meld.
   Map<String, dynamic> _chooseBookBuildingAddition(
     Player bot,
-    List<Map<String, dynamic>> additions,
-  ) {
+    List<Map<String, dynamic>> additions, {
+    bool preferFinishedBook = false,
+  }) {
     Map<String, dynamic>? completesMissing;
+    Map<String, dynamic>? finishesBook;
     Map<String, dynamic>? growsNearBook;
     for (final addition in additions) {
       final card = addition['card'] as PlayingCard?;
@@ -668,12 +718,15 @@ class LegalActionGenerator {
           meld.cards.length < GameConfig.bookSize) {
         growsNearBook ??= addition;
       }
+      if (preferFinishedBook && meld.cards.length == GameConfig.bookSize - 1) {
+        finishesBook ??= addition;
+      }
       if (meld.cards.length == GameConfig.bookSize - 1 &&
           _completesMissingGoOutBook(bot, meld, card)) {
         completesMissing ??= addition;
       }
     }
-    return completesMissing ?? growsNearBook ?? additions.first;
+    return completesMissing ?? finishesBook ?? growsNearBook ?? additions.first;
   }
 
   /// A wild may finish a dirty book once a clean book exists. Naturals finish

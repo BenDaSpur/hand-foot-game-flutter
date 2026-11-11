@@ -158,6 +158,72 @@ void main() {
       },
     );
 
+    test(
+      'same-rank create does not pad a short pile the add rule would refuse',
+      () {
+        bot.hasPlayedDown = true;
+        bot.hasPickedUpFoot = false;
+        bot.melds.addAll([
+          _sizedMeld(CardRank.ace, size: 7, dirty: false),
+          _sizedMeld(CardRank.king, size: 7, dirty: true),
+          _sizedMeld(CardRank.four, size: 3, dirty: false),
+        ]);
+        bot.hand
+          ..clear()
+          ..addAll([
+            ..._nOf(CardRank.four, 3),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.five),
+            const PlayingCard(suit: Suit.spades, rank: CardRank.six),
+            const PlayingCard(suit: Suit.clubs, rank: CardRank.seven),
+            const PlayingCard(suit: Suit.diamonds, rank: CardRank.eight),
+            const PlayingCard(suit: Suit.hearts, rank: CardRank.nine),
+          ]);
+        expect(bot.currentHand.length, BotConfig.handPileForceFootMaxHand);
+        controller.gameState.turnPhase = TurnPhase.meld;
+        controller.gameState.hasDrawnFromDeck = true;
+        _setPile(controller, size: 3, top: CardRank.three);
+
+        final decision = botAI.makeDecision(bot, controller);
+        expect(decision.action, 'noMeld');
+      },
+    );
+
+    test('finishes a 6-card book instead of growing a higher size-5 pile', () {
+      bot.hasPlayedDown = true;
+      bot.hasPickedUpFoot = false;
+      bot.melds.addAll([
+        _sizedMeld(CardRank.ace, size: 7, dirty: false),
+        _sizedMeld(CardRank.king, size: 7, dirty: true),
+        _sizedMeld(CardRank.queen, size: 5, dirty: false),
+        _sizedMeld(CardRank.four, size: 6, dirty: true),
+      ]);
+      bot.hand
+        ..clear()
+        ..addAll([
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.queen),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.four),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.five),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.six),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.seven),
+          const PlayingCard(suit: Suit.spades, rank: CardRank.eight),
+          const PlayingCard(suit: Suit.clubs, rank: CardRank.nine),
+          const PlayingCard(suit: Suit.diamonds, rank: CardRank.ten),
+          const PlayingCard(suit: Suit.hearts, rank: CardRank.jack),
+        ]);
+      expect(
+        bot.currentHand.length,
+        greaterThan(BotConfig.handPileForceFootMaxHand),
+      );
+      controller.gameState.turnPhase = TurnPhase.meld;
+      controller.gameState.hasDrawnFromDeck = true;
+      _setPile(controller, size: 3, top: CardRank.three);
+
+      final decision = botAI.makeDecision(bot, controller);
+      expect(decision.action, 'addToMeld');
+      final data = decision.data as Map<String, dynamic>;
+      expect((data['card'] as PlayingCard).rank, CardRank.four);
+    });
+
     test('played-down discard prefers a singleton 4 over a singleton king', () {
       bot.hasPlayedDown = true;
       bot.hasPickedUpFoot = false;

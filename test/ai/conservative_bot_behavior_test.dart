@@ -114,7 +114,7 @@ void main() {
     });
 
     test(
-      'passes the meld phase when two cards would only pad a short dirty pile',
+      'adds one king when that leaves a single card for the foot discard',
       () {
         // Bot with only 2 cards left - should be aggressive now
         bot.dealHand([
@@ -141,9 +141,11 @@ void main() {
 
         final decision = botAI.makeDecision(bot, gameController);
 
-        // Two cards from the foot: padding the short dirty king pile does
-        // not finish a book, so the meld phase passes and the discard follows.
-        expect(decision.action, anyOf(equals('noMeld'), equals('discard')));
+        // Adding one king leaves one card, so the discard empties the hand
+        // pile this turn. A meld-phase discard is not a legal action.
+        expect(decision.action, 'addToMeld');
+        final data = decision.data as Map<String, dynamic>;
+        expect((data['card'] as PlayingCard).rank, CardRank.king);
       },
     );
 
